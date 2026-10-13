@@ -335,7 +335,7 @@ export default function App() {
                 />
               </div>
 
-              {/* Espaçamento K -> KYRO */}
+              {/* Espaçamento K -> KYRO (Permite aproximar ao máximo / valores negativos) */}
               <div>
                 <div className="flex justify-between text-slate-300 mb-1">
                   <span>Distância K até KYRO:</span>
@@ -343,8 +343,8 @@ export default function App() {
                 </div>
                 <input 
                   type="range" 
-                  min="2" 
-                  max="25" 
+                  min="-30" 
+                  max="35" 
                   value={logoConfig.gapKToKyro} 
                   onChange={(e) => setLogoConfig({ ...logoConfig, gapKToKyro: Number(e.target.value) })} 
                   className="w-full accent-amber-500 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
@@ -359,8 +359,8 @@ export default function App() {
                 </div>
                 <input 
                   type="range" 
-                  min="2" 
-                  max="20" 
+                  min="-15" 
+                  max="30" 
                   value={logoConfig.gapKyroToPf} 
                   onChange={(e) => setLogoConfig({ ...logoConfig, gapKyroToPf: Number(e.target.value) })} 
                   className="w-full accent-amber-500 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
