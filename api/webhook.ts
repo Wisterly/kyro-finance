@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { processFinanceAssistant } from './chat';
+import { processFinanceAssistant } from './services/financeAssistant';
 import { sendWhatsAppMessage } from './services/evolution';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
