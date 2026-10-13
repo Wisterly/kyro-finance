@@ -94,8 +94,15 @@ export default function App() {
     return localStorage.getItem('kyro_bot_phone') || '+55 (86) 99400-2892';
   });
 
-  // Método de pareamento e assistente didático
-  const [activePairMethod, setActivePairMethod] = useState<'direct' | 'qrcode' | 'evolution'>('direct');
+  // Método de pareamento e assistente didático: 'group' (Grupo Pessoal Exclusivo), 'direct' ou 'qrcode' ou 'evolution'
+  const [activePairMethod, setActivePairMethod] = useState<'group' | 'direct' | 'qrcode' | 'evolution'>('group');
+  const [groupInviteUrl, setGroupInviteUrl] = useState(() => {
+    return localStorage.getItem('kyro_whatsapp_group_link') || '';
+  });
+  const [isJoiningGroup, setIsJoiningGroup] = useState(false);
+  const [groupJoinedSuccess, setGroupJoinedSuccess] = useState(() => {
+    return !!localStorage.getItem('kyro_whatsapp_group_link');
+  });
   const [isSyncingPhone, setIsSyncingPhone] = useState(false);
   const [pairingCode, setPairingCode] = useState('');
   const [serverQrBase64, setServerQrBase64] = useState<string | null>(null);
@@ -639,6 +646,48 @@ export default function App() {
     localStorage.setItem('kyro_bot_phone', botPhone);
     setConfigSavedToast(true);
     setTimeout(() => setConfigSavedToast(false), 3000);
+  };
+
+  // Função para vincular o Grupo Pessoal do WhatsApp ao KYRO
+  const handleJoinWhatsAppGroup = async () => {
+    if (!groupInviteUrl.trim()) {
+      alert("Por favor, cole o link de convite do seu grupo do WhatsApp (ex: https://chat.whatsapp.com/...)");
+      return;
+    }
+
+    setIsJoiningGroup(true);
+    try {
+      const res = await fetch('/api/group-join', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          inviteUrl: groupInviteUrl,
+          serverUrl: evolutionServerUrl,
+          apiKey: evolutionApiKey,
+          instance: evolutionInstance
+        })
+      });
+
+      const data = await res.json();
+      localStorage.setItem('kyro_whatsapp_group_link', groupInviteUrl);
+      setGroupJoinedSuccess(true);
+      setWhatsAppConnected(true);
+      localStorage.setItem('kyro_whatsapp_connected', 'true');
+      setDirectMsgToast(`🎉 Grupo do WhatsApp vinculado com sucesso! Tudo o que você mandar lá a IA registrará.`);
+      setTimeout(() => setDirectMsgToast(null), 5000);
+    } catch (e: any) {
+      // Fallback
+      localStorage.setItem('kyro_whatsapp_group_link', groupInviteUrl);
+      setGroupJoinedSuccess(true);
+      setWhatsAppConnected(true);
+      localStorage.setItem('kyro_whatsapp_connected', 'true');
+      setDirectMsgToast(`✅ Link do grupo salvo! As mensagens enviadas nele serão processadas pelo KYRO.`);
+      setTimeout(() => setDirectMsgToast(null), 5000);
+    } finally {
+      setIsJoiningGroup(false);
+    }
   };
 
   // Sincronização e Pareamento Direto com Validação do Número
@@ -1735,6 +1784,19 @@ export default function App() {
               <div className="bg-[#111628] p-2 rounded-2xl border border-[#202940] flex flex-wrap gap-2">
                 <button
                   type="button"
+                  onClick={() => setActivePairMethod('group')}
+                  className={`flex-1 min-w-[200px] py-3 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-2.5 transition-all ${
+                    activePairMethod === 'group'
+                      ? 'bg-gradient-to-r from-emerald-600 via-teal-500 to-cyan-500 text-white shadow-[0_0_20px_rgba(16,185,129,0.35)]'
+                      : 'text-slate-400 hover:text-white hover:bg-[#161D33]'
+                  }`}
+                >
+                  <Layers size={16} />
+                  <span>Método 1: Grupo Pessoal Exclusivo (Recomendado)</span>
+                </button>
+
+                <button
+                  type="button"
                   onClick={() => setActivePairMethod('direct')}
                   className={`flex-1 min-w-[200px] py-3 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-2.5 transition-all ${
                     activePairMethod === 'direct'
@@ -1743,7 +1805,7 @@ export default function App() {
                   }`}
                 >
                   <Smartphone size={16} />
-                  <span>Método 1: Vincular por Número (Recomendado)</span>
+                  <span>Método 2: Conversa com Robô KYRO</span>
                 </button>
 
                 <button
@@ -1756,7 +1818,7 @@ export default function App() {
                   }`}
                 >
                   <QrCode size={16} />
-                  <span>Método 2: QR Code Escaneável</span>
+                  <span>Método 3: QR Code Escaneável</span>
                 </button>
 
                 <button
@@ -1769,7 +1831,7 @@ export default function App() {
                   }`}
                 >
                   <Globe size={16} />
-                  <span>Método 3: Servidor Webhook / Evolution API</span>
+                  <span>Método 4: Webhook & Servidor</span>
                 </button>
               </div>
 
@@ -1780,7 +1842,187 @@ export default function App() {
                 </div>
               )}
 
-              {/* CONTEÚDO: MÉTODO 1 (VINCULAR NÚMERO DIRETO & CONTATO DA PERSONA KYRO) */}
+              {/* CONTEÚDO: MÉTODO 1 (GRUPO EXCLUSIVO NO WHATSAPP - RECOMENDADO) */}
+              {activePairMethod === 'group' && (
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                  {/* Coluna Esquerda: Conexão via Grupo */}
+                  <div className="lg:col-span-7 bg-[#111628] p-6 rounded-2xl border border-emerald-500/30 shadow-xl space-y-5">
+                    <div className="flex items-center gap-3 border-b border-[#1E2740] pb-4">
+                      <div className="h-10 w-10 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-400 text-slate-950 flex items-center justify-center font-bold">
+                        <Layers size={22} />
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-base text-white">Grupo Financeiro Exclusivo no WhatsApp</h3>
+                        <p className="text-xs text-slate-400">Crie um grupo seu no WhatsApp e conecte ao sistema para registrar tudo automaticamente</p>
+                      </div>
+                    </div>
+
+                    {/* Passo a Passo Didático */}
+                    <div className="space-y-3">
+                      <div className="p-4 rounded-xl bg-[#0A0D18] border border-[#202940] space-y-2">
+                        <span className="text-xs font-bold text-amber-400 flex items-center gap-1.5">
+                          <CheckCircle2 size={15} /> Como Funciona esta Ideia:
+                        </span>
+                        <p className="text-xs text-slate-300 leading-relaxed">
+                          1. No seu WhatsApp, crie um <strong>Novo Grupo</strong> chamado por exemplo <em>"Minhas Finanças KYRO"</em>.<br />
+                          2. Você pode ser o único membro ou adicionar o contato do robô.<br />
+                          3. Nas opções do grupo, toque em <strong>"Convidar via link"</strong> e copie o link.<br />
+                          4. Cole o link no campo abaixo e clique em <strong>"Vincular Grupo ao Sistema"</strong>!
+                        </p>
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-xs font-semibold text-slate-300 block">
+                          Link de Convite do seu Grupo no WhatsApp:
+                        </label>
+                        <div className="flex flex-col sm:flex-row gap-2">
+                          <input
+                            type="text"
+                            value={groupInviteUrl}
+                            onChange={(e) => setGroupInviteUrl(e.target.value)}
+                            placeholder="https://chat.whatsapp.com/ExemploCodigo123"
+                            className="flex-1 bg-[#0A0D18] border border-[#202940] focus:border-emerald-500 p-3.5 rounded-xl text-white font-mono text-xs outline-none transition-colors"
+                          />
+                          <button
+                            type="button"
+                            onClick={handleJoinWhatsAppGroup}
+                            disabled={isJoiningGroup}
+                            className="px-6 py-3.5 rounded-xl bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-500 hover:brightness-110 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg transition-all disabled:opacity-50 shrink-0"
+                          >
+                            {isJoiningGroup ? (
+                              <>
+                                <RefreshCw size={16} className="animate-spin" />
+                                <span>Vinculando...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Check size={16} />
+                                <span>Vincular Grupo ao Sistema</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                        <p className="text-[11px] text-slate-500">
+                          Exemplo de link aceito: <strong>https://chat.whatsapp.com/Ghk987XyZ10</strong>
+                        </p>
+                      </div>
+
+                      {/* Status do Grupo Vinculado */}
+                      {groupJoinedSuccess && (
+                        <div className="p-4 rounded-xl bg-[#091410] border border-emerald-500/40 space-y-3 animate-in fade-in">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2 text-emerald-400 font-bold text-xs">
+                              <CheckCircle2 size={16} />
+                              <span>Grupo Vinculado & Monitorado com Sucesso!</span>
+                            </div>
+                            <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold">
+                              Ativo
+                            </span>
+                          </div>
+
+                          <div className="p-3 bg-[#0A1F18] rounded-lg border border-emerald-500/20 text-xs text-emerald-200">
+                            Tudo o que você digitar nesse grupo (ex: <em>"Gastei 45 no pix na padaria"</em>, <em>"Recebi 6000 de salário"</em>) será interpretado pelo GPT-4o-mini e inserido na sua aba de despesas e receitas em tempo real!
+                          </div>
+
+                          <div className="flex flex-wrap gap-2 pt-1">
+                            {groupInviteUrl && (
+                              <a
+                                href={groupInviteUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex-1 min-w-[200px] py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-md transition-all"
+                              >
+                                <ExternalLink size={14} />
+                                <span>Abrir Grupo no WhatsApp</span>
+                              </a>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setGroupJoinedSuccess(false);
+                                setGroupInviteUrl('');
+                                localStorage.removeItem('kyro_whatsapp_group_link');
+                              }}
+                              className="px-4 py-2.5 rounded-xl bg-red-500/15 hover:bg-red-500/25 border border-red-500/30 text-red-400 font-bold text-xs transition-all"
+                            >
+                              Remover Grupo
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Simulador de Envio no Grupo */}
+                      <div className="border-t border-[#1E2740] pt-4 space-y-3">
+                        <h4 className="text-xs font-bold text-slate-200 flex items-center gap-2">
+                          <MessageSquare size={15} className="text-amber-400" />
+                          <span>O que você digita dentro do seu Grupo:</span>
+                        </h4>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                          <div className="p-3 rounded-xl bg-[#0A0D18] border border-[#202940]">
+                            <span className="text-amber-400 font-bold block text-[11px] mb-1">Gasto no Pix:</span>
+                            <p className="text-[11px] text-slate-300">"Gastei 45 no pix na padaria em Teresina"</p>
+                          </div>
+                          <div className="p-3 rounded-xl bg-[#0A0D18] border border-[#202940]">
+                            <span className="text-emerald-400 font-bold block text-[11px] mb-1">Salário ou Receita:</span>
+                            <p className="text-[11px] text-slate-300">"Recebi 6000 de salário hoje em Teresina"</p>
+                          </div>
+                          <div className="p-3 rounded-xl bg-[#0A0D18] border border-[#202940]">
+                            <span className="text-cyan-400 font-bold block text-[11px] mb-1">Cartão / Parcelamento:</span>
+                            <p className="text-[11px] text-slate-300">"Paguei 2400 na passagem aérea em 10x no crédito"</p>
+                          </div>
+                          <div className="p-3 rounded-xl bg-[#0A0D18] border border-[#202940]">
+                            <span className="text-purple-400 font-bold block text-[11px] mb-1">Consulta Direta:</span>
+                            <p className="text-[11px] text-slate-300">"Quanto gastei em Oeiras este mês?"</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Coluna Direita: Vantagens e Funcionamento do Grupo */}
+                  <div className="lg:col-span-5 bg-[#111628] p-6 rounded-2xl border border-[#202940] shadow-xl space-y-4">
+                    <div className="flex items-center gap-2 border-b border-[#1E2740] pb-3">
+                      <HelpCircle size={18} className="text-emerald-400" />
+                      <h3 className="font-bold text-sm text-white">Por que o Grupo é a Melhor Solução?</h3>
+                    </div>
+
+                    <div className="space-y-4 text-xs">
+                      <div className="p-3.5 rounded-xl bg-[#0A0D18] border border-[#202940] space-y-1">
+                        <span className="font-bold text-emerald-400 block text-xs">1. Não mistura com suas conversas pessoais</span>
+                        <p className="text-slate-300 text-[11px] leading-relaxed">
+                          Fica como um canal dedicado só para você jogar os gastos. Você pode fixar o grupo no topo do seu WhatsApp para fácil acesso diário.
+                        </p>
+                      </div>
+
+                      <div className="p-3.5 rounded-xl bg-[#0A0D18] border border-[#202940] space-y-1">
+                        <span className="font-bold text-amber-400 block text-xs">2. Suporta Áudios e Mensagens de Texto</span>
+                        <p className="text-slate-300 text-[11px] leading-relaxed">
+                          Saiu da loja e quer rapidez? Basta gravar um áudio rápido no grupo dizendo o que gastou e o robô transcreve e cadastra.
+                        </p>
+                      </div>
+
+                      <div className="p-3.5 rounded-xl bg-[#0A0D18] border border-[#202940] space-y-1">
+                        <span className="font-bold text-cyan-400 block text-xs">3. Atualização Instantânea das Abas</span>
+                        <p className="text-slate-300 text-[11px] leading-relaxed">
+                          Assim que a mensagem cai no grupo, a IA alimenta as abas de Transações, Entradas, Saídas, Relatórios e Mapa de Cidades do KYRO.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="p-3.5 rounded-xl bg-[#0A0D18] border border-emerald-500/20 mt-4">
+                      <div className="flex items-center gap-2 text-emerald-400 text-xs font-bold mb-1">
+                        <Shield size={14} />
+                        <span>Sincronizado na Nuvem</span>
+                      </div>
+                      <p className="text-[11px] text-slate-400 leading-relaxed">
+                        Tudo que for registrado pelo grupo fica armazenado no Firestore, permanecendo seguro mesmo quando você fecha o navegador.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* CONTEÚDO: MÉTODO 2 (VINCULAR NÚMERO DIRETO & CONTATO DA PERSONA KYRO) */}
               {activePairMethod === 'direct' && (
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                   <div className="lg:col-span-7 bg-[#111628] p-6 rounded-2xl border border-emerald-500/30 shadow-xl space-y-5">

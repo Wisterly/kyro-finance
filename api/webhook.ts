@@ -210,8 +210,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json({ status: 'Ignored fromMe message' });
     }
 
+    // Suporta mensagens diretas (@s.whatsapp.net) e grupos (@g.us)
     const remoteJid = data?.key?.remoteJid || payload?.sender || payload?.number || '558699999999';
-    const phoneNumber = String(remoteJid).replace('@s.whatsapp.net', '');
+    const isGroup = String(remoteJid).endsWith('@g.us');
+    const participant = data?.key?.participant || payload?.participant || remoteJid;
+    const phoneNumber = String(participant).replace('@s.whatsapp.net', '').replace('@g.us', '');
 
     let messageText = 
       data?.message?.conversation ||
@@ -230,7 +233,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json({ status: 'No text message to process' });
     }
 
-    console.log(`[Webhook Evolution] Mensagem recebida de ${phoneNumber}: "${messageText}"`);
+    console.log(`[Webhook Evolution] Mensagem recebida de ${phoneNumber} (Grupo: ${isGroup ? remoteJid : 'não'}): "${messageText}"`);
 
     const result = await processAssistant(messageText);
 
@@ -238,9 +241,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const customApiKey = (req.headers['x-evolution-key'] as string) || payload?.evolutionApiKey;
     const customInstance = (req.headers['x-evolution-instance'] as string) || payload?.evolutionInstance;
 
-    if (phoneNumber && phoneNumber !== 'test') {
+    // Responde no grupo ou na conversa privada
+    const targetRecipient = isGroup ? remoteJid : phoneNumber;
+    if (targetRecipient && targetRecipient !== 'test') {
       await sendWhatsAppMessage({
-        phoneNumber,
+        phoneNumber: targetRecipient,
         message: result.reply,
         serverUrl: customServerUrl,
         apiKey: customApiKey,
