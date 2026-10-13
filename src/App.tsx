@@ -181,6 +181,43 @@ export default function App() {
     return matchSearch && matchMethod;
   });
 
+  // Ajustador e Calibrador Permanente com LocalStorage
+  const DEFAULT_LOGO_CONFIG = {
+    kHeight: 46,
+    kyroHeight: 28,
+    pfHeight: 22,
+    gapKToKyro: 10,
+    gapKyroToPf: 8,
+    posY: 0,
+    posX: 0,
+  };
+
+  const [logoConfig, setLogoConfig] = useState(() => {
+    const saved = localStorage.getItem('kyro_logo_config');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        return DEFAULT_LOGO_CONFIG;
+      }
+    }
+    return DEFAULT_LOGO_CONFIG;
+  });
+
+  const [showCalibrator, setShowCalibrator] = useState(false);
+  const [saveSuccessMsg, setSaveSuccessMsg] = useState(false);
+
+  const handleSaveConfig = () => {
+    localStorage.setItem('kyro_logo_config', JSON.stringify(logoConfig));
+    setSaveSuccessMsg(true);
+    setTimeout(() => setSaveSuccessMsg(false), 2500);
+  };
+
+  const handleResetConfig = () => {
+    setLogoConfig(DEFAULT_LOGO_CONFIG);
+    localStorage.removeItem('kyro_logo_config');
+  };
+
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-[#0A0D18] text-slate-100 font-sans">
       
@@ -190,22 +227,201 @@ export default function App() {
         md:static md:translate-x-0 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}
       `}>
         <div>
-          {/* Logo KYRO | Private Finance transparente sem borda/fundo */}
-          <div className="px-5 py-6 flex items-center justify-between">
-            <div className="flex items-center cursor-pointer w-full" onClick={() => setActiveTab('dashboard')}>
-              <img 
-                src="/kyro-transparent.png" 
-                alt="KYRO Private Finance" 
-                className="w-full max-w-[210px] h-auto max-h-12 object-contain filter drop-shadow-[0_2px_12px_rgba(217,119,6,0.2)]" 
-              />
-            </div>
-            <button 
-              onClick={() => setMobileMenuOpen(false)}
-              className="md:hidden text-slate-400 hover:text-white ml-2"
+          {/* Logo 100% Modular e Calibrável (K + KYRO + Private Finance) */}
+          <div className="px-5 pt-6 pb-2 relative group">
+            <div 
+              className="flex items-center cursor-pointer select-none"
+              style={{
+                transform: `translate(${logoConfig.posX}px, ${logoConfig.posY}px)`
+              }}
+              onClick={() => setShowCalibrator(!showCalibrator)}
+              title="Clique para abrir o painel de ajuste de tamanho e posições"
             >
-              <X size={20} />
+              {/* 1. K Grande Esculpido */}
+              <img 
+                src="/part-k.png" 
+                alt="K" 
+                style={{ height: `${logoConfig.kHeight}px` }}
+                className="w-auto object-contain filter drop-shadow-[0_2px_14px_rgba(217,119,6,0.35)] flex-shrink-0" 
+              />
+              
+              <div 
+                className="flex items-center flex-1 min-w-0"
+                style={{ marginLeft: `${logoConfig.gapKToKyro}px` }}
+              >
+                {/* 2. Nome KYRO */}
+                <img 
+                  src="/part-kyro.png" 
+                  alt="KYRO" 
+                  style={{ height: `${logoConfig.kyroHeight}px` }}
+                  className="w-auto object-contain flex-shrink-0 filter drop-shadow-[0_2px_10px_rgba(217,119,6,0.25)]" 
+                />
+
+                {/* 3. Nome Private Finance */}
+                <img 
+                  src="/part-private-finance.png" 
+                  alt="Private Finance" 
+                  style={{ 
+                    height: `${logoConfig.pfHeight}px`,
+                    marginLeft: `${logoConfig.gapKyroToPf}px` 
+                  }}
+                  className="w-auto object-contain object-left flex-1 min-w-0 filter drop-shadow-[0_2px_8px_rgba(217,119,6,0.2)]" 
+                />
+              </div>
+            </div>
+
+            {/* Botão de Ajuste no Canto */}
+            <button
+              onClick={() => setShowCalibrator(!showCalibrator)}
+              className="absolute top-2 right-2 text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded opacity-75 hover:opacity-100 transition-opacity"
+            >
+              ⚙ Ajustar
             </button>
           </div>
+
+          {/* PAINEL DE CONTROLE MANUAL COMPLETO */}
+          {showCalibrator && (
+            <div className="mx-3 mb-2 p-3.5 bg-[#13192B] border border-amber-500/60 rounded-xl shadow-2xl text-[11px] space-y-2.5 animate-in fade-in z-50">
+              <div className="flex justify-between items-center font-bold text-amber-400 border-b border-slate-800 pb-1.5">
+                <span>🎛️ Calibrar Peças da Logo</span>
+                <button onClick={() => setShowCalibrator(false)} className="text-slate-400 hover:text-white">✕</button>
+              </div>
+
+              {/* Ajuste K */}
+              <div>
+                <div className="flex justify-between text-slate-300 mb-1">
+                  <span>Tamanho do 'K':</span>
+                  <span className="font-mono text-amber-400 font-bold">{logoConfig.kHeight}px</span>
+                </div>
+                <input 
+                  type="range" 
+                  min="24" 
+                  max="70" 
+                  value={logoConfig.kHeight} 
+                  onChange={(e) => setLogoConfig({ ...logoConfig, kHeight: Number(e.target.value) })} 
+                  className="w-full accent-amber-500 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
+                />
+              </div>
+
+              {/* Ajuste KYRO */}
+              <div>
+                <div className="flex justify-between text-slate-300 mb-1">
+                  <span>Tamanho do 'KYRO':</span>
+                  <span className="font-mono text-amber-400 font-bold">{logoConfig.kyroHeight}px</span>
+                </div>
+                <input 
+                  type="range" 
+                  min="14" 
+                  max="50" 
+                  value={logoConfig.kyroHeight} 
+                  onChange={(e) => setLogoConfig({ ...logoConfig, kyroHeight: Number(e.target.value) })} 
+                  className="w-full accent-amber-500 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
+                />
+              </div>
+
+              {/* Ajuste Private Finance */}
+              <div>
+                <div className="flex justify-between text-slate-300 mb-1">
+                  <span>Tamanho 'Private Finance':</span>
+                  <span className="font-mono text-amber-400 font-bold">{logoConfig.pfHeight}px</span>
+                </div>
+                <input 
+                  type="range" 
+                  min="12" 
+                  max="45" 
+                  value={logoConfig.pfHeight} 
+                  onChange={(e) => setLogoConfig({ ...logoConfig, pfHeight: Number(e.target.value) })} 
+                  className="w-full accent-amber-500 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
+                />
+              </div>
+
+              {/* Espaçamento K -> KYRO */}
+              <div>
+                <div className="flex justify-between text-slate-300 mb-1">
+                  <span>Distância K até KYRO:</span>
+                  <span className="font-mono text-amber-400 font-bold">{logoConfig.gapKToKyro}px</span>
+                </div>
+                <input 
+                  type="range" 
+                  min="2" 
+                  max="25" 
+                  value={logoConfig.gapKToKyro} 
+                  onChange={(e) => setLogoConfig({ ...logoConfig, gapKToKyro: Number(e.target.value) })} 
+                  className="w-full accent-amber-500 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
+                />
+              </div>
+
+              {/* Espaçamento KYRO -> Private Finance */}
+              <div>
+                <div className="flex justify-between text-slate-300 mb-1">
+                  <span>Distância KYRO até Private:</span>
+                  <span className="font-mono text-amber-400 font-bold">{logoConfig.gapKyroToPf}px</span>
+                </div>
+                <input 
+                  type="range" 
+                  min="2" 
+                  max="20" 
+                  value={logoConfig.gapKyroToPf} 
+                  onChange={(e) => setLogoConfig({ ...logoConfig, gapKyroToPf: Number(e.target.value) })} 
+                  className="w-full accent-amber-500 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
+                />
+              </div>
+
+              {/* Posição Vertical (Cima/Baixo) */}
+              <div>
+                <div className="flex justify-between text-slate-300 mb-1">
+                  <span>Posição Vertical (Y):</span>
+                  <span className="font-mono text-amber-400 font-bold">{logoConfig.posY}px</span>
+                </div>
+                <input 
+                  type="range" 
+                  min="-20" 
+                  max="25" 
+                  value={logoConfig.posY} 
+                  onChange={(e) => setLogoConfig({ ...logoConfig, posY: Number(e.target.value) })} 
+                  className="w-full accent-amber-500 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
+                />
+              </div>
+
+              {/* Posição Horizontal (Esq/Dir) */}
+              <div>
+                <div className="flex justify-between text-slate-300 mb-1">
+                  <span>Posição Horizontal (X):</span>
+                  <span className="font-mono text-amber-400 font-bold">{logoConfig.posX}px</span>
+                </div>
+                <input 
+                  type="range" 
+                  min="-15" 
+                  max="25" 
+                  value={logoConfig.posX} 
+                  onChange={(e) => setLogoConfig({ ...logoConfig, posX: Number(e.target.value) })} 
+                  className="w-full accent-amber-500 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
+                />
+              </div>
+
+              {/* Botões de Ação */}
+              <div className="pt-2 border-t border-slate-800 flex gap-2">
+                <button
+                  onClick={handleSaveConfig}
+                  className="flex-1 py-1.5 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 font-bold hover:brightness-110 shadow-md transition-all text-center"
+                >
+                  💾 Salvar no Site
+                </button>
+                <button
+                  onClick={handleResetConfig}
+                  className="px-2.5 py-1.5 rounded-lg bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 text-center"
+                >
+                  Redefinir
+                </button>
+              </div>
+
+              {saveSuccessMsg && (
+                <p className="text-[10px] text-emerald-400 text-center font-bold animate-pulse">
+                  ✓ Configuração salva e gravada permanentemente!
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Menus de Navegação com Glow Laranja/Âmbar */}
           <nav className="p-4 space-y-1.5 mt-2">
