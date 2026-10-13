@@ -34,17 +34,20 @@ import {
   Wallet,
   Calendar,
   Layers,
-  MapPinOff,
-  ShoppingBag
+  Repeat,
+  Plane,
+  Trash2,
+  Check,
+  AlertCircle
 } from 'lucide-react';
-import { Transaction, ChatMessage, PaymentMethod, TransactionType } from './types';
+import { Transaction, ChatMessage, PaymentMethod, TransactionType, RecurringExpense } from './types';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'transacoes' | 'orcamentos' | 'mapa' | 'relatorios' | 'configuracoes'>('dashboard');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [chatOpenMobile, setChatOpenMobile] = useState(false);
   
-  // Modais dinâmicos conforme solicitado
+  // Modais dinâmicos
   const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
   const [activeKpiModal, setActiveKpiModal] = useState<'saldo' | 'entradas' | 'saidas' | 'metodos' | null>(null);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
@@ -53,11 +56,15 @@ export default function App() {
   const [newTxModalOpen, setNewTxModalOpen] = useState(false);
   const [newTxTypeDefault, setNewTxTypeDefault] = useState<TransactionType>('Saída');
 
+  // Sub-aba no Modal de Saídas: 'avulsas' ou 'recorrentes'
+  const [saidasTab, setSaidasTab] = useState<'avulsas' | 'recorrentes'>('avulsas');
+  const [newRecModalOpen, setNewRecModalOpen] = useState(false);
+
   // Perfil do Usuário
   const userFullName = "Kayro Wisterly";
   const userFirstName = "Wisterly";
 
-  // Configuração da Logo persistente no localStorage
+  // Configuração da Logo
   const DEFAULT_LOGO_CONFIG = {
     kHeight: 46,
     kyroHeight: 28,
@@ -71,11 +78,7 @@ export default function App() {
   const [logoConfig, setLogoConfig] = useState(() => {
     const saved = localStorage.getItem('kyro_logo_config');
     if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        return DEFAULT_LOGO_CONFIG;
-      }
+      try { return JSON.parse(saved); } catch (e) {}
     }
     return DEFAULT_LOGO_CONFIG;
   });
@@ -94,7 +97,60 @@ export default function App() {
     localStorage.removeItem('kyro_logo_config');
   };
 
-  // Base de Transações Sincronizada com LocalStorage
+  // Base de Saídas Recorrentes & Parcelamentos (Persistente)
+  const [recurringExpenses, setRecurringExpenses] = useState<RecurringExpense[]>(() => {
+    const saved = localStorage.getItem('kyro_recurring');
+    if (saved) {
+      try { return JSON.parse(saved); } catch (e) {}
+    }
+    return [
+      {
+        id: 'rec_1',
+        title: 'Passagem Aérea Férias',
+        category: 'Passagem Aérea / Viagem',
+        totalAmount: 2400.00,
+        installmentAmount: 240.00,
+        currentInstallment: 3,
+        totalInstallments: 10,
+        city: 'São Paulo, SP',
+        method: 'Crédito',
+        active: true,
+        dueDateDay: 15
+      },
+      {
+        id: 'rec_2',
+        title: 'Empréstimo Bancário',
+        category: 'Empréstimo',
+        totalAmount: 12000.00,
+        installmentAmount: 500.00,
+        currentInstallment: 6,
+        totalInstallments: 24,
+        city: 'Teresina, PI',
+        method: 'PIX',
+        active: true,
+        dueDateDay: 10
+      },
+      {
+        id: 'rec_3',
+        title: 'Mensalidade Academia / Personal',
+        category: 'Pessoal / Mensalidade',
+        totalAmount: 180.00,
+        installmentAmount: 180.00,
+        currentInstallment: 1,
+        totalInstallments: 0, // 0 = contínuo mensal
+        city: 'Teresina, PI',
+        method: 'PIX',
+        active: true,
+        dueDateDay: 5
+      }
+    ];
+  });
+
+  useEffect(() => {
+    localStorage.setItem('kyro_recurring', JSON.stringify(recurringExpenses));
+  }, [recurringExpenses]);
+
+  // Base de Transações (Persistente)
   const [transactions, setTransactions] = useState<Transaction[]>(() => {
     const saved = localStorage.getItem('kyro_transactions');
     if (saved) {
@@ -105,7 +161,7 @@ export default function App() {
         id: '1',
         description: 'Padaria Bella Vista',
         category: 'Alimentação',
-        subcategory: 'Pães e Lanche',
+        subcategory: 'Pães e Café',
         city: 'Teresina, PI',
         amount: 45.00,
         type: 'Saída',
@@ -117,8 +173,8 @@ export default function App() {
         id: '2',
         description: 'Lojas de Calçados & Roupas',
         category: 'Vestuário',
-        subcategory: 'Roupas e Sapatos',
-        city: 'Teresina, PI',
+        subcategory: 'Calçados',
+        city: 'Oeiras, PI',
         amount: 190.00,
         type: 'Saída',
         method: 'Débito',
@@ -127,50 +183,78 @@ export default function App() {
       },
       {
         id: '3',
-        description: 'Assinatura Software',
-        category: 'Serviços',
-        subcategory: 'Tecnologia / Online',
+        description: 'Passagem Aérea (Parcela 3/10)',
+        category: 'Passagem Aérea / Viagem',
+        subcategory: 'Férias',
         city: 'São Paulo, SP',
-        amount: 59.90,
+        amount: 240.00,
         type: 'Saída',
-        method: 'PIX',
+        method: 'Crédito',
         date: '10 Out',
-        status: 'Concluído'
+        status: 'Concluído',
+        currentInstallment: 3,
+        totalInstallments: 10
       },
       {
         id: '4',
-        description: 'Supermercado Central',
-        category: 'Alimentação',
-        subcategory: 'Compras da Semana',
+        description: 'Empréstimo Bancário (Parcela 6/24)',
+        category: 'Empréstimo',
+        subcategory: 'Parcela Fixa',
         city: 'Teresina, PI',
-        amount: 380.00,
+        amount: 500.00,
         type: 'Saída',
-        method: 'Crédito',
-        date: '08 Out',
-        status: 'Concluído'
+        method: 'PIX',
+        date: '10 Out',
+        status: 'Concluído',
+        currentInstallment: 6,
+        totalInstallments: 24
       },
       {
         id: '5',
+        description: 'Mensalidade Personal Trainer',
+        category: 'Pessoal / Mensalidade',
+        subcategory: 'Saúde e Treino',
+        city: 'Caxias, MA',
+        amount: 180.00,
+        type: 'Saída',
+        method: 'PIX',
+        date: '05 Out',
+        status: 'Concluído'
+      },
+      {
+        id: '6',
+        description: 'Supermercado Central',
+        category: 'Alimentação',
+        subcategory: 'Compras do Mês',
+        city: 'Caxias, MA',
+        amount: 320.00,
+        type: 'Saída',
+        method: 'Crédito',
+        date: '04 Out',
+        status: 'Concluído'
+      },
+      {
+        id: '7',
         description: 'Salário Mensal',
         category: 'Recebimento',
         subcategory: 'Salário Fixo',
         city: 'Teresina, PI',
-        amount: 5000.00,
+        amount: 6000.00,
         type: 'Entrada',
         method: 'Transferência',
         date: '05 Out',
         status: 'Concluído'
       },
       {
-        id: '6',
+        id: '8',
         description: 'Rendimento de Investimentos',
         category: 'Recebimento',
-        subcategory: 'Dividendos / Pro-labore',
+        subcategory: 'Dividendos',
         city: 'Teresina, PI',
-        amount: 1300.00,
+        amount: 1200.00,
         type: 'Entrada',
         method: 'PIX',
-        date: '03 Out',
+        date: '02 Out',
         status: 'Concluído'
       }
     ];
@@ -180,24 +264,24 @@ export default function App() {
     localStorage.setItem('kyro_transactions', JSON.stringify(transactions));
   }, [transactions]);
 
-  // Mensagens do Assistente IA / WhatsApp Bot
+  // Mensagens do Assistente IA / WhatsApp
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: '1',
       sender: 'ia',
-      text: `Olá, ${userFirstName}! Sou o seu Copiloto KYRO conectado ao seu WhatsApp. Pode mandar mensagens, áudios ou comprovantes que eu lanço tudo automaticamente no seu financeiro!`,
+      text: `Olá, ${userFirstName}! Sou seu Copiloto Financeiro KYRO via WhatsApp. Pode mandar mensagens, áudios e comprovantes, ou perguntar quanto gastou em qualquer cidade (ex: Teresina, Caxias, Oeiras), categoria ou método!`,
       timestamp: '20:15'
     },
     {
       id: '2',
       sender: 'user',
-      text: 'Acabei de fazer um Pix de R$ 45,00 para comprar pão na padaria Bella Vista em Teresina',
+      text: 'Quanto eu gastei em Caxias este mês?',
       timestamp: '20:16'
     },
     {
       id: '3',
       sender: 'ia',
-      text: '✅ Transação registrada via WhatsApp!\n• Valor: R$ 45,00\n• Método: PIX\n• Objeto: Pão\n• Estabelecimento: Padaria Bella Vista\n• Categoria: Alimentação\n• Cidade: Teresina, PI\n\nSeu Saldo Total e Saídas do Mês já foram atualizados!',
+      text: '📍 Gastos em Caxias, MA este mês:\n• Supermercado Central: R$ 320,00 (Crédito)\n• Mensalidade Personal: R$ 180,00 (PIX)\n\n💰 Total gasto em Caxias: R$ 500,00.',
       timestamp: '20:16'
     }
   ]);
@@ -214,7 +298,7 @@ export default function App() {
     .filter(t => t.type === 'Saída')
     .reduce((acc, t) => acc + t.amount, 0);
 
-  const basePatrimony = 13240.80; // Saldo anterior acumulado
+  const basePatrimony = 13240.80;
   const totalBalance = basePatrimony + monthIncomes - monthExpenses;
 
   // Métodos de Pagamento Totais
@@ -230,63 +314,99 @@ export default function App() {
     .filter(t => t.type === 'Saída' && t.method === 'Crédito')
     .reduce((acc, t) => acc + t.amount, 0);
 
-  // Porcentagem Matemática Financeira: Taxa de Economia / Poupança
   const savingsRate = monthIncomes > 0 
     ? Math.round(((monthIncomes - monthExpenses) / monthIncomes) * 100) 
     : 0;
 
-  // Lógica da IA para processar texto ou simulação de áudio/WhatsApp
+  // Resumo de Recorrentes Ativas
+  const totalMonthlyRecurring = recurringExpenses
+    .filter(r => r.active)
+    .reduce((acc, r) => acc + r.installmentAmount, 0);
+
+  // ================= CÉREBRO DA IA (PROCESSAMENTO MULTIMODAL & CONSULTAS VIA WHATSAPP) =================
   const processIaText = (text: string) => {
     const lower = text.toLowerCase();
     
-    // Tentar extrair valor numerico (ex: 45 ou 45,00 ou 45.00)
+    // 1. CONSULTA DE GASTOS POR CIDADE (Ex: "Quanto gastei em Caxias?", "Quanto gastei em Oeiras?", "Quanto gastei em Teresina?")
+    const citiesToCheck = [
+      { name: 'Caxias', full: 'Caxias, MA' },
+      { name: 'Oeiras', full: 'Oeiras, PI' },
+      { name: 'Teresina', full: 'Teresina, PI' },
+      { name: 'São Paulo', full: 'São Paulo, SP' },
+      { name: 'Fortaleza', full: 'Fortaleza, CE' }
+    ];
+
+    for (const c of citiesToCheck) {
+      if (lower.includes(c.name.toLowerCase())) {
+        const cityTxs = transactions.filter(t => 
+          t.type === 'Saída' && t.city.toLowerCase().includes(c.name.toLowerCase())
+        );
+        const cityTotal = cityTxs.reduce((acc, t) => acc + t.amount, 0);
+        
+        if (cityTxs.length === 0) {
+          return `📍 Consulta para ${c.full}:\nNão identifiquei nenhum gasto registrado nesta cidade este mês.`;
+        }
+
+        const itemsList = cityTxs.map(t => `• ${t.description}: R$ ${t.amount.toLocaleString('pt-BR', {minimumFractionDigits:2})} (${t.method})`).join('\n');
+        return `📍 Levantamento financeiro para ${c.full}:\n${itemsList}\n\n💰 Total gasto em ${c.name}: R$ ${cityTotal.toLocaleString('pt-BR', {minimumFractionDigits:2})}.`;
+      }
+    }
+
+    // 2. CONSULTA DE SAÍDAS RECORRENTES / EMPRÉSTIMO / PASSAGEM
+    if (lower.includes('recorrente') || lower.includes('empréstimo') || lower.includes('parcela') || lower.includes('passagem')) {
+      const activeList = recurringExpenses.filter(r => r.active).map(r => {
+        const parcelInfo = r.totalInstallments > 0 ? `(${r.currentInstallment}/${r.totalInstallments})` : '(Mensalidade fixa)';
+        return `• ${r.title} ${parcelInfo}: R$ ${r.installmentAmount.toLocaleString('pt-BR', {minimumFractionDigits:2})}/mês`;
+      }).join('\n');
+
+      return `🔁 Suas Saídas Recorrentes & Parcelamentos Ativos:\n${activeList}\n\n💳 Custo mensal fixo/parcelado comprometido: R$ ${totalMonthlyRecurring.toLocaleString('pt-BR', {minimumFractionDigits:2})}/mês.`;
+    }
+
+    // 3. CONSULTA DE MÉTODOS DE PAGAMENTO (Ex: "Quanto gastei no Pix?", "Quanto gastei no cartão?")
+    if (lower.includes('quanto gastei no pix') || lower.includes('total em pix')) {
+      return `💳 Total gasto em PIX este mês: R$ ${pixExpenses.toLocaleString('pt-BR', {minimumFractionDigits:2})}, distribuído em compras do dia a dia e despesas fixas.`;
+    }
+    if (lower.includes('crédito') || lower.includes('cartão de crédito')) {
+      return `💳 Total gasto no Cartão de Crédito este mês: R$ ${creditExpenses.toLocaleString('pt-BR', {minimumFractionDigits:2})}, incluindo parcelas de passagens aéreas e compras de mercado.`;
+    }
+
+    // 4. LANÇAMENTO AUTOMÁTICO DE GASTO NOVO VIA WHATSAPP (ÁUDIO / TEXTO)
     const valMatch = text.match(/(\d+[.,]?\d*)/);
     const amount = valMatch ? parseFloat(valMatch[0].replace(',', '.')) : 0;
 
-    // Detectar Método
-    let method: PaymentMethod = 'PIX';
-    if (lower.includes('débito') || lower.includes('debito')) method = 'Débito';
-    else if (lower.includes('crédito') || lower.includes('credito') || lower.includes('cartão')) method = 'Crédito';
-    else if (lower.includes('dinheiro')) method = 'Dinheiro';
-    else if (lower.includes('transferência') || lower.includes('ted')) method = 'Transferência';
+    if (amount > 0 && (lower.includes('gastei') || lower.includes('comprei') || lower.includes('paguei') || lower.includes('pix') || lower.includes('débito') || lower.includes('crédito'))) {
+      let method: PaymentMethod = 'PIX';
+      if (lower.includes('débito') || lower.includes('debito')) method = 'Débito';
+      else if (lower.includes('crédito') || lower.includes('credito') || lower.includes('cartão')) method = 'Crédito';
+      else if (lower.includes('dinheiro')) method = 'Dinheiro';
 
-    // Detectar Categoria e Objeto
-    let category = 'Outros';
-    let subcategory = 'Gasto Avulso';
-    let desc = 'Compra Avulsa';
+      let city = 'Teresina, PI';
+      if (lower.includes('caxias')) city = 'Caxias, MA';
+      else if (lower.includes('oeiras')) city = 'Oeiras, PI';
+      else if (lower.includes('são paulo') || lower.includes('sp')) city = 'São Paulo, SP';
 
-    if (lower.includes('padaria') || lower.includes('pão') || lower.includes('comida') || lower.includes('almoço') || lower.includes('lanche')) {
-      category = 'Alimentação';
-      subcategory = 'Padaria & Comida';
-      desc = lower.includes('padaria') ? 'Padaria' : 'Alimentação';
-    } else if (lower.includes('roupa') || lower.includes('calçado') || lower.includes('sapato') || lower.includes('loja')) {
-      category = 'Vestuário';
-      subcategory = 'Vestuário & Calçados';
-      desc = 'Vestuário / Calçado';
-    } else if (lower.includes('remédio') || lower.includes('farmácia') || lower.includes('saúde')) {
-      category = 'Saúde';
-      subcategory = 'Farmácia & Cuidados';
-      desc = 'Farmácia';
-    } else if (lower.includes('gasolina') || lower.includes('posto') || lower.includes('combustível') || lower.includes('uber')) {
-      category = 'Transporte';
-      subcategory = 'Combustível / Viagem';
-      desc = 'Transporte';
-    } else if (lower.includes('salário') || lower.includes('recebi') || lower.includes('rendimento')) {
-      category = 'Recebimento';
-      subcategory = 'Salário / Renda';
-      desc = 'Entrada Financeira';
-    }
+      let category = 'Outros';
+      let subcategory = 'Despesa Avulsa';
+      let desc = 'Compra Registrada via WhatsApp';
 
-    // Detectar Cidade
-    let city = 'Teresina, PI';
-    if (lower.includes('são paulo') || lower.includes('sp')) city = 'São Paulo, SP';
-    else if (lower.includes('fortaleza')) city = 'Fortaleza, CE';
-    else if (lower.includes('brasília')) city = 'Brasília, DF';
+      if (lower.includes('padaria') || lower.includes('pão') || lower.includes('comida') || lower.includes('almoço')) {
+        category = 'Alimentação';
+        subcategory = 'Padaria & Refeição';
+        desc = lower.includes('padaria') ? 'Padaria' : 'Alimentação';
+      } else if (lower.includes('roupa') || lower.includes('calçado') || lower.includes('sapato')) {
+        category = 'Vestuário';
+        subcategory = 'Vestuário & Calçados';
+        desc = 'Loja de Calçados & Roupas';
+      } else if (lower.includes('passagem') || lower.includes('voo') || lower.includes('aérea')) {
+        category = 'Passagem Aérea / Viagem';
+        subcategory = 'Transporte Aéreo';
+        desc = 'Passagem Aérea';
+      } else if (lower.includes('empréstimo')) {
+        category = 'Empréstimo';
+        subcategory = 'Amortização Empréstimo';
+        desc = 'Parcela Empréstimo';
+      }
 
-    const isIncome = lower.includes('recebi') || lower.includes('salário') || lower.includes('ganhei') || lower.includes('depósito');
-    const txType: TransactionType = isIncome ? 'Entrada' : 'Saída';
-
-    if (amount > 0) {
       const newTx: Transaction = {
         id: Date.now().toString(),
         description: desc,
@@ -294,7 +414,7 @@ export default function App() {
         subcategory,
         city,
         amount,
-        type: txType,
+        type: 'Saída',
         method,
         date: 'Hoje',
         status: 'Concluído'
@@ -302,14 +422,10 @@ export default function App() {
 
       setTransactions(prev => [newTx, ...prev]);
 
-      return `✅ Lançamento processado pela IA:\n• Tipo: ${txType}\n• Valor: R$ ${amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n• Método: ${method}\n• Categoria: ${category} (${subcategory})\n• Cidade: ${city}\n\nAtualizado instantaneamente nas Saídas, Saldo Total e Métodos de Pagamento!`;
+      return `✅ Lançamento processado via IA/WhatsApp:\n• Objeto: ${desc}\n• Categoria: ${category}\n• Valor: R$ ${amount.toLocaleString('pt-BR', {minimumFractionDigits:2})}\n• Método: ${method}\n• Cidade: ${city}\n\nAtualizado automaticamente em Saídas, Saldo Total, Gráficos e Relatórios!`;
     }
 
-    if (lower.includes('quanto gastei') || lower.includes('resumo') || lower.includes('pix')) {
-      return `📊 Resumo do Mês:\n• Total Saídas: R$ ${monthExpenses.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n• Gasto em PIX: R$ ${pixExpenses.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n• Gasto em Débito: R$ ${debitExpenses.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n• Gasto em Crédito: R$ ${creditExpenses.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n• Seu saldo disponível é R$ ${totalBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}.`;
-    }
-
-    return `Entendido, ${userFirstName}! Mensagem arquivada. Diga o que gastou ou recebeu (ex: "gastei 30 no pix na padaria em Teresina") que eu catalogo tudo.`;
+    return `Entendido, ${userFirstName}! Pergunte qualquer coisa (ex: "Quanto gastei em Caxias?", "Quanto gastei em Oeiras?", "Quanto de empréstimo?") ou me informe qualquer novo gasto!`;
   };
 
   const handleSendMessage = () => {
@@ -365,7 +481,6 @@ export default function App() {
               onClick={() => setShowCalibrator(!showCalibrator)}
               title="Clique para abrir o painel de ajuste"
             >
-              {/* 1. K Grande Esculpido */}
               <img 
                 src="/part-k.png" 
                 alt="K" 
@@ -377,7 +492,6 @@ export default function App() {
                 className="flex items-center flex-1 min-w-0"
                 style={{ marginLeft: `${logoConfig.gapKToKyro}px` }}
               >
-                {/* 2. Nome KYRO */}
                 <img 
                   src="/part-kyro.png" 
                   alt="KYRO" 
@@ -385,7 +499,6 @@ export default function App() {
                   className="w-auto object-contain flex-shrink-0 filter drop-shadow-[0_2px_10px_rgba(217,119,6,0.25)]" 
                 />
 
-                {/* 3. Nome Private Finance */}
                 <img 
                   src="/part-private-finance.png" 
                   alt="Private Finance" 
@@ -398,7 +511,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Botão de Ajuste no Canto */}
             <button
               onClick={() => setShowCalibrator(!showCalibrator)}
               className="absolute top-2 right-2 text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded opacity-75 hover:opacity-100 transition-opacity"
@@ -421,10 +533,7 @@ export default function App() {
                   <span className="font-mono text-amber-400 font-bold">{logoConfig.kHeight}px</span>
                 </div>
                 <input 
-                  type="range" 
-                  min="20" 
-                  max="160" 
-                  value={logoConfig.kHeight} 
+                  type="range" min="20" max="160" value={logoConfig.kHeight} 
                   onChange={(e) => setLogoConfig({ ...logoConfig, kHeight: Number(e.target.value) })} 
                   className="w-full accent-amber-500 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
                 />
@@ -436,10 +545,7 @@ export default function App() {
                   <span className="font-mono text-amber-400 font-bold">{logoConfig.kyroHeight}px</span>
                 </div>
                 <input 
-                  type="range" 
-                  min="10" 
-                  max="90" 
-                  value={logoConfig.kyroHeight} 
+                  type="range" min="10" max="90" value={logoConfig.kyroHeight} 
                   onChange={(e) => setLogoConfig({ ...logoConfig, kyroHeight: Number(e.target.value) })} 
                   className="w-full accent-amber-500 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
                 />
@@ -451,10 +557,7 @@ export default function App() {
                   <span className="font-mono text-amber-400 font-bold">{logoConfig.pfHeight}px</span>
                 </div>
                 <input 
-                  type="range" 
-                  min="10" 
-                  max="80" 
-                  value={logoConfig.pfHeight} 
+                  type="range" min="10" max="80" value={logoConfig.pfHeight} 
                   onChange={(e) => setLogoConfig({ ...logoConfig, pfHeight: Number(e.target.value) })} 
                   className="w-full accent-amber-500 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
                 />
@@ -466,10 +569,7 @@ export default function App() {
                   <span className="font-mono text-amber-400 font-bold">{logoConfig.gapKToKyro}px</span>
                 </div>
                 <input 
-                  type="range" 
-                  min="-30" 
-                  max="35" 
-                  value={logoConfig.gapKToKyro} 
+                  type="range" min="-30" max="35" value={logoConfig.gapKToKyro} 
                   onChange={(e) => setLogoConfig({ ...logoConfig, gapKToKyro: Number(e.target.value) })} 
                   className="w-full accent-amber-500 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
                 />
@@ -481,10 +581,7 @@ export default function App() {
                   <span className="font-mono text-amber-400 font-bold">{logoConfig.gapKyroToPf}px</span>
                 </div>
                 <input 
-                  type="range" 
-                  min="-15" 
-                  max="30" 
-                  value={logoConfig.gapKyroToPf} 
+                  type="range" min="-15" max="30" value={logoConfig.gapKyroToPf} 
                   onChange={(e) => setLogoConfig({ ...logoConfig, gapKyroToPf: Number(e.target.value) })} 
                   className="w-full accent-amber-500 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
                 />
@@ -513,7 +610,7 @@ export default function App() {
             </div>
           )}
 
-          {/* Menus de Navegação com Glow Laranja/Âmbar */}
+          {/* Menus de Navegação */}
           <nav className="p-4 space-y-1.5 mt-2">
             <button
               onClick={() => { setActiveTab('dashboard'); setMobileMenuOpen(false); }}
@@ -633,19 +730,17 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-3">
-            {/* Campo de Busca Funcional */}
             <div className="relative hidden sm:block w-64 md:w-80">
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={17} />
               <input
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Buscar despesa, padaria, cidade..."
+                placeholder="Buscar despesa, cidade..."
                 className="w-full bg-[#12172A] border border-[#202940] rounded-xl pl-10 pr-4 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/40 transition-all"
               />
             </div>
 
-            {/* Notificações */}
             <button 
               onClick={() => setNotificationsOpen(true)}
               className="relative p-2.5 rounded-xl bg-[#12172A] border border-[#202940] text-slate-400 hover:text-amber-400 hover:border-amber-500/40 transition-all"
@@ -654,7 +749,6 @@ export default function App() {
               <span className="absolute top-2 right-2 h-2 w-2 rounded-full bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.8)]"></span>
             </button>
 
-            {/* Botão + Lançamento Rápido */}
             <button 
               onClick={() => { setNewTxTypeDefault('Saída'); setNewTxModalOpen(true); }}
               className="hidden sm:flex items-center gap-2 px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 font-bold text-xs shadow-md shadow-amber-500/20 hover:brightness-110 transition-all"
@@ -663,7 +757,6 @@ export default function App() {
               Novo Lançamento
             </button>
 
-            {/* Botão Assistente IA no Celular */}
             <button 
               onClick={() => setChatOpenMobile(true)}
               className="lg:hidden flex items-center gap-2 px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-bold text-xs shadow-lg shadow-amber-500/20"
@@ -680,10 +773,10 @@ export default function App() {
           {/* ABA 1: DASHBOARD */}
           {activeTab === 'dashboard' && (
             <>
-              {/* ================= CARDS DE INDICADORES (KPIs) 100% DINÂMICOS E CLICÁVEIS ================= */}
+              {/* ================= CARDS DE INDICADORES (KPIs) ================= */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5">
                 
-                {/* 1. Saldo Total (Entradas - Saídas + Saldo Anterior) */}
+                {/* 1. Saldo Total */}
                 <div 
                   onClick={() => setActiveKpiModal('saldo')}
                   className="bg-[#111628] p-5 rounded-2xl border-2 border-amber-500/70 shadow-[0_0_25px_rgba(245,158,11,0.22)] relative overflow-hidden cursor-pointer hover:scale-[1.01] transition-all duration-300"
@@ -699,7 +792,7 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* 2. Entradas (Mês) - Clicável com Adição Manual e Seleção de Objeto */}
+                {/* 2. Entradas (Mês) */}
                 <div 
                   onClick={() => setActiveKpiModal('entradas')}
                   className="bg-[#111628] p-5 rounded-2xl border border-[#202940] shadow-lg relative overflow-hidden cursor-pointer hover:border-emerald-500/50 hover:scale-[1.01] transition-all duration-300"
@@ -718,7 +811,7 @@ export default function App() {
                   </p>
                 </div>
 
-                {/* 3. Saídas (Mês) - Clicável com Resumo de Fluxo e Detalhes da IA/WhatsApp */}
+                {/* 3. Saídas (Mês) - Clicável: Avulsas & Recorrentes */}
                 <div 
                   onClick={() => setActiveKpiModal('saidas')}
                   className="bg-[#111628] p-5 rounded-2xl border border-[#202940] shadow-lg relative overflow-hidden cursor-pointer hover:border-orange-500/50 hover:scale-[1.01] transition-all duration-300"
@@ -732,12 +825,12 @@ export default function App() {
                   <p className="text-2xl font-bold text-slate-100 mt-2">
                     R$ {monthExpenses.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                   </p>
-                  <p className="text-[11px] text-orange-400/90 mt-3 font-medium">
-                    Alimentado via WhatsApp & IA • Ver Cards
+                  <p className="text-[11px] text-orange-400/90 mt-3 font-medium flex items-center gap-1">
+                    <Repeat size={12} /> Inclui R$ {totalMonthlyRecurring.toLocaleString('pt-BR', {minimumFractionDigits:2})} em recorrentes
                   </p>
                 </div>
 
-                {/* 4. Métodos de Pagamento (Separado: Pix, Débito, Crédito) */}
+                {/* 4. Métodos de Pagamento */}
                 <div 
                   onClick={() => setActiveKpiModal('metodos')}
                   className="bg-[#111628] p-5 rounded-2xl border border-[#202940] shadow-lg flex flex-col justify-between cursor-pointer hover:border-amber-500/40 hover:scale-[1.01] transition-all"
@@ -811,21 +904,21 @@ export default function App() {
                       <text x="245" y="58" fill="#FDE68A" fontSize="10" fontWeight="bold">PIX</text>
 
                       <rect x="250" y="98" width="8" height="25" rx="3" fill="#EA580C" />
-                      <text x="242" y="137" fill="#FED7AA" fontSize="10">Débito</text>
+                      <text x="242" y="137" fill="#FED7AA" fontSize="10">Débito / Cartão</text>
 
                       <text x="420" y="20" fill="#94A3B8" fontSize="10" fontWeight="bold">Categorias</text>
                       <rect x="425" y="30" width="8" height="20" rx="3" fill="#F59E0B" />
                       <text x="440" y="44" fill="#CBD5E1" fontSize="10">Padaria / Alimentação</text>
 
                       <rect x="425" y="70" width="8" height="20" rx="3" fill="#D97706" />
-                      <text x="440" y="84" fill="#CBD5E1" fontSize="10">Vestuário / Roupas</text>
+                      <text x="440" y="84" fill="#CBD5E1" fontSize="10">Viagens / Passagens</text>
 
                       <rect x="425" y="110" width="8" height="20" rx="3" fill="#EA580C" />
-                      <text x="440" y="124" fill="#CBD5E1" fontSize="10">Serviços / Cartão</text>
+                      <text x="440" y="124" fill="#CBD5E1" fontSize="10">Empréstimos / Fixo</text>
 
                       <text x="420" y="145" fill="#94A3B8" fontSize="10" fontWeight="bold">Localizações</text>
                       <rect x="425" y="150" width="8" height="15" rx="3" fill="#F59E0B" />
-                      <text x="440" y="162" fill="#FCD34D" fontSize="10">Teresina, PI</text>
+                      <text x="440" y="162" fill="#FCD34D" fontSize="10">Caxias / Oeiras / THE</text>
                     </svg>
                   </div>
 
@@ -835,7 +928,7 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Gráfico 2: Categorias de Gastos (Alimentado Automaticamente) */}
+                {/* Gráfico 2: Categorias de Gastos */}
                 <div className="lg:col-span-2 bg-[#111628] p-6 rounded-2xl border border-[#202940] shadow-lg flex flex-col justify-between">
                   <div>
                     <h3 className="text-base font-bold text-slate-100">Categorias de Gastos</h3>
@@ -846,10 +939,10 @@ export default function App() {
                     <div className="relative h-32 w-32 flex items-center justify-center">
                       <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
                         <circle cx="18" cy="18" r="15.915" fill="transparent" stroke="#1E293B" strokeWidth="4" />
-                        <circle cx="18" cy="18" r="15.915" fill="transparent" stroke="#F59E0B" strokeWidth="4.5" strokeDasharray="42 58" strokeDashoffset="0" />
-                        <circle cx="18" cy="18" r="15.915" fill="transparent" stroke="#B45309" strokeWidth="4.5" strokeDasharray="28 72" strokeDashoffset="-42" />
-                        <circle cx="18" cy="18" r="15.915" fill="transparent" stroke="#38BDF8" strokeWidth="4.5" strokeDasharray="18 82" strokeDashoffset="-70" />
-                        <circle cx="18" cy="18" r="15.915" fill="transparent" stroke="#E2E8F0" strokeWidth="4.5" strokeDasharray="12 88" strokeDashoffset="-88" />
+                        <circle cx="18" cy="18" r="15.915" fill="transparent" stroke="#F59E0B" strokeWidth="4.5" strokeDasharray="35 65" strokeDashoffset="0" />
+                        <circle cx="18" cy="18" r="15.915" fill="transparent" stroke="#B45309" strokeWidth="4.5" strokeDasharray="30 70" strokeDashoffset="-35" />
+                        <circle cx="18" cy="18" r="15.915" fill="transparent" stroke="#38BDF8" strokeWidth="4.5" strokeDasharray="20 80" strokeDashoffset="-65" />
+                        <circle cx="18" cy="18" r="15.915" fill="transparent" stroke="#E2E8F0" strokeWidth="4.5" strokeDasharray="15 85" strokeDashoffset="-85" />
                       </svg>
                       <div className="absolute flex flex-col items-center">
                         <span className="text-xs font-bold text-slate-200">100%</span>
@@ -860,25 +953,25 @@ export default function App() {
                     <div className="space-y-2 text-xs">
                       <div className="flex items-center gap-2 cursor-pointer hover:text-amber-400" onClick={() => setFilterMethod('Alimentação')}>
                         <span className="h-2.5 w-2.5 rounded-full bg-amber-500"></span>
-                        <span className="text-slate-300">Alimentação (Padaria & Comida)</span>
+                        <span className="text-slate-300">Alimentação & Padaria</span>
                       </div>
-                      <div className="flex items-center gap-2 cursor-pointer hover:text-amber-400" onClick={() => setFilterMethod('Vestuário')}>
+                      <div className="flex items-center gap-2 cursor-pointer hover:text-amber-400" onClick={() => setFilterMethod('Empréstimo')}>
                         <span className="h-2.5 w-2.5 rounded-full bg-amber-700"></span>
-                        <span className="text-slate-300">Vestuário (Roupa/Calçado)</span>
+                        <span className="text-slate-300">Empréstimos & Parcelas</span>
                       </div>
-                      <div className="flex items-center gap-2 cursor-pointer hover:text-amber-400" onClick={() => setFilterMethod('Serviços')}>
+                      <div className="flex items-center gap-2 cursor-pointer hover:text-amber-400" onClick={() => setFilterMethod('Viagem')}>
                         <span className="h-2.5 w-2.5 rounded-full bg-sky-400"></span>
-                        <span className="text-slate-300">Serviços</span>
+                        <span className="text-slate-300">Passagem Aérea & Viagens</span>
                       </div>
-                      <div className="flex items-center gap-2 cursor-pointer hover:text-amber-400" onClick={() => setFilterMethod('Transporte')}>
+                      <div className="flex items-center gap-2 cursor-pointer hover:text-amber-400" onClick={() => setFilterMethod('Pessoal')}>
                         <span className="h-2.5 w-2.5 rounded-full bg-slate-300"></span>
-                        <span className="text-slate-300">Transporte</span>
+                        <span className="text-slate-300">Pessoal & Mensalidades</span>
                       </div>
                     </div>
                   </div>
 
                   <div className="text-center pt-2 border-t border-[#1E2740]">
-                    <span className="text-[11px] text-amber-400/90 font-medium">Alimentado automaticamente via IA & WhatsApp</span>
+                    <span className="text-[11px] text-amber-400/90 font-medium">Alimentado via WhatsApp & IA em tempo real</span>
                   </div>
                 </div>
 
@@ -889,7 +982,7 @@ export default function App() {
                 <div className="flex items-center justify-between mb-5">
                   <div>
                     <h3 className="text-base font-bold text-slate-100">Últimas Transações</h3>
-                    <p className="text-xs text-slate-400">Clique em qualquer item para ver o card detalhado</p>
+                    <p className="text-xs text-slate-400">Detalhamento por estabelecimento, parcelamento, cidade e método</p>
                   </div>
                   <button 
                     onClick={() => setActiveTab('transacoes')}
@@ -921,10 +1014,20 @@ export default function App() {
                               <div className={`h-9 w-9 rounded-xl flex items-center justify-center font-bold text-xs ${
                                 tx.type === 'Entrada' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
                               }`}>
-                                {tx.category === 'Alimentação' ? '🍞' : tx.category === 'Vestuário' ? '👟' : tx.category === 'Serviços' ? '💳' : '💰'}
+                                {tx.category.includes('Alimentação') ? '🍞' : 
+                                 tx.category.includes('Vestuário') ? '👟' : 
+                                 tx.category.includes('Passagem') ? '✈️' : 
+                                 tx.category.includes('Empréstimo') ? '🏦' : '💰'}
                               </div>
                               <div>
-                                <p className="font-semibold text-slate-100 group-hover:text-amber-300 transition-colors">{tx.description}</p>
+                                <p className="font-semibold text-slate-100 group-hover:text-amber-300 transition-colors">
+                                  {tx.description}
+                                  {tx.totalInstallments && tx.totalInstallments > 0 && (
+                                    <span className="ml-2 text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-1.5 py-0.5 rounded-full font-bold">
+                                      {tx.currentInstallment}/{tx.totalInstallments}
+                                    </span>
+                                  )}
+                                </p>
                                 <p className="text-xs text-slate-400">{tx.category} • <span className="text-slate-500">{tx.city}</span></p>
                               </div>
                             </div>
@@ -963,37 +1066,14 @@ export default function App() {
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
                   <h2 className="text-xl font-bold text-white">Extrato Consolidado de Transações</h2>
-                  <p className="text-xs text-slate-400">Filtragem avançada por método de pagamento, data e localidade</p>
+                  <p className="text-xs text-slate-400">Filtragem inteligente alimentada pela IA</p>
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
-                  <button 
-                    onClick={() => setFilterMethod('todos')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${filterMethod === 'todos' ? 'bg-amber-500 text-slate-950 font-bold' : 'bg-[#182038] text-slate-300'}`}
-                  >
-                    Todos
-                  </button>
-                  <button 
-                    onClick={() => setFilterMethod('pix')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${filterMethod === 'pix' ? 'bg-amber-500 text-slate-950 font-bold' : 'bg-[#182038] text-slate-300'}`}
-                  >
-                    PIX
-                  </button>
-                  <button 
-                    onClick={() => setFilterMethod('débito')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${filterMethod === 'débito' ? 'bg-amber-500 text-slate-950 font-bold' : 'bg-[#182038] text-slate-300'}`}
-                  >
-                    Débito
-                  </button>
-                  <button 
-                    onClick={() => setFilterMethod('crédito')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${filterMethod === 'crédito' ? 'bg-amber-500 text-slate-950 font-bold' : 'bg-[#182038] text-slate-300'}`}
-                  >
-                    Crédito
-                  </button>
-                  <button 
-                    onClick={() => { setNewTxTypeDefault('Saída'); setNewTxModalOpen(true); }}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all ml-2"
-                  >
+                  <button onClick={() => setFilterMethod('todos')} className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${filterMethod === 'todos' ? 'bg-amber-500 text-slate-950 font-bold' : 'bg-[#182038] text-slate-300'}`}>Todos</button>
+                  <button onClick={() => setFilterMethod('pix')} className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${filterMethod === 'pix' ? 'bg-amber-500 text-slate-950 font-bold' : 'bg-[#182038] text-slate-300'}`}>PIX</button>
+                  <button onClick={() => setFilterMethod('débito')} className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${filterMethod === 'débito' ? 'bg-amber-500 text-slate-950 font-bold' : 'bg-[#182038] text-slate-300'}`}>Débito</button>
+                  <button onClick={() => setFilterMethod('crédito')} className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${filterMethod === 'crédito' ? 'bg-amber-500 text-slate-950 font-bold' : 'bg-[#182038] text-slate-300'}`}>Crédito</button>
+                  <button onClick={() => { setNewTxTypeDefault('Saída'); setNewTxModalOpen(true); }} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all ml-2">
                     <Plus size={15} /> Adicionar
                   </button>
                 </div>
@@ -1014,7 +1094,14 @@ export default function App() {
                   <tbody className="divide-y divide-[#1E2740]/70 text-sm">
                     {filteredTransactions.map(tx => (
                       <tr key={tx.id} onClick={() => setSelectedTx(tx)} className="hover:bg-slate-800/40 cursor-pointer">
-                        <td className="py-3.5 pl-2 font-semibold text-slate-100">{tx.description}</td>
+                        <td className="py-3.5 pl-2 font-semibold text-slate-100 flex items-center gap-2">
+                          {tx.description}
+                          {tx.totalInstallments && tx.totalInstallments > 0 && (
+                            <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-1.5 py-0.5 rounded-full font-bold">
+                              {tx.currentInstallment}/{tx.totalInstallments}
+                            </span>
+                          )}
+                        </td>
                         <td className="py-3.5 text-slate-300 text-xs">{tx.category} • {tx.subcategory}</td>
                         <td className="py-3.5 text-slate-400 text-xs">{tx.city}</td>
                         <td className="py-3.5 text-center">
@@ -1038,96 +1125,174 @@ export default function App() {
             </div>
           )}
 
-          {/* ABA 3: ORÇAMENTOS */}
+          {/* ABA 3: ORÇAMENTOS (ATUALIZADO AUTOMATICAMENTE PELA IA) */}
           {activeTab === 'orcamentos' && (
             <div className="bg-[#111628] p-6 rounded-2xl border border-[#202940] shadow-lg space-y-6">
               <div>
-                <h2 className="text-xl font-bold text-white">Metas & Tetos de Orçamento</h2>
-                <p className="text-xs text-slate-400">A IA monitora quando você está perto de atingir o limite estipulado</p>
+                <h2 className="text-xl font-bold text-white">Metas & Tetos de Orçamento (Monitoramento por IA)</h2>
+                <p className="text-xs text-slate-400">A IA recalcula os tetos com base no que você gasta no WhatsApp e nos lançamentos</p>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                {/* 1. Alimentação */}
                 <div className="p-5 rounded-xl bg-[#141A2E] border border-[#222C46]">
                   <div className="flex justify-between items-center mb-2">
                     <span className="font-semibold text-sm text-slate-200">Alimentação & Padaria</span>
-                    <span className="text-xs text-amber-400 font-bold">R$ {transactions.filter(t => t.category === 'Alimentação').reduce((a,b)=>a+b.amount,0).toLocaleString('pt-BR', {minimumFractionDigits:2})} / R$ 800,00</span>
+                    <span className="text-xs text-amber-400 font-bold">R$ {transactions.filter(t => t.category.includes('Alimentação')).reduce((a,b)=>a+b.amount,0).toLocaleString('pt-BR', {minimumFractionDigits:2})} / R$ 800,00</span>
                   </div>
                   <div className="w-full bg-slate-800 h-2.5 rounded-full overflow-hidden">
-                    <div className="bg-gradient-to-r from-amber-500 to-orange-500 h-full rounded-full w-[43%]"></div>
+                    <div className="bg-gradient-to-r from-amber-500 to-orange-500 h-full rounded-full" style={{ width: `${Math.min(100, Math.round((transactions.filter(t => t.category.includes('Alimentação')).reduce((a,b)=>a+b.amount,0)/800)*100))}%` }}></div>
                   </div>
-                  <p className="text-[11px] text-slate-400 mt-2">Dentro da meta mensal planejada</p>
+                  <p className="text-[11px] text-slate-400 mt-2">Atualizado via IA conforme compras em padarias e mercados</p>
                 </div>
 
+                {/* 2. Empréstimos & Parcelas Fixas */}
+                <div className="p-5 rounded-xl bg-[#141A2E] border border-amber-500/30">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="font-semibold text-sm text-slate-200">Empréstimos & Saídas Recorrentes</span>
+                    <span className="text-xs text-amber-400 font-bold">R$ {totalMonthlyRecurring.toLocaleString('pt-BR', {minimumFractionDigits:2})} / mês</span>
+                  </div>
+                  <div className="w-full bg-slate-800 h-2.5 rounded-full overflow-hidden">
+                    <div className="bg-gradient-to-r from-amber-500 to-emerald-500 h-full rounded-full w-[70%]"></div>
+                  </div>
+                  <p className="text-[11px] text-emerald-400 mt-2">Comprometimento de parcelas sob controle rigoroso</p>
+                </div>
+
+                {/* 3. Passagens Aéreas & Viagens */}
+                <div className="p-5 rounded-xl bg-[#141A2E] border border-[#222C46]">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="font-semibold text-sm text-slate-200">Viagens & Passagens Aéreas</span>
+                    <span className="text-xs text-sky-400 font-bold">R$ {transactions.filter(t => t.category.includes('Passagem') || t.category.includes('Viagem')).reduce((a,b)=>a+b.amount,0).toLocaleString('pt-BR', {minimumFractionDigits:2})} / R$ 3.000,00</span>
+                  </div>
+                  <div className="w-full bg-slate-800 h-2.5 rounded-full overflow-hidden">
+                    <div className="bg-gradient-to-r from-sky-500 to-blue-600 h-full rounded-full w-[35%]"></div>
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-2">Parcelamento de passagens monitorado mês a mês</p>
+                </div>
+
+                {/* 4. Vestuário & Compras */}
                 <div className="p-5 rounded-xl bg-[#141A2E] border border-[#222C46]">
                   <div className="flex justify-between items-center mb-2">
                     <span className="font-semibold text-sm text-slate-200">Vestuário & Calçados</span>
-                    <span className="text-xs text-orange-400 font-bold">R$ {transactions.filter(t => t.category === 'Vestuário').reduce((a,b)=>a+b.amount,0).toLocaleString('pt-BR', {minimumFractionDigits:2})} / R$ 400,00</span>
+                    <span className="text-xs text-orange-400 font-bold">R$ {transactions.filter(t => t.category.includes('Vestuário')).reduce((a,b)=>a+b.amount,0).toLocaleString('pt-BR', {minimumFractionDigits:2})} / R$ 500,00</span>
                   </div>
                   <div className="w-full bg-slate-800 h-2.5 rounded-full overflow-hidden">
-                    <div className="bg-gradient-to-r from-orange-500 to-amber-500 h-full rounded-full w-[47%]"></div>
+                    <div className="bg-gradient-to-r from-orange-500 to-amber-500 h-full rounded-full w-[45%]"></div>
                   </div>
-                  <p className="text-[11px] text-slate-400 mt-2">Consumo sob controle</p>
+                  <p className="text-[11px] text-slate-400 mt-2">Dentro da meta de gastos pessoais</p>
                 </div>
               </div>
             </div>
           )}
 
-          {/* ABA 4: MAPA DE GASTOS */}
+          {/* ABA 4: MAPA DE GASTOS (POR CIDADE - TERESINA, CAXIAS, OEIRAS, ETC.) */}
           {activeTab === 'mapa' && (
             <div className="bg-[#111628] p-6 rounded-2xl border border-[#202940] shadow-lg space-y-6">
               <div>
-                <h2 className="text-xl font-bold text-white">Geolocalização dos Gastos</h2>
-                <p className="text-xs text-slate-400">Identificação das cidades e regiões onde você mais realiza compras</p>
+                <h2 className="text-xl font-bold text-white">Geolocalização dos Gastos por Cidade</h2>
+                <p className="text-xs text-slate-400">Total gasto por município, monitorado pela IA conforme suas mensagens</p>
               </div>
 
+              {/* Cards das Cidades */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="p-5 rounded-xl bg-[#141A2E] border border-amber-500/30">
-                  <div className="flex items-center gap-3">
-                    <MapPin className="text-amber-400" size={24} />
+                
+                {/* Teresina */}
+                <div className="p-5 rounded-xl bg-[#141A2E] border border-amber-500/40 shadow-md">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="h-10 w-10 rounded-xl bg-amber-500/15 text-amber-400 flex items-center justify-center font-bold">
+                      <MapPin size={22} />
+                    </div>
                     <div>
-                      <h4 className="font-bold text-slate-100">Teresina, PI</h4>
-                      <p className="text-xs text-slate-400">Maior volume de transações físicas</p>
+                      <h4 className="font-bold text-slate-100 text-base">Teresina, PI</h4>
+                      <p className="text-[11px] text-amber-400 font-medium">Sede Principal</p>
                     </div>
                   </div>
+                  <p className="text-xl font-extrabold text-white">
+                    R$ {transactions.filter(t => t.type === 'Saída' && t.city.includes('Teresina')).reduce((a,b)=>a+b.amount,0).toLocaleString('pt-BR', {minimumFractionDigits:2})}
+                  </p>
+                  <p className="text-[11px] text-slate-400 mt-2">
+                    {transactions.filter(t => t.type === 'Saída' && t.city.includes('Teresina')).length} transações registradas
+                  </p>
                 </div>
 
-                <div className="p-5 rounded-xl bg-[#141A2E] border border-[#222C46]">
-                  <div className="flex items-center gap-3">
-                    <MapPin className="text-sky-400" size={24} />
+                {/* Caxias */}
+                <div className="p-5 rounded-xl bg-[#141A2E] border border-emerald-500/30 shadow-md">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="h-10 w-10 rounded-xl bg-emerald-500/15 text-emerald-400 flex items-center justify-center font-bold">
+                      <MapPin size={22} />
+                    </div>
                     <div>
-                      <h4 className="font-bold text-slate-100">São Paulo, SP</h4>
-                      <p className="text-xs text-slate-400">Assinaturas e compras digitais</p>
+                      <h4 className="font-bold text-slate-100 text-base">Caxias, MA</h4>
+                      <p className="text-[11px] text-emerald-400 font-medium">Despesas & Pessoal</p>
                     </div>
                   </div>
+                  <p className="text-xl font-extrabold text-white">
+                    R$ {transactions.filter(t => t.type === 'Saída' && t.city.includes('Caxias')).reduce((a,b)=>a+b.amount,0).toLocaleString('pt-BR', {minimumFractionDigits:2})}
+                  </p>
+                  <p className="text-[11px] text-slate-400 mt-2">
+                    {transactions.filter(t => t.type === 'Saída' && t.city.includes('Caxias')).length} transações registradas
+                  </p>
+                </div>
+
+                {/* Oeiras */}
+                <div className="p-5 rounded-xl bg-[#141A2E] border border-sky-500/30 shadow-md">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="h-10 w-10 rounded-xl bg-sky-500/15 text-sky-400 flex items-center justify-center font-bold">
+                      <MapPin size={22} />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-slate-100 text-base">Oeiras, PI</h4>
+                      <p className="text-[11px] text-sky-400 font-medium">Vestuário & Compras</p>
+                    </div>
+                  </div>
+                  <p className="text-xl font-extrabold text-white">
+                    R$ {transactions.filter(t => t.type === 'Saída' && t.city.includes('Oeiras')).reduce((a,b)=>a+b.amount,0).toLocaleString('pt-BR', {minimumFractionDigits:2})}
+                  </p>
+                  <p className="text-[11px] text-slate-400 mt-2">
+                    {transactions.filter(t => t.type === 'Saída' && t.city.includes('Oeiras')).length} transação registrada
+                  </p>
+                </div>
+
+              </div>
+
+              {/* Dica da IA */}
+              <div className="p-4 rounded-xl bg-[#0E1322] border border-[#1E2740] flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Sparkles size={20} className="text-amber-400" />
+                  <p className="text-xs text-slate-300">
+                    <strong>Pergunta rápida no WhatsApp:</strong> Você pode mandar um áudio ou texto como <em>"Quanto gastei em Caxias?"</em> ou <em>"Quanto gastei em Oeiras?"</em> que a IA te responde instantaneamente no WhatsApp!
+                  </p>
                 </div>
               </div>
             </div>
           )}
 
-          {/* ABA 5: RELATÓRIOS */}
+          {/* ABA 5: RELATÓRIOS (GERADOS PELA IA) */}
           {activeTab === 'relatorios' && (
             <div className="bg-[#111628] p-6 rounded-2xl border border-[#202940] shadow-lg space-y-6">
               <div className="flex justify-between items-center">
                 <div>
-                  <h2 className="text-xl font-bold text-white">Demonstrativo e Relatórios Financeiros</h2>
-                  <p className="text-xs text-slate-400">Exportação consolidada dos seus números</p>
+                  <h2 className="text-xl font-bold text-white">Demonstrativo & Relatórios com IA</h2>
+                  <p className="text-xs text-slate-400">Consolidado em tempo real de Kayro Wisterly</p>
                 </div>
                 <button 
-                  onClick={() => alert("Gerando relatório em PDF consolidado de Kayro Wisterly...")}
+                  onClick={() => alert("Gerando relatório completo em PDF consolidado...")}
                   className="flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-500 text-slate-950 font-bold text-xs hover:bg-amber-400"
                 >
                   <Download size={15} /> Baixar Relatório (PDF)
                 </button>
               </div>
 
-              <div className="p-5 rounded-xl bg-[#141A2E] border border-[#222C46] space-y-3">
-                <h4 className="font-bold text-slate-200">Resumo Executivo do Mês (Outubro)</h4>
-                <p className="text-xs text-slate-300 leading-relaxed">
-                  • <strong>Total de Entradas:</strong> R$ {monthIncomes.toLocaleString('pt-BR', {minimumFractionDigits:2})}<br/>
-                  • <strong>Total de Saídas:</strong> R$ {monthExpenses.toLocaleString('pt-BR', {minimumFractionDigits:2})}<br/>
-                  • <strong>Resultado Líquido Positivo:</strong> +R$ {(monthIncomes - monthExpenses).toLocaleString('pt-BR', {minimumFractionDigits:2})}<br/>
-                  • <strong>Taxa de Poupança/Sobra:</strong> {savingsRate}% da sua renda preservada.
-                </p>
+              <div className="p-5 rounded-xl bg-[#141A2E] border border-[#222C46] space-y-4">
+                <h4 className="font-bold text-amber-400 flex items-center gap-2">
+                  <Sparkles size={16} /> Diagnóstico Financeiro da IA
+                </h4>
+                <div className="text-xs text-slate-300 space-y-2 leading-relaxed">
+                  <p>• <strong>Receita Total:</strong> R$ {monthIncomes.toLocaleString('pt-BR', {minimumFractionDigits:2})}</p>
+                  <p>• <strong>Despesas Totais:</strong> R$ {monthExpenses.toLocaleString('pt-BR', {minimumFractionDigits:2})} (incluindo R$ {totalMonthlyRecurring.toLocaleString('pt-BR', {minimumFractionDigits:2})} em parcelas recorrentes de empréstimos, viagens e pessoal).</p>
+                  <p>• <strong>Lucro Líquido / Sobra:</strong> <span className="text-emerald-400 font-bold">+R$ {(monthIncomes - monthExpenses).toLocaleString('pt-BR', {minimumFractionDigits:2})}</span> ({savingsRate}% de economia).</p>
+                  <p>• <strong>Distribuição por Cidades:</strong> Maior concentração em Teresina (PI), seguida por Caxias (MA) e Oeiras (PI).</p>
+                </div>
               </div>
             </div>
           )}
@@ -1136,31 +1301,28 @@ export default function App() {
           {activeTab === 'configuracoes' && (
             <div className="bg-[#111628] p-6 rounded-2xl border border-[#202940] shadow-lg space-y-6">
               <div>
-                <h2 className="text-xl font-bold text-white">Configurações & Integrações</h2>
-                <p className="text-xs text-slate-400">Conexão do WhatsApp Bot e Backup em Nuvem</p>
+                <h2 className="text-xl font-bold text-white">Configurações & Conexão WhatsApp Bot</h2>
+                <p className="text-xs text-slate-400">Integração do número para receber áudios, textos e comprovantes</p>
               </div>
 
               <div className="space-y-4">
-                <div className="p-5 rounded-xl bg-[#141A2E] border border-[#222C46] flex items-center justify-between">
+                <div className="p-5 rounded-xl bg-[#141A2E] border border-amber-500/40 flex items-center justify-between">
                   <div>
-                    <h4 className="font-semibold text-slate-200">Integração WhatsApp Bot</h4>
-                    <p className="text-xs text-slate-400">Recebimento de áudios, textos e fotos de comprovantes diretamente do seu WhatsApp</p>
+                    <h4 className="font-semibold text-slate-200">WhatsApp Bot (Copiloto KYRO)</h4>
+                    <p className="text-xs text-slate-400">Pronto para receber comandos de áudio e texto (Ex: Caxias, Oeiras, Teresina, PIX, Empréstimos)</p>
                   </div>
                   <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                    🟢 Conectado
+                    🟢 Ativo 24h
                   </span>
                 </div>
 
                 <div className="p-5 rounded-xl bg-[#141A2E] border border-[#222C46] flex items-center justify-between">
                   <div>
-                    <h4 className="font-semibold text-slate-200">Conta Google / Nuvem</h4>
-                    <p className="text-xs text-slate-400">Sincronização 24h na conta de {userFullName}</p>
+                    <h4 className="font-semibold text-slate-200">Conta Google Sincronizada</h4>
+                    <p className="text-xs text-slate-400">Usuário: {userFullName} (Backup em nuvem)</p>
                   </div>
-                  <button 
-                    onClick={() => setProfileModalOpen(true)}
-                    className="px-3 py-1.5 rounded-lg bg-amber-500/20 text-amber-400 border border-amber-500/40 text-xs font-bold hover:bg-amber-500/30"
-                  >
-                    Gerenciar Conta
+                  <button onClick={() => setProfileModalOpen(true)} className="px-3 py-1.5 rounded-lg bg-amber-500/20 text-amber-400 border border-amber-500/40 text-xs font-bold hover:bg-amber-500/30">
+                    Gerenciar
                   </button>
                 </div>
               </div>
@@ -1187,10 +1349,7 @@ export default function App() {
               </p>
             </div>
           </div>
-          <button 
-            onClick={() => setChatOpenMobile(false)}
-            className="lg:hidden text-slate-400 hover:text-white"
-          >
+          <button onClick={() => setChatOpenMobile(false)} className="lg:hidden text-slate-400 hover:text-white">
             <X size={18} />
           </button>
         </div>
@@ -1217,20 +1376,20 @@ export default function App() {
           <div className="flex items-center gap-2 bg-[#12172A] border border-[#202940] rounded-xl px-3 py-2 focus-within:border-amber-500/50 transition-all">
             <button 
               onClick={() => {
-                const simulatedAudio = "Acabei de pagar 25 reais no débito na padaria em Teresina";
-                setInputMessage(simulatedAudio);
+                const simulated = "Quanto gastei em Caxias?";
+                setInputMessage(simulated);
               }}
-              title="Simular comando de áudio" 
+              title="Exemplo: Consulta por cidade" 
               className="text-slate-400 hover:text-amber-400 transition-colors p-1"
             >
               <Mic size={16} />
             </button>
             <button 
               onClick={() => {
-                const simulatedPrint = "Comprovante PIX: R$ 85,00 para Posto de Gasolina em Teresina";
-                setInputMessage(simulatedPrint);
+                const simulated = "Comprei passagem aérea de 2400 parcelada em 10 vezes no crédito em São Paulo";
+                setInputMessage(simulated);
               }}
-              title="Simular leitura de comprovante" 
+              title="Exemplo: Cadastro de compra parcelada" 
               className="text-slate-400 hover:text-amber-400 transition-colors p-1"
             >
               <ImageIcon size={16} />
@@ -1240,7 +1399,7 @@ export default function App() {
               value={inputMessage}
               onChange={(e) => setInputMessage(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
-              placeholder="Digite, envie áudio ou comprovante..."
+              placeholder="Pergunte (ex: Caxias, Oeiras, Pix...)"
               className="flex-1 bg-transparent text-xs text-slate-200 placeholder-slate-500 focus:outline-none"
             />
             <button
@@ -1251,12 +1410,12 @@ export default function App() {
             </button>
           </div>
           <p className="text-[10px] text-center text-slate-500 mt-2">
-            Mensagens enviadas aqui ou no seu WhatsApp sincronizam em tempo real
+            Pergunte sobre qualquer cidade, categoria ou registre novos gastos
           </p>
         </div>
       </aside>
 
-      {/* ===================== MODAL DE ENTRADAS (CLICADO NO CARD ENTRADAS DO MÊS) ===================== */}
+      {/* ===================== MODAL DE ENTRADAS ===================== */}
       {activeKpiModal === 'entradas' && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-[#12172A] border border-[#2A3554] rounded-2xl max-w-lg w-full p-6 shadow-2xl relative animate-in fade-in max-h-[90vh] overflow-y-auto">
@@ -1274,7 +1433,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Formulário Manual de Adição de Entradas */}
             <form onSubmit={(e) => {
               e.preventDefault();
               const f = e.target as any;
@@ -1342,7 +1500,6 @@ export default function App() {
               </button>
             </form>
 
-            {/* Lista em Cards das Entradas Registradas */}
             <h4 className="text-xs font-bold text-slate-300 mb-2">Entradas Registradas Este Mês:</h4>
             <div className="space-y-2 max-h-48 overflow-y-auto">
               {transactions.filter(t => t.type === 'Entrada').map(t => (
@@ -1359,69 +1516,269 @@ export default function App() {
         </div>
       )}
 
-      {/* ===================== MODAL DE SAÍDAS (CLICADO NO CARD SAÍDAS DO MÊS - CARDS DETALHADOS) ===================== */}
+      {/* ===================== MODAL DE SAÍDAS (COM ABA DE RECORRENTES & PARCELAMENTOS) ===================== */}
       {activeKpiModal === 'saidas' && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#12172A] border border-[#2A3554] rounded-2xl max-w-xl w-full p-6 shadow-2xl relative animate-in fade-in max-h-[90vh] overflow-y-auto">
+          <div className="bg-[#12172A] border border-[#2A3554] rounded-2xl max-w-2xl w-full p-6 shadow-2xl relative animate-in fade-in max-h-[90vh] overflow-y-auto">
             <button onClick={() => setActiveKpiModal(null)} className="absolute top-4 right-4 text-slate-400 hover:text-white">
               <X size={20} />
             </button>
 
-            <div className="flex items-center gap-3 mb-4">
-              <div className="h-10 w-10 rounded-xl bg-orange-500/20 text-orange-400 flex items-center justify-center">
-                <ArrowDownRight size={22} />
+            <div className="flex items-center justify-between mb-4 pb-3 border-b border-[#1E2740]">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-xl bg-orange-500/20 text-orange-400 flex items-center justify-center">
+                  <ArrowDownRight size={22} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-lg text-white">Gestão Completa de Saídas</h3>
+                  <p className="text-xs text-slate-400">Total gasto este mês: <strong className="text-orange-400">R$ {monthExpenses.toLocaleString('pt-BR', {minimumFractionDigits:2})}</strong></p>
+                </div>
               </div>
-              <div>
-                <h3 className="font-bold text-lg text-white">Resumo Detalhado do Fluxo de Saídas</h3>
-                <p className="text-xs text-slate-400">Total gasto este mês: <strong className="text-orange-400">R$ {monthExpenses.toLocaleString('pt-BR', {minimumFractionDigits:2})}</strong></p>
+
+              {/* Seletor de Sub-Abas: Saídas Avulsas vs Saídas Recorrentes */}
+              <div className="flex items-center bg-[#0E1322] p-1 rounded-xl border border-[#1E2740]">
+                <button
+                  onClick={() => setSaidasTab('avulsas')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${saidasTab === 'avulsas' ? 'bg-amber-500 text-slate-950 shadow-md' : 'text-slate-400 hover:text-white'}`}
+                >
+                  Saídas Avulsas
+                </button>
+                <button
+                  onClick={() => setSaidasTab('recorrentes')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${saidasTab === 'recorrentes' ? 'bg-amber-500 text-slate-950 shadow-md' : 'text-slate-400 hover:text-white'}`}
+                >
+                  🔁 Recorrentes & Parcelas
+                </button>
               </div>
             </div>
 
-            <p className="text-xs text-slate-300 mb-4 leading-relaxed bg-[#0E1322] p-3 rounded-xl border border-[#1E2740]">
-              💡 <strong>Como funciona a alimentação:</strong> Cada áudio, mensagem de texto ou foto de comprovante enviada no WhatsApp ou no chat ao lado é convertida pela IA em um card detalhado abaixo:
-            </p>
+            {/* CONTEÚDO 1: SAÍDAS AVULSAS */}
+            {saidasTab === 'avulsas' && (
+              <div className="space-y-3">
+                <p className="text-xs text-slate-300 leading-relaxed bg-[#0E1322] p-3 rounded-xl border border-[#1E2740]">
+                  💡 <strong>Alimentação Inteligente:</strong> As compras do dia a dia (padaria, almoço, lojas, etc.) caem automaticamente aqui pelo seu WhatsApp.
+                </p>
 
-            {/* Cards com informações separadamente conforme pedido */}
-            <div className="space-y-3">
-              {transactions.filter(t => t.type === 'Saída').map(tx => (
-                <div key={tx.id} className="p-4 rounded-xl bg-[#141A2E] border border-[#222C46] hover:border-amber-500/40 transition-all shadow-sm">
-                  <div className="flex justify-between items-start">
-                    <div className="flex items-center gap-2.5">
-                      <span className="p-2 rounded-lg bg-amber-500/10 text-amber-400 font-bold text-sm">
-                        {tx.category === 'Alimentação' ? '🍞' : tx.category === 'Vestuário' ? '👟' : tx.category === 'Serviços' ? '💳' : '🛍️'}
-                      </span>
-                      <div>
-                        <h4 className="font-bold text-slate-100 text-sm">{tx.description}</h4>
-                        <p className="text-xs text-amber-400/90 font-medium">{tx.category} • {tx.subcategory}</p>
+                <div className="space-y-2.5 max-h-96 overflow-y-auto">
+                  {transactions.filter(t => t.type === 'Saída').map(tx => (
+                    <div key={tx.id} className="p-3.5 rounded-xl bg-[#141A2E] border border-[#222C46] hover:border-amber-500/40 transition-all">
+                      <div className="flex justify-between items-start">
+                        <div className="flex items-center gap-2.5">
+                          <span className="p-2 rounded-lg bg-amber-500/10 text-amber-400 font-bold text-sm">
+                            {tx.category.includes('Alimentação') ? '🍞' : tx.category.includes('Vestuário') ? '👟' : tx.category.includes('Passagem') ? '✈️' : '🛍️'}
+                          </span>
+                          <div>
+                            <h4 className="font-bold text-slate-100 text-sm flex items-center gap-2">
+                              {tx.description}
+                              {tx.totalInstallments && tx.totalInstallments > 0 && (
+                                <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-1.5 py-0.5 rounded-full font-bold">
+                                  {tx.currentInstallment}/{tx.totalInstallments}
+                                </span>
+                              )}
+                            </h4>
+                            <p className="text-xs text-amber-400/90 font-medium">{tx.category} • {tx.city}</p>
+                          </div>
+                        </div>
+                        <span className="font-bold text-orange-400 text-sm">
+                          - R$ {tx.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </span>
                       </div>
                     </div>
-                    <span className="font-bold text-orange-400 text-base">
-                      - R$ {tx.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                    </span>
-                  </div>
-
-                  {/* Detalhes em mini badges */}
-                  <div className="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-[#1E2740] text-[11px]">
-                    <div>
-                      <span className="text-slate-400 block text-[10px]">MÉTODO</span>
-                      <span className="font-bold text-amber-300">{tx.method}</span>
-                    </div>
-                    <div>
-                      <span className="text-slate-400 block text-[10px]">CIDADE</span>
-                      <span className="font-semibold text-slate-200">{tx.city}</span>
-                    </div>
-                    <div>
-                      <span className="text-slate-400 block text-[10px]">DATA</span>
-                      <span className="font-semibold text-slate-200">{tx.date}</span>
-                    </div>
-                  </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              </div>
+            )}
 
-            <button onClick={() => setActiveKpiModal(null)} className="w-full mt-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition-all">
-              Fechar Resumo
+            {/* CONTEÚDO 2: SAÍDAS RECORRENTES & PARCELAMENTOS MENSAIS */}
+            {saidasTab === 'recorrentes' && (
+              <div className="space-y-4">
+                <div className="flex justify-between items-center bg-[#0E1322] p-3.5 rounded-xl border border-amber-500/30">
+                  <div>
+                    <h4 className="font-bold text-sm text-amber-300">Total Mensal Comprometido</h4>
+                    <p className="text-xs text-slate-400">Empréstimos, passagens parceladas e mensalidades fixas</p>
+                  </div>
+                  <span className="text-lg font-extrabold text-amber-400">
+                    R$ {totalMonthlyRecurring.toLocaleString('pt-BR', {minimumFractionDigits:2})}/mês
+                  </span>
+                </div>
+
+                {/* Botão para Criar Nova Saída Recorrente */}
+                <button
+                  onClick={() => setNewRecModalOpen(true)}
+                  className="w-full py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 font-bold text-xs hover:brightness-110 transition-all flex items-center justify-center gap-2"
+                >
+                  <Plus size={16} /> Cadastrar Nova Recorrente ou Parcelamento (Passagem, Empréstimo, Pessoal...)
+                </button>
+
+                {/* Cards das Saídas Recorrentes Ativas */}
+                <div className="space-y-3 max-h-80 overflow-y-auto">
+                  {recurringExpenses.map(rec => (
+                    <div key={rec.id} className="p-4 rounded-xl bg-[#141A2E] border border-[#222C46] space-y-2 hover:border-amber-500/40 transition-all">
+                      <div className="flex justify-between items-start">
+                        <div className="flex items-center gap-2.5">
+                          <span className="p-2 rounded-lg bg-amber-500/15 text-amber-400 font-bold text-base">
+                            {rec.category.includes('Passagem') ? '✈️' : rec.category.includes('Empréstimo') ? '🏦' : '👤'}
+                          </span>
+                          <div>
+                            <h4 className="font-bold text-slate-100 text-sm">{rec.title}</h4>
+                            <p className="text-xs text-amber-400/90 font-medium">{rec.category} • Vencimento dia {rec.dueDateDay}</p>
+                          </div>
+                        </div>
+
+                        <div className="text-right">
+                          <span className="font-extrabold text-white text-base">
+                            R$ {rec.installmentAmount.toLocaleString('pt-BR', {minimumFractionDigits:2})}
+                          </span>
+                          <span className="text-xs text-slate-400 block">/mês</span>
+                        </div>
+                      </div>
+
+                      {/* Progresso de Parcelas */}
+                      {rec.totalInstallments > 0 ? (
+                        <div className="pt-2 border-t border-[#1E2740] space-y-1">
+                          <div className="flex justify-between text-[11px] text-slate-300">
+                            <span>Parcela: <strong>{rec.currentInstallment} de {rec.totalInstallments}</strong></span>
+                            <span>Total financiado: R$ {rec.totalAmount.toLocaleString('pt-BR', {minimumFractionDigits:2})}</span>
+                          </div>
+                          <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                            <div 
+                              className="bg-gradient-to-r from-amber-500 to-orange-500 h-full rounded-full" 
+                              style={{ width: `${Math.round((rec.currentInstallment / rec.totalInstallments) * 100)}%` }}
+                            ></div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="pt-2 border-t border-[#1E2740] flex justify-between text-[11px] text-emerald-400">
+                          <span>🔁 Mensalidade contínua (renovação automática)</span>
+                          <span>{rec.method} • {rec.city}</span>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <button onClick={() => setActiveKpiModal(null)} className="w-full mt-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs transition-all">
+              Fechar Janela
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ===================== MODAL DE CADASTRO DE NOVA RECORRENTE / PARCELAMENTO ===================== */}
+      {newRecModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#12172A] border border-[#2A3554] rounded-2xl max-w-md w-full p-6 shadow-2xl relative animate-in fade-in">
+            <button onClick={() => setNewRecModalOpen(false)} className="absolute top-4 right-4 text-slate-400 hover:text-white">
+              <X size={20} />
+            </button>
+
+            <h3 className="font-bold text-base text-white mb-2 flex items-center gap-2">
+              <Repeat size={18} className="text-amber-400" /> Cadastrar Saída Recorrente
+            </h3>
+            <p className="text-xs text-slate-400 mb-4">Adicione empréstimos, mensalidades ou passagens aéreas parceladas:</p>
+
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              const f = e.target as any;
+              const installments = parseInt(f.parcelas.value);
+              const totalVal = parseFloat(f.valorTotal.value);
+              const parcelaVal = installments > 0 ? (totalVal / installments) : totalVal;
+
+              const newRec: RecurringExpense = {
+                id: `rec_${Date.now()}`,
+                title: f.titulo.value,
+                category: f.categoria.value === 'Outros' ? f.outraCategoria.value : f.categoria.value,
+                totalAmount: totalVal,
+                installmentAmount: parcelaVal,
+                currentInstallment: 1,
+                totalInstallments: installments,
+                city: f.cidade.value,
+                method: f.metodo.value,
+                active: true,
+                dueDateDay: parseInt(f.diaVenc.value) || 10
+              };
+
+              setRecurringExpenses(prev => [newRec, ...prev]);
+
+              // Adicionar primeira parcela nas transações de saída automaticamente
+              const newTx: Transaction = {
+                id: Date.now().toString(),
+                description: `${newRec.title} ${installments > 0 ? '(1/' + installments + ')' : ''}`,
+                category: newRec.category,
+                subcategory: 'Parcela / Recorrência',
+                city: newRec.city,
+                amount: parcelaVal,
+                type: 'Saída',
+                method: newRec.method,
+                date: 'Hoje',
+                status: 'Concluído',
+                currentInstallment: 1,
+                totalInstallments: installments
+              };
+              setTransactions(prev => [newTx, ...prev]);
+
+              setNewRecModalOpen(false);
+            }} className="space-y-3 text-xs">
+              <div>
+                <label className="text-slate-400 block mb-1">Título / Descrição da Despesa:</label>
+                <input required name="titulo" placeholder="Ex: Passagem Aérea Fortaleza, Empréstimo..." className="w-full bg-[#161D32] border border-[#2A3554] p-2 rounded-lg text-slate-100" />
+              </div>
+
+              <div>
+                <label className="text-slate-400 block mb-1">Categoria:</label>
+                <select name="categoria" className="w-full bg-[#161D32] border border-[#2A3554] p-2 rounded-lg text-slate-100" onChange={(e) => {
+                  const el = document.getElementById('campoOutraCatRec');
+                  if (el) el.style.display = e.target.value === 'Outros' ? 'block' : 'none';
+                }}>
+                  <option value="Passagem Aérea / Viagem">Passagem Aérea / Viagem</option>
+                  <option value="Empréstimo">Empréstimo Bancário</option>
+                  <option value="Pessoal / Mensalidade">Mensalidade Pessoal (Academia, etc.)</option>
+                  <option value="Outros">Outra Categoria (Criar personalizada...)</option>
+                </select>
+              </div>
+
+              <div id="campoOutraCatRec" style={{ display: 'none' }}>
+                <label className="text-slate-400 block mb-1">Nome da Nova Categoria:</label>
+                <input name="outraCategoria" placeholder="Ex: Financiamento Carro, Seguro..." className="w-full bg-[#161D32] border border-[#2A3554] p-2 rounded-lg text-slate-100" />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-slate-400 block mb-1">Valor Total (R$):</label>
+                  <input required type="number" step="0.01" name="valorTotal" placeholder="Ex: 2400.00" className="w-full bg-[#161D32] border border-[#2A3554] p-2 rounded-lg text-slate-100 font-bold text-orange-400" />
+                </div>
+                <div>
+                  <label className="text-slate-400 block mb-1">Nº de Parcelas:</label>
+                  <input required type="number" name="parcelas" defaultValue="10" placeholder="0 para fixo todo mês" className="w-full bg-[#161D32] border border-[#2A3554] p-2 rounded-lg text-slate-100" />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-slate-400 block mb-1">Método de Pagamento:</label>
+                  <select name="metodo" className="w-full bg-[#161D32] border border-[#2A3554] p-2 rounded-lg text-slate-100">
+                    <option value="Crédito">Cartão de Crédito</option>
+                    <option value="PIX">PIX</option>
+                    <option value="Débito">Débito</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-slate-400 block mb-1">Cidade / Estado:</label>
+                  <input name="cidade" defaultValue="Teresina, PI" className="w-full bg-[#161D32] border border-[#2A3554] p-2 rounded-lg text-slate-100" />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-slate-400 block mb-1">Dia do Vencimento Mensal:</label>
+                <input type="number" name="diaVenc" min="1" max="31" defaultValue="10" className="w-full bg-[#161D32] border border-[#2A3554] p-2 rounded-lg text-slate-100" />
+              </div>
+
+              <button type="submit" className="w-full mt-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition-all shadow-md">
+                Salvar e Ativar Recorrência
+              </button>
+            </form>
           </div>
         </div>
       )}
@@ -1456,7 +1813,7 @@ export default function App() {
               <div className="p-3.5 rounded-xl bg-[#141A2E] border border-sky-500/30 flex justify-between items-center">
                 <div className="flex items-center gap-2.5">
                   <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-sky-500/15 text-sky-400 border border-sky-500/30">Crédito</span>
-                  <span className="text-xs font-semibold text-slate-200">Fatura Cartão de Crédito</span>
+                  <span className="text-xs font-semibold text-slate-200">Fatura Cartão de Crédito (Parcelas)</span>
                 </div>
                 <span className="font-bold text-sky-400 text-sm">R$ {creditExpenses.toLocaleString('pt-BR', {minimumFractionDigits:2})}</span>
               </div>
@@ -1469,7 +1826,7 @@ export default function App() {
         </div>
       )}
 
-      {/* ===================== MODAL SALDO TOTAL (EXPLICAÇÃO DO CÁLCULO) ===================== */}
+      {/* ===================== MODAL SALDO TOTAL ===================== */}
       {activeKpiModal === 'saldo' && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-[#12172A] border border-[#2A3554] rounded-2xl max-w-md w-full p-6 shadow-2xl relative animate-in fade-in">
@@ -1499,7 +1856,7 @@ export default function App() {
             </div>
 
             <p className="text-[11px] text-slate-400 mt-3 text-center">
-              A porcentagem exibida ({savingsRate}%) representa a taxa de economia em relação a tudo o que entrou.
+              A taxa de {savingsRate}% representa a sobra financeira real sobre tudo o que entrou.
             </p>
 
             <button onClick={() => setActiveKpiModal(null)} className="w-full mt-4 py-2.5 rounded-xl bg-amber-500 text-slate-950 font-bold text-xs">
@@ -1509,7 +1866,7 @@ export default function App() {
         </div>
       )}
 
-      {/* ===================== MODAL DE DETALHES DA TRANSAÇÃO INDIVIDUAL ===================== */}
+      {/* ===================== MODAL DETALHES DE TRANSAÇÃO ===================== */}
       {selectedTx && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-[#12172A] border border-[#2A3554] rounded-2xl max-w-md w-full p-6 shadow-2xl relative animate-in fade-in duration-200">
@@ -1519,7 +1876,10 @@ export default function App() {
             
             <div className="flex items-center gap-3 mb-4">
               <div className="h-12 w-12 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-lg border border-amber-500/30">
-                {selectedTx.category === 'Alimentação' ? '🍞' : selectedTx.category === 'Vestuário' ? '👟' : selectedTx.category === 'Serviços' ? '💳' : '💰'}
+                {selectedTx.category.includes('Alimentação') ? '🍞' : 
+                 selectedTx.category.includes('Vestuário') ? '👟' : 
+                 selectedTx.category.includes('Passagem') ? '✈️' : 
+                 selectedTx.category.includes('Empréstimo') ? '🏦' : '💰'}
               </div>
               <div>
                 <h3 className="font-bold text-lg text-white">{selectedTx.description}</h3>
@@ -1534,6 +1894,12 @@ export default function App() {
                   {selectedTx.type === 'Entrada' ? '+' : '-'} R$ {selectedTx.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                 </span>
               </div>
+              {selectedTx.totalInstallments && selectedTx.totalInstallments > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Parcelamento:</span>
+                  <span className="font-bold text-amber-400">Parcela {selectedTx.currentInstallment} de {selectedTx.totalInstallments}</span>
+                </div>
+              )}
               <div className="flex justify-between">
                 <span className="text-slate-400">Método de Pagamento:</span>
                 <span className="font-semibold text-slate-200">{selectedTx.method}</span>
@@ -1630,7 +1996,7 @@ export default function App() {
         </div>
       )}
 
-      {/* ===================== MODAL NOVO LANÇAMENTO GERAL ===================== */}
+      {/* ===================== MODAL NOVO LANÇAMENTO MANUAL ===================== */}
       {newTxModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-[#12172A] border border-[#2A3554] rounded-2xl max-w-md w-full p-6 shadow-2xl relative">
