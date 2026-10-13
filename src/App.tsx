@@ -346,6 +346,32 @@ export default function App() {
     }
   }, [isCloudSynced]);
 
+  // Sincronização Periódica com o Webhook do Grupo (busca novos lançamentos gravados pelo robô no grupo)
+  useEffect(() => {
+    const fetchWebhookTxs = async () => {
+      try {
+        const res = await fetch('/api/webhook');
+        const data = await res.json();
+        if (data?.transactions && Array.isArray(data.transactions) && data.transactions.length > 0) {
+          setTransactions(prev => {
+            const existingIds = new Set(prev.map(t => t.id));
+            const newOnes = data.transactions.filter((t: any) => !existingIds.has(t.id));
+            if (newOnes.length > 0) {
+              return [...newOnes, ...prev];
+            }
+            return prev;
+          });
+        }
+      } catch (err) {
+        // Silencioso em caso de offline
+      }
+    };
+
+    fetchWebhookTxs();
+    const interval = setInterval(fetchWebhookTxs, 4000); // Polling a cada 4 segundos
+    return () => clearInterval(interval);
+  }, []);
+
   // Exclusão Funcional de Transações
   const handleDeleteTransaction = (id: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
@@ -1780,58 +1806,32 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Seletor de Modo de Conexão Didático */}
+              {/* Seletor de Modo de Conexão Focado no Grupo */}
               <div className="bg-[#111628] p-2 rounded-2xl border border-[#202940] flex flex-wrap gap-2">
                 <button
                   type="button"
                   onClick={() => setActivePairMethod('group')}
-                  className={`flex-1 min-w-[200px] py-3 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-2.5 transition-all ${
+                  className={`flex-1 min-w-[240px] py-3.5 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-2.5 transition-all ${
                     activePairMethod === 'group'
-                      ? 'bg-gradient-to-r from-emerald-600 via-teal-500 to-cyan-500 text-white shadow-[0_0_20px_rgba(16,185,129,0.35)]'
+                      ? 'bg-gradient-to-r from-emerald-600 via-teal-500 to-cyan-500 text-white shadow-[0_0_25px_rgba(16,185,129,0.4)]'
                       : 'text-slate-400 hover:text-white hover:bg-[#161D33]'
                   }`}
                 >
-                  <Layers size={16} />
-                  <span>Método 1: Grupo Pessoal Exclusivo (Recomendado)</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setActivePairMethod('direct')}
-                  className={`flex-1 min-w-[200px] py-3 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-2.5 transition-all ${
-                    activePairMethod === 'direct'
-                      ? 'bg-gradient-to-r from-emerald-600 to-teal-500 text-white shadow-[0_0_20px_rgba(16,185,129,0.3)]'
-                      : 'text-slate-400 hover:text-white hover:bg-[#161D33]'
-                  }`}
-                >
-                  <Smartphone size={16} />
-                  <span>Método 2: Conversa com Robô KYRO</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setActivePairMethod('qrcode')}
-                  className={`flex-1 min-w-[200px] py-3 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-2.5 transition-all ${
-                    activePairMethod === 'qrcode'
-                      ? 'bg-gradient-to-r from-emerald-600 to-teal-500 text-white shadow-[0_0_20px_rgba(16,185,129,0.3)]'
-                      : 'text-slate-400 hover:text-white hover:bg-[#161D33]'
-                  }`}
-                >
-                  <QrCode size={16} />
-                  <span>Método 3: QR Code Escaneável</span>
+                  <Layers size={18} />
+                  <span>Método Oficial: Grupo de Finanças no WhatsApp</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => setActivePairMethod('evolution')}
-                  className={`flex-1 min-w-[200px] py-3 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-2.5 transition-all ${
+                  className={`flex-1 min-w-[240px] py-3.5 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-2.5 transition-all ${
                     activePairMethod === 'evolution'
                       ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 shadow-[0_0_20px_rgba(245,158,11,0.3)]'
                       : 'text-slate-400 hover:text-white hover:bg-[#161D33]'
                   }`}
                 >
-                  <Globe size={16} />
-                  <span>Método 4: Webhook & Servidor</span>
+                  <Globe size={18} />
+                  <span>Configuração do Webhook da Nuvem & Simulador</span>
                 </button>
               </div>
 
