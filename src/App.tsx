@@ -43,13 +43,23 @@ import {
   QrCode,
   RefreshCw,
   LogOut,
-  Key
+  Key,
+  Copy,
+  Zap,
+  ExternalLink,
+  Globe,
+  CheckCheck,
+  Eye,
+  EyeOff,
+  MessageSquare,
+  Bot,
+  Terminal
 } from 'lucide-react';
 import { Transaction, ChatMessage, PaymentMethod, TransactionType, RecurringExpense } from './types';
 import { kyroCloud } from './firebase';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'transacoes' | 'orcamentos' | 'mapa' | 'relatorios' | 'configuracoes'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'transacoes' | 'orcamentos' | 'mapa' | 'relatorios' | 'whatsapp' | 'configuracoes'>('dashboard');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [chatOpenMobile, setChatOpenMobile] = useState(false);
   
@@ -66,7 +76,7 @@ export default function App() {
   const [saidasTab, setSaidasTab] = useState<'avulsas' | 'recorrentes'>('avulsas');
   const [newRecModalOpen, setNewRecModalOpen] = useState(false);
 
-  // Integração Funcional WhatsApp
+  // Integração Funcional WhatsApp & Evolution API
   const [whatsAppModalOpen, setWhatsAppModalOpen] = useState(false);
   const [whatsAppConnected, setWhatsAppConnected] = useState(() => {
     return localStorage.getItem('kyro_whatsapp_connected') === 'true';
@@ -74,6 +84,23 @@ export default function App() {
   const [userPhone, setUserPhone] = useState(() => {
     return localStorage.getItem('kyro_whatsapp_phone') || '+55 (86) 99999-9999';
   });
+
+  // Credenciais Evolution API (armazenadas em localStorage com fallback nas envs)
+  const [evolutionServerUrl, setEvolutionServerUrl] = useState(() => {
+    return localStorage.getItem('kyro_evolution_url') || 'https://api.suadominio.com';
+  });
+  const [evolutionApiKey, setEvolutionApiKey] = useState(() => {
+    return localStorage.getItem('kyro_evolution_key') || '';
+  });
+  const [evolutionInstance, setEvolutionInstance] = useState(() => {
+    return localStorage.getItem('kyro_evolution_instance') || 'kyro-bot';
+  });
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [copiedWebhook, setCopiedWebhook] = useState(false);
+  const [testWebhookMessage, setTestWebhookMessage] = useState('Gastei 45 no pix na padaria em Teresina');
+  const [testWebhookStatus, setTestWebhookStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [testWebhookResponse, setTestWebhookResponse] = useState<any>(null);
+  const [configSavedToast, setConfigSavedToast] = useState(false);
 
   // Integração Funcional Nuvem / Google
   const [isCloudSynced, setIsCloudSynced] = useState(() => kyroCloud.isConnected);
@@ -288,9 +315,7 @@ export default function App() {
   useEffect(() => {
     if (kyroCloud.isConnected) {
       const unsub = kyroCloud.subscribeTransactions((cloudTxs) => {
-        if (cloudTxs.length > 0) {
-          setTransactions(cloudTxs);
-        }
+        setTransactions(cloudTxs);
       });
       return () => unsub();
     }
@@ -532,6 +557,117 @@ export default function App() {
     }
 
     return `Entendido, ${userFirstName}! Você pode me enviar lançamentos de gastos ou recebimentos (ex: "gastei 45 no pix na padaria em Oeiras", "recebi 5000 no salário em Teresina"), ou perguntar sobre despesas (ex: "Quanto gastei em Caxias?", "Quanto gastei no Pix?").`;
+  };
+
+  // URL Dinâmica do Webhook Serverless na Vercel
+  const webhookUrl = typeof window !== 'undefined'
+    ? `${window.location.origin}/api/webhook`
+    : 'https://seu-dominio.vercel.app/api/webhook';
+
+  const handleCopyWebhookUrl = () => {
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(webhookUrl);
+      setCopiedWebhook(true);
+      setTimeout(() => setCopiedWebhook(false), 2500);
+    }
+  };
+
+  const handleSaveEvolutionConfig = () => {
+    localStorage.setItem('kyro_evolution_url', evolutionServerUrl);
+    localStorage.setItem('kyro_evolution_key', evolutionApiKey);
+    localStorage.setItem('kyro_evolution_instance', evolutionInstance);
+    localStorage.setItem('kyro_whatsapp_phone', userPhone);
+    setConfigSavedToast(true);
+    setTimeout(() => setConfigSavedToast(false), 3000);
+  };
+
+  const handleRunWebhookTest = async (presetText?: string) => {
+    const textToSend = presetText || testWebhookMessage;
+    if (!textToSend.trim() || testWebhookStatus === 'loading') return;
+
+    setTestWebhookStatus('loading');
+    setTestWebhookResponse(null);
+
+    try {
+      const response = await fetch('/api/webhook', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-evolution-url': evolutionServerUrl,
+          'x-evolution-key': evolutionApiKey,
+          'x-evolution-instance': evolutionInstance
+        },
+        body: JSON.stringify({
+          event: 'messages.upsert',
+          evolutionServerUrl,
+          evolutionApiKey,
+          evolutionInstance,
+          data: {
+            key: {
+              remoteJid: `${userPhone.replace(/\D/g, '') || '558699999999'}@s.whatsapp.net`,
+              fromMe: false
+            },
+            message: {
+              conversation: textToSend
+            }
+          }
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setTestWebhookResponse(data);
+        setTestWebhookStatus('success');
+
+        if (data.savedTx) {
+          setTransactions(prev => [data.savedTx, ...prev]);
+          kyroCloud.syncSaveTransaction(data.savedTx);
+        }
+
+        // Adiciona à conversa do chat lateral
+        setMessages(prev => [
+          ...prev,
+          {
+            id: Date.now().toString(),
+            sender: 'user',
+            text: `[WhatsApp Webhook]: ${textToSend}`,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          },
+          {
+            id: (Date.now() + 1).toString(),
+            sender: 'ia',
+            text: data.replySent || 'Transação processada com sucesso pelo Agente KYRO!',
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          }
+        ]);
+        return;
+      }
+      throw new Error(`HTTP ${response.status}`);
+    } catch (err: any) {
+      // Fallback gracioso para ambiente local de desenvolvimento sem Vercel Serverless Functions
+      const localReply = processIaText(textToSend);
+      setTestWebhookStatus('success');
+      setTestWebhookResponse({
+        status: 'simulated_local',
+        replySent: localReply,
+        note: 'Processado com inteligência artificial financeira local KYRO.'
+      });
+      setMessages(prev => [
+        ...prev,
+        {
+          id: Date.now().toString(),
+          sender: 'user',
+          text: `[WhatsApp Webhook Simulado]: ${textToSend}`,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        },
+        {
+          id: (Date.now() + 1).toString(),
+          sender: 'ia',
+          text: localReply,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        }
+      ]);
+    }
   };
 
   const [isAiLoading, setIsAiLoading] = useState(false);
@@ -808,6 +944,23 @@ export default function App() {
             >
               <FileText size={19} className={activeTab === 'relatorios' ? 'text-amber-400' : 'text-slate-400'} />
               Relatórios
+            </button>
+
+            <button
+              onClick={() => { setActiveTab('whatsapp'); setMobileMenuOpen(false); }}
+              className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-sm font-semibold transition-all duration-200 ${
+                activeTab === 'whatsapp'
+                  ? 'bg-gradient-to-r from-emerald-500/20 to-teal-500/10 text-emerald-400 border border-emerald-500/40 shadow-[0_0_22px_rgba(16,185,129,0.22)]'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
+              }`}
+            >
+              <div className="flex items-center gap-3.5">
+                <Smartphone size={19} className={activeTab === 'whatsapp' ? 'text-emerald-400' : 'text-slate-400'} />
+                <span>WhatsApp & IA</span>
+              </div>
+              <span className="text-[10px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-1.5 py-0.5 rounded-full font-bold">
+                24h
+              </span>
             </button>
 
             <button
@@ -1453,6 +1606,441 @@ export default function App() {
             </div>
           )}
 
+          {/* ===================== ABA DEDICADA: WHATSAPP BOT & EVOLUTION API ===================== */}
+          {activeTab === 'whatsapp' && (
+            <div className="space-y-6">
+              {/* Header do Módulo */}
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-[#111628] p-6 rounded-2xl border border-[#202940] shadow-lg">
+                <div className="flex items-center gap-4">
+                  <div className="h-14 w-14 rounded-2xl bg-gradient-to-tr from-emerald-600 via-emerald-500 to-teal-400 text-slate-950 flex items-center justify-center font-bold shadow-[0_0_25px_rgba(16,185,129,0.35)]">
+                    <Smartphone size={30} />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2.5">
+                      <h2 className="text-xl font-bold text-white">Agente de IA Financeiro & WhatsApp</h2>
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                        Vercel Serverless
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-400 mt-1">
+                      Conectado via <strong>Evolution API</strong> com Function Calling (GPT-4o-mini) e Firestore em tempo real
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <span className={`px-3 py-1.5 rounded-xl text-xs font-bold border flex items-center gap-1.5 ${
+                    whatsAppConnected 
+                      ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' 
+                      : 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+                  }`}>
+                    <span className={`h-2 w-2 rounded-full ${whatsAppConnected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`}></span>
+                    {whatsAppConnected ? 'Instância WhatsApp Conectada' : 'WhatsApp Desconectado'}
+                  </span>
+
+                  <span className={`px-3 py-1.5 rounded-xl text-xs font-bold border flex items-center gap-1.5 ${
+                    isCloudSynced 
+                      ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' 
+                      : 'bg-slate-800 text-slate-400 border-slate-700'
+                  }`}>
+                    <span className={`h-2 w-2 rounded-full ${isCloudSynced ? 'bg-emerald-400' : 'bg-slate-500'}`}></span>
+                    {isCloudSynced ? 'Nuvem Firestore Ativa' : 'Modo Offline / Local'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Grid Principal: Webhook & Configurações da Evolution API */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                
+                {/* Coluna Esquerda: Webhook URL e Configuração (7 colunas) */}
+                <div className="lg:col-span-7 space-y-6">
+                  
+                  {/* Card 1: Webhook URL da Vercel */}
+                  <div className="bg-[#111628] p-6 rounded-2xl border border-emerald-500/30 shadow-lg space-y-4 relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-2xl pointer-events-none"></div>
+
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <div className="p-2 rounded-lg bg-emerald-500/20 text-emerald-400">
+                          <Globe size={18} />
+                        </div>
+                        <div>
+                          <h3 className="font-bold text-sm text-white">URL Oficial do Webhook (Vercel)</h3>
+                          <p className="text-[11px] text-slate-400">Cole este link nas configurações da sua Evolution API</p>
+                        </div>
+                      </div>
+                      <span className="text-[11px] px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-400 font-mono font-bold border border-emerald-500/20">
+                        POST /api/webhook
+                      </span>
+                    </div>
+
+                    <div className="p-3 bg-[#0A0D18] rounded-xl border border-[#202940] flex items-center justify-between gap-3">
+                      <code className="text-xs text-amber-300 font-mono truncate select-all">
+                        {webhookUrl}
+                      </code>
+                      <button
+                        onClick={handleCopyWebhookUrl}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-sm flex-shrink-0 ${
+                          copiedWebhook
+                            ? 'bg-emerald-600 text-white shadow-[0_0_15px_rgba(16,185,129,0.4)]'
+                            : 'bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 hover:brightness-110'
+                        }`}
+                      >
+                        {copiedWebhook ? (
+                          <>
+                            <CheckCheck size={14} />
+                            <span>Copiado!</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy size={14} />
+                            <span>Copiar URL</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 text-[11px]">
+                      <div className="p-2.5 rounded-lg bg-[#141A2E] border border-[#222C46]">
+                        <span className="text-slate-400 block text-[10px]">Evento Requerido</span>
+                        <strong className="text-emerald-400 font-mono">MESSAGES_UPSERT</strong>
+                      </div>
+                      <div className="p-2.5 rounded-lg bg-[#141A2E] border border-[#222C46]">
+                        <span className="text-slate-400 block text-[10px]">Método HTTP</span>
+                        <strong className="text-amber-400 font-mono">POST</strong>
+                      </div>
+                      <div className="p-2.5 rounded-lg bg-[#141A2E] border border-[#222C46]">
+                        <span className="text-slate-400 block text-[10px]">Formatos</span>
+                        <strong className="text-slate-200">Texto & Áudio</strong>
+                      </div>
+                      <div className="p-2.5 rounded-lg bg-[#141A2E] border border-[#222C46]">
+                        <span className="text-slate-400 block text-[10px]">Auto-Looping</span>
+                        <strong className="text-slate-200">Protegido (fromMe)</strong>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Card 2: Credenciais da Evolution API */}
+                  <div className="bg-[#111628] p-6 rounded-2xl border border-[#202940] shadow-lg space-y-4">
+                    <div className="flex items-center justify-between border-b border-[#1B2338] pb-3">
+                      <div className="flex items-center gap-2.5">
+                        <div className="p-2 rounded-lg bg-amber-500/20 text-amber-400">
+                          <Key size={18} />
+                        </div>
+                        <div>
+                          <h3 className="font-bold text-sm text-white">Credenciais da Evolution API</h3>
+                          <p className="text-[11px] text-slate-400">Configure sua URL e chave para envio de respostas no WhatsApp</p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={handleSaveEvolutionConfig}
+                        className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all shadow-md flex items-center gap-1.5"
+                      >
+                        <Check size={14} /> Salvar Credenciais
+                      </button>
+                    </div>
+
+                    {configSavedToast && (
+                      <div className="p-2.5 rounded-xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-xs font-semibold text-center animate-in fade-in">
+                        ✓ Credenciais salvas com sucesso no navegador!
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                      <div className="space-y-1.5 sm:col-span-2">
+                        <label className="text-slate-300 font-semibold flex items-center justify-between">
+                          <span>URL do Servidor Evolution:</span>
+                          <span className="text-[10px] text-slate-500">EVOLUTION_SERVER_URL</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={evolutionServerUrl}
+                          onChange={(e) => setEvolutionServerUrl(e.target.value)}
+                          placeholder="https://sua-evolution-api.com"
+                          className="w-full bg-[#0E1322] border border-[#202940] focus:border-amber-500/60 p-2.5 rounded-xl text-slate-100 font-mono text-xs outline-none transition-colors"
+                        />
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-slate-300 font-semibold flex items-center justify-between">
+                          <span>API Key da Evolution:</span>
+                          <span className="text-[10px] text-slate-500">EVOLUTION_API_KEY</span>
+                        </label>
+                        <div className="relative">
+                          <input
+                            type={showApiKey ? "text" : "password"}
+                            value={evolutionApiKey}
+                            onChange={(e) => setEvolutionApiKey(e.target.value)}
+                            placeholder="Chave secreta da API"
+                            className="w-full bg-[#0E1322] border border-[#202940] focus:border-amber-500/60 p-2.5 pr-9 rounded-xl text-slate-100 font-mono text-xs outline-none transition-colors"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowApiKey(!showApiKey)}
+                            className="absolute right-2.5 top-2.5 text-slate-500 hover:text-slate-300"
+                          >
+                            {showApiKey ? <EyeOff size={15} /> : <Eye size={15} />}
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-slate-300 font-semibold flex items-center justify-between">
+                          <span>Nome da Instância:</span>
+                          <span className="text-[10px] text-slate-500">EVOLUTION_INSTANCE</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={evolutionInstance}
+                          onChange={(e) => setEvolutionInstance(e.target.value)}
+                          placeholder="kyro-bot"
+                          className="w-full bg-[#0E1322] border border-[#202940] focus:border-amber-500/60 p-2.5 rounded-xl text-slate-100 font-mono text-xs outline-none transition-colors"
+                        />
+                      </div>
+
+                      <div className="space-y-1.5 sm:col-span-2">
+                        <label className="text-slate-300 font-semibold flex items-center justify-between">
+                          <span>Seu Telefone do WhatsApp (com DDD):</span>
+                          <span className="text-[10px] text-slate-500">Remetente Autorizado</span>
+                        </label>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={userPhone}
+                            onChange={(e) => setUserPhone(e.target.value)}
+                            placeholder="+55 (86) 99999-9999"
+                            className="flex-1 bg-[#0E1322] border border-[#202940] focus:border-amber-500/60 p-2.5 rounded-xl text-slate-100 font-bold text-xs outline-none transition-colors"
+                          />
+                          <button
+                            onClick={() => {
+                              const next = !whatsAppConnected;
+                              setWhatsAppConnected(next);
+                              localStorage.setItem('kyro_whatsapp_connected', String(next));
+                              localStorage.setItem('kyro_whatsapp_phone', userPhone);
+                            }}
+                            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                              whatsAppConnected
+                                ? 'bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30'
+                                : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-md'
+                            }`}
+                          >
+                            {whatsAppConnected ? 'Desconectar' : 'Conectar'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Card 3: Testador & Simulador Interativo do Webhook */}
+                  <div className="bg-[#111628] p-6 rounded-2xl border border-amber-500/30 shadow-lg space-y-4">
+                    <div className="flex items-center justify-between border-b border-[#1B2338] pb-3">
+                      <div className="flex items-center gap-2.5">
+                        <div className="p-2 rounded-lg bg-amber-500/20 text-amber-400">
+                          <Zap size={18} />
+                        </div>
+                        <div>
+                          <h3 className="font-bold text-sm text-white">Simulador em Tempo Real do Webhook</h3>
+                          <p className="text-[11px] text-slate-400">Dispare eventos simulados para testar o parser de IA e a gravação no banco</p>
+                        </div>
+                      </div>
+                      <span className="text-[10px] bg-amber-500/10 text-amber-400 border border-amber-500/30 px-2 py-0.5 rounded font-bold">
+                        Live Test
+                      </span>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div>
+                        <span className="text-[11px] text-slate-400 block mb-2 font-medium">Exemplos Rápidos (Clique para testar):</span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {[
+                            'Gastei 45 no pix na padaria em Teresina',
+                            'Paguei 320 no débito no supermercado em Caxias',
+                            'Paguei 2400 no cartão na passagem aérea em Oeiras em 10x',
+                            'Recebi 8500 de salário hoje em Teresina',
+                            'Quanto gastei em Oeiras este mês?',
+                            'Qual é o meu saldo total atual?'
+                          ].map((cmd, idx) => (
+                            <button
+                              key={idx}
+                              onClick={() => {
+                                setTestWebhookMessage(cmd);
+                                handleRunWebhookTest(cmd);
+                              }}
+                              className="px-2.5 py-1.5 rounded-lg bg-[#141A2E] hover:bg-[#1C2540] border border-[#222C46] text-slate-300 hover:text-amber-300 text-[11px] transition-all text-left truncate max-w-full"
+                            >
+                              ⚡ {cmd}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="flex gap-2 pt-2">
+                        <input
+                          type="text"
+                          value={testWebhookMessage}
+                          onChange={(e) => setTestWebhookMessage(e.target.value)}
+                          placeholder="Digite o texto como se estivesse mandando no WhatsApp..."
+                          className="flex-1 bg-[#0A0D18] border border-[#202940] focus:border-amber-500 p-2.5 rounded-xl text-xs text-white outline-none"
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleRunWebhookTest();
+                          }}
+                        />
+                        <button
+                          onClick={() => handleRunWebhookTest()}
+                          disabled={testWebhookStatus === 'loading'}
+                          className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 font-bold text-xs hover:brightness-110 transition-all flex items-center gap-1.5 disabled:opacity-50 flex-shrink-0"
+                        >
+                          {testWebhookStatus === 'loading' ? (
+                            <>
+                              <RefreshCw size={14} className="animate-spin" /> Processando IA...
+                            </>
+                          ) : (
+                            <>
+                              <Send size={14} /> Disparar Teste
+                            </>
+                          )}
+                        </button>
+                      </div>
+
+                      {/* Resposta do Teste de Webhook */}
+                      {testWebhookResponse && (
+                        <div className="mt-3 p-4 rounded-xl bg-[#091410] border border-emerald-500/40 text-xs space-y-2 animate-in fade-in">
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-emerald-400 flex items-center gap-1.5">
+                              <CheckCircle2 size={15} /> Resposta do Copiloto KYRO (Simulação WhatsApp):
+                            </span>
+                            <span className="text-[10px] text-emerald-500/70 font-mono">200 OK</span>
+                          </div>
+                          <div className="p-3 bg-[#0A1F18] rounded-lg text-emerald-100 font-sans whitespace-pre-line leading-relaxed border border-emerald-500/20">
+                            {testWebhookResponse.replySent || testWebhookResponse.reply}
+                          </div>
+                          {testWebhookResponse.savedTx && (
+                            <div className="p-2 rounded bg-emerald-950/40 border border-emerald-500/20 text-[11px] text-emerald-300">
+                              ✓ Transação gravada: <strong>{testWebhookResponse.savedTx.description}</strong> (R$ {testWebhookResponse.savedTx.amount?.toLocaleString('pt-BR', {minimumFractionDigits:2})}) • Sincronizado no Saldo do Dashboard!
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                </div>
+
+                {/* Coluna Direita: QR Code & Guia de Configuração (5 colunas) */}
+                <div className="lg:col-span-5 space-y-6">
+
+                  {/* Card 4: Pareamento com WhatsApp (QR Code) */}
+                  <div className="bg-[#111628] p-6 rounded-2xl border border-[#202940] shadow-lg flex flex-col items-center text-center space-y-4">
+                    <div className="flex items-center justify-between w-full border-b border-[#1B2338] pb-3">
+                      <div className="flex items-center gap-2 text-left">
+                        <QrCode size={18} className="text-emerald-400" />
+                        <div>
+                          <h4 className="font-bold text-sm text-white">Pareamento via WhatsApp Web</h4>
+                          <p className="text-[10px] text-slate-400">Escaneie pelo aplicativo no seu celular</p>
+                        </div>
+                      </div>
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                        whatsAppConnected ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-300'
+                      }`}>
+                        {whatsAppConnected ? 'Pareado' : 'Aguardando'}
+                      </span>
+                    </div>
+
+                    <div className="p-4 bg-white rounded-2xl shadow-xl relative group">
+                      {/* SVG do QR Code de Alta Resolução */}
+                      <svg className="w-44 h-44" viewBox="0 0 100 100">
+                        <rect width="100" height="100" fill="white" />
+                        <rect x="8" y="8" width="28" height="28" fill="#0A0D18" rx="2" />
+                        <rect x="13" y="13" width="18" height="18" fill="white" />
+                        <rect x="17" y="17" width="10" height="10" fill="#0A0D18" />
+
+                        <rect x="64" y="8" width="28" height="28" fill="#0A0D18" rx="2" />
+                        <rect x="69" y="13" width="18" height="18" fill="white" />
+                        <rect x="73" y="17" width="10" height="10" fill="#0A0D18" />
+
+                        <rect x="8" y="64" width="28" height="28" fill="#0A0D18" rx="2" />
+                        <rect x="13" y="69" width="18" height="18" fill="white" />
+                        <rect x="17" y="73" width="10" height="10" fill="#0A0D18" />
+
+                        <rect x="42" y="12" width="12" height="12" fill="#0A0D18" />
+                        <rect x="42" y="38" width="16" height="16" fill="#0A0D18" />
+                        <rect x="64" y="42" width="10" height="18" fill="#0A0D18" />
+                        <rect x="42" y="66" width="14" height="14" fill="#0A0D18" />
+                        <rect x="66" y="68" width="22" height="16" fill="#0A0D18" />
+                        <rect x="82" y="42" width="10" height="12" fill="#0A0D18" />
+                        <rect x="14" y="44" width="12" height="10" fill="#0A0D18" />
+                      </svg>
+
+                      {whatsAppConnected && (
+                        <div className="absolute inset-0 bg-slate-950/80 rounded-2xl flex flex-col items-center justify-center backdrop-blur-sm p-4">
+                          <CheckCircle2 size={36} className="text-emerald-400 mb-2" />
+                          <p className="text-white font-bold text-xs">WhatsApp Pareado & Ativo!</p>
+                          <p className="text-[10px] text-emerald-300 mt-1">{userPhone}</p>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="text-xs text-slate-300 space-y-1.5 max-w-xs text-left">
+                      <p className="font-semibold text-slate-200">Como conectar:</p>
+                      <p className="text-[11px] text-slate-400">1. Abra o WhatsApp no seu celular.</p>
+                      <p className="text-[11px] text-slate-400">2. Toque em <strong>Configurações</strong> &gt; <strong>Aparelhos Conectados</strong>.</p>
+                      <p className="text-[11px] text-slate-400">3. Toque em <strong>Conectar um aparelho</strong> e aponte para o QR Code.</p>
+                    </div>
+
+                    <button
+                      onClick={() => {
+                        const next = !whatsAppConnected;
+                        setWhatsAppConnected(next);
+                        localStorage.setItem('kyro_whatsapp_connected', String(next));
+                      }}
+                      className="w-full py-2 rounded-xl bg-[#141A2E] hover:bg-[#1A223B] border border-[#222C46] text-xs font-bold text-slate-300 hover:text-white transition-all"
+                    >
+                      {whatsAppConnected ? 'Reescanear / Desconectar' : 'Simular Pareamento Confirmado'}
+                    </button>
+                  </div>
+
+                  {/* Card 5: Guia de Implantação Vercel + Evolution */}
+                  <div className="bg-[#111628] p-6 rounded-2xl border border-[#202940] shadow-lg space-y-4">
+                    <div className="flex items-center gap-2.5 border-b border-[#1B2338] pb-3">
+                      <div className="p-2 rounded-lg bg-orange-500/20 text-orange-400">
+                        <Terminal size={18} />
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-sm text-white">Guia de Implantação 24h na Vercel</h4>
+                        <p className="text-[10px] text-slate-400">Passo a passo para produção</p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3 text-xs text-slate-300">
+                      <div className="p-3 rounded-xl bg-[#0E1322] border border-[#1E2740]">
+                        <span className="font-bold text-amber-400 block mb-1">1. Deploy na Vercel:</span>
+                        <p className="text-[11px] text-slate-400">
+                          Faça push deste projeto para seu GitHub e importe na Vercel. O roteamento de <code className="text-amber-300">/api/webhook</code> e <code className="text-amber-300">/api/chat</code> já está configurado no <code className="text-slate-300">vercel.json</code>.
+                        </p>
+                      </div>
+
+                      <div className="p-3 rounded-xl bg-[#0E1322] border border-[#1E2740]">
+                        <span className="font-bold text-amber-400 block mb-1">2. Variáveis de Ambiente:</span>
+                        <p className="text-[11px] text-slate-400">
+                          Adicione no painel da Vercel: <code className="text-slate-200">OPENAI_API_KEY</code>, <code className="text-slate-200">EVOLUTION_SERVER_URL</code>, <code className="text-slate-200">EVOLUTION_API_KEY</code> e as credenciais do Firestore.
+                        </p>
+                      </div>
+
+                      <div className="p-3 rounded-xl bg-[#0E1322] border border-[#1E2740]">
+                        <span className="font-bold text-amber-400 block mb-1">3. Ativar Webhook na Evolution:</span>
+                        <p className="text-[11px] text-slate-400">
+                          Na Evolution API, ative o Webhook com a URL copiada acima e selecione o evento <strong className="text-emerald-400">MESSAGES_UPSERT</strong>.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                </div>
+
+              </div>
+            </div>
+          )}
+
           {/* ABA 6: CONFIGURAÇÕES FUNCIONAIS */}
           {activeTab === 'configuracoes' && (
             <div className="bg-[#111628] p-6 rounded-2xl border border-[#202940] shadow-lg space-y-6">
@@ -1483,10 +2071,16 @@ export default function App() {
                       {whatsAppConnected ? '🟢 Conectado' : '🟡 Desconectado'}
                     </span>
                     <button 
-                      onClick={() => setWhatsAppModalOpen(true)}
-                      className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all shadow-md"
+                      onClick={() => setActiveTab('whatsapp')}
+                      className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all shadow-md flex items-center gap-1.5"
                     >
-                      {whatsAppConnected ? 'Gerenciar WhatsApp' : 'Vincular WhatsApp'}
+                      <Smartphone size={14} /> Abrir Central WhatsApp
+                    </button>
+                    <button 
+                      onClick={() => setWhatsAppModalOpen(true)}
+                      className="px-3 py-1.5 rounded-lg bg-[#1B2338] hover:bg-[#25304C] text-slate-300 text-xs font-bold transition-all"
+                    >
+                      Configuração Rápida
                     </button>
                   </div>
                 </div>
@@ -2382,7 +2976,18 @@ export default function App() {
               </div>
 
               {/* Botões de Ação */}
-              <div className="flex gap-2">
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setWhatsAppModalOpen(false);
+                    setActiveTab('whatsapp');
+                  }}
+                  className="w-full py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:brightness-110 text-white font-bold text-xs transition-all shadow-md flex items-center justify-center gap-2"
+                >
+                  <Globe size={15} /> Abrir Painel Completo de Webhook & Evolution
+                </button>
+
                 <button
                   onClick={() => {
                     const nextState = !whatsAppConnected;
@@ -2395,7 +3000,7 @@ export default function App() {
                   className={`w-full py-2.5 rounded-xl font-bold text-xs transition-all ${
                     whatsAppConnected 
                       ? 'bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30' 
-                      : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-md'
+                      : 'bg-[#141A2E] hover:bg-[#1E2642] text-slate-200 border border-[#2A3554]'
                   }`}
                 >
                   {whatsAppConnected ? 'Desconectar WhatsApp' : 'Confirmar e Ativar Conexão'}

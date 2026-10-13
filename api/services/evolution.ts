@@ -15,11 +15,24 @@ const evolutionApi = axios.create({
 interface SendMessageParams {
   phoneNumber: string;
   message: string;
+  serverUrl?: string;
+  apiKey?: string;
+  instance?: string;
 }
 
-export const sendWhatsAppMessage = async ({ phoneNumber, message }: SendMessageParams) => {
-  if (!EVOLUTION_SERVER_URL || !EVOLUTION_API_KEY || !EVOLUTION_INSTANCE) {
-    console.warn('[Evolution API] Variáveis de ambiente da Evolution não configuradas.');
+export const sendWhatsAppMessage = async ({ 
+  phoneNumber, 
+  message,
+  serverUrl,
+  apiKey,
+  instance 
+}: SendMessageParams) => {
+  const activeUrl = serverUrl || EVOLUTION_SERVER_URL;
+  const activeKey = apiKey || EVOLUTION_API_KEY;
+  const activeInstance = instance || EVOLUTION_INSTANCE;
+
+  if (!activeUrl || !activeKey || !activeInstance) {
+    console.warn('[Evolution API] Credenciais da Evolution API ausentes (configure nas variáveis de ambiente da Vercel ou na aba do painel).');
     return null;
   }
 
@@ -27,14 +40,23 @@ export const sendWhatsAppMessage = async ({ phoneNumber, message }: SendMessageP
   const cleanNumber = phoneNumber.replace(/\D/g, '');
 
   try {
-    const response = await evolutionApi.post(`/message/sendText/${EVOLUTION_INSTANCE}`, {
-      number: cleanNumber,
-      text: message,
-      linkPreview: true
-    });
+    const response = await axios.post(
+      `${activeUrl.replace(/\/$/, '')}/message/sendText/${activeInstance}`,
+      {
+        number: cleanNumber,
+        text: message,
+        linkPreview: true
+      },
+      {
+        headers: {
+          apikey: activeKey,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
     return response.data;
   } catch (error: any) {
     console.error('[Evolution API] Erro ao enviar mensagem:', error?.response?.data || error?.message);
-    throw error;
+    return null;
   }
 };

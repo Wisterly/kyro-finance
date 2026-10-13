@@ -20,7 +20,21 @@ class KyroCloudSync {
   }
 
   public init(): boolean {
-    const savedConfig = this.getSavedConfig();
+    let savedConfig = this.getSavedConfig();
+    if (!savedConfig || !savedConfig.apiKey) {
+      const metaEnv = (import.meta as any)?.env;
+      if (metaEnv && metaEnv.VITE_FIREBASE_API_KEY) {
+        savedConfig = {
+          apiKey: metaEnv.VITE_FIREBASE_API_KEY,
+          authDomain: metaEnv.VITE_FIREBASE_AUTH_DOMAIN,
+          projectId: metaEnv.VITE_FIREBASE_PROJECT_ID,
+          storageBucket: metaEnv.VITE_FIREBASE_STORAGE_BUCKET,
+          messagingSenderId: metaEnv.VITE_FIREBASE_MESSAGING_SENDER_ID,
+          appId: metaEnv.VITE_FIREBASE_APP_ID,
+        };
+      }
+    }
+
     if (savedConfig && savedConfig.apiKey && savedConfig.projectId) {
       try {
         if (!getApps().length) {
