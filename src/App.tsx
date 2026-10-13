@@ -2977,10 +2977,82 @@ export default function App() {
 
             {/* CONTEÚDO 1: SAÍDAS AVULSAS */}
             {saidasTab === 'avulsas' && (
-              <div className="space-y-3">
-                <p className="text-xs text-slate-300 leading-relaxed bg-[#0E1322] p-3 rounded-xl border border-[#1E2740]">
-                  💡 <strong>Alimentação Inteligente:</strong> As compras do dia a dia (padaria, almoço, lojas, etc.) caem automaticamente aqui pelo seu WhatsApp.
-                </p>
+              <div className="space-y-4">
+                {/* Formulário para Adicionar Saída Manualmente */}
+                <form onSubmit={(e) => {
+                  e.preventDefault();
+                  const f = e.target as any;
+                  const newExit: Transaction = {
+                    id: Date.now().toString(),
+                    description: f.desc.value,
+                    category: f.cat.value,
+                    subcategory: f.cat.value,
+                    city: f.cidade.value,
+                    amount: parseFloat(f.valor.value),
+                    type: 'Saída',
+                    method: f.metodo.value,
+                    date: 'Hoje',
+                    status: 'Concluído'
+                  };
+                  setTransactions(prev => [newExit, ...prev]);
+                  kyroCloud.syncSaveTransaction(newExit);
+                  f.reset();
+                }} className="p-4 rounded-xl bg-[#0E1322] border border-[#1E2740] space-y-3">
+                  <h4 className="text-xs font-bold text-orange-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <Plus size={14} /> Registrar Nova Saída Manualmente
+                  </h4>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                    <div>
+                      <label className="text-slate-400 block mb-1">Descrição do Gasto:</label>
+                      <input required name="desc" placeholder="Ex: Supermercado, Almoço, Gasolina..." className="w-full bg-[#161D32] border border-[#2A3554] p-2.5 rounded-lg text-slate-100 outline-none" />
+                    </div>
+
+                    <div>
+                      <label className="text-slate-400 block mb-1">Valor (R$):</label>
+                      <input required type="number" step="0.01" name="valor" placeholder="Ex: 45.00" className="w-full bg-[#161D32] border border-[#2A3554] p-2.5 rounded-lg text-slate-100 font-bold text-orange-400 outline-none" />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                    <div>
+                      <label className="text-slate-400 block mb-1">Categoria:</label>
+                      <select name="cat" className="w-full bg-[#161D32] border border-[#2A3554] p-2 rounded-lg text-slate-100 outline-none">
+                        <option value="Alimentação">Alimentação</option>
+                        <option value="Transporte">Transporte / Posto</option>
+                        <option value="Supermercado">Supermercado</option>
+                        <option value="Saúde">Saúde & Farmácia</option>
+                        <option value="Vestuário">Vestuário / Compras</option>
+                        <option value="Outros">Outros</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-slate-400 block mb-1">Forma de Pagamento:</label>
+                      <select name="metodo" className="w-full bg-[#161D32] border border-[#2A3554] p-2 rounded-lg text-slate-100 outline-none">
+                        <option value="PIX">PIX</option>
+                        <option value="Débito">Débito</option>
+                        <option value="Crédito">Crédito</option>
+                        <option value="Dinheiro">Dinheiro</option>
+                        <option value="Transferência">Transferência</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-slate-400 block mb-1">Cidade:</label>
+                      <input name="cidade" defaultValue="Teresina, PI" className="w-full bg-[#161D32] border border-[#2A3554] p-2 rounded-lg text-slate-100 outline-none" />
+                    </div>
+                  </div>
+
+                  <button type="submit" className="w-full py-2.5 rounded-lg bg-orange-600 hover:bg-orange-500 text-white font-bold text-xs transition-all shadow-md flex items-center justify-center gap-1.5">
+                    <Plus size={15} /> Adicionar às Saídas
+                  </button>
+                </form>
+
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold text-slate-300">Saídas Registradas Este Mês:</h4>
+                  <span className="text-[11px] text-slate-400">Total: {transactions.filter(t => t.type === 'Saída').length} lançamentos</span>
+                </div>
 
                 <div className="space-y-2.5 max-h-96 overflow-y-auto">
                   {transactions.filter(t => t.type === 'Saída').length === 0 ? (
