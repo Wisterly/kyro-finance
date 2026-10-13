@@ -190,13 +190,13 @@ export default function App() {
         md:static md:translate-x-0 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}
       `}>
         <div>
-          {/* Logo KYRO | Private Finance transparente sem borda/fundo */}
-          <div className="px-5 py-6 flex items-center justify-between">
+          {/* Logo KYRO | Private Finance com destaque e legibilidade perfeita */}
+          <div className="px-5 pt-7 pb-4 flex items-center justify-between">
             <div className="flex items-center cursor-pointer w-full" onClick={() => setActiveTab('dashboard')}>
               <img 
                 src="/kyro-transparent.png" 
                 alt="KYRO Private Finance" 
-                className="w-full max-w-[210px] h-auto max-h-12 object-contain filter drop-shadow-[0_2px_12px_rgba(217,119,6,0.2)]" 
+                className="w-full h-auto max-h-20 object-contain object-left filter drop-shadow-[0_2px_14px_rgba(217,119,6,0.3)] hover:scale-105 transition-transform duration-200" 
               />
             </div>
             <button 
