@@ -89,11 +89,18 @@ export default function App() {
   const [userPhone, setUserPhone] = useState(() => {
     return localStorage.getItem('kyro_whatsapp_phone') || '+55 (86) 99999-9999';
   });
+  // Número Oficial do Robô / Persona KYRO no WhatsApp (Linha do Sistema)
+  const [botPhone, setBotPhone] = useState(() => {
+    return localStorage.getItem('kyro_bot_phone') || '+55 (86) 99400-2892';
+  });
 
   // Método de pareamento e assistente didático
   const [activePairMethod, setActivePairMethod] = useState<'direct' | 'qrcode' | 'evolution'>('direct');
   const [isSyncingPhone, setIsSyncingPhone] = useState(false);
   const [pairingCode, setPairingCode] = useState('');
+  const [serverQrBase64, setServerQrBase64] = useState<string | null>(null);
+  const [isFetchingServerQr, setIsFetchingServerQr] = useState(false);
+  const [serverQrError, setServerQrError] = useState<string | null>(null);
 
   // Credenciais Evolution API (armazenadas em localStorage com fallback nas envs)
   const [evolutionServerUrl, setEvolutionServerUrl] = useState(() => {
@@ -570,17 +577,51 @@ export default function App() {
     return `Entendido, ${userFirstName}! Você pode me enviar lançamentos de gastos ou recebimentos (ex: "gastei 45 no pix na padaria em Oeiras", "recebi 5000 no salário em Teresina"), ou perguntar sobre despesas (ex: "Quanto gastei em Caxias?", "Quanto gastei no Pix?").`;
   };
 
-  // Telefone limpo formatado para links internacionais
+  // Telefone do Usuário e Telefone do Robô / Persona KYRO
   const cleanUserPhone = userPhone.replace(/\D/g, '') || '558699999999';
+  const cleanBotPhone = botPhone.replace(/\D/g, '') || '5586994002892';
+
+  // Link Oficial de conversa direta com o Robô do KYRO (Persona Externa)
+  const waMeBotUrl = `https://wa.me/${cleanBotPhone}?text=${encodeURIComponent('Oi KYRO! Acabei de gastar 45 no pix na padaria em Teresina')}`;
 
   // URL do Webhook do KYRO
   const webhookUrl = typeof window !== 'undefined'
     ? `${window.location.origin}/api/webhook`
     : 'https://kyro-finance.vercel.app/api/webhook';
 
-  // Conteúdo do QR Code escaneável
-  // Pode abrir conversa direta no WhatsApp ou apontar para a instância Evolution
-  const qrCodeValue = `https://wa.me/${cleanUserPhone}?text=${encodeURIComponent('Olá KYRO! Conectar meu WhatsApp ao meu controle financeiro pessoal.')}`;
+  // Conteúdo do QR Code escaneável: Aponta diretamente para iniciar conversa com o BOT do KYRO!
+  const qrCodeValue = waMeBotUrl;
+
+  // Função para buscar QR Code ao vivo do servidor Evolution/Baileys
+  const handleFetchServerQrCode = async () => {
+    setIsFetchingServerQr(true);
+    setServerQrError(null);
+    try {
+      const queryParams = new URLSearchParams({
+        serverUrl: evolutionServerUrl,
+        apiKey: evolutionApiKey,
+        instance: evolutionInstance
+      });
+      const res = await fetch(`/api/instance-qr?${queryParams.toString()}`);
+      const data = await res.json();
+      
+      if (data?.base64) {
+        setServerQrBase64(data.base64);
+        if (data.pairingCode) setPairingCode(data.pairingCode);
+      } else if (data?.status === 'connected') {
+        setWhatsAppConnected(true);
+        localStorage.setItem('kyro_whatsapp_connected', 'true');
+        setDirectMsgToast('🎉 WhatsApp já está conectado e online no servidor!');
+        setTimeout(() => setDirectMsgToast(null), 4000);
+      } else {
+        setServerQrError(data?.message || 'Servidor ainda não configurado para gerar sessão de WhatsApp Web.');
+      }
+    } catch (e: any) {
+      setServerQrError('Erro de conexão com o servidor. Usando canal direto de atendimento.');
+    } finally {
+      setIsFetchingServerQr(false);
+    }
+  };
 
   const handleCopyWebhookUrl = () => {
     if (typeof navigator !== 'undefined' && navigator.clipboard) {
@@ -595,6 +636,7 @@ export default function App() {
     localStorage.setItem('kyro_evolution_key', evolutionApiKey);
     localStorage.setItem('kyro_evolution_instance', evolutionInstance);
     localStorage.setItem('kyro_whatsapp_phone', userPhone);
+    localStorage.setItem('kyro_bot_phone', botPhone);
     setConfigSavedToast(true);
     setTimeout(() => setConfigSavedToast(false), 3000);
   };
@@ -614,8 +656,9 @@ export default function App() {
       setWhatsAppConnected(true);
       localStorage.setItem('kyro_whatsapp_connected', 'true');
       localStorage.setItem('kyro_whatsapp_phone', userPhone);
+      localStorage.setItem('kyro_bot_phone', botPhone);
       setIsSyncingPhone(false);
-      setDirectMsgToast(`✅ WhatsApp ${userPhone} vinculado com sucesso ao KYRO Finance!`);
+      setDirectMsgToast(`✅ WhatsApp ${userPhone} vinculado com sucesso à conta KYRO Finance!`);
       setTimeout(() => setDirectMsgToast(null), 4000);
     }, 700);
   };
@@ -1737,23 +1780,58 @@ export default function App() {
                 </div>
               )}
 
-              {/* CONTEÚDO: MÉTODO 1 (VINCULAR NÚMERO DIRETO) */}
+              {/* CONTEÚDO: MÉTODO 1 (VINCULAR NÚMERO DIRETO & CONTATO DA PERSONA KYRO) */}
               {activePairMethod === 'direct' && (
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                   <div className="lg:col-span-7 bg-[#111628] p-6 rounded-2xl border border-emerald-500/30 shadow-xl space-y-5">
                     <div className="flex items-center gap-3 border-b border-[#1E2740] pb-4">
                       <div className="h-10 w-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
-                        <Smartphone size={22} />
+                        <Bot size={22} />
                       </div>
                       <div>
-                        <h3 className="font-bold text-base text-white">Passo 1: Insira seu WhatsApp para Vincular</h3>
-                        <p className="text-xs text-slate-400">Sem burocracia: conecte seu número diretamente ao assistente KYRO</p>
+                        <h3 className="font-bold text-base text-white">Canal Oficial: Contato / Persona do Sistema KYRO</h3>
+                        <p className="text-xs text-slate-400">Você conversa com um número empresarial independente dedicado ao seu controle financeiro</p>
                       </div>
                     </div>
 
-                    <div className="space-y-3">
+                    {/* Card Destacado do Contato do Bot / Persona */}
+                    <div className="p-4 rounded-xl bg-[#0E1528] border border-cyan-500/30 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="h-3 w-3 rounded-full bg-emerald-400 animate-pulse"></span>
+                          <span className="text-xs font-bold text-cyan-300">Número Empresarial / Linha do Robô KYRO:</span>
+                        </div>
+                        <span className="text-[10px] px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 font-mono font-bold">
+                          Persona Online
+                        </span>
+                      </div>
+                      
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <input
+                          type="text"
+                          value={botPhone}
+                          onChange={(e) => setBotPhone(e.target.value)}
+                          placeholder="+55 (86) 99400-2892"
+                          className="flex-1 bg-[#0A0D18] border border-[#202940] focus:border-cyan-500 p-3 rounded-xl text-cyan-100 font-bold text-sm outline-none font-mono"
+                        />
+                        <a
+                          href={waMeBotUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-5 py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:brightness-110 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg transition-all shrink-0"
+                        >
+                          <ExternalLink size={15} />
+                          <span>Abrir Chat com o Robô</span>
+                        </a>
+                      </div>
+                      <p className="text-[11px] text-slate-400">
+                        💡 <strong>Este é um contato separado do seu celular!</strong> Ao clicar acima, ele abre a conversa com o número do robô. O que você digita lá é recebido e processado pelo sistema.
+                      </p>
+                    </div>
+
+                    <div className="space-y-3 pt-2">
                       <label className="text-xs font-semibold text-slate-300 block">
-                        Número de Telefone com DDD:
+                        Seu Número de WhatsApp Pessoal (Remetente Autorizado):
                       </label>
                       <div className="flex flex-col sm:flex-row gap-3">
                         <div className="relative flex-1">
@@ -1779,13 +1857,13 @@ export default function App() {
                           ) : (
                             <>
                               <CheckCircle2 size={16} />
-                              <span>Vincular Celular Agora</span>
+                              <span>Vincular Meu Celular</span>
                             </>
                           )}
                         </button>
                       </div>
                       <p className="text-[11px] text-slate-500">
-                        Exemplo: <strong>+55 (86) 99876-5432</strong>. Aceita qualquer DDD do Brasil.
+                        Seu telefone cadastrado: <strong>{userPhone}</strong>. Garante que apenas suas mensagens no chat do robô consigam alterar seu saldo.
                       </p>
                     </div>
 
@@ -1795,10 +1873,10 @@ export default function App() {
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2 text-emerald-400 font-bold text-xs">
                             <CheckCircle2 size={16} />
-                            <span>Status: WhatsApp Conectado e Ativo!</span>
+                            <span>Canal Estabelecido: Celular Autorizado no Robô!</span>
                           </div>
                           <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold">
-                            Pronto para Uso
+                            Pronto para Conversar
                           </span>
                         </div>
 
@@ -1806,27 +1884,27 @@ export default function App() {
                           <div className="p-3 bg-[#0A1F18] rounded-lg border border-emerald-500/30 flex items-center justify-between">
                             <div>
                               <span className="text-[10px] text-emerald-400/80 uppercase tracking-wider block font-bold">
-                                Código de Confirmação Oficial:
+                                Token de Sessão:
                               </span>
                               <strong className="text-xl text-emerald-300 font-mono tracking-widest">
                                 {pairingCode}
                               </strong>
                             </div>
                             <span className="text-[10px] text-slate-400 max-w-[140px] text-right">
-                              Válido para esta sessão do KYRO
+                              Ativo no KYRO Private Finance
                             </span>
                           </div>
                         )}
 
                         <div className="pt-2 flex flex-wrap gap-2">
                           <a
-                            href={`https://wa.me/${cleanUserPhone}?text=${encodeURIComponent('Oi KYRO! Gastei 45 no pix na padaria em Teresina')}`}
+                            href={waMeBotUrl}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="flex-1 min-w-[200px] py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-md transition-all"
                           >
                             <ExternalLink size={14} />
-                            <span>Abrir Conversa no WhatsApp Web / App</span>
+                            <span>Mandar Mensagem para o Robô Agora</span>
                           </a>
                           <button
                             type="button"
@@ -1842,11 +1920,11 @@ export default function App() {
                       </div>
                     )}
 
-                    {/* Como Testar e Usar no WhatsApp */}
+                    {/* Exemplos de Interação */}
                     <div className="border-t border-[#1E2740] pt-4 space-y-3">
                       <h4 className="text-xs font-bold text-slate-200 flex items-center gap-2">
                         <MessageSquare size={15} className="text-amber-400" />
-                        <span>O que você pode mandar no WhatsApp:</span>
+                        <span>O que você envia para a outra Persona (o robô do sistema):</span>
                       </h4>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
                         <div className="p-3 rounded-xl bg-[#0A0D18] border border-[#202940]">
@@ -1873,18 +1951,18 @@ export default function App() {
                   <div className="lg:col-span-5 bg-[#111628] p-6 rounded-2xl border border-[#202940] shadow-xl space-y-4">
                     <div className="flex items-center gap-2 border-b border-[#1E2740] pb-3">
                       <HelpCircle size={18} className="text-emerald-400" />
-                      <h3 className="font-bold text-sm text-white">Como Funciona a Sincronização</h3>
+                      <h3 className="font-bold text-sm text-white">Como Funciona a Comunicação</h3>
                     </div>
 
                     <div className="space-y-4 text-xs">
                       <div className="flex gap-3">
-                        <div className="h-6 w-6 rounded-full bg-emerald-500/20 text-emerald-400 font-bold text-xs flex items-center justify-center shrink-0">
+                        <div className="h-6 w-6 rounded-full bg-cyan-500/20 text-cyan-400 font-bold text-xs flex items-center justify-center shrink-0">
                           1
                         </div>
                         <div>
-                          <h5 className="font-bold text-slate-200">Vincule seu número</h5>
+                          <h5 className="font-bold text-slate-200">Você conversa com uma Persona externa</h5>
                           <p className="text-[11px] text-slate-400 mt-0.5">
-                            O sistema salva seu celular com segurança na nuvem para autorizar os seus comandos financeiros.
+                            Não é uma mensagem para si mesmo. É uma conversa direta com a conta do robô financeiro do KYRO ({botPhone}).
                           </p>
                         </div>
                       </div>
@@ -1894,21 +1972,21 @@ export default function App() {
                           2
                         </div>
                         <div>
-                          <h5 className="font-bold text-slate-200">Envie mensagens ou áudios</h5>
+                          <h5 className="font-bold text-slate-200">A IA lê o que você enviou</h5>
                           <p className="text-[11px] text-slate-400 mt-0.5">
-                            Escreva ou fale naturalmente no WhatsApp exatamente o que comprou, onde comprou e como pagou.
+                            O Webhook serverless na Vercel recebe sua mensagem, ativa o GPT-4o-mini e extrai o valor, cidade e forma de pagamento.
                           </p>
                         </div>
                       </div>
 
                       <div className="flex gap-3">
-                        <div className="h-6 w-6 rounded-full bg-emerald-500/20 text-emerald-400 font-bold text-xs flex items-center justify-center shrink-0">
+                        <div className="h-6 w-6 rounded-full bg-amber-500/20 text-amber-400 font-bold text-xs flex items-center justify-center shrink-0">
                           3
                         </div>
                         <div>
-                          <h5 className="font-bold text-slate-200">A IA atualiza o Painel instantaneamente</h5>
+                          <h5 className="font-bold text-slate-200">O Painel Web e seu Celular sincronizam</h5>
                           <p className="text-[11px] text-slate-400 mt-0.5">
-                            O valor é computado, seu saldo recalcula e tudo fica registrado no site e no app sem esforço manual.
+                            Os números e gráficos deste site mudam automaticamente sem você precisar abrir planilhas ou digitar manualmente.
                           </p>
                         </div>
                       </div>
@@ -1917,17 +1995,17 @@ export default function App() {
                     <div className="p-3.5 rounded-xl bg-[#0A0D18] border border-[#202940] mt-4">
                       <div className="flex items-center gap-2 text-emerald-400 text-xs font-bold mb-1">
                         <Shield size={14} />
-                        <span>Privacidade & Segurança</span>
+                        <span>Canal Exclusivo e Privado</span>
                       </div>
                       <p className="text-[11px] text-slate-400 leading-relaxed">
-                        Apenas as mensagens do seu número autorizado ({userPhone}) têm permissão para criar registros e consultar seu saldo financeiro.
+                        Apenas as mensagens enviadas do seu número ({userPhone}) têm autorização para adicionar gastos à sua carteira.
                       </p>
                     </div>
                   </div>
                 </div>
               )}
 
-              {/* CONTEÚDO: MÉTODO 2 (QR CODE ESCANEÁVEL OFICIAL) */}
+              {/* CONTEÚDO: MÉTODO 2 (QR CODE ESCANEÁVEL: CANAL DIRETO + SESSÃO INSTÂNCIA) */}
               {activePairMethod === 'qrcode' && (
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                   {/* Card do QR Code Real Escaneável */}
@@ -1936,48 +2014,78 @@ export default function App() {
                       <div className="flex items-center gap-2 text-left">
                         <QrCode size={20} className="text-emerald-400" />
                         <div>
-                          <h3 className="font-bold text-sm text-white">QR Code Escaneável Oficial</h3>
-                          <p className="text-[11px] text-slate-400">Aponte a câmera do seu celular ou o leitor de QR Code</p>
+                          <h3 className="font-bold text-sm text-white">QR Code de Conexão com o Robô</h3>
+                          <p className="text-[11px] text-slate-400">Escaneie com a câmera do celular para iniciar o chat</p>
                         </div>
                       </div>
                       <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${
-                        whatsAppConnected ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                        whatsAppConnected ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
                       }`}>
-                        {whatsAppConnected ? '● Vinculado' : '○ Pronto para Escanear'}
+                        {whatsAppConnected ? '● Vinculado' : '○ Pronto para Conversar'}
                       </span>
                     </div>
 
-                    {/* QR Code Dinâmico Real via qrcode.react */}
+                    {/* Exibição: Se houver QR Code retornado do servidor Evolution (sessão WhatsApp Web) exibe ele; se não, renderiza o QR de conversa com o Bot */}
                     <div className="p-5 bg-white rounded-2xl shadow-2xl relative border-4 border-emerald-500/40">
-                      <QRCodeSVG
-                        value={qrCodeValue}
-                        size={210}
-                        level="H"
-                        includeMargin={true}
-                      />
+                      {serverQrBase64 ? (
+                        <img
+                          src={serverQrBase64.startsWith('data:') ? serverQrBase64 : `data:image/png;base64,${serverQrBase64}`}
+                          alt="WhatsApp Web QR Code"
+                          className="w-52 h-52 object-contain"
+                        />
+                      ) : (
+                        <QRCodeSVG
+                          value={qrCodeValue}
+                          size={210}
+                          level="H"
+                          includeMargin={true}
+                        />
+                      )}
 
-                      {whatsAppConnected && (
+                      {whatsAppConnected && !serverQrBase64 && (
                         <div className="absolute inset-0 bg-slate-950/85 rounded-2xl flex flex-col items-center justify-center backdrop-blur-sm p-4">
                           <CheckCircle2 size={42} className="text-emerald-400 mb-2" />
                           <p className="text-white font-bold text-sm">Dispositivo Pareado!</p>
-                          <p className="text-xs text-emerald-300 mt-1">{userPhone}</p>
+                          <p className="text-xs text-emerald-300 mt-1">Conectado ao Robô ({botPhone})</p>
                         </div>
                       )}
                     </div>
 
                     <div className="w-full space-y-2">
                       <p className="text-xs text-slate-300 font-medium">
-                        Ao escanear, o WhatsApp abrirá diretamente a conversa com o Copiloto KYRO.
+                        {serverQrBase64 
+                          ? 'Escaneie no WhatsApp > Aparelhos Conectados para parear a sessão do bot.' 
+                          : `Ao apontar a câmera, seu celular abre diretamente a conversa com a Persona KYRO (${botPhone}).`}
                       </p>
-                      <a
-                        href={qrCodeValue}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="w-full py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:brightness-110 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-md transition-all"
-                      >
-                        <ExternalLink size={14} />
-                        <span>Abrir Link do QR Code no Navegador</span>
-                      </a>
+                      
+                      <div className="flex gap-2">
+                        <a
+                          href={waMeBotUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:brightness-110 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-md transition-all"
+                        >
+                          <ExternalLink size={14} />
+                          <span>Abrir Chat do Robô</span>
+                        </a>
+
+                        <button
+                          type="button"
+                          onClick={handleFetchServerQrCode}
+                          disabled={isFetchingServerQr}
+                          className="px-3.5 py-2.5 rounded-xl bg-[#141A2E] hover:bg-[#1E2642] border border-[#2B3754] text-amber-300 font-bold text-xs flex items-center gap-1.5 transition-all"
+                          title="Tenta buscar sessão ao vivo do servidor Evolution"
+                        >
+                          <RefreshCw size={14} className={isFetchingServerQr ? 'animate-spin' : ''} />
+                          <span>Gerar Sessão Web</span>
+                        </button>
+                      </div>
+
+                      {serverQrError && (
+                        <p className="text-[11px] text-amber-400/90 bg-amber-500/10 p-2 rounded-lg border border-amber-500/20">
+                          ℹ️ {serverQrError} (Você pode usar o link direto do robô acima normalmente!)
+                        </p>
+                      )}
                     </div>
                   </div>
 
@@ -1985,25 +2093,24 @@ export default function App() {
                   <div className="lg:col-span-6 bg-[#111628] p-6 rounded-2xl border border-[#202940] shadow-xl space-y-5">
                     <div className="flex items-center gap-2 border-b border-[#1E2740] pb-3">
                       <Smartphone size={18} className="text-emerald-400" />
-                      <h3 className="font-bold text-sm text-white">Como Escanear no Celular</h3>
+                      <h3 className="font-bold text-sm text-white">Como Funciona no Celular</h3>
                     </div>
 
                     <div className="space-y-4 text-xs">
                       <div className="p-3.5 rounded-xl bg-[#0A0D18] border border-[#202940] space-y-1">
-                        <span className="font-bold text-emerald-400 block text-xs">Opção A: Com a Câmera do Celular (Mais Fácil)</span>
+                        <span className="font-bold text-emerald-400 block text-xs">Opção 1: Iniciar Chat com o Robô (Recomendado)</span>
                         <p className="text-slate-300 text-[11px] leading-relaxed">
-                          1. Abra o aplicativo de Câmera padrão do seu iPhone ou Android.<br />
-                          2. Aponte a câmera para o QR Code ao lado.<br />
-                          3. Toque na notificação amarela/verde "Abrir no WhatsApp".
+                          1. Aponte a câmera do seu celular para o QR Code ao lado.<br />
+                          2. Toque no link que surge na tela.<br />
+                          3. O WhatsApp abrirá uma conversa com o contato do <strong>Copiloto KYRO</strong>.<br />
+                          4. Mande uma mensagem como <em>"Gastei 50 no almoço em Teresina"</em>.
                         </p>
                       </div>
 
                       <div className="p-3.5 rounded-xl bg-[#0A0D18] border border-[#202940] space-y-1">
-                        <span className="font-bold text-amber-400 block text-xs">Opção B: WhatsApp Web / Aparelhos Conectados</span>
+                        <span className="font-bold text-amber-400 block text-xs">Opção 2: Conectar Instância Própria (Aparelhos Conectados)</span>
                         <p className="text-slate-300 text-[11px] leading-relaxed">
-                          1. Abra o WhatsApp no seu smartphone.<br />
-                          2. Vá em <strong>Configurações / Opções (três pontinhos)</strong> &gt; <strong>Aparelhos Conectados</strong>.<br />
-                          3. Toque em <strong>Conectar um Aparelho</strong> e confirme seu bloqueio biométrico.
+                          Se você tiver um servidor da Evolution API próprio ativo, clique no botão <strong>"Gerar Sessão Web"</strong> para puxar o QR Code de sessão Baileys diretamente da sua API.
                         </p>
                       </div>
 
@@ -2014,14 +2121,14 @@ export default function App() {
                           setWhatsAppConnected(next);
                           localStorage.setItem('kyro_whatsapp_connected', String(next));
                           if (next) {
-                            setDirectMsgToast(`✅ WhatsApp pareado com sucesso via QR Code!`);
+                            setDirectMsgToast(`✅ Canal com o Robô KYRO confirmado e ativo!`);
                             setTimeout(() => setDirectMsgToast(null), 4000);
                           }
                         }}
                         className="w-full py-2.5 rounded-xl bg-[#141A2E] hover:bg-[#1A223B] border border-[#222C46] text-xs font-bold text-slate-200 hover:text-white transition-all flex items-center justify-center gap-2"
                       >
                         <RefreshCw size={14} />
-                        <span>{whatsAppConnected ? 'Desconectar Pareamento' : 'Confirmar que Escaneou'}</span>
+                        <span>{whatsAppConnected ? 'Desconectar Canal' : 'Confirmar Canal Ativo'}</span>
                       </button>
                     </div>
                   </div>
@@ -3188,19 +3295,27 @@ export default function App() {
             </button>
 
             <div className="flex items-center gap-3 mb-4">
-              <div className="h-11 w-11 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
-                <Smartphone size={24} />
+              <div className="h-11 w-11 rounded-xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center">
+                <Bot size={24} />
               </div>
               <div>
-                <h3 className="font-bold text-base text-white">Vincular WhatsApp ao KYRO</h3>
-                <p className="text-xs text-slate-400">Conexão 24h via Evolution / Z-API Bot</p>
+                <h3 className="font-bold text-base text-white">Canal WhatsApp do KYRO</h3>
+                <p className="text-xs text-slate-400">Persona & Robô Financeiro Oficial</p>
               </div>
             </div>
 
             <div className="space-y-4 text-xs">
               <div className="p-4 rounded-xl bg-[#0E1322] border border-[#1E2740] space-y-3">
                 <div>
-                  <label className="text-slate-400 block mb-1">Seu Número de WhatsApp (com DDD):</label>
+                  <label className="text-cyan-300 font-bold block mb-1">Contato do Robô KYRO (Persona):</label>
+                  <div className="p-2.5 rounded-lg bg-[#080D1A] border border-cyan-500/30 text-cyan-200 font-mono font-bold text-xs flex items-center justify-between">
+                    <span>{botPhone}</span>
+                    <span className="text-[10px] text-emerald-400">● Online</span>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-slate-400 block mb-1">Seu Número Autorizado (com DDD):</label>
                   <input 
                     type="text" 
                     value={userPhone} 
@@ -3211,9 +3326,9 @@ export default function App() {
                 </div>
 
                 <div className="flex justify-between items-center pt-2 border-t border-[#1E2740]">
-                  <span className="text-slate-300">Status da Sessão:</span>
-                  <span className={`font-bold ${whatsAppConnected ? 'text-emerald-400' : 'text-amber-400'}`}>
-                    {whatsAppConnected ? '🟢 Vinculado e Ativo' : '🟡 Aguardando Conexão'}
+                  <span className="text-slate-300">Status do Canal:</span>
+                  <span className={`font-bold ${whatsAppConnected ? 'text-emerald-400' : 'text-cyan-400'}`}>
+                    {whatsAppConnected ? '🟢 Canal Vinculado' : '🟡 Pronto para Enviar'}
                   </span>
                 </div>
               </div>
@@ -3222,31 +3337,40 @@ export default function App() {
               <div className="p-4 rounded-xl bg-[#0E1322] border border-[#1E2740] flex flex-col items-center justify-center text-center">
                 <div className="p-3 bg-white rounded-xl mb-3 shadow-xl border-2 border-emerald-500/40">
                   <QRCodeSVG
-                    value={qrCodeValue}
+                    value={waMeBotUrl}
                     size={140}
                     level="H"
                     includeMargin={false}
                   />
                 </div>
                 <p className="text-xs text-white font-semibold">
-                  {whatsAppConnected ? 'WhatsApp Vinculado e Ativo!' : 'Aponte a câmera do seu celular para escanear'}
+                  Aponte a câmera para abrir o chat do Robô KYRO
                 </p>
                 <p className="text-[10px] text-slate-400 mt-0.5">
-                  Abre a conversa direta do Copiloto no seu WhatsApp
+                  Não abre com você mesmo: abre com o contato do robô ({botPhone})
                 </p>
               </div>
 
               {/* Botões de Ação */}
               <div className="space-y-2">
+                <a
+                  href={waMeBotUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:brightness-110 text-white font-bold text-xs transition-all shadow-md flex items-center justify-center gap-2"
+                >
+                  <ExternalLink size={15} /> Abrir Conversa com o Robô no WhatsApp
+                </a>
+
                 <button
                   type="button"
                   onClick={() => {
                     setWhatsAppModalOpen(false);
                     setActiveTab('whatsapp');
                   }}
-                  className="w-full py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:brightness-110 text-white font-bold text-xs transition-all shadow-md flex items-center justify-center gap-2"
+                  className="w-full py-2.5 rounded-xl bg-[#141A2E] hover:bg-[#1E2642] text-slate-200 border border-[#2A3554] font-bold text-xs transition-all flex items-center justify-center gap-2"
                 >
-                  <Globe size={15} /> Abrir Painel Completo de Webhook & Evolution
+                  <Globe size={15} /> Ver Métodos de Conexão & Webhook
                 </button>
 
                 <button
