@@ -295,8 +295,8 @@ export default function App() {
                 </div>
                 <input 
                   type="range" 
-                  min="24" 
-                  max="70" 
+                  min="20" 
+                  max="160" 
                   value={logoConfig.kHeight} 
                   onChange={(e) => setLogoConfig({ ...logoConfig, kHeight: Number(e.target.value) })} 
                   className="w-full accent-amber-500 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
@@ -311,8 +311,8 @@ export default function App() {
                 </div>
                 <input 
                   type="range" 
-                  min="14" 
-                  max="50" 
+                  min="10" 
+                  max="90" 
                   value={logoConfig.kyroHeight} 
                   onChange={(e) => setLogoConfig({ ...logoConfig, kyroHeight: Number(e.target.value) })} 
                   className="w-full accent-amber-500 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
@@ -327,8 +327,8 @@ export default function App() {
                 </div>
                 <input 
                   type="range" 
-                  min="12" 
-                  max="45" 
+                  min="10" 
+                  max="80" 
                   value={logoConfig.pfHeight} 
                   onChange={(e) => setLogoConfig({ ...logoConfig, pfHeight: Number(e.target.value) })} 
                   className="w-full accent-amber-500 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
