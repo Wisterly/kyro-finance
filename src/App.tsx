@@ -375,113 +375,169 @@ export default function App() {
     .filter(r => r.active)
     .reduce((acc, r) => acc + r.installmentAmount, 0);
 
-  // ================= CÉREBRO DA IA (PROCESSAMENTO MULTIMODAL & CONSULTAS VIA WHATSAPP) =================
+  // ================= CÉREBRO DA IA (ALIMENTAÇÃO AUTOMÁTICA & CONSULTAS EM TEMPO REAL) =================
   const processIaText = (text: string) => {
-    const lower = text.toLowerCase();
-    
-    // 1. CONSULTA DE GASTOS POR CIDADE (Ex: "Quanto gastei em Caxias?", "Quanto gastei em Oeiras?", "Quanto gastei em Teresina?")
+    const lower = text.toLowerCase().trim();
+
+    // 1. CONSULTA: QUANTO GASTEI POR CIDADE (Oeiras, Caxias, Teresina, São Paulo, Fortaleza, etc.)
     const citiesToCheck = [
-      { name: 'Caxias', full: 'Caxias, MA' },
-      { name: 'Oeiras', full: 'Oeiras, PI' },
-      { name: 'Teresina', full: 'Teresina, PI' },
-      { name: 'São Paulo', full: 'São Paulo, SP' },
-      { name: 'Fortaleza', full: 'Fortaleza, CE' }
+      { name: 'oeiras', label: 'Oeiras, PI' },
+      { name: 'caxias', label: 'Caxias, MA' },
+      { name: 'teresina', label: 'Teresina, PI' },
+      { name: 'são paulo', label: 'São Paulo, SP' },
+      { name: 'sp', label: 'São Paulo, SP' },
+      { name: 'fortaleza', label: 'Fortaleza, CE' },
+      { name: 'brasília', label: 'Brasília, DF' }
     ];
 
-    for (const c of citiesToCheck) {
-      if (lower.includes(c.name.toLowerCase())) {
-        const cityTxs = transactions.filter(t => 
-          t.type === 'Saída' && t.city.toLowerCase().includes(c.name.toLowerCase())
-        );
-        const cityTotal = cityTxs.reduce((acc, t) => acc + t.amount, 0);
-        
-        if (cityTxs.length === 0) {
-          return `📍 Consulta para ${c.full}:\nNão identifiquei nenhum gasto registrado nesta cidade este mês.`;
-        }
+    if (lower.includes('quanto') || lower.includes('total') || lower.includes('qual') || lower.includes('saldo')) {
+      // 1.1 Consulta por Cidade
+      for (const c of citiesToCheck) {
+        if (lower.includes(c.name)) {
+          const cityTxs = transactions.filter(t => 
+            t.type === 'Saída' && t.city.toLowerCase().includes(c.name)
+          );
+          const cityTotal = cityTxs.reduce((acc, t) => acc + t.amount, 0);
 
-        const itemsList = cityTxs.map(t => `• ${t.description}: R$ ${t.amount.toLocaleString('pt-BR', {minimumFractionDigits:2})} (${t.method})`).join('\n');
-        return `📍 Levantamento financeiro para ${c.full}:\n${itemsList}\n\n💰 Total gasto em ${c.name}: R$ ${cityTotal.toLocaleString('pt-BR', {minimumFractionDigits:2})}.`;
+          if (cityTxs.length === 0) {
+            return `📍 Consulta para ${c.label}:\nNão encontrei nenhuma despesa registrada nesta cidade este mês.`;
+          }
+
+          const details = cityTxs.map(t => `• ${t.description}: R$ ${t.amount.toLocaleString('pt-BR', {minimumFractionDigits:2})} (${t.method})`).join('\n');
+          return `📍 Gastos em ${c.label} este mês:\n${details}\n\n💰 Total gasto na cidade: R$ ${cityTotal.toLocaleString('pt-BR', {minimumFractionDigits:2})}.`;
+        }
+      }
+
+      // 1.2 Consulta por Métodos de Pagamento (PIX, Débito, Crédito, Dinheiro)
+      if (lower.includes('pix')) {
+        const pixTxs = transactions.filter(t => t.type === 'Saída' && t.method === 'PIX');
+        const total = pixTxs.reduce((a, b) => a + b.amount, 0);
+        const list = pixTxs.map(t => `• ${t.description} (${t.city}): R$ ${t.amount.toLocaleString('pt-BR', {minimumFractionDigits:2})}`).join('\n');
+        return `💳 Total gasto via PIX este mês: R$ ${total.toLocaleString('pt-BR', {minimumFractionDigits:2})}\n\nDetalhamento:\n${list || '• Nenhuma saída em PIX no momento.'}`;
+      }
+
+      if (lower.includes('débito') || lower.includes('debito')) {
+        const debTxs = transactions.filter(t => t.type === 'Saída' && t.method === 'Débito');
+        const total = debTxs.reduce((a, b) => a + b.amount, 0);
+        const list = debTxs.map(t => `• ${t.description} (${t.city}): R$ ${t.amount.toLocaleString('pt-BR', {minimumFractionDigits:2})}`).join('\n');
+        return `💳 Total gasto no Débito este mês: R$ ${total.toLocaleString('pt-BR', {minimumFractionDigits:2})}\n\nDetalhamento:\n${list || '• Nenhuma saída no débito no momento.'}`;
+      }
+
+      if (lower.includes('crédito') || lower.includes('credito') || lower.includes('cartão')) {
+        const credTxs = transactions.filter(t => t.type === 'Saída' && t.method === 'Crédito');
+        const total = credTxs.reduce((a, b) => a + b.amount, 0);
+        const list = credTxs.map(t => `• ${t.description} (${t.city}): R$ ${t.amount.toLocaleString('pt-BR', {minimumFractionDigits:2})}`).join('\n');
+        return `💳 Total gasto no Cartão de Crédito este mês: R$ ${total.toLocaleString('pt-BR', {minimumFractionDigits:2})}\n\nDetalhamento:\n${list || '• Nenhuma saída no crédito no momento.'}`;
+      }
+
+      // 1.3 Consulta Geral de Saldo / Resumo
+      if (lower.includes('saldo') || lower.includes('tenho') || lower.includes('sobrou') || lower.includes('resumo')) {
+        return `📊 Diagnóstico Financeiro de ${userFullName}:\n• Entradas: R$ ${monthIncomes.toLocaleString('pt-BR', {minimumFractionDigits:2})}\n• Saídas: R$ ${monthExpenses.toLocaleString('pt-BR', {minimumFractionDigits:2})}\n• Saldo Líquido Atual: R$ ${totalBalance.toLocaleString('pt-BR', {minimumFractionDigits:2})}\n• Taxa de Sobra: ${savingsRate}%.`;
       }
     }
 
-    // 2. CONSULTA DE SAÍDAS RECORRENTES / EMPRÉSTIMO / PASSAGEM
-    if (lower.includes('recorrente') || lower.includes('empréstimo') || lower.includes('parcela') || lower.includes('passagem')) {
-      const activeList = recurringExpenses.filter(r => r.active).map(r => {
-        const parcelInfo = r.totalInstallments > 0 ? `(${r.currentInstallment}/${r.totalInstallments})` : '(Mensalidade fixa)';
-        return `• ${r.title} ${parcelInfo}: R$ ${r.installmentAmount.toLocaleString('pt-BR', {minimumFractionDigits:2})}/mês`;
-      }).join('\n');
-
-      return `🔁 Suas Saídas Recorrentes & Parcelamentos Ativos:\n${activeList}\n\n💳 Custo mensal fixo/parcelado comprometido: R$ ${totalMonthlyRecurring.toLocaleString('pt-BR', {minimumFractionDigits:2})}/mês.`;
+    // 2. ALIMENTAÇÃO AUTOMÁTICA: EXTRAÇÃO DE LANÇAMENTO DA FRASE
+    // Expressão regular para achar valores (ex: 45, 45.00, 45,50, 1.200,00 ou "45 reais")
+    const matchVal = text.match(/(?:r\$\s*)?(\d+(?:[.,]\d+)?)/i);
+    let amount = 0;
+    if (matchVal) {
+      amount = parseFloat(matchVal[1].replace(',', '.'));
     }
 
-    // 3. CONSULTA DE MÉTODOS DE PAGAMENTO (Ex: "Quanto gastei no Pix?", "Quanto gastei no cartão?")
-    if (lower.includes('quanto gastei no pix') || lower.includes('total em pix')) {
-      return `💳 Total gasto em PIX este mês: R$ ${pixExpenses.toLocaleString('pt-BR', {minimumFractionDigits:2})}, distribuído em compras do dia a dia e despesas fixas.`;
-    }
-    if (lower.includes('crédito') || lower.includes('cartão de crédito')) {
-      return `💳 Total gasto no Cartão de Crédito este mês: R$ ${creditExpenses.toLocaleString('pt-BR', {minimumFractionDigits:2})}, incluindo parcelas de passagens aéreas e compras de mercado.`;
-    }
-
-    // 4. LANÇAMENTO AUTOMÁTICO DE GASTO NOVO VIA WHATSAPP (ÁUDIO / TEXTO)
-    const valMatch = text.match(/(\d+[.,]?\d*)/);
-    const amount = valMatch ? parseFloat(valMatch[0].replace(',', '.')) : 0;
-
-    if (amount > 0 && (lower.includes('gastei') || lower.includes('comprei') || lower.includes('paguei') || lower.includes('pix') || lower.includes('débito') || lower.includes('crédito'))) {
+    // Se a IA encontrou um valor e palavras indicativas de transação
+    if (amount > 0) {
+      // Método de pagamento
       let method: PaymentMethod = 'PIX';
       if (lower.includes('débito') || lower.includes('debito')) method = 'Débito';
       else if (lower.includes('crédito') || lower.includes('credito') || lower.includes('cartão')) method = 'Crédito';
       else if (lower.includes('dinheiro')) method = 'Dinheiro';
+      else if (lower.includes('ted') || lower.includes('transferência') || lower.includes('transferencia')) method = 'Transferência';
 
+      // Cidade
       let city = 'Teresina, PI';
-      if (lower.includes('caxias')) city = 'Caxias, MA';
-      else if (lower.includes('oeiras')) city = 'Oeiras, PI';
+      if (lower.includes('oeiras')) city = 'Oeiras, PI';
+      else if (lower.includes('caxias')) city = 'Caxias, MA';
       else if (lower.includes('são paulo') || lower.includes('sp')) city = 'São Paulo, SP';
+      else if (lower.includes('fortaleza')) city = 'Fortaleza, CE';
+      else if (lower.includes('brasília') || lower.includes('brasilia')) city = 'Brasília, DF';
 
-      let category = 'Outros';
-      let subcategory = 'Despesa Avulsa';
-      let desc = 'Compra Registrada via WhatsApp';
+      // Detectar se é Entrada ou Saída
+      const isIncome = lower.includes('recebi') || lower.includes('salário') || lower.includes('salario') || 
+                       lower.includes('ganhei') || lower.includes('depósito') || lower.includes('vendi') || lower.includes('entrou');
+      const type: TransactionType = isIncome ? 'Entrada' : 'Saída';
 
-      if (lower.includes('padaria') || lower.includes('pão') || lower.includes('comida') || lower.includes('almoço')) {
-        category = 'Alimentação';
-        subcategory = 'Padaria & Refeição';
-        desc = lower.includes('padaria') ? 'Padaria' : 'Alimentação';
-      } else if (lower.includes('roupa') || lower.includes('calçado') || lower.includes('sapato')) {
-        category = 'Vestuário';
-        subcategory = 'Vestuário & Calçados';
-        desc = 'Loja de Calçados & Roupas';
-      } else if (lower.includes('passagem') || lower.includes('voo') || lower.includes('aérea')) {
-        category = 'Passagem Aérea / Viagem';
-        subcategory = 'Transporte Aéreo';
-        desc = 'Passagem Aérea';
-      } else if (lower.includes('empréstimo')) {
-        category = 'Empréstimo';
-        subcategory = 'Amortização Empréstimo';
-        desc = 'Parcela Empréstimo';
+      // Categoria e Descrição do Objeto
+      let category = isIncome ? 'Recebimento' : 'Outros';
+      let subcategory = 'Gasto Avulso';
+      let description = 'Compra via Chat IA';
+
+      if (isIncome) {
+        if (lower.includes('salário') || lower.includes('salario')) {
+          description = 'Salário Mensal';
+          subcategory = 'Salário Fixo';
+        } else if (lower.includes('investimento') || lower.includes('rendimento')) {
+          description = 'Rendimento de Investimento';
+          subcategory = 'Dividendos / Lucros';
+        } else {
+          description = 'Recebimento PIX / Renda';
+          subcategory = 'Entrada Avulsa';
+        }
+      } else {
+        if (lower.includes('padaria') || lower.includes('pão') || lower.includes('comida') || lower.includes('almoço') || lower.includes('jantar') || lower.includes('restaurante') || lower.includes('lanche')) {
+          category = 'Alimentação';
+          subcategory = lower.includes('padaria') ? 'Padaria & Lanche' : 'Refeição & Restaurante';
+          description = lower.includes('padaria') ? 'Padaria' : 'Alimentação / Refeição';
+        } else if (lower.includes('roupa') || lower.includes('calçado') || lower.includes('sapato') || lower.includes('tênis') || lower.includes('loja')) {
+          category = 'Vestuário';
+          subcategory = 'Roupas & Calçados';
+          description = 'Loja de Calçados / Vestuário';
+        } else if (lower.includes('passagem') || lower.includes('voo') || lower.includes('aérea') || lower.includes('viagem')) {
+          category = 'Passagem Aérea / Viagem';
+          subcategory = 'Passagens Aéreas';
+          description = 'Passagem Aérea';
+        } else if (lower.includes('empréstimo') || lower.includes('emprestimo')) {
+          category = 'Empréstimo';
+          subcategory = 'Parcela Empréstimo';
+          description = 'Empréstimo Bancário';
+        } else if (lower.includes('gasolina') || lower.includes('posto') || lower.includes('combustível') || lower.includes('uber')) {
+          category = 'Transporte';
+          subcategory = 'Combustível & Transporte';
+          description = 'Posto de Gasolina / Transporte';
+        } else if (lower.includes('farmácia') || lower.includes('farmacia') || lower.includes('remédio')) {
+          category = 'Saúde';
+          subcategory = 'Farmácia & Cuidados';
+          description = 'Farmácia';
+        }
       }
 
+      // Adicionar nova transação no estado e no banco de dados
       const newTx: Transaction = {
         id: Date.now().toString(),
-        description: desc,
+        description,
         category,
         subcategory,
         city,
         amount,
-        type: 'Saída',
+        type,
         method,
         date: 'Hoje',
         status: 'Concluído'
       };
 
       setTransactions(prev => [newTx, ...prev]);
+      kyroCloud.syncSaveTransaction(newTx);
 
-      return `✅ Lançamento processado via IA/WhatsApp:\n• Objeto: ${desc}\n• Categoria: ${category}\n• Valor: R$ ${amount.toLocaleString('pt-BR', {minimumFractionDigits:2})}\n• Método: ${method}\n• Cidade: ${city}\n\nAtualizado automaticamente em Saídas, Saldo Total, Gráficos e Relatórios!`;
+      const symbol = type === 'Entrada' ? '+' : '-';
+      return `⚡ Lançamento adicionado e automatizado pela IA com sucesso!\n\n• Tipo: ${type}\n• Objeto: ${description}\n• Categoria: ${category} (${subcategory})\n• Valor: ${symbol} R$ ${amount.toLocaleString('pt-BR', {minimumFractionDigits:2})}\n• Método: ${method}\n• Cidade: ${city}\n\n✅ O Saldo Total, os Gráficos, as Cidades e as Métricas do Dashboard foram recalculados automaticamente!`;
     }
 
-    return `Entendido, ${userFirstName}! Pergunte qualquer coisa (ex: "Quanto gastei em Caxias?", "Quanto gastei em Oeiras?", "Quanto de empréstimo?") ou me informe qualquer novo gasto!`;
+    return `Entendido, ${userFirstName}! Você pode me enviar lançamentos de gastos ou recebimentos (ex: "gastei 45 no pix na padaria em Oeiras", "recebi 5000 no salário em Teresina"), ou perguntar sobre despesas (ex: "Quanto gastei em Caxias?", "Quanto gastei no Pix?").`;
   };
 
-  const handleSendMessage = () => {
-    if (!inputMessage.trim()) return;
+  const [isAiLoading, setIsAiLoading] = useState(false);
+
+  const handleSendMessage = async () => {
+    if (!inputMessage.trim() || isAiLoading) return;
 
     const userMsg: ChatMessage = {
       id: Date.now().toString(),
@@ -490,10 +546,39 @@ export default function App() {
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
 
-    setMessages(prev => [...prev, userMsg]);
     const textToProcess = inputMessage;
+    setMessages(prev => [...prev, userMsg]);
     setInputMessage('');
+    setIsAiLoading(true);
 
+    try {
+      // Tenta chamar o endpoint da API na Vercel
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: textToProcess })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setMessages(prev => [...prev, {
+          id: (Date.now() + 1).toString(),
+          sender: 'ia',
+          text: data.reply || 'Processado com sucesso!',
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        }]);
+
+        if (data.savedTx) {
+          setTransactions(prev => [data.savedTx, ...prev]);
+        }
+        setIsAiLoading(false);
+        return;
+      }
+    } catch (err) {
+      // Fallback local se a API não estiver rodando no ambiente de dev local sem Vercel CLI
+    }
+
+    // Processamento Inteligente Local Fallback
     setTimeout(() => {
       const reply = processIaText(textToProcess);
       setMessages(prev => [...prev, {
@@ -502,7 +587,8 @@ export default function App() {
         text: reply,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       }]);
-    }, 600);
+      setIsAiLoading(false);
+    }, 500);
   };
 
   // Filtragem
