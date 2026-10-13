@@ -47,8 +47,9 @@ export async function processFinanceAssistant(userMessage: string, history: any[
 
   if (responseMessage?.tool_calls && responseMessage.tool_calls.length > 0) {
     for (const toolCall of responseMessage.tool_calls) {
-      if (toolCall.function.name === 'registrar_transacao') {
-        const args: NewTransactionInput = JSON.parse(toolCall.function.arguments);
+      const tc = toolCall as any;
+      if (tc.function?.name === 'registrar_transacao') {
+        const args: NewTransactionInput = JSON.parse(tc.function.arguments);
         savedTx = await saveTransactionToDb(args);
 
         // Retornar resultado da execução da ferramenta para o modelo gerar a confirmação
