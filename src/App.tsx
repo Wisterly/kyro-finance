@@ -182,11 +182,12 @@ export default function App() {
   });
 
   // Ajustador manual em tempo real da Logo
-  const [logoScale, setLogoScale] = useState<number>(100);
+  const [kScale, setKScale] = useState<number>(100);
   const [textScale, setTextScale] = useState<number>(100);
+  const [gapBetween, setGapBetween] = useState<number>(12);
   const [logoPosY, setLogoPosY] = useState<number>(0);
   const [logoPosX, setLogoPosX] = useState<number>(0);
-  const [showLogoAdjuster, setShowLogoAdjuster] = useState<boolean>(false);
+  const [showLogoAdjuster, setShowLogoAdjuster] = useState<boolean>(true);
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-[#0A0D18] text-slate-100 font-sans">
@@ -197,34 +198,38 @@ export default function App() {
         md:static md:translate-x-0 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}
       `}>
         <div>
-          {/* Logo KYRO | Private Finance com Ajustador Manual Integrado */}
-          <div className="px-5 pt-6 pb-2 relative group">
+          {/* Logo com K e TEXTO 100% Separados e Independentes */}
+          <div className="px-4 pt-6 pb-2 relative group">
             <div 
-              className="flex items-center gap-3 cursor-pointer select-none transition-all duration-75"
+              className="flex items-center cursor-pointer select-none"
               style={{
-                transform: `translate(${logoPosX}px, ${logoPosY}px)`
+                transform: `translate(${logoPosX}px, ${logoPosY}px)`,
+                gap: `${gapBetween}px`
               }}
               onClick={() => setShowLogoAdjuster(!showLogoAdjuster)}
-              title="Clique para abrir o controle de tamanho e posição"
+              title="Clique para abrir/fechar o calibrador"
             >
+              {/* APENAS O K (Sem nenhum texto ou borda extra) */}
               <img 
-                src="/kyro-icon-tight.png" 
+                src="/k-only.png" 
                 alt="K" 
-                style={{ height: `${(48 * logoScale) / 100}px` }}
+                style={{ height: `${(44 * kScale) / 100}px` }}
                 className="w-auto object-contain filter drop-shadow-[0_2px_14px_rgba(217,119,6,0.35)] flex-shrink-0" 
               />
+              
+              {/* APENAS O TEXTO (KYRO | Private Finance completo) */}
               <img 
-                src="/kyro-text-tight.png" 
+                src="/text-only.png" 
                 alt="KYRO | Private Finance" 
-                style={{ height: `${(32 * textScale) / 100}px` }}
+                style={{ height: `${(26 * textScale) / 100}px` }}
                 className="w-auto flex-1 object-contain object-left filter drop-shadow-[0_2px_10px_rgba(217,119,6,0.2)]" 
               />
             </div>
 
-            {/* Botão sutil para abrir/fechar o ajustador */}
+            {/* Botão de Ajuste */}
             <button
               onClick={() => setShowLogoAdjuster(!showLogoAdjuster)}
-              className="absolute top-2 right-2 text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1.5 py-0.5 rounded opacity-60 hover:opacity-100 transition-opacity"
+              className="absolute top-2 right-2 text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded opacity-80 hover:opacity-100 transition-opacity"
             >
               ⚙ Ajustar
             </button>
@@ -232,36 +237,36 @@ export default function App() {
 
           {/* PAINEL DE CONTROLE MANUAL FLUTUANTE */}
           {showLogoAdjuster && (
-            <div className="mx-3 mb-2 p-3 bg-[#13192B] border border-amber-500/50 rounded-xl shadow-2xl text-[11px] space-y-2 animate-in fade-in">
+            <div className="mx-3 mb-2 p-3 bg-[#13192B] border border-amber-500/50 rounded-xl shadow-2xl text-[11px] space-y-2.5 animate-in fade-in z-50">
               <div className="flex justify-between items-center font-bold text-amber-400">
-                <span>🔧 Calibrar Logo & Texto</span>
+                <span>🔧 Calibrar K & Texto Separados</span>
                 <button onClick={() => setShowLogoAdjuster(false)} className="text-slate-400 hover:text-white">✕</button>
               </div>
 
               <div>
                 <div className="flex justify-between text-slate-300 mb-1">
                   <span>Tamanho do 'K':</span>
-                  <span className="font-mono text-amber-400">{logoScale}%</span>
+                  <span className="font-mono text-amber-400 font-bold">{kScale}%</span>
                 </div>
                 <input 
                   type="range" 
-                  min="50" 
-                  max="200" 
-                  value={logoScale} 
-                  onChange={(e) => setLogoScale(Number(e.target.value))} 
+                  min="40" 
+                  max="180" 
+                  value={kScale} 
+                  onChange={(e) => setKScale(Number(e.target.value))} 
                   className="w-full accent-amber-500 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
                 />
               </div>
 
               <div>
                 <div className="flex justify-between text-slate-300 mb-1">
-                  <span>Tamanho do Texto (KYRO):</span>
-                  <span className="font-mono text-amber-400">{textScale}%</span>
+                  <span>Tamanho Texto (KYRO):</span>
+                  <span className="font-mono text-amber-400 font-bold">{textScale}%</span>
                 </div>
                 <input 
                   type="range" 
-                  min="50" 
-                  max="250" 
+                  min="40" 
+                  max="220" 
                   value={textScale} 
                   onChange={(e) => setTextScale(Number(e.target.value))} 
                   className="w-full accent-amber-500 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
@@ -270,13 +275,28 @@ export default function App() {
 
               <div>
                 <div className="flex justify-between text-slate-300 mb-1">
-                  <span>Mover Vertical (Cima/Baixo):</span>
-                  <span className="font-mono text-amber-400">{logoPosY}px</span>
+                  <span>Espaçamento (Distância):</span>
+                  <span className="font-mono text-amber-400 font-bold">{gapBetween}px</span>
                 </div>
                 <input 
                   type="range" 
-                  min="-30" 
+                  min="0" 
                   max="30" 
+                  value={gapBetween} 
+                  onChange={(e) => setGapBetween(Number(e.target.value))} 
+                  className="w-full accent-amber-500 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
+                />
+              </div>
+
+              <div>
+                <div className="flex justify-between text-slate-300 mb-1">
+                  <span>Posição Vertical:</span>
+                  <span className="font-mono text-amber-400 font-bold">{logoPosY}px</span>
+                </div>
+                <input 
+                  type="range" 
+                  min="-25" 
+                  max="25" 
                   value={logoPosY} 
                   onChange={(e) => setLogoPosY(Number(e.target.value))} 
                   className="w-full accent-amber-500 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
@@ -285,21 +305,21 @@ export default function App() {
 
               <div>
                 <div className="flex justify-between text-slate-300 mb-1">
-                  <span>Mover Horizontal (Esq/Dir):</span>
-                  <span className="font-mono text-amber-400">{logoPosX}px</span>
+                  <span>Posição Horizontal:</span>
+                  <span className="font-mono text-amber-400 font-bold">{logoPosX}px</span>
                 </div>
                 <input 
                   type="range" 
-                  min="-20" 
-                  max="30" 
+                  min="-15" 
+                  max="25" 
                   value={logoPosX} 
                   onChange={(e) => setLogoPosX(Number(e.target.value))} 
                   className="w-full accent-amber-500 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
                 />
               </div>
 
-              <div className="pt-1 border-t border-slate-800 text-[10px] text-slate-400 text-center">
-                Quando estiver no tamanho ideal, me avise que eu gravo definitivamente!
+              <div className="pt-1.5 border-t border-slate-800 text-[10px] text-amber-300/80 text-center font-medium">
+                Me passe os números que ficarem na tela para eu salvar definitivo!
               </div>
             </div>
           )}
