@@ -350,8 +350,8 @@ export default function App() {
     .filter(t => t.type === 'Saída')
     .reduce((acc, t) => acc + t.amount, 0);
 
-  const basePatrimony = 13240.80;
-  const totalBalance = basePatrimony + monthIncomes - monthExpenses;
+  // SALDO TOTAL 100% DINÂMICO: Se não houver transações, fica exatamente R$ 0,00!
+  const totalBalance = monthIncomes - monthExpenses;
 
   // Métodos de Pagamento Totais
   const pixExpenses = transactions
@@ -367,7 +367,7 @@ export default function App() {
     .reduce((acc, t) => acc + t.amount, 0);
 
   const savingsRate = monthIncomes > 0 
-    ? Math.round(((monthIncomes - monthExpenses) / monthIncomes) * 100) 
+    ? Math.max(0, Math.round(((monthIncomes - monthExpenses) / monthIncomes) * 100)) 
     : 0;
 
   // Resumo de Recorrentes Ativas
@@ -1610,15 +1610,28 @@ export default function App() {
 
             <h4 className="text-xs font-bold text-slate-300 mb-2">Entradas Registradas Este Mês:</h4>
             <div className="space-y-2 max-h-48 overflow-y-auto">
-              {transactions.filter(t => t.type === 'Entrada').map(t => (
-                <div key={t.id} className="p-3 rounded-xl bg-[#0E1322] border border-[#1E2740] flex justify-between items-center text-xs">
-                  <div>
-                    <p className="font-semibold text-slate-100">{t.description}</p>
-                    <p className="text-[11px] text-slate-400">{t.method} • {t.city} • {t.date}</p>
+              {transactions.filter(t => t.type === 'Entrada').length === 0 ? (
+                <p className="text-xs text-slate-500 text-center py-4">Nenhuma entrada cadastrada no momento.</p>
+              ) : (
+                transactions.filter(t => t.type === 'Entrada').map(t => (
+                  <div key={t.id} className="p-3 rounded-xl bg-[#0E1322] border border-[#1E2740] flex justify-between items-center text-xs group hover:border-emerald-500/30 transition-all">
+                    <div>
+                      <p className="font-semibold text-slate-100">{t.description}</p>
+                      <p className="text-[11px] text-slate-400">{t.method} • {t.city} • {t.date}</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="font-bold text-emerald-400 text-sm">+ R$ {t.amount.toLocaleString('pt-BR', {minimumFractionDigits:2})}</span>
+                      <button 
+                        onClick={() => handleDeleteTransaction(t.id)}
+                        title="Excluir esta entrada"
+                        className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-all"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
                   </div>
-                  <span className="font-bold text-emerald-400 text-sm">+ R$ {t.amount.toLocaleString('pt-BR', {minimumFractionDigits:2})}</span>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
         </div>
@@ -1668,31 +1681,44 @@ export default function App() {
                 </p>
 
                 <div className="space-y-2.5 max-h-96 overflow-y-auto">
-                  {transactions.filter(t => t.type === 'Saída').map(tx => (
-                    <div key={tx.id} className="p-3.5 rounded-xl bg-[#141A2E] border border-[#222C46] hover:border-amber-500/40 transition-all">
-                      <div className="flex justify-between items-start">
-                        <div className="flex items-center gap-2.5">
-                          <span className="p-2 rounded-lg bg-amber-500/10 text-amber-400 font-bold text-sm">
-                            {tx.category.includes('Alimentação') ? '🍞' : tx.category.includes('Vestuário') ? '👟' : tx.category.includes('Passagem') ? '✈️' : '🛍️'}
-                          </span>
-                          <div>
-                            <h4 className="font-bold text-slate-100 text-sm flex items-center gap-2">
-                              {tx.description}
-                              {tx.totalInstallments && tx.totalInstallments > 0 && (
-                                <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-1.5 py-0.5 rounded-full font-bold">
-                                  {tx.currentInstallment}/{tx.totalInstallments}
-                                </span>
-                              )}
-                            </h4>
-                            <p className="text-xs text-amber-400/90 font-medium">{tx.category} • {tx.city}</p>
+                  {transactions.filter(t => t.type === 'Saída').length === 0 ? (
+                    <p className="text-xs text-slate-500 text-center py-6">Nenhuma saída registrada no momento.</p>
+                  ) : (
+                    transactions.filter(t => t.type === 'Saída').map(tx => (
+                      <div key={tx.id} className="p-3.5 rounded-xl bg-[#141A2E] border border-[#222C46] hover:border-amber-500/40 transition-all group">
+                        <div className="flex justify-between items-start">
+                          <div className="flex items-center gap-2.5">
+                            <span className="p-2 rounded-lg bg-amber-500/10 text-amber-400 font-bold text-sm">
+                              {tx.category.includes('Alimentação') ? '🍞' : tx.category.includes('Vestuário') ? '👟' : tx.category.includes('Passagem') ? '✈️' : '🛍️'}
+                            </span>
+                            <div>
+                              <h4 className="font-bold text-slate-100 text-sm flex items-center gap-2">
+                                {tx.description}
+                                {tx.totalInstallments && tx.totalInstallments > 0 && (
+                                  <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-1.5 py-0.5 rounded-full font-bold">
+                                    {tx.currentInstallment}/{tx.totalInstallments}
+                                  </span>
+                                )}
+                              </h4>
+                              <p className="text-xs text-amber-400/90 font-medium">{tx.category} • {tx.city}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2.5">
+                            <span className="font-bold text-orange-400 text-sm">
+                              - R$ {tx.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </span>
+                            <button 
+                              onClick={() => handleDeleteTransaction(tx.id)}
+                              title="Excluir esta saída"
+                              className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-all"
+                            >
+                              <Trash2 size={15} />
+                            </button>
                           </div>
                         </div>
-                        <span className="font-bold text-orange-400 text-sm">
-                          - R$ {tx.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                        </span>
                       </div>
-                    </div>
-                  ))}
+                    ))
+                  )}
                 </div>
               </div>
             )}
@@ -1720,49 +1746,62 @@ export default function App() {
 
                 {/* Cards das Saídas Recorrentes Ativas */}
                 <div className="space-y-3 max-h-80 overflow-y-auto">
-                  {recurringExpenses.map(rec => (
-                    <div key={rec.id} className="p-4 rounded-xl bg-[#141A2E] border border-[#222C46] space-y-2 hover:border-amber-500/40 transition-all">
-                      <div className="flex justify-between items-start">
-                        <div className="flex items-center gap-2.5">
-                          <span className="p-2 rounded-lg bg-amber-500/15 text-amber-400 font-bold text-base">
-                            {rec.category.includes('Passagem') ? '✈️' : rec.category.includes('Empréstimo') ? '🏦' : '👤'}
-                          </span>
-                          <div>
-                            <h4 className="font-bold text-slate-100 text-sm">{rec.title}</h4>
-                            <p className="text-xs text-amber-400/90 font-medium">{rec.category} • Vencimento dia {rec.dueDateDay}</p>
+                  {recurringExpenses.length === 0 ? (
+                    <p className="text-xs text-slate-500 text-center py-6">Nenhuma saída recorrente cadastrada no momento.</p>
+                  ) : (
+                    recurringExpenses.map(rec => (
+                      <div key={rec.id} className="p-4 rounded-xl bg-[#141A2E] border border-[#222C46] space-y-2 hover:border-amber-500/40 transition-all group">
+                        <div className="flex justify-between items-start">
+                          <div className="flex items-center gap-2.5">
+                            <span className="p-2 rounded-lg bg-amber-500/15 text-amber-400 font-bold text-base">
+                              {rec.category.includes('Passagem') ? '✈️' : rec.category.includes('Empréstimo') ? '🏦' : '👤'}
+                            </span>
+                            <div>
+                              <h4 className="font-bold text-slate-100 text-sm">{rec.title}</h4>
+                              <p className="text-xs text-amber-400/90 font-medium">{rec.category} • Vencimento dia {rec.dueDateDay}</p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-3">
+                            <div className="text-right">
+                              <span className="font-extrabold text-white text-base">
+                                R$ {rec.installmentAmount.toLocaleString('pt-BR', {minimumFractionDigits:2})}
+                              </span>
+                              <span className="text-xs text-slate-400 block">/mês</span>
+                            </div>
+                            <button
+                              onClick={() => handleDeleteRecurring(rec.id)}
+                              title="Excluir despesa recorrente"
+                              className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-all"
+                            >
+                              <Trash2 size={16} />
+                            </button>
                           </div>
                         </div>
 
-                        <div className="text-right">
-                          <span className="font-extrabold text-white text-base">
-                            R$ {rec.installmentAmount.toLocaleString('pt-BR', {minimumFractionDigits:2})}
-                          </span>
-                          <span className="text-xs text-slate-400 block">/mês</span>
-                        </div>
+                        {/* Progresso de Parcelas */}
+                        {rec.totalInstallments > 0 ? (
+                          <div className="pt-2 border-t border-[#1E2740] space-y-1">
+                            <div className="flex justify-between text-[11px] text-slate-300">
+                              <span>Parcela: <strong>{rec.currentInstallment} de {rec.totalInstallments}</strong></span>
+                              <span>Total financiado: R$ {rec.totalAmount.toLocaleString('pt-BR', {minimumFractionDigits:2})}</span>
+                            </div>
+                            <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                              <div 
+                                className="bg-gradient-to-r from-amber-500 to-orange-500 h-full rounded-full" 
+                                style={{ width: `${Math.round((rec.currentInstallment / rec.totalInstallments) * 100)}%` }}
+                              ></div>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="pt-2 border-t border-[#1E2740] flex justify-between text-[11px] text-emerald-400">
+                            <span>🔁 Mensalidade contínua (renovação automática)</span>
+                            <span>{rec.method} • {rec.city}</span>
+                          </div>
+                        )}
                       </div>
-
-                      {/* Progresso de Parcelas */}
-                      {rec.totalInstallments > 0 ? (
-                        <div className="pt-2 border-t border-[#1E2740] space-y-1">
-                          <div className="flex justify-between text-[11px] text-slate-300">
-                            <span>Parcela: <strong>{rec.currentInstallment} de {rec.totalInstallments}</strong></span>
-                            <span>Total financiado: R$ {rec.totalAmount.toLocaleString('pt-BR', {minimumFractionDigits:2})}</span>
-                          </div>
-                          <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
-                            <div 
-                              className="bg-gradient-to-r from-amber-500 to-orange-500 h-full rounded-full" 
-                              style={{ width: `${Math.round((rec.currentInstallment / rec.totalInstallments) * 100)}%` }}
-                            ></div>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="pt-2 border-t border-[#1E2740] flex justify-between text-[11px] text-emerald-400">
-                          <span>🔁 Mensalidade contínua (renovação automática)</span>
-                          <span>{rec.method} • {rec.city}</span>
-                        </div>
-                      )}
-                    </div>
-                  ))}
+                    ))
+                  )}
                 </div>
               </div>
             )}
@@ -1946,8 +1985,8 @@ export default function App() {
 
             <div className="p-4 rounded-xl bg-[#0E1322] border border-[#1E2740] space-y-2.5 text-xs">
               <div className="flex justify-between text-slate-300">
-                <span>Saldo Anterior Consolidado:</span>
-                <span className="font-bold text-slate-100">R$ {basePatrimony.toLocaleString('pt-BR', {minimumFractionDigits:2})}</span>
+                <span>Saldo Inicial / Base:</span>
+                <span className="font-bold text-slate-100">R$ 0,00</span>
               </div>
               <div className="flex justify-between text-emerald-400">
                 <span>(+) Entradas deste Mês:</span>
