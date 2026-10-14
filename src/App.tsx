@@ -57,12 +57,16 @@ import {
   HelpCircle,
   Link,
   ChevronRight,
-  Shield
+  Shield,
+  Square,
+  CheckSquare,
+  Loader2
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { Transaction, ChatMessage, PaymentMethod, TransactionType, RecurringExpense } from './types';
 import { kyroCloud } from './firebase';
 import { WhatsAppTab } from './components/WhatsAppTab';
+import { parseDynamicFinancialMessage } from './utils/financialParser';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'transacoes' | 'orcamentos' | 'mapa' | 'relatorios' | 'whatsapp' | 'configuracoes'>('dashboard');
@@ -502,6 +506,55 @@ export default function App() {
   const [inputMessage, setInputMessage] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
 
+  // Estados de Seleção Múltipla para Exclusão em Lote
+  const [selectedEntryIds, setSelectedEntryIds] = useState<Set<string>>(new Set());
+  const [selectedExitIds, setSelectedExitIds] = useState<Set<string>>(new Set());
+  const [selectedTxTabIds, setSelectedTxTabIds] = useState<Set<string>>(new Set());
+
+  const handleToggleSelectEntry = (id: string) => {
+    setSelectedEntryIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleToggleSelectExit = (id: string) => {
+    setSelectedExitIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleToggleSelectTxTab = (id: string) => {
+    setSelectedTxTabIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleBulkDeleteTransactions = (idsToDelete: Set<string>, label: string = 'transações') => {
+    if (idsToDelete.size === 0) return;
+    const count = idsToDelete.size;
+    if (window.confirm(`Deseja realmente excluir as ${count} ${label} selecionadas? Os saldos, métricas e o Dashboard serão recalculados instantaneamente.`)) {
+      setTransactions(prev => prev.filter(t => !idsToDelete.has(t.id)));
+      idsToDelete.forEach(id => kyroCloud.syncDeleteTransaction(id));
+      setSelectedEntryIds(new Set());
+      setSelectedExitIds(new Set());
+      setSelectedTxTabIds(new Set());
+      setWhatsappSyncToast({
+        show: true,
+        text: `🗑️ ${count} ${label} excluídas com sucesso! Saldos recalculados.`
+      });
+      setTimeout(() => setWhatsappSyncToast(null), 4000);
+    }
+  };
+
   // ================= CÁLCULOS FINANCEIROS MATEMÁTICOS EM TEMPO REAL =================
   const monthIncomes = transactions
     .filter(t => t.type === 'Entrada')
@@ -913,60 +966,252 @@ export default function App() {
   };
 
   const [isAiLoading, setIsAiLoading] = useState(false);
+  const [isRecordingAudio, setIsRecordingAudio] = useState(false);
+  const [audioRecordingTime, setAudioRecordingTime] = useState(0);
+  const [isOcrProcessing, setIsOcrProcessing] = useState(false);
+  const mediaRecorderRef = React.useRef<MediaRecorder | null>(null);
+  const audioChunksRef = React.useRef<Blob[]>([]);
+  const speechRecognitionRef = React.useRef<any>(null);
+  const timerIntervalRef = React.useRef<any>(null);
+  const fileInputRef = React.useRef<HTMLInputElement | null>(null);
+
+  // Manipulador Unificado do Assistente IA (Texto, Áudio e Imagem de Comprovante)
+  const handleProcessUserInteraction = async ({
+    type,
+    text,
+    audioUrl,
+    imageUrl,
+    replaceMessageId
+  }: {
+    type: 'text' | 'audio' | 'image';
+    text: string;
+    audioUrl?: string;
+    imageUrl?: string;
+    replaceMessageId?: string;
+  }) => {
+    const isAudio = type === 'audio';
+    const isImage = type === 'image';
+
+    // Extrai dados financeiros diretamente com o algoritmo dinâmico idêntico ao WhatsApp
+    const parsed = parseDynamicFinancialMessage(text, isAudio, isImage);
+
+    if (parsed && parsed.savedTx) {
+      const newTx: Transaction = {
+        ...parsed.savedTx,
+        status: 'Concluído'
+      };
+
+      // Adiciona ao Dashboard imediatamente e persiste
+      setTransactions(prev => [newTx, ...prev]);
+      kyroCloud.syncSaveTransaction(newTx);
+
+      // Dispara toast no Dashboard
+      const symbol = newTx.type === 'Entrada' ? '+' : '-';
+      setWhatsappSyncToast({
+        show: true,
+        text: `Lançamento: ${newTx.description} (${symbol} R$ ${newTx.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}) atualizado no Dashboard e nas abas!`
+      });
+      setTimeout(() => setWhatsappSyncToast(null), 5000);
+
+      const aiReplyMsg: ChatMessage = {
+        id: (Date.now() + 2).toString(),
+        sender: 'ia',
+        text: parsed.reply,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      };
+
+      setMessages(prev => {
+        if (replaceMessageId) {
+          return prev.map(m => m.id === replaceMessageId ? aiReplyMsg : m);
+        }
+        return [...prev, aiReplyMsg];
+      });
+
+    } else {
+      // Se não for lançamento financeiro direto, processa como consulta
+      const reply = processIaText(text);
+      const aiReplyMsg: ChatMessage = {
+        id: (Date.now() + 2).toString(),
+        sender: 'ia',
+        text: reply,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      };
+
+      setMessages(prev => {
+        if (replaceMessageId) {
+          return prev.map(m => m.id === replaceMessageId ? aiReplyMsg : m);
+        }
+        return [...prev, aiReplyMsg];
+      });
+    }
+  };
 
   const handleSendMessage = async () => {
     if (!inputMessage.trim() || isAiLoading) return;
 
+    const userText = inputMessage;
     const userMsg: ChatMessage = {
       id: Date.now().toString(),
       sender: 'user',
-      text: inputMessage,
+      text: userText,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
 
-    const textToProcess = inputMessage;
     setMessages(prev => [...prev, userMsg]);
     setInputMessage('');
     setIsAiLoading(true);
 
     try {
-      // Tenta chamar o endpoint da API na Vercel
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: textToProcess })
+      await handleProcessUserInteraction({
+        type: 'text',
+        text: userText
       });
+    } finally {
+      setIsAiLoading(false);
+    }
+  };
 
-      if (response.ok) {
-        const data = await response.json();
+  // Gravação de Áudio ao Vivo no Chat Lateral
+  const startRecordingAudio = async () => {
+    try {
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      let recognitionInstance: any = null;
+      let recognizedText = '';
+
+      if (SpeechRecognition) {
+        recognitionInstance = new SpeechRecognition();
+        recognitionInstance.lang = 'pt-BR';
+        recognitionInstance.continuous = true;
+        recognitionInstance.interimResults = false;
+        recognitionInstance.onresult = (event: any) => {
+          for (let i = event.resultIndex; i < event.results.length; i++) {
+            if (event.results[i].isFinal) {
+              recognizedText += ' ' + event.results[i][0].transcript;
+            }
+          }
+        };
+        recognitionInstance.onerror = (e: any) => {
+          console.warn('[SpeechRecognition] Erro:', e);
+        };
+        recognitionInstance.start();
+        speechRecognitionRef.current = recognitionInstance;
+      }
+
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      audioChunksRef.current = [];
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+      recorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const audioUrl = URL.createObjectURL(audioBlob);
+        stream.getTracks().forEach(track => track.stop());
+
+        const finalText = recognizedText.trim() || 'Lançamento de áudio falado no chat';
+
         setMessages(prev => [...prev, {
-          id: (Date.now() + 1).toString(),
-          sender: 'ia',
-          text: data.reply || 'Processado com sucesso!',
+          id: Date.now().toString(),
+          sender: 'user',
+          text: `🎙️ "${finalText}"`,
+          audioUrl,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         }]);
 
-        if (data.savedTx) {
-          setTransactions(prev => [data.savedTx, ...prev]);
-        }
-        setIsAiLoading(false);
-        return;
-      }
-    } catch (err) {
-      // Fallback local se a API não estiver rodando no ambiente de dev local sem Vercel CLI
-    }
+        await handleProcessUserInteraction({
+          type: 'audio',
+          text: finalText,
+          audioUrl
+        });
+      };
 
-    // Processamento Inteligente Local Fallback
-    setTimeout(() => {
-      const reply = processIaText(textToProcess);
-      setMessages(prev => [...prev, {
-        id: (Date.now() + 1).toString(),
-        sender: 'ia',
-        text: reply,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      }]);
-      setIsAiLoading(false);
-    }, 500);
+      recorder.start();
+      mediaRecorderRef.current = recorder;
+      setIsRecordingAudio(true);
+      setAudioRecordingTime(0);
+
+      timerIntervalRef.current = setInterval(() => {
+        setAudioRecordingTime(prev => prev + 1);
+      }, 1000);
+
+    } catch (err: any) {
+      alert('Não foi possível acessar o microfone do seu navegador. Verifique as permissões de áudio.');
+    }
+  };
+
+  const stopRecordingAudio = () => {
+    if (speechRecognitionRef.current) {
+      try { speechRecognitionRef.current.stop(); } catch (e) {}
+    }
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      mediaRecorderRef.current.stop();
+    }
+    if (timerIntervalRef.current) {
+      clearInterval(timerIntervalRef.current);
+    }
+    setIsRecordingAudio(false);
+  };
+
+  // Upload e OCR de Imagem / Comprovante
+  const handleImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const base64Url = reader.result as string;
+      await handleProcessImageComprovante(file, base64Url);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleProcessImageComprovante = async (file: File, imageUrl: string) => {
+    setIsOcrProcessing(true);
+
+    const userImgMsg: ChatMessage = {
+      id: Date.now().toString(),
+      sender: 'user',
+      text: '📄 [Comprovante / Recibo anexado para análise da IA]',
+      imageUrl,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    };
+    setMessages(prev => [...prev, userImgMsg]);
+
+    const loadingId = (Date.now() + 1).toString();
+    setMessages(prev => [...prev, {
+      id: loadingId,
+      sender: 'ia',
+      text: '⏳ Analisando comprovante com IA OCR...',
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    }]);
+
+    try {
+      const { createWorker } = await import('tesseract.js');
+      const worker = await createWorker('por');
+      const ret = await worker.recognize(file);
+      await worker.terminate();
+
+      const ocrText = ret?.data?.text || '';
+      console.log('📄 [OCR Texto Lido]:', ocrText);
+
+      await handleProcessUserInteraction({
+        type: 'image',
+        text: ocrText || file.name.replace(/[._-]/g, ' '),
+        imageUrl,
+        replaceMessageId: loadingId
+      });
+    } catch (err: any) {
+      console.warn('[OCR Fallback]:', err);
+      await handleProcessUserInteraction({
+        type: 'image',
+        text: file.name.replace(/[._-]/g, ' '),
+        imageUrl,
+        replaceMessageId: loadingId
+      });
+    } finally {
+      setIsOcrProcessing(false);
+    }
   };
 
   // Filtragem
@@ -1618,6 +1863,14 @@ export default function App() {
                   <button onClick={() => { setNewTxTypeDefault('Saída'); setNewTxModalOpen(true); }} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all ml-2">
                     <Plus size={15} /> Adicionar
                   </button>
+                  {selectedTxTabIds.size > 0 && (
+                    <button 
+                      onClick={() => handleBulkDeleteTransactions(selectedTxTabIds, 'transações')}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-bold transition-all shadow-md ml-1"
+                    >
+                      <Trash2 size={13} /> Excluir ({selectedTxTabIds.size})
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -1625,6 +1878,21 @@ export default function App() {
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="border-b border-[#1E2740] text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                      <th className="pb-3 pl-3 w-10">
+                        <input 
+                          type="checkbox"
+                          checked={filteredTransactions.length > 0 && filteredTransactions.every(t => selectedTxTabIds.has(t.id))}
+                          onChange={() => {
+                            if (filteredTransactions.length > 0 && filteredTransactions.every(t => selectedTxTabIds.has(t.id))) {
+                              setSelectedTxTabIds(new Set());
+                            } else {
+                              setSelectedTxTabIds(new Set(filteredTransactions.map(t => t.id)));
+                            }
+                          }}
+                          className="h-4 w-4 rounded border-slate-700 bg-slate-900 text-amber-500 focus:ring-amber-500 cursor-pointer accent-amber-500"
+                          title="Selecionar todas as transações da lista"
+                        />
+                      </th>
                       <th className="pb-3 pl-2">Item / Estabelecimento</th>
                       <th className="pb-3">Categoria</th>
                       <th className="pb-3">Local / Cidade</th>
@@ -1635,7 +1903,21 @@ export default function App() {
                   </thead>
                   <tbody className="divide-y divide-[#1E2740]/70 text-sm">
                     {filteredTransactions.map(tx => (
-                      <tr key={tx.id} onClick={() => setSelectedTx(tx)} className="hover:bg-slate-800/40 cursor-pointer">
+                      <tr 
+                        key={tx.id} 
+                        onClick={() => setSelectedTx(tx)} 
+                        className={`transition-colors cursor-pointer ${
+                          selectedTxTabIds.has(tx.id) ? 'bg-amber-500/10 hover:bg-amber-500/15' : 'hover:bg-slate-800/40'
+                        }`}
+                      >
+                        <td className="py-3.5 pl-3" onClick={(e) => e.stopPropagation()}>
+                          <input 
+                            type="checkbox"
+                            checked={selectedTxTabIds.has(tx.id)}
+                            onChange={() => handleToggleSelectTxTab(tx.id)}
+                            className="h-4 w-4 rounded border-slate-700 bg-slate-900 text-amber-500 focus:ring-amber-500 cursor-pointer accent-amber-500"
+                          />
+                        </td>
                         <td className="py-3.5 pl-2 font-semibold text-slate-100 flex items-center gap-2">
                           {tx.description}
                           {tx.totalInstallments && tx.totalInstallments > 0 && (
@@ -1985,7 +2267,17 @@ export default function App() {
                   ? 'bg-[#6D3811] text-amber-100 rounded-tr-none shadow-md border border-amber-600/40'
                   : 'bg-[#151C30] border border-[#202940] text-slate-200 rounded-tl-none shadow-sm'
               }`}>
+                {msg.imageUrl && (
+                  <div className="mb-2 overflow-hidden rounded-lg border border-slate-700/50">
+                    <img src={msg.imageUrl} alt="Comprovante" className="max-h-48 w-full object-cover rounded-lg" />
+                  </div>
+                )}
                 {msg.text}
+                {msg.audioUrl && (
+                  <div className="mt-2 w-full pt-1">
+                    <audio src={msg.audioUrl} controls className="w-full h-8 rounded" />
+                  </div>
+                )}
               </div>
               <span className="text-[10px] text-slate-500 mt-1 px-1">{msg.timestamp}</span>
             </div>
@@ -1993,44 +2285,84 @@ export default function App() {
         </div>
 
         <div className="p-4 border-t border-[#1B2338]/80 bg-[#0A0D18]/90">
+          {/* Indicador de Gravação de Áudio ao Vivo */}
+          {isRecordingAudio && (
+            <div className="mb-2.5 p-2 rounded-xl bg-red-500/15 border border-red-500/30 flex items-center justify-between text-xs text-red-300 animate-in fade-in">
+              <span className="flex items-center gap-2">
+                <span className="h-2 w-2 rounded-full bg-red-500 animate-ping"></span>
+                Gravando voz... 00:{audioRecordingTime < 10 ? `0${audioRecordingTime}` : audioRecordingTime}
+              </span>
+              <button 
+                onClick={stopRecordingAudio}
+                className="px-2.5 py-1 rounded-lg bg-red-500 hover:bg-red-600 text-white font-bold text-[10px] transition-all"
+              >
+                Parar & Lançar
+              </button>
+            </div>
+          )}
+
+          {/* Indicador de Processamento OCR da Imagem */}
+          {isOcrProcessing && (
+            <div className="mb-2.5 p-2 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center gap-2 text-xs text-amber-300 animate-in fade-in">
+              <Loader2 size={14} className="animate-spin text-amber-400" />
+              <span>Analisando comprovante com IA OCR...</span>
+            </div>
+          )}
+
+          {/* Input oculto para selecionar foto/comprovante */}
+          <input 
+            type="file" 
+            ref={fileInputRef} 
+            onChange={handleImageFileChange} 
+            accept="image/*" 
+            className="hidden" 
+          />
+
           <div className="flex items-center gap-2 bg-[#12172A] border border-[#202940] rounded-xl px-3 py-2 focus-within:border-amber-500/50 transition-all">
             <button 
-              onClick={() => {
-                const simulated = "Quanto gastei em Caxias?";
-                setInputMessage(simulated);
-              }}
-              title="Exemplo: Consulta por cidade" 
-              className="text-slate-400 hover:text-amber-400 transition-colors p-1"
+              type="button"
+              onClick={isRecordingAudio ? stopRecordingAudio : startRecordingAudio}
+              title={isRecordingAudio ? "Parar gravação de voz" : "Gravar áudio com IA"} 
+              className={`p-1.5 rounded-lg transition-all ${
+                isRecordingAudio 
+                  ? 'bg-red-500 text-white animate-pulse shadow-[0_0_10px_rgba(239,68,68,0.5)]' 
+                  : 'text-slate-400 hover:text-amber-400 hover:bg-slate-800'
+              }`}
             >
               <Mic size={16} />
             </button>
             <button 
-              onClick={() => {
-                const simulated = "Comprei passagem aérea de 2400 parcelada em 10 vezes no crédito em São Paulo";
-                setInputMessage(simulated);
-              }}
-              title="Exemplo: Cadastro de compra parcelada" 
-              className="text-slate-400 hover:text-amber-400 transition-colors p-1"
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isOcrProcessing}
+              title="Anexar Comprovante / Recibo (OCR IA)" 
+              className={`p-1.5 rounded-lg transition-all ${
+                isOcrProcessing 
+                  ? 'bg-amber-500/20 text-amber-400' 
+                  : 'text-slate-400 hover:text-amber-400 hover:bg-slate-800'
+              }`}
             >
-              <ImageIcon size={16} />
+              {isOcrProcessing ? <Loader2 size={16} className="animate-spin text-amber-400" /> : <ImageIcon size={16} />}
             </button>
             <input
               type="text"
               value={inputMessage}
               onChange={(e) => setInputMessage(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
-              placeholder="Pergunte (ex: Caxias, Oeiras, Pix...)"
+              placeholder={isRecordingAudio ? "Gravando áudio..." : "Digite, fale ou envie comprovante..."}
               className="flex-1 bg-transparent text-xs text-slate-200 placeholder-slate-500 focus:outline-none"
+              disabled={isRecordingAudio}
             />
             <button
               onClick={handleSendMessage}
-              className="p-1.5 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 hover:brightness-110 transition-colors shadow-sm font-bold"
+              disabled={isAiLoading || !inputMessage.trim()}
+              className="p-1.5 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 hover:brightness-110 disabled:opacity-40 transition-colors shadow-sm font-bold"
             >
-              <Send size={14} />
+              {isAiLoading ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
             </button>
           </div>
           <p className="text-[10px] text-center text-slate-500 mt-2">
-            Pergunte sobre qualquer cidade, categoria ou registre novos gastos
+            Texto, Áudio ou Comprovante: a IA divide e lança automaticamente
           </p>
         </div>
       </aside>
@@ -2120,21 +2452,74 @@ export default function App() {
               </button>
             </form>
 
-            <h4 className="text-xs font-bold text-slate-300 mb-2">Entradas Registradas Este Mês:</h4>
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <h4 className="text-xs font-bold text-slate-300">Entradas Registradas Este Mês:</h4>
+                <span className="text-[11px] text-slate-400">({transactions.filter(t => t.type === 'Entrada').length})</span>
+              </div>
+              {transactions.filter(t => t.type === 'Entrada').length > 0 && (
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const allEntries = transactions.filter(t => t.type === 'Entrada');
+                      if (allEntries.length > 0 && allEntries.every(t => selectedEntryIds.has(t.id))) {
+                        setSelectedEntryIds(new Set());
+                      } else {
+                        setSelectedEntryIds(new Set(allEntries.map(t => t.id)));
+                      }
+                    }}
+                    className="text-[11px] text-amber-400 hover:text-amber-300 font-semibold px-2 py-0.5 rounded bg-slate-800/80 hover:bg-slate-800 transition-colors"
+                  >
+                    {transactions.filter(t => t.type === 'Entrada').every(t => selectedEntryIds.has(t.id)) ? 'Desmarcar Todas' : 'Selecionar Todas'}
+                  </button>
+                  {selectedEntryIds.size > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => handleBulkDeleteTransactions(selectedEntryIds, 'entradas')}
+                      className="flex items-center gap-1 text-[11px] bg-red-600 hover:bg-red-500 text-white font-bold px-2 py-0.5 rounded shadow-sm transition-colors"
+                    >
+                      <Trash2 size={12} /> Excluir ({selectedEntryIds.size})
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+
             <div className="space-y-2 max-h-48 overflow-y-auto">
               {transactions.filter(t => t.type === 'Entrada').length === 0 ? (
                 <p className="text-xs text-slate-500 text-center py-4">Nenhuma entrada cadastrada no momento.</p>
               ) : (
                 transactions.filter(t => t.type === 'Entrada').map(t => (
-                  <div key={t.id} className="p-3 rounded-xl bg-[#0E1322] border border-[#1E2740] flex justify-between items-center text-xs group hover:border-emerald-500/30 transition-all">
-                    <div>
-                      <p className="font-semibold text-slate-100">{t.description}</p>
-                      <p className="text-[11px] text-slate-400">{t.method} • {t.city} • {t.date}</p>
+                  <div 
+                    key={t.id} 
+                    onClick={() => handleToggleSelectEntry(t.id)}
+                    className={`p-3 rounded-xl border flex justify-between items-center text-xs group cursor-pointer transition-all ${
+                      selectedEntryIds.has(t.id)
+                        ? 'bg-amber-500/10 border-amber-500/60 shadow-[0_0_10px_rgba(245,158,11,0.15)]'
+                        : 'bg-[#0E1322] border-[#1E2740] hover:border-emerald-500/30'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <input 
+                        type="checkbox"
+                        checked={selectedEntryIds.has(t.id)}
+                        onChange={() => handleToggleSelectEntry(t.id)}
+                        onClick={(e) => e.stopPropagation()}
+                        className="h-4 w-4 rounded border-slate-700 bg-slate-900 text-amber-500 focus:ring-amber-500 cursor-pointer accent-amber-500"
+                      />
+                      <div>
+                        <p className="font-semibold text-slate-100">{t.description}</p>
+                        <p className="text-[11px] text-slate-400">{t.method} • {t.city} • {t.date}</p>
+                      </div>
                     </div>
                     <div className="flex items-center gap-3">
                       <span className="font-bold text-emerald-400 text-sm">+ R$ {t.amount.toLocaleString('pt-BR', {minimumFractionDigits:2})}</span>
                       <button 
-                        onClick={() => handleDeleteTransaction(t.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteTransaction(t.id);
+                        }}
                         title="Excluir esta entrada"
                         className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-all"
                       >
@@ -2259,9 +2644,38 @@ export default function App() {
                   </button>
                 </form>
 
-                <div className="flex items-center justify-between">
-                  <h4 className="text-xs font-bold text-slate-300">Saídas Registradas Este Mês:</h4>
-                  <span className="text-[11px] text-slate-400">Total: {transactions.filter(t => t.type === 'Saída').length} lançamentos</span>
+                <div className="flex items-center justify-between pb-1">
+                  <div className="flex items-center gap-2">
+                    <h4 className="text-xs font-bold text-slate-300">Saídas Registradas Este Mês:</h4>
+                    <span className="text-[11px] text-slate-400">({transactions.filter(t => t.type === 'Saída').length})</span>
+                  </div>
+                  {transactions.filter(t => t.type === 'Saída').length > 0 && (
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const allExits = transactions.filter(t => t.type === 'Saída');
+                          if (allExits.length > 0 && allExits.every(t => selectedExitIds.has(t.id))) {
+                            setSelectedExitIds(new Set());
+                          } else {
+                            setSelectedExitIds(new Set(allExits.map(t => t.id)));
+                          }
+                        }}
+                        className="text-[11px] text-amber-400 hover:text-amber-300 font-semibold px-2 py-0.5 rounded bg-slate-800/80 hover:bg-slate-800 transition-colors"
+                      >
+                        {transactions.filter(t => t.type === 'Saída').every(t => selectedExitIds.has(t.id)) ? 'Desmarcar Todas' : 'Selecionar Todas'}
+                      </button>
+                      {selectedExitIds.size > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => handleBulkDeleteTransactions(selectedExitIds, 'saídas')}
+                          className="flex items-center gap-1 text-[11px] bg-red-600 hover:bg-red-500 text-white font-bold px-2 py-0.5 rounded shadow-sm transition-colors"
+                        >
+                          <Trash2 size={12} /> Excluir ({selectedExitIds.size})
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-2.5 max-h-96 overflow-y-auto">
@@ -2269,9 +2683,24 @@ export default function App() {
                     <p className="text-xs text-slate-500 text-center py-6">Nenhuma saída registrada no momento.</p>
                   ) : (
                     transactions.filter(t => t.type === 'Saída').map(tx => (
-                      <div key={tx.id} className="p-3.5 rounded-xl bg-[#141A2E] border border-[#222C46] hover:border-amber-500/40 transition-all group">
+                      <div 
+                        key={tx.id} 
+                        onClick={() => handleToggleSelectExit(tx.id)}
+                        className={`p-3.5 rounded-xl border transition-all group cursor-pointer ${
+                          selectedExitIds.has(tx.id)
+                            ? 'bg-amber-500/10 border-amber-500/60 shadow-[0_0_10px_rgba(245,158,11,0.15)]'
+                            : 'bg-[#141A2E] border-[#222C46] hover:border-amber-500/40'
+                        }`}
+                      >
                         <div className="flex justify-between items-start">
                           <div className="flex items-center gap-2.5">
+                            <input 
+                              type="checkbox"
+                              checked={selectedExitIds.has(tx.id)}
+                              onChange={() => handleToggleSelectExit(tx.id)}
+                              onClick={(e) => e.stopPropagation()}
+                              className="h-4 w-4 rounded border-slate-700 bg-slate-900 text-amber-500 focus:ring-amber-500 cursor-pointer accent-amber-500 mr-1"
+                            />
                             <span className="p-2 rounded-lg bg-amber-500/10 text-amber-400 font-bold text-sm">
                               {tx.category.includes('Alimentação') ? '🍞' : tx.category.includes('Vestuário') ? '👟' : tx.category.includes('Passagem') ? '✈️' : '🛍️'}
                             </span>
@@ -2292,7 +2721,10 @@ export default function App() {
                               - R$ {tx.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                             </span>
                             <button 
-                              onClick={() => handleDeleteTransaction(tx.id)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteTransaction(tx.id);
+                              }}
                               title="Excluir esta saída"
                               className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-all"
                             >
