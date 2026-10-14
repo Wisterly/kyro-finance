@@ -285,11 +285,56 @@ async function sendWhatsAppReply({ targetRecipient, message, serverUrl, apiKey, 
   }
 }
 
-// 8. Processador de IA (LLM com extração JSON Estrita)
+// 8. Processador de IA Multi-Provedores (Inspirado no tgpt: Provedores Gratuitos + OpenAI + Fallback)
+async function queryFreeAiProvider(promptText: string): Promise<any | null> {
+  // Provedor 1: Pollinations AI (Livre, sem necessidade de API Key, padrão do tgpt)
+  try {
+    const res = await axios.post(
+      'https://text.pollinations.ai/openai',
+      {
+        model: 'openai',
+        messages: [
+          {
+            role: 'system',
+            content: `Você é um extrator de dados financeiros em JSON estrito.
+Retorne EXCLUSIVAMENTE um objeto JSON válido (sem markdown, sem texto antes ou depois) no formato:
+{
+  "descricao": "string",
+  "valor": number,
+  "categoria": "string",
+  "subcategoria": "string",
+  "tipo": "Entrada" ou "Saída",
+  "forma_pagamento": "PIX" | "Débito" | "Crédito" | "Dinheiro" | "Transferência",
+  "cidade": "string"
+}`
+          },
+          { role: 'user', content: promptText }
+        ],
+        jsonMode: true
+      },
+      { timeout: 4000, headers: { 'Content-Type': 'application/json' } }
+    );
+
+    const content = res.data?.choices?.[0]?.message?.content;
+    if (content) {
+      // Limpa qualquer bloco ```json se vier
+      const cleanJson = content.replace(/```json/gi, '').replace(/```/g, '').trim();
+      const parsed = JSON.parse(cleanJson);
+      if (parsed && (parsed.valor || parsed.amount)) {
+        return parsed;
+      }
+    }
+  } catch (err: any) {
+    console.warn('[Free AI Provider Pollinations]:', err?.message || err);
+  }
+
+  return null;
+}
+
 async function processAssistant(userMessage: string, isAudio: boolean = false) {
   const parsedFallback = parseFinancialMessageHeuristic(userMessage);
 
-  // 1. Tenta OpenAI GPT-4o-mini com JSON Schema Estrito
+  // 1. Tenta OpenAI GPT-4o-mini com JSON Schema Estrito (se houver chave configurada)
   if (process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== 'dummy_key') {
     try {
       const messages: any[] = [
@@ -342,7 +387,32 @@ Responda EXCLUSIVAMENTE em formato JSON com o seguinte schema:
         }
       }
     } catch (llmErr) {
-      console.warn('[OpenAI LLM Falhou, usando Parser Heurístico]:', llmErr);
+      console.warn('[OpenAI LLM Falhou]:', llmErr);
+    }
+  }
+
+  // 2. Se OpenAI não estiver configurada ou falhar, tenta o Provedor Livre Gratuito (estilo tgpt)
+  const freeParsed = await queryFreeAiProvider(userMessage);
+  if (freeParsed) {
+    const mappedTx = {
+      description: freeParsed.descricao || freeParsed.description || 'Movimentação WhatsApp',
+      amount: parseFloat(freeParsed.valor || freeParsed.amount),
+      type: (freeParsed.tipo === 'Entrada' || freeParsed.tipo === 'entrada') ? 'Entrada' : 'Saída',
+      category: freeParsed.categoria || freeParsed.category || 'Geral',
+      subcategory: freeParsed.subcategoria || freeParsed.subcategory || 'Geral',
+      method: freeParsed.forma_pagamento || freeParsed.metodo || 'PIX',
+      city: freeParsed.cidade || freeParsed.city || 'Teresina, PI'
+    };
+
+    if (mappedTx.amount > 0) {
+      const savedTx = await saveTransaction(mappedTx);
+      const symbol = mappedTx.type === 'Entrada' ? '+' : '-';
+      const prefixAudio = isAudio ? '🎙️ [Áudio]: ' : '💬 ';
+
+      return {
+        reply: `🤖 [IA Copiloto Livre]: Lançamento registrado!\n\n${prefixAudio}"${userMessage}"\n\n• Tipo: ${mappedTx.type}\n• Objeto: ${mappedTx.description}\n• Categoria: ${mappedTx.category}\n• Valor: ${symbol} R$ ${mappedTx.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n• Método: ${mappedTx.method}\n• Cidade: ${mappedTx.city}\n\n✅ Sincronizado automaticamente no seu painel!`,
+        savedTx
+      };
     }
   }
 

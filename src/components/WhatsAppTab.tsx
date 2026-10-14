@@ -73,15 +73,89 @@ export const WhatsAppTab: React.FC<WhatsAppTabProps> = ({
 
   // Número do segundo celular configurável
   const [secondPhone, setSecondPhone] = useState(() => {
-    return localStorage.getItem('kyro_second_phone_number') || '+55 (86) 99400-2892';
+    return localStorage.getItem('kyro_second_phone_number') || '5586994002892';
   });
 
   const [pairMode, setPairMode] = useState<'code' | 'qr'>('code');
+  const [isRequestingCode, setIsRequestingCode] = useState(false);
+  const [codeErrorMessage, setCodeErrorMessage] = useState('');
+  const [botServerRunning, setBotServerRunning] = useState(false);
+
+  const [serverQrCode, setServerQrCode] = useState<string>('');
 
   // Valor do QR Code escaneável
-  const qrCodeData = `https://wa.me/${secondPhone.replace(/\D/g, '')}?text=${encodeURIComponent('KYRO_CONNECT_DEVICE_' + pairingCode)}`;
+  const qrCodeData = serverQrCode || `https://wa.me/${secondPhone.replace(/\D/g, '')}?text=${encodeURIComponent('KYRO_CONNECT_DEVICE_' + pairingCode)}`;
 
-  // Simular conexão do Segundo Celular após escanear
+  // Verificar status real do robô local a cada 3 segundos
+  useEffect(() => {
+    const checkBotStatus = async () => {
+      try {
+        const res = await fetch('http://localhost:3001/api/status');
+        if (res.ok) {
+          const data = await res.json();
+          setBotServerRunning(true);
+          if (data.qr) {
+            setServerQrCode(data.qr);
+          }
+          if (data.connected) {
+            setIsConnected(true);
+            localStorage.setItem('kyro_second_phone_connected', 'true');
+          }
+          if (data.pairingCode && data.pairingCode !== pairingCode) {
+            setPairingCode(data.pairingCode);
+          }
+        } else {
+          setBotServerRunning(false);
+        }
+      } catch (e) {
+        setBotServerRunning(false);
+      }
+    };
+
+    checkBotStatus();
+    const interval = setInterval(checkBotStatus, 3000);
+    return () => clearInterval(interval);
+  }, [pairingCode]);
+
+  // Função REAL para solicitar o Código de 8 Dígitos ao WhatsApp
+  const handleRequestPairingCode = async () => {
+    setIsRequestingCode(true);
+    setCodeErrorMessage('');
+
+    const cleanNum = secondPhone.replace(/\D/g, '');
+    if (!cleanNum || cleanNum.length < 10) {
+      setCodeErrorMessage('Digite o número completo com DDD (ex: 5586994002892)');
+      setIsRequestingCode(false);
+      return;
+    }
+
+    try {
+      const response = await fetch('http://localhost:3001/api/request-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phoneNumber: cleanNum })
+      });
+
+      const data = await response.json();
+      if (response.ok && data.code) {
+        setPairingCode(data.code);
+        localStorage.setItem('kyro_pairing_code', data.code);
+        localStorage.setItem('kyro_second_phone_number', cleanNum);
+        alert(`Código Oficial do WhatsApp Gerado: ${data.formattedCode || data.code}\n\nAgora vá no WhatsApp do seu celular > Aparelhos Conectados > Conectar com número de telefone e digite este código!`);
+      } else if (data.alreadyRegistered) {
+        setIsConnected(true);
+        localStorage.setItem('kyro_second_phone_connected', 'true');
+        alert('Este número já está conectado e online no sistema!');
+      } else {
+        setCodeErrorMessage(data.error || 'Não foi possível gerar o código. Verifique se o iniciar_robo.bat está aberto.');
+      }
+    } catch (err: any) {
+      setCodeErrorMessage('O Robô local não está ligado. Abra o arquivo iniciar_robo.bat para ligar o robô local.');
+    } finally {
+      setIsRequestingCode(false);
+    }
+  };
+
   const handleSimulateScan = () => {
     setIsConnecting(true);
     setTimeout(() => {
@@ -89,10 +163,13 @@ export const WhatsAppTab: React.FC<WhatsAppTabProps> = ({
       localStorage.setItem('kyro_second_phone_connected', 'true');
       localStorage.setItem('kyro_second_phone_number', secondPhone);
       setIsConnecting(false);
-    }, 1200);
+    }, 800);
   };
 
-  const handleDisconnect = () => {
+  const handleDisconnect = async () => {
+    try {
+      await fetch('http://localhost:3001/api/disconnect', { method: 'POST' });
+    } catch (e) {}
     setIsConnected(false);
     localStorage.removeItem('kyro_second_phone_connected');
     const newCode = `KYRO-${Math.floor(1000 + Math.random() * 9000)}`;
@@ -111,13 +188,13 @@ export const WhatsAppTab: React.FC<WhatsAppTabProps> = ({
       {/* ================= HEADER SIMPLES & DIDÁTICO ================= */}
       <div className="bg-[#111628] p-6 rounded-2xl border border-[#202940] shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-5">
         <div className="flex items-center gap-4">
-          <div className="h-14 w-14 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-400 text-slate-950 flex items-center justify-center font-bold shadow-[0_0_25px_rgba(16,185,129,0.35)] flex-shrink-0">
+          <div className="h-14 w-14 rounded-2xl bg-gradient-to-tr from-emerald-600 via-teal-500 to-cyan-400 text-slate-950 flex items-center justify-center font-bold shadow-[0_0_25px_rgba(16,185,129,0.35)] flex-shrink-0">
             <Smartphone size={28} />
           </div>
           <div>
             <div className="flex flex-wrap items-center gap-2.5">
               <h2 className="text-xl font-bold text-white tracking-tight">
-                Conectar Segundo Celular (KYRO Celular)
+                Assistente WhatsApp & IA Multi-Provedores
               </h2>
               <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border flex items-center gap-1.5 ${
                 isConnected
@@ -125,11 +202,14 @@ export const WhatsAppTab: React.FC<WhatsAppTabProps> = ({
                   : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
               }`}>
                 <span className={`h-2 w-2 rounded-full ${isConnected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`}></span>
-                {isConnected ? 'Segundo Celular Conectado' : 'Aguardando Escanear QR Code'}
+                {isConnected ? 'WhatsApp Conectado' : 'Aguardando Pareamento'}
+              </span>
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-purple-500/15 text-purple-300 border border-purple-500/30 flex items-center gap-1">
+                <Sparkles size={11} /> Motor IA Livre (tgpt) + OpenAI Ativos
               </span>
             </div>
             <p className="text-xs text-slate-400 mt-1">
-              Escaneie o QR Code com seu segundo celular para transformá-lo no assistente do grupo de finanças.
+              Conecte seu WhatsApp sem precisar pagar APIs caras: sistema com provedores livres integrados e leitura instantânea de áudio e texto.
             </p>
           </div>
         </div>
@@ -205,36 +285,57 @@ export const WhatsAppTab: React.FC<WhatsAppTabProps> = ({
                     type="text"
                     value={secondPhone}
                     onChange={(e) => setSecondPhone(e.target.value)}
-                    placeholder="+55 (86) 99400-2892"
-                    className="flex-1 bg-[#0A0D18] border border-[#202940] rounded-xl px-4 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+                    placeholder="Ex: 5586994002892 (DDI + DDD + Número)"
+                    className="flex-1 bg-[#0A0D18] border border-[#202940] rounded-xl px-4 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 font-mono"
                   />
                   <button
                     type="button"
-                    onClick={() => {
-                      const newCode = `${Math.floor(1000 + Math.random() * 9000)}-${Math.floor(1000 + Math.random() * 9000)}`;
-                      setPairingCode(newCode);
-                      localStorage.setItem('kyro_pairing_code', newCode);
-                      localStorage.setItem('kyro_second_phone_number', secondPhone);
-                    }}
-                    className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition-all"
+                    onClick={handleRequestPairingCode}
+                    disabled={isRequestingCode}
+                    className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all shadow-md flex items-center gap-1.5 disabled:opacity-50"
                   >
-                    Gerar Novo Código
+                    {isRequestingCode ? (
+                      <>
+                        <RefreshCw size={14} className="animate-spin" />
+                        <span>Solicitando ao WhatsApp...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles size={14} />
+                        <span>Gerar Código Oficial</span>
+                      </>
+                    )}
                   </button>
                 </div>
 
+                {codeErrorMessage && (
+                  <div className="p-3 rounded-lg bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
+                    <span>⚠️ {codeErrorMessage}</span>
+                  </div>
+                )}
+
                 <div className="p-4 bg-[#080B14] rounded-xl border border-emerald-500/30 text-center space-y-1">
-                  <span className="text-[11px] text-slate-400 block font-semibold">
-                    Seu Código Oficial de Pareamento do WhatsApp:
-                  </span>
-                  <div className="flex items-center justify-center gap-3">
+                  <div className="flex items-center justify-between pb-1">
+                    <span className="text-[11px] text-slate-400 font-semibold">
+                      Seu Código Oficial de Pareamento do WhatsApp:
+                    </span>
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                      botServerRunning 
+                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' 
+                        : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                    }`}>
+                      {botServerRunning ? '🟢 Robô Local Conectado' : '🟡 Robô Desligado (iniciar_robo.bat)'}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-center gap-3 pt-2">
                     <span className="font-mono text-2xl sm:text-3xl font-black text-amber-400 tracking-widest select-all">
                       {pairingCode}
                     </span>
                     <button
                       type="button"
                       onClick={() => {
-                        navigator.clipboard.writeText(pairingCode);
-                        alert(`Código ${pairingCode} copiado!`);
+                        navigator.clipboard.writeText(pairingCode.replace('-', ''));
+                        alert(`Código ${pairingCode} copiado para a área de transferência!`);
                       }}
                       className="px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300 hover:text-white text-[11px] font-bold"
                     >

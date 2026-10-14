@@ -1,42 +1,63 @@
 /**
- * KYRO Finance - Robô WhatsApp Local (Baileys)
- * Conecta diretamente ao WhatsApp do seu segundo celular sem nenhum site de terceiros!
+ * KYRO Finance - Servidor Local do Robô WhatsApp com Suporte a Pareamento Oficial
+ * 
+ * Este servidor roda na porta 3001 e fornece:
+ * 1. Endpoint /api/request-code para gerar o Código Oficial de 8 dígitos do WhatsApp
+ * 2. Endpoint /api/status para o painel web saber se está conectado em tempo real
+ * 3. Robô Baileys que recebe mensagens e envia ao webhook para registrar despesas e receitas!
  */
 const { 
   default: makeWASocket, 
   useMultiFileAuthState, 
   DisconnectReason, 
   fetchLatestBaileysVersion,
-  downloadMediaMessage 
+  Browsers
 } = require('@whiskeysockets/baileys');
-const qrcode = require('qrcode-terminal');
 const pino = require('pino');
 const axios = require('axios');
-const fs = require('fs');
 const path = require('path');
+const http = require('http');
+const fs = require('fs');
 
-const WEBHOOK_URL = process.env.WEBHOOK_URL || 'http://localhost:3000/api/webhook';
+const HTTP_PORT = process.env.BOT_PORT || 3001;
 const REMOTE_WEBHOOK_URL = 'https://kyro-finance.vercel.app/api/webhook';
+const LOCAL_WEBHOOK_URL = 'http://localhost:3000/api/webhook';
 
-console.log('====================================================');
-console.log('🤖 INICIANDO ROBÔ WHATSAPP LOCAL KYRO FINANCE');
-console.log('📱 Transformando seu segundo celular no Robô do Sistema');
-console.log('====================================================\n');
+let sockInstance = null;
+let botStatus = {
+  connected: false,
+  phoneNumber: '',
+  pairingCode: '',
+  lastQr: '',
+  error: null
+};
 
-async function startBot() {
+// ==============================================================
+// 1. INICIALIZAÇÃO DO SOCKET BAILEYS (WHATSAPP WEB OFICIAL)
+// ==============================================================
+async function startSocket() {
   const authFolder = path.join(__dirname, 'auth_info_baileys');
-  const { state, saveCreds } = await useMultiFileAuthState(authFolder);
-  const { version, isLatest } = await fetchLatestBaileysVersion();
+  if (!fs.existsSync(authFolder)) {
+    fs.mkdirSync(authFolder, { recursive: true });
+  }
 
-  console.log(`📡 Versão do Baileys: ${version.join('.')} (Última: ${isLatest})`);
+  const { state, saveCreds } = await useMultiFileAuthState(authFolder);
+  const { version } = await fetchLatestBaileysVersion();
+
+  console.log(`[WhatsApp] Inicializando Baileys v${version.join('.')}...`);
 
   const sock = makeWASocket({
     version,
     logger: pino({ level: 'silent' }),
     printQRInTerminal: false,
     auth: state,
-    browser: ['KYRO Finance Bot', 'Chrome', '1.0.0']
+    browser: Browsers.ubuntu('Chrome'),
+    connectTimeoutMs: 60000,
+    defaultQueryTimeoutMs: 60000,
+    keepAliveIntervalMs: 25000
   });
+
+  sockInstance = sock;
 
   sock.ev.on('creds.update', saveCreds);
 
@@ -44,49 +65,41 @@ async function startBot() {
     const { connection, lastDisconnect, qr } = update;
 
     if (qr) {
-      console.log('\n======================================================');
-      console.log('📲 ESCANEIE O QR CODE ABAIXO NO SEU SEGUNDO CELULAR:');
-      console.log('1. Abra o WhatsApp no segundo celular (o número do Robô).');
-      console.log('2. Vá em Configurações > Aparelhos Conectados > Conectar um Aparelho.');
-      console.log('3. Aponte a câmera para este QR Code:');
-      console.log('======================================================\n');
-      qrcode.generate(qr, { small: true });
-      console.log('\nAguardando leitura do QR Code...\n');
+      botStatus.lastQr = qr;
+      console.log('[WhatsApp] Novo QR Code gerado.');
     }
 
-    if (connection === 'close') {
+    if (connection === 'open') {
+      botStatus.connected = true;
+      botStatus.lastQr = '';
+      botStatus.error = null;
+      botStatus.phoneNumber = sock.user?.id?.split(':')[0] || 'Conectado';
+      console.log(`🎉 [WhatsApp] CONECTADO COM SUCESSO! Número: ${botStatus.phoneNumber}`);
+    } else if (connection === 'close') {
+      botStatus.connected = false;
       const statusCode = (lastDisconnect?.error)?.output?.statusCode;
       const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
-      console.log(`⚠️ Conexão encerrada (Status: ${statusCode}). Reconectando: ${shouldReconnect}...`);
+      console.log(`⚠️ [WhatsApp] Conexão encerrada (Status: ${statusCode}). Reconectando: ${shouldReconnect}`);
       if (shouldReconnect) {
-        setTimeout(startBot, 3000);
+        setTimeout(startSocket, 3000);
       } else {
-        console.log('❌ Sessão desconectada. Apague a pasta "auth_info_baileys" para ler o QR Code novamente.');
+        console.log('❌ Sessão expirada. Apagando credenciais para novo pareamento...');
+        try {
+          fs.rmSync(authFolder, { recursive: true, force: true });
+        } catch (e) {}
+        setTimeout(startSocket, 2000);
       }
-    } else if (connection === 'open') {
-      console.log('\n======================================================');
-      console.log('🎉 SUCESSO! SEU SEGUNDO CELULAR FOI CONECTADO AO KYRO!');
-      console.log(`📱 Número Conectado: ${sock.user?.id || 'WhatsApp Ativo'}`);
-      console.log('🚀 O robô já está escutando mensagens privadas e em grupos!');
-      console.log('======================================================\n');
     }
   });
 
-  // Escuta novas mensagens recebidas
+  // Escuta mensagens do grupo ou privado
   sock.ev.on('messages.upsert', async ({ messages, type }) => {
     if (type !== 'notify') return;
 
     for (const msg of messages) {
-      if (!msg.message) continue;
-
-      // Ignora mensagens enviadas pelo próprio robô para evitar loops
-      if (msg.key.fromMe) continue;
+      if (!msg.message || msg.key.fromMe) continue;
 
       const remoteJid = msg.key.remoteJid;
-      const isGroup = remoteJid.endsWith('@g.us');
-      const sender = msg.key.participant || remoteJid;
-
-      // Extrai texto da mensagem
       const messageText = 
         msg.message.conversation ||
         msg.message.extendedTextMessage?.text ||
@@ -94,51 +107,160 @@ async function startBot() {
         '';
 
       const isAudio = !!msg.message.audioMessage;
+      console.log(`📩 Mensagem recebida de ${remoteJid}: "${messageText || (isAudio ? '[Áudio]' : '')}"`);
 
-      console.log(`\n📩 Nova Mensagem recebida [${isGroup ? 'Grupo' : 'Privado'}]:`);
-      console.log(`• De: ${sender}`);
-      console.log(`• Tipo: ${isAudio ? '🎙️ Áudio de Voz' : `💬 Texto: "${messageText}"`}`);
+      // Envia ao Webhook do KYRO
+      const payload = {
+        event: 'messages.upsert',
+        data: {
+          key: msg.key,
+          message: msg.message
+        }
+      };
 
+      let replyText = null;
       try {
-        // Envia para o Webhook do KYRO
-        let webhookTarget = WEBHOOK_URL;
-        let responseData = null;
-
-        const payload = {
-          event: 'messages.upsert',
-          data: {
-            key: msg.key,
-            message: msg.message
-          }
-        };
-
-        try {
-          const res = await axios.post(webhookTarget, payload, { timeout: 8000 });
-          responseData = res.data;
-        } catch (localErr) {
-          // Se o servidor local não estiver rodando na porta 3000, tenta o webhook de produção na Vercel
-          try {
-            const res = await axios.post(REMOTE_WEBHOOK_URL, payload, { timeout: 12000 });
-            responseData = res.data;
-          } catch (remoteErr) {
-            console.error('Falha ao enviar webhook:', remoteErr.message);
-          }
-        }
-
-        // Se o webhook processou com sucesso e retornou resposta
-        if (responseData && responseData.replySent) {
-          console.log(`✅ Lançamento processado! Respondendo no WhatsApp...`);
-          await sock.sendMessage(remoteJid, { 
-            text: responseData.replySent 
-          }, { quoted: msg });
-        }
+        const res = await axios.post(REMOTE_WEBHOOK_URL, payload, { timeout: 12000 });
+        replyText = res.data?.replySent;
       } catch (err) {
-        console.error('Erro ao processar mensagem no robô:', err.message);
+        try {
+          const resLocal = await axios.post(LOCAL_WEBHOOK_URL, payload, { timeout: 6000 });
+          replyText = resLocal.data?.replySent;
+        } catch (err2) {
+          console.warn('[Webhook] Falha ao enviar para API remota/local:', err2.message);
+        }
+      }
+
+      if (replyText) {
+        try {
+          await sock.sendMessage(remoteJid, { text: replyText }, { quoted: msg });
+          console.log(`✅ Resposta enviada no WhatsApp: "${replyText.substring(0, 50)}..."`);
+        } catch (sendErr) {
+          console.error('[WhatsApp] Erro ao enviar resposta:', sendErr.message);
+        }
       }
     }
   });
+
+  return sock;
 }
 
-startBot().catch((err) => {
-  console.error('Erro fatal ao iniciar bot:', err);
+// ==============================================================
+// 2. SERVIDOR HTTP LOCAL PARA O PAINEL WEB CHAMAR
+// ==============================================================
+const server = http.createServer(async (req, res) => {
+  // Configuração CORS total
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (req.method === 'OPTIONS') {
+    res.writeHead(200);
+    return res.end();
+  }
+
+  const url = new URL(req.url, `http://localhost:${HTTP_PORT}`);
+
+  // Endpoint 1: Status da Conexão
+  if (url.pathname === '/api/status' && req.method === 'GET') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify({
+      connected: botStatus.connected,
+      phoneNumber: botStatus.phoneNumber,
+      pairingCode: botStatus.pairingCode,
+      hasQr: !!botStatus.lastQr,
+      qr: botStatus.lastQr
+    }));
+  }
+
+  // Endpoint 2: Solicitar Código de 8 Dígitos Oficial do WhatsApp
+  if (url.pathname === '/api/request-code' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', async () => {
+      try {
+        const parsed = JSON.parse(body || '{}');
+        let rawPhone = parsed.phoneNumber || '';
+        const cleanPhone = rawPhone.replace(/\D/g, '');
+
+        if (!cleanPhone || cleanPhone.length < 10) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({ 
+            error: 'Número de telefone inválido. Digite o número com DDI e DDD (ex: 5586994002892).' 
+          }));
+        }
+
+        if (!sockInstance) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({ error: 'Socket do WhatsApp ainda não inicializou. Aguarde alguns segundos.' }));
+        }
+
+        if (sockInstance.authState.creds.registered) {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({ 
+            alreadyRegistered: true, 
+            message: 'Este WhatsApp já está autenticado e conectado!' 
+          }));
+        }
+
+        console.log(`[WhatsApp] Solicitando Código Oficial de Pareamento para ${cleanPhone}...`);
+        
+        // Chamada oficial da API do Baileys para o WhatsApp gerar o código
+        const code = await sockInstance.requestPairingCode(cleanPhone);
+        botStatus.pairingCode = code;
+        botStatus.phoneNumber = cleanPhone;
+
+        console.log(`🔑 [WhatsApp] CÓDIGO GERADO: ${code}`);
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({
+          success: true,
+          code,
+          formattedCode: `${code.slice(0, 4)}-${code.slice(4)}`,
+          phoneNumber: cleanPhone
+        }));
+
+      } catch (err) {
+        console.error('[WhatsApp] Erro ao solicitar código de pareamento:', err.message);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ 
+          error: 'Falha ao solicitar código junto ao WhatsApp.', 
+          details: err.message 
+        }));
+      }
+    });
+    return;
+  }
+
+  // Endpoint 3: Desconectar Sessão
+  if (url.pathname === '/api/disconnect' && req.method === 'POST') {
+    try {
+      if (sockInstance) {
+        await sockInstance.logout().catch(() => {});
+      }
+      const authFolder = path.join(__dirname, 'auth_info_baileys');
+      try { fs.rmSync(authFolder, { recursive: true, force: true }); } catch (e) {}
+      botStatus.connected = false;
+      botStatus.phoneNumber = '';
+      botStatus.pairingCode = '';
+      setTimeout(startSocket, 1500);
+
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ success: true, message: 'Sessão desconectada.' }));
+    } catch (e) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ error: e.message }));
+    }
+  }
+
+  res.writeHead(404);
+  res.end('Not Found');
+});
+
+server.listen(HTTP_PORT, () => {
+  console.log('====================================================');
+  console.log(`🚀 SERVIDOR DO ROBÔ WHATSAPP RODANDO NA PORTA ${HTTP_PORT}`);
+  console.log(`📡 URL da API do Robô: http://localhost:${HTTP_PORT}`);
+  console.log('====================================================\n');
+  startSocket().catch(err => console.error('Erro ao iniciar socket:', err));
 });
