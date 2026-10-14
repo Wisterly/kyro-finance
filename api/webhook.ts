@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import OpenAI from 'openai';
+import OpenAI, { toFile } from 'openai';
 import axios from 'axios';
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore, collection, addDoc, getDocs, query, orderBy, limit } from 'firebase/firestore';
@@ -29,7 +29,7 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY || 'dummy_key'
 });
 
-// 3. Fallback Heurístico Robusto (garante que despesas e receitas sejam extraídas e salvas mesmo sem OpenAI API Key ativa)
+// 3. Parser Heurístico Resiliente (Fallback local offline)
 function parseFinancialMessageHeuristic(text: string) {
   const lower = text.toLowerCase().trim();
   
@@ -42,7 +42,7 @@ function parseFinancialMessageHeuristic(text: string) {
   if (isNaN(amount) || amount <= 0) return null;
 
   // Determina tipo: Entrada ou Saída
-  let type = 'Saída';
+  let type: 'Entrada' | 'Saída' = 'Saída';
   if (
     lower.includes('recebi') ||
     lower.includes('ganhei') ||
@@ -168,8 +168,89 @@ async function saveTransaction(tx: any) {
   }
 }
 
-// 5. Enviar Mensagem de Volta no WhatsApp / Grupo
-async function sendWhatsAppMessage({ targetRecipient, message, serverUrl, apiKey, instance }: any) {
+// 5. Transcrever Áudio via OpenAI Whisper
+async function transcribeAudioBuffer(audioBuffer: Buffer, mimetype: string): Promise<string | null> {
+  if (!process.env.OPENAI_API_KEY || process.env.OPENAI_API_KEY === 'dummy_key') {
+    return null;
+  }
+
+  try {
+    const extension = mimetype.includes('ogg') || mimetype.includes('opus') ? 'ogg' : 'mp3';
+    const file = await toFile(audioBuffer, `whatsapp_voice.${extension}`, {
+      type: mimetype || 'audio/ogg'
+    });
+
+    const transcription = await openai.audio.transcriptions.create({
+      file,
+      model: 'whisper-1',
+      language: 'pt',
+      prompt: 'Controle financeiro pessoal: pagamentos, pix, cartao, despesas, mercado, salario, valores em reais.'
+    });
+
+    return transcription.text || null;
+  } catch (err: any) {
+    console.error('[Whisper Transcricao Erro]:', err?.message || err);
+    return null;
+  }
+}
+
+// 6. Baixar Áudio da Evolution API / Meta Cloud API
+async function fetchAudioMedia({
+  evolutionServerUrl,
+  evolutionApiKey,
+  evolutionInstance,
+  messageId,
+  audioUrl,
+  metaToken
+}: any): Promise<{ buffer: Buffer; mimetype: string } | null> {
+  // Caso 1: Meta WhatsApp Cloud API (Graph API)
+  if (audioUrl && metaToken) {
+    try {
+      const audioRes = await axios.get(audioUrl, {
+        headers: { Authorization: `Bearer ${metaToken}`, 'User-Agent': 'curl/7.68.0' },
+        responseType: 'arraybuffer',
+        timeout: 10000
+      });
+      return { buffer: Buffer.from(audioRes.data), mimetype: 'audio/ogg' };
+    } catch (e: any) {
+      console.warn('[Meta Audio Download Erro]:', e?.message);
+    }
+  }
+
+  // Caso 2: Evolution API (/chat/getBase64FromMediaMessage)
+  if (evolutionServerUrl && evolutionApiKey && evolutionInstance && messageId) {
+    try {
+      const cleanUrl = evolutionServerUrl.replace(/\/$/, '');
+      const mediaRes = await axios.post(
+        `${cleanUrl}/chat/getBase64FromMediaMessage/${evolutionInstance}`,
+        {
+          message: { key: { id: messageId } },
+          convertToMp4: false
+        },
+        {
+          headers: { apikey: evolutionApiKey, 'Content-Type': 'application/json' },
+          timeout: 10000
+        }
+      );
+
+      const base64Data = mediaRes.data?.base64 || mediaRes.data?.data;
+      if (base64Data) {
+        const cleanBase64 = base64Data.replace(/^data:[^;]+;base64,/, '');
+        return {
+          buffer: Buffer.from(cleanBase64, 'base64'),
+          mimetype: mediaRes.data?.mimetype || 'audio/ogg'
+        };
+      }
+    } catch (e: any) {
+      console.warn('[Evolution Audio Download Erro]:', e?.message);
+    }
+  }
+
+  return null;
+}
+
+// 7. Enviar Mensagem de Resposta no WhatsApp
+async function sendWhatsAppReply({ targetRecipient, message, serverUrl, apiKey, instance }: any) {
   const activeUrl = serverUrl || process.env.EVOLUTION_SERVER_URL;
   const activeKey = apiKey || process.env.EVOLUTION_API_KEY;
   const activeInstance = instance || process.env.EVOLUTION_INSTANCE;
@@ -199,93 +280,91 @@ async function sendWhatsAppMessage({ targetRecipient, message, serverUrl, apiKey
     );
     return response.data;
   } catch (error: any) {
-    console.error('[Evolution API] Erro ao enviar mensagem:', error?.response?.data || error?.message);
+    console.error('[Evolution API] Erro ao enviar resposta:', error?.response?.data || error?.message);
     return null;
   }
 }
 
-// 6. Processador de IA Financeiro com Fallback Automático
-async function processAssistant(userMessage: string) {
+// 8. Processador de IA (LLM com extração JSON Estrita)
+async function processAssistant(userMessage: string, isAudio: boolean = false) {
   const parsedFallback = parseFinancialMessageHeuristic(userMessage);
 
-  // Se OpenAI estiver configurada e funcional
+  // 1. Tenta OpenAI GPT-4o-mini com JSON Schema Estrito
   if (process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== 'dummy_key') {
     try {
       const messages: any[] = [
         {
           role: 'system',
-          content: `Você é o Copiloto Financeiro KYRO no WhatsApp do grupo.
-Quando o usuário mandar uma mensagem informando gasto, Pix, compra, receita ou salário, você DEVE acionar a função registrar_transacao.
-Campos: description, amount, type ('Entrada' ou 'Saída'), category, subcategory, method ('PIX', 'Débito', 'Crédito', 'Dinheiro', 'Transferência'), city.`
+          content: `Você é o Agente Financeiro Pessoal do KYRO Finance.
+Analise a mensagem de despesa ou receita informada pelo usuário (via texto ou áudio transcrito).
+Responda EXCLUSIVAMENTE em formato JSON com o seguinte schema:
+{
+  "descricao": string,
+  "valor": number,
+  "categoria": string,
+  "subcategoria": string,
+  "tipo": "Entrada" | "Saída",
+  "forma_pagamento": "PIX" | "Débito" | "Crédito" | "Dinheiro" | "Transferência",
+  "cidade": string
+}`
         },
         { role: 'user', content: userMessage }
       ];
 
-      const firstResponse = await openai.chat.completions.create({
+      const completion = await openai.chat.completions.create({
         model: 'gpt-4o-mini',
         messages,
-        tools: [
-          {
-            type: 'function',
-            function: {
-              name: 'registrar_transacao',
-              description: 'Registra uma nova movimentação financeira no KYRO.',
-              parameters: {
-                type: 'object',
-                properties: {
-                  description: { type: 'string' },
-                  amount: { type: 'number' },
-                  type: { type: 'string', enum: ['Entrada', 'Saída'] },
-                  category: { type: 'string' },
-                  subcategory: { type: 'string' },
-                  method: { type: 'string', enum: ['PIX', 'Débito', 'Crédito', 'Dinheiro', 'Transferência'] },
-                  city: { type: 'string' }
-                },
-                required: ['description', 'amount', 'type', 'category', 'method', 'city']
-              }
-            }
-          }
-        ],
-        tool_choice: 'auto'
+        response_format: { type: 'json_object' }
       });
 
-      const responseMessage = firstResponse.choices[0]?.message;
-      if (responseMessage?.tool_calls && responseMessage.tool_calls.length > 0) {
-        for (const toolCall of responseMessage.tool_calls) {
-          const tc = toolCall as any;
-          if (tc.function?.name === 'registrar_transacao') {
-            const args = JSON.parse(tc.function.arguments);
-            const savedTx = await saveTransaction(args);
-            const symbol = args.type === 'Entrada' ? '+' : '-';
-            return {
-              reply: `✅ Lançamento registrado com sucesso no KYRO Finance!\n\n• Tipo: ${args.type}\n• Objeto: ${args.description}\n• Valor: ${symbol} R$ ${args.amount.toLocaleString('pt-BR', {minimumFractionDigits:2})}\n• Forma: ${args.method}\n• Cidade: ${args.city}\n\n📊 Seu painel, despesas e saldo foram atualizados automaticamente!`,
-              savedTx
-            };
-          }
+      const rawJson = completion.choices[0]?.message?.content;
+      if (rawJson) {
+        const parsed = JSON.parse(rawJson);
+        const mappedTx = {
+          description: parsed.descricao || parsed.description,
+          amount: parseFloat(parsed.valor || parsed.amount),
+          type: (parsed.tipo === 'Entrada' || parsed.tipo === 'entrada' || parsed.type === 'Entrada') ? 'Entrada' : 'Saída',
+          category: parsed.categoria || parsed.category || 'Geral',
+          subcategory: parsed.subcategoria || parsed.subcategory || 'Geral',
+          method: parsed.forma_pagamento || parsed.metodo || 'PIX',
+          city: parsed.cidade || parsed.city || 'Teresina, PI'
+        };
+
+        if (mappedTx.amount > 0) {
+          const savedTx = await saveTransaction(mappedTx);
+          const symbol = mappedTx.type === 'Entrada' ? '+' : '-';
+          const prefixAudio = isAudio ? '🎙️ [Áudio Transcrito por Whisper]: ' : '💬 ';
+
+          return {
+            reply: `✅ Lançamento registrado com sucesso no KYRO Finance!\n\n${prefixAudio}"${userMessage}"\n\n• Tipo: ${mappedTx.type}\n• Objeto: ${mappedTx.description}\n• Categoria: ${mappedTx.category}\n• Valor: ${symbol} R$ ${mappedTx.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n• Pagamento: ${mappedTx.method}\n• Cidade: ${mappedTx.city}\n\n📊 Saldo recalculado e sincronizado no painel!`,
+            savedTx
+          };
         }
       }
-    } catch (openAiErr) {
-      console.warn('[OpenAI Erro, usando Parser Heurístico]', openAiErr);
+    } catch (llmErr) {
+      console.warn('[OpenAI LLM Falhou, usando Parser Heurístico]:', llmErr);
     }
   }
 
-  // Executa Parser Heurístico se a mensagem continha um lançamento financeiro
+  // 2. Fallback Heurístico Robusto
   if (parsedFallback) {
     const savedTx = await saveTransaction(parsedFallback);
     const symbol = parsedFallback.type === 'Entrada' ? '+' : '-';
+    const prefixAudio = isAudio ? '🎙️ [Áudio Reconhecido]: ' : '💬 ';
+
     return {
-      reply: `⚡ Lançamento adicionado e interpretado pela IA do KYRO!\n\n• Tipo: ${parsedFallback.type}\n• Descrição: ${parsedFallback.description}\n• Categoria: ${parsedFallback.category} (${parsedFallback.subcategory})\n• Valor: ${symbol} R$ ${parsedFallback.amount.toLocaleString('pt-BR', {minimumFractionDigits: 2})}\n• Pagamento: ${parsedFallback.method}\n• Localização: ${parsedFallback.city}\n\n✅ Atualizado automaticamente na aba de ${parsedFallback.type === 'Entrada' ? 'Entradas' : 'Saídas'} e no Dashboard!`,
+      reply: `⚡ Lançamento adicionado ao KYRO Finance!\n\n${prefixAudio}"${userMessage}"\n\n• Tipo: ${parsedFallback.type}\n• Objeto: ${parsedFallback.description}\n• Valor: ${symbol} R$ ${parsedFallback.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n• Forma: ${parsedFallback.method}\n• Cidade: ${parsedFallback.city}\n\n✅ Atualizado nas abas de ${parsedFallback.type === 'Entrada' ? 'Entradas' : 'Saídas'} e no Dashboard!`,
       savedTx
     };
   }
 
   return {
-    reply: `Olá! Recebi sua mensagem no grupo. Para cadastrar um gasto ou entrada, envie por exemplo: "Gastei 45 no pix na padaria em Teresina" ou "Recebi 6000 de salário hoje".`,
+    reply: `Olá! Recebi sua mensagem: "${userMessage}".\nPara cadastrar uma movimentação, envie em texto ou áudio, por exemplo: "Almoço 35 no débito em Teresina" ou "Pix de 150 recebido de salário".`,
     savedTx: null
   };
 }
 
-// 7. Handler Serverless Oficial da Vercel
+// 9. Endpoint Serverless Vercel (GET para sincronização, POST para webhook)
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -295,8 +374,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).end();
   }
 
-  // Permite que o frontend consulte transações recentes gravadas pelo webhook
+  // Verificação GET (WhatsApp Cloud API Challenge ou consulta do Frontend)
   if (req.method === 'GET') {
+    // 1. Meta Webhook Verification Challenge
+    const hubMode = req.query['hub.mode'];
+    const hubToken = req.query['hub.verify_token'];
+    const hubChallenge = req.query['hub.challenge'];
+    const verifyToken = process.env.WEBHOOK_VERIFY_TOKEN || 'kyro_token_seguro';
+
+    if (hubMode === 'subscribe' && hubToken === verifyToken) {
+      return res.status(200).send(hubChallenge);
+    }
+
+    // 2. Consulta de transações recentes do Firestore para auto-sync no Frontend
     try {
       if (db) {
         const q = query(collection(db, 'kyro_transactions'), orderBy('createdAt', 'desc'), limit(50));
@@ -305,12 +395,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(200).json({ status: 'active', transactions: txs });
       }
     } catch (e) {
-      console.warn('Erro ao listar do Firestore:', e);
+      console.warn('Erro ao listar Firestore:', e);
     }
 
     return res.status(200).json({
       status: 'active',
-      message: 'KYRO Group Webhook Endpoint ativo.',
+      message: 'KYRO WhatsApp Financial Webhook ativo (Texto & Áudio Whisper).',
       endpoint: '/api/webhook'
     });
   }
@@ -321,21 +411,34 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const payload = req.body || {};
+
+    // Suporte a ping de diagnóstico e teste de conectividade
+    if (payload?.action === 'ping' || payload?.testPing === true) {
+      return res.status(200).json({
+        status: 'pong',
+        ok: true,
+        timestamp: Date.now(),
+        message: 'Conexão com Webhook KYRO validada com sucesso! Rota operacional 24/7.'
+      });
+    }
+
     const data = payload?.data || payload;
 
-    // Ignora mensagens enviadas pelo próprio robô para evitar looping
+    // Ignora mensagens enviadas pelo próprio robô (fromMe)
     if (data?.key?.fromMe === true) {
       return res.status(200).json({ status: 'Ignored fromMe message' });
     }
 
-    // Suporta mensagens diretas (@s.whatsapp.net) e grupos (@g.us)
+    // Identifica remetente e destinatário
     const remoteJid = data?.key?.remoteJid || payload?.sender || payload?.number || 'grupo_kyro@g.us';
     const isGroup = String(remoteJid).endsWith('@g.us');
     const participant = data?.key?.participant || payload?.participant || remoteJid;
     const phoneNumber = String(participant).replace('@s.whatsapp.net', '').replace('@g.us', '');
+    const messageId = data?.key?.id || payload?.id;
 
-    // Extrai o texto da mensagem de todas as variações de payload da Evolution API / Baileys
+    // 1. Extrai Texto (Evolution API, Meta Cloud API ou Twilio Sandbox)
     let messageText = 
+      payload?.Body ||
       data?.message?.conversation ||
       data?.message?.extendedTextMessage?.text ||
       payload?.message?.conversation ||
@@ -346,27 +449,52 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       payload?.text ||
       '';
 
-    if (!messageText && (data?.message?.audioMessage || payload?.message?.audioMessage)) {
-      messageText = '[Áudio de voz recebido no grupo]';
+    let isAudio = false;
+
+    // 2. Extrai e Transcreve Áudio se for mensagem de voz
+    const hasAudio = !!(data?.message?.audioMessage || payload?.message?.audioMessage || payload?.audio || payload?.MediaUrl0);
+    if (!messageText && hasAudio) {
+      isAudio = true;
+      const customServerUrl = (req.headers['x-evolution-url'] as string) || payload?.evolutionServerUrl;
+      const customApiKey = (req.headers['x-evolution-key'] as string) || payload?.evolutionApiKey;
+      const customInstance = (req.headers['x-evolution-instance'] as string) || payload?.evolutionInstance;
+
+      const audioMedia = await fetchAudioMedia({
+        evolutionServerUrl: customServerUrl,
+        evolutionApiKey: customApiKey,
+        evolutionInstance: customInstance,
+        messageId
+      });
+
+      if (audioMedia?.buffer) {
+        const transcribed = await transcribeAudioBuffer(audioMedia.buffer, audioMedia.mimetype);
+        if (transcribed) {
+          messageText = transcribed;
+        }
+      }
+
+      if (!messageText) {
+        messageText = '[Áudio de despesa recebido via WhatsApp]';
+      }
     }
 
     if (!messageText || typeof messageText !== 'string' || !messageText.trim()) {
-      return res.status(200).json({ status: 'No text message to process' });
+      return res.status(200).json({ status: 'No message to process' });
     }
 
-    console.log(`[Webhook Grupo] Mensagem de ${phoneNumber} em ${remoteJid}: "${messageText}"`);
+    console.log(`[Webhook WhatsApp] ${isAudio ? '🎙️ Áudio' : '💬 Texto'} de ${phoneNumber}: "${messageText}"`);
 
-    // Processa com IA / Heurística
-    const result = await processAssistant(messageText);
+    // 3. Processamento de IA & Gravação no Banco
+    const result = await processAssistant(messageText, isAudio);
 
+    // 4. Envia Resposta de Feedback no WhatsApp
     const customServerUrl = (req.headers['x-evolution-url'] as string) || payload?.evolutionServerUrl;
     const customApiKey = (req.headers['x-evolution-key'] as string) || payload?.evolutionApiKey;
     const customInstance = (req.headers['x-evolution-instance'] as string) || payload?.evolutionInstance;
-
-    // Responde diretamente dentro do Grupo do WhatsApp!
     const targetRecipient = isGroup ? remoteJid : phoneNumber;
+
     if (targetRecipient && targetRecipient !== 'test') {
-      await sendWhatsAppMessage({
+      await sendWhatsAppReply({
         targetRecipient,
         message: result.reply,
         serverUrl: customServerUrl,
@@ -379,10 +507,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       status: 'success',
       replySent: result.reply,
       savedTx: result.savedTx,
-      group: isGroup ? remoteJid : null
+      transcribed: isAudio ? messageText : null
     });
   } catch (error: any) {
-    console.error('[Webhook Grupo] Erro:', error);
+    console.error('[Webhook Fatal Error]:', error);
     return res.status(200).json({
       status: 'error_handled',
       message: error?.message
