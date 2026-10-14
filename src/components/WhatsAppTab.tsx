@@ -65,11 +65,16 @@ export const WhatsAppTab: React.FC<WhatsAppTabProps> = ({
 
   const [isConnecting, setIsConnecting] = useState(false);
   const [groupName, setGroupName] = useState(() => {
-    return localStorage.getItem('kyro_group_name') || 'Finanças KYRO';
+    return localStorage.getItem('kyro_group_name') || 'Finanças Kyro';
   });
   const [groupConfirmed, setGroupConfirmed] = useState(() => {
     return localStorage.getItem('kyro_group_confirmed') === 'true';
   });
+  const [groupInviteLink, setGroupInviteLink] = useState(() => {
+    return localStorage.getItem('kyro_group_invite_link') || '';
+  });
+  const [isSavingGroupLink, setIsSavingGroupLink] = useState(false);
+  const [groupLinkSaveSuccess, setGroupLinkSaveSuccess] = useState(false);
 
   // Número do segundo celular configurável
   const [secondPhone, setSecondPhone] = useState(() => {
@@ -178,9 +183,43 @@ export const WhatsAppTab: React.FC<WhatsAppTabProps> = ({
   };
 
   const handleConfirmGroup = () => {
-    setGroupConfirmed(true);
+    handleSaveGroupLink();
+  };
+
+  const handleSaveGroupLink = async () => {
+    setIsSavingGroupLink(true);
+    setGroupLinkSaveSuccess(false);
+
+    const cleanLink = groupInviteLink.trim();
+    const cleanName = groupName.trim() || 'Finanças Kyro';
+
+    localStorage.setItem('kyro_group_invite_link', cleanLink);
+    localStorage.setItem('kyro_group_name', cleanName);
     localStorage.setItem('kyro_group_confirmed', 'true');
-    localStorage.setItem('kyro_group_name', groupName);
+    setGroupConfirmed(true);
+
+    try {
+      // 1. Notifica o robô local na porta 3001
+      await fetch('http://localhost:3001/api/set-group', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ inviteLink: cleanLink, groupName: cleanName })
+      }).catch(() => {});
+
+      // 2. Notifica o webhook remoto da Vercel
+      await fetch('/api/webhook', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'set_monitored_group', inviteLink: cleanLink, groupName: cleanName })
+      }).catch(() => {});
+
+      setGroupLinkSaveSuccess(true);
+      setTimeout(() => setGroupLinkSaveSuccess(false), 5000);
+    } catch (e) {
+      console.warn('Erro ao salvar grupo:', e);
+    } finally {
+      setIsSavingGroupLink(false);
+    }
   };
 
   return (
@@ -442,7 +481,7 @@ export const WhatsAppTab: React.FC<WhatsAppTabProps> = ({
           )}
         </div>
 
-        {/* PASSO 2: CRIAR O GRUPO NO WHATSAPP (5 COLUNAS) */}
+        {/* PASSO 2: VINCULAR O LINK DO GRUPO MONITORADO (5 COLUNAS) */}
         <div className="lg:col-span-5 bg-[#111628] p-6 rounded-2xl border border-teal-500/30 shadow-lg space-y-5 flex flex-col justify-between">
           <div className="space-y-4">
             <div className="flex items-center gap-3 border-b border-[#1E263E] pb-4">
@@ -450,56 +489,82 @@ export const WhatsAppTab: React.FC<WhatsAppTabProps> = ({
                 2
               </div>
               <div>
-                <h3 className="font-bold text-sm text-white">Passo 2: Criar o Grupo no WhatsApp</h3>
-                <p className="text-[11px] text-slate-400">Junte seu celular pessoal e o segundo celular no mesmo grupo</p>
+                <h3 className="font-bold text-sm text-white">Passo 2: Vincular o Grupo de Monitoramento</h3>
+                <p className="text-[11px] text-slate-400">Cole o link do grupo para que APENAS ele seja lido e monitorado</p>
               </div>
             </div>
 
-            <div className="space-y-3 text-xs text-slate-300">
+            <div className="space-y-3.5 text-xs text-slate-300">
               <div className="p-3 rounded-xl bg-[#141A2E] border border-[#222C46] flex items-start gap-2.5">
                 <Users size={18} className="text-teal-400 mt-0.5 flex-shrink-0" />
                 <div>
-                  <strong className="text-white block font-bold">Crie o Grupo no seu Celular Principal</strong>
+                  <strong className="text-white block font-bold">1. Pegue o Link de Convite do Grupo no WhatsApp</strong>
                   <p className="text-[11px] text-slate-400 mt-0.5">
-                    No seu celular de uso diário, crie um novo grupo no WhatsApp e adicione o número do <strong>Segundo Celular</strong>.
+                    No WhatsApp do seu celular, abra o grupo &rarr; Toque no nome &rarr; <strong>"Convidar via link"</strong> &rarr; <strong>Copiar link</strong>.
                   </p>
                 </div>
               </div>
 
-              <div className="space-y-2 pt-1">
-                <label className="text-[11px] font-bold text-slate-400 block">Nome do Grupo:</label>
+              {/* Input: Link de Convite do Grupo */}
+              <div className="space-y-1.5 pt-1">
+                <label className="text-[11px] font-bold text-teal-300 flex items-center gap-1.5">
+                  <ExternalLink size={13} /> Link de Compartilhamento do Grupo:
+                </label>
+                <input
+                  type="url"
+                  value={groupInviteLink}
+                  onChange={(e) => setGroupInviteLink(e.target.value)}
+                  placeholder="https://chat.whatsapp.com/GzB9xabc123..."
+                  className="w-full bg-[#0A0D18] border border-[#202940] rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-teal-500 font-mono"
+                />
+              </div>
+
+              {/* Input: Nome de Referência do Grupo */}
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold text-slate-400 block">Nome do Grupo no WhatsApp:</label>
                 <div className="flex gap-2">
                   <input
                     type="text"
                     value={groupName}
                     onChange={(e) => setGroupName(e.target.value)}
-                    placeholder="Ex: Finanças KYRO"
+                    placeholder="Ex: Finanças Kyro"
                     className="flex-1 bg-[#0A0D18] border border-[#202940] rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-teal-500"
                   />
                   <button
                     type="button"
-                    onClick={handleConfirmGroup}
-                    className="px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs flex items-center gap-1.5 transition-all shadow-md"
+                    onClick={handleSaveGroupLink}
+                    disabled={isSavingGroupLink}
+                    className="px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs flex items-center gap-1.5 transition-all shadow-md disabled:opacity-50"
                   >
-                    <CheckCheck size={14} />
-                    <span>Salvar</span>
+                    {isSavingGroupLink ? <RefreshCw size={14} className="animate-spin" /> : <CheckCheck size={14} />}
+                    <span>{isSavingGroupLink ? 'Salvando...' : 'Vincular'}</span>
                   </button>
                 </div>
               </div>
 
               {groupConfirmed && (
-                <div className="p-3 rounded-xl bg-teal-500/15 border border-teal-500/30 text-teal-300 text-xs flex items-center gap-2">
-                  <CheckCheck size={16} className="text-teal-400 flex-shrink-0" />
-                  <span>Grupo <strong>"{groupName}"</strong> vinculado ao robô com sucesso!</span>
+                <div className="p-3.5 rounded-xl bg-teal-500/15 border border-teal-500/30 text-teal-300 text-xs space-y-1.5 animate-in fade-in">
+                  <div className="flex items-center gap-2 font-bold text-teal-200">
+                    <CheckCheck size={16} className="text-teal-400 flex-shrink-0" />
+                    <span>Grupo Vinculado com Sucesso: "{groupName}"</span>
+                  </div>
+                  {groupInviteLink && (
+                    <p className="text-[10px] text-teal-400/80 font-mono truncate">
+                      Link: {groupInviteLink}
+                    </p>
+                  )}
+                  <p className="text-[10px] text-emerald-300 font-semibold pt-1">
+                    🛡️ Proteção Ativa: Apenas este grupo é monitorado. Conversas no privado, status e outros grupos são 100% ignorados sem resposta automática!
+                  </p>
                 </div>
               )}
             </div>
           </div>
 
-          <div className="p-4 rounded-xl bg-[#0C101D] border border-[#1E263E] text-xs space-y-1.5">
-            <span className="text-[10px] uppercase font-bold text-emerald-400 tracking-wider">Como Funciona a Leitura:</span>
+          <div className="p-4 rounded-xl bg-[#0C101D] border border-[#1E263E] text-xs space-y-1.5 mt-3">
+            <span className="text-[10px] uppercase font-bold text-emerald-400 tracking-wider">Como Funciona a Leitura 24/7:</span>
             <p className="text-[11px] text-slate-300 leading-relaxed">
-              O Segundo Celular já está no grupo. Sempre que você mandar um <strong>texto</strong> ou <strong>áudio de voz</strong> lá, ele lê a mensagem, a Inteligência Artificial processa e lança direto no site!
+              O Segundo Celular monitora exclusivamente este grupo. Sempre que você mandar um <strong>texto</strong> ou <strong>áudio de voz</strong> lá, ele lê a mensagem, a Inteligência Artificial processa e lança direto no Dashboard e nas abas de Entradas e Saídas do site!
             </p>
           </div>
         </div>

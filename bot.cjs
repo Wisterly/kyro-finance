@@ -78,6 +78,40 @@ function recordTransaction(tx) {
   }, { timeout: 6000 }).catch(() => {});
 }
 
+// ==============================================================
+// CONFIGURAÇÃO DO GRUPO MONITORADO OFICIAL
+// ==============================================================
+const MONITORED_GROUP_FILE = path.join(__dirname, 'monitored_group.json');
+let monitoredGroup = {
+  inviteLink: '',
+  groupJid: '',
+  groupName: 'Finanças Kyro'
+};
+
+try {
+  if (fs.existsSync(MONITORED_GROUP_FILE)) {
+    const raw = fs.readFileSync(MONITORED_GROUP_FILE, 'utf-8');
+    monitoredGroup = JSON.parse(raw);
+    console.log(`[Grupo Monitorado] Carregado: "${monitoredGroup.groupName}" (${monitoredGroup.groupJid || 'JID pendente'})`);
+  }
+} catch (e) {}
+
+function saveMonitoredGroup(data) {
+  monitoredGroup = { ...monitoredGroup, ...data, updatedAt: new Date().toISOString() };
+  try {
+    fs.writeFileSync(MONITORED_GROUP_FILE, JSON.stringify(monitoredGroup, null, 2), 'utf-8');
+    console.log(`📌 [Grupo Monitorado Salvo]:`, monitoredGroup);
+  } catch (e) {
+    console.error('Erro ao salvar monitored_group.json:', e.message);
+  }
+
+  // Notifica o webhook remoto da Vercel
+  axios.post(REMOTE_WEBHOOK_URL, {
+    action: 'set_monitored_group',
+    monitoredGroup
+  }, { timeout: 6000 }).catch(() => {});
+}
+
 // Cache dos metadados de grupos do WhatsApp
 const groupCache = new Map();
 
@@ -87,6 +121,12 @@ async function checkIsAuthorizedGroup(sock, remoteJid) {
     return { authorized: false, reason: 'Mensagem privada ou broadcast ignorada (apenas grupo Finanças Kyro)' };
   }
 
+  // 1. Se o JID bater exatamente com o JID vinculado pelo link do grupo
+  if (monitoredGroup.groupJid && remoteJid === monitoredGroup.groupJid) {
+    return { authorized: true, groupSubject: monitoredGroup.groupName || 'Finanças Kyro' };
+  }
+
+  // 2. Busca o nome/título do grupo via metadados
   let groupSubject = groupCache.get(remoteJid);
   if (!groupSubject) {
     try {
@@ -95,6 +135,15 @@ async function checkIsAuthorizedGroup(sock, remoteJid) {
         groupSubject = meta.subject;
         groupCache.set(remoteJid, groupSubject);
         console.log(`[WhatsApp Grupo Detectado]: "${groupSubject}" (${remoteJid})`);
+
+        // Se ainda não tinha JID e o nome bate, vincula automaticamente
+        const normSubject = groupSubject.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+        const normConfig = (monitoredGroup.groupName || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+        if (normConfig && (normSubject.includes(normConfig) || normConfig.includes(normSubject))) {
+          monitoredGroup.groupJid = remoteJid;
+          monitoredGroup.groupName = groupSubject;
+          saveMonitoredGroup(monitoredGroup);
+        }
       }
     } catch (err) {
       console.warn(`[WhatsApp] Falha ao obter metadados do grupo ${remoteJid}:`, err.message);
@@ -112,15 +161,22 @@ async function checkIsAuthorizedGroup(sock, remoteJid) {
     .toLowerCase()
     .trim();
 
-  // Verifica se é o grupo "Finanças Kyro" (ou variações: "Financas Kyro", "Kyro Finanças", "Finanças - Kyro", etc.)
+  // Verifica se é o grupo configurado pelo usuário OU contém "financas kyro"
+  const normConfigured = (monitoredGroup.groupName || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+
+  const isConfiguredMatch = normConfigured && norm.includes(normConfigured);
   const isKyroFinancas = 
     (norm.includes('financas') && norm.includes('kyro')) ||
     norm.includes('financas kyro') ||
     norm.includes('kyro financas') ||
     norm.includes('kyro finance');
 
-  if (!isKyroFinancas) {
-    return { authorized: false, reason: `Grupo "${groupSubject}" ignorado. Apenas o grupo "Finanças Kyro" é processado.` };
+  if (!isConfiguredMatch && !isKyroFinancas) {
+    return { authorized: false, reason: `Grupo "${groupSubject}" ignorado. Apenas o grupo monitorado oficial é processado.` };
   }
 
   return { authorized: true, groupSubject };
@@ -531,6 +587,68 @@ const server = http.createServer(async (req, res) => {
       }
     });
     return;
+  }
+
+  // Endpoint 6: Definir Link do Grupo Monitorado Oficial
+  if (url.pathname === '/api/set-group' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', async () => {
+      try {
+        const parsed = JSON.parse(body || '{}');
+        const inviteLink = (parsed.inviteLink || '').trim();
+        let targetName = (parsed.groupName || '').trim() || monitoredGroup.groupName;
+        let resolvedJid = '';
+
+        // Extrai código do convite (ex: chat.whatsapp.com/L7abc123)
+        const match = inviteLink.match(/chat\.whatsapp\.com\/([A-Za-z0-9_-]+)/i);
+        if (match && sockInstance) {
+          const inviteCode = match[1];
+          try {
+            const inviteInfo = await sockInstance.groupGetInviteInfo(inviteCode);
+            if (inviteInfo) {
+              resolvedJid = inviteInfo.id;
+              targetName = inviteInfo.subject || targetName;
+              console.log(`🔗 [Grupo Identificado pelo Link]: "${targetName}" (${resolvedJid})`);
+            }
+          } catch (e) {
+            console.warn('[WhatsApp] Falha ao consultar inviteCode:', e.message);
+          }
+
+          // Se o robô ainda não estiver no grupo, aceita o convite automaticamente
+          try {
+            await sockInstance.groupAcceptInvite(inviteCode);
+            console.log(`🎉 [WhatsApp] Robô ingressou com sucesso no grupo via link de convite!`);
+          } catch (e) {
+            // Já faz parte do grupo
+          }
+        }
+
+        saveMonitoredGroup({
+          inviteLink: inviteLink || monitoredGroup.inviteLink,
+          groupName: targetName || 'Finanças Kyro',
+          groupJid: resolvedJid || monitoredGroup.groupJid
+        });
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({
+          success: true,
+          monitoredGroup
+        }));
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: err.message }));
+      }
+    });
+    return;
+  }
+
+  // Endpoint 7: Consultar Grupo Monitorado Atual
+  if (url.pathname === '/api/monitored-group' && req.method === 'GET') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify({
+      monitoredGroup
+    }));
   }
 
   res.writeHead(404);

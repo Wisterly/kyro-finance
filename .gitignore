@@ -28,3 +28,4 @@ dist-ssr
 .vercel
 auth_info_baileys/
 transactions.json
+monitored_group.json

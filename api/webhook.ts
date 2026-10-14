@@ -510,6 +510,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       status: 'active',
       transactions: allTxs,
       count: allTxs.length,
+      monitoredGroup: globalAny.__KYRO_MONITORED_GROUP__ || { groupName: 'Finanças Kyro' },
       message: 'KYRO WhatsApp Financial Webhook ativo (Texto & Áudio Whisper).',
       endpoint: '/api/webhook'
     });
@@ -548,6 +549,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         status: 'synced',
         count: globalAny.__KYRO_WEBHOOK_TRANSACTIONS__?.length || 0
       });
+    }
+
+    // Suporte a salvar/configurar o grupo monitorado
+    if (payload?.action === 'set_monitored_group') {
+      const g = payload.monitoredGroup || { 
+        inviteLink: payload.inviteLink, 
+        groupName: payload.groupName || 'Finanças Kyro',
+        groupJid: payload.groupJid
+      };
+      globalAny.__KYRO_MONITORED_GROUP__ = g;
+      return res.status(200).json({ status: 'saved', monitoredGroup: g });
     }
 
     const data = payload?.data || payload;
