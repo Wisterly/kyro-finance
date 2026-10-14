@@ -92,7 +92,7 @@ function parseDynamicFinancialMessage(text: string, isAudio: boolean = false) {
 
   // 6. Cidade (Apenas se o usuário tiver mencionado explicitamente! Se não disse, NUNCA adiciona)
   let city = '';
-  if (lower.includes('oeiras')) city = 'Oeiras, PI';
+  if (lower.includes('oeiras') || lower.includes('oeira') || lower.includes('ostras')) city = 'Oeiras, PI';
   else if (lower.includes('caxias')) city = 'Caxias, MA';
   else if (lower.includes('teresina')) city = 'Teresina, PI';
   else if (lower.includes('são paulo') || lower.includes('sao paulo')) city = 'São Paulo, SP';
@@ -115,6 +115,9 @@ function parseDynamicFinancialMessage(text: string, isAudio: boolean = false) {
   if (city) {
     const citySimple = city.split(',')[0].trim();
     remaining = remaining.replace(new RegExp(`\\b${citySimple}\\b`, 'gi'), ' ');
+    if (citySimple.toLowerCase() === 'oeiras') {
+      remaining = remaining.replace(/\bostras\b/gi, ' ');
+    }
   }
 
   const cleanObjectWords = remaining.replace(/[^\w\sÀ-ÿ]/g, '').trim().split(/\s+/).filter(w => w.length > 1);
