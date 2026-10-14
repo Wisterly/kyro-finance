@@ -2,6 +2,18 @@ export type PaymentMethod = 'PIX' | 'Débito' | 'Crédito' | 'Dinheiro' | 'Trans
 
 export type TransactionType = 'Entrada' | 'Saída';
 
+export interface CreditCardData {
+  id: string;
+  name: string; // ex: "Nubank", "Inter", "Itaú", "Santander", "C6 Bank", "Bradesco"
+  closingDay: number; // Dia do fechamento da fatura (ex: dia 15)
+  dueDay: number; // Dia de vencimento da fatura (ex: dia 22)
+  limit?: number; // Limite total de crédito (ex: 5000)
+  color?: string; // Cor visual do cartão (ex: 'purple', 'orange', 'blue', 'red', 'emerald', 'black')
+  lastDigits?: string; // Últimos 4 dígitos opcionais (ex: '4821')
+}
+
+export type CreditCard = CreditCardData;
+
 export interface RecurringExpense {
   id: string;
   title: string;
@@ -12,6 +24,7 @@ export interface RecurringExpense {
   totalInstallments: number; // Total de parcelas (ex: 10 ou 0 para infinito/mensalidade contínua)
   city: string;
   method: PaymentMethod;
+  cardName?: string; // Nome do cartão vinculado se for crédito (ex: "Nubank", "Inter")
   active: boolean;
   dueDateDay: number; // Dia de vencimento no mês (ex: dia 10)
   dueDateText?: string; // ex: "20 de Dezembro" ou "Dia 20"
@@ -30,6 +43,7 @@ export interface Transaction {
   amount: number;
   type: TransactionType;
   method: PaymentMethod;
+  cardName?: string; // Cartão de crédito utilizado (ex: "Nubank", "Inter")
   date: string;
   time?: string;
   status: 'Concluído' | 'Pendente';

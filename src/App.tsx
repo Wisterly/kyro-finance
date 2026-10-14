@@ -63,13 +63,13 @@ import {
   Loader2
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
-import { Transaction, ChatMessage, PaymentMethod, TransactionType, RecurringExpense } from './types';
+import { Transaction, ChatMessage, PaymentMethod, TransactionType, RecurringExpense, CreditCardData } from './types';
 import { kyroCloud } from './firebase';
 import { WhatsAppTab } from './components/WhatsAppTab';
 import { parseDynamicFinancialMessage } from './utils/financialParser';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'transacoes' | 'orcamentos' | 'mapa' | 'relatorios' | 'whatsapp' | 'configuracoes'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'transacoes' | 'orcamentos' | 'mapa' | 'relatorios' | 'whatsapp' | 'configuracoes' | 'cartoes'>('dashboard');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [chatOpenMobile, setChatOpenMobile] = useState(false);
   
@@ -85,6 +85,54 @@ export default function App() {
   // Sub-aba no Modal de Saídas: 'avulsas' ou 'recorrentes'
   const [saidasTab, setSaidasTab] = useState<'avulsas' | 'recorrentes'>('avulsas');
   const [newRecModalOpen, setNewRecModalOpen] = useState(false);
+
+  // Gestão de Cartões de Crédito e Faturas
+  const [creditCards, setCreditCards] = useState<CreditCardData[]>(() => {
+    const saved = localStorage.getItem('kyro_credit_cards');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch (e) {}
+    }
+    return [
+      {
+        id: 'card_nu',
+        name: 'Nubank',
+        closingDay: 15,
+        dueDay: 22,
+        limit: 5000,
+        color: 'purple',
+        lastDigits: '8492'
+      },
+      {
+        id: 'card_inter',
+        name: 'Inter',
+        closingDay: 3,
+        dueDay: 10,
+        limit: 3500,
+        color: 'orange',
+        lastDigits: '1920'
+      },
+      {
+        id: 'card_itau',
+        name: 'Itaú',
+        closingDay: 28,
+        dueDay: 5,
+        limit: 8000,
+        color: 'blue',
+        lastDigits: '5543'
+      }
+    ];
+  });
+
+  useEffect(() => {
+    localStorage.setItem('kyro_credit_cards', JSON.stringify(creditCards));
+  }, [creditCards]);
+
+  const [selectedCardId, setSelectedCardId] = useState<string>('todos');
+  const [newCardModalOpen, setNewCardModalOpen] = useState(false);
+  const [cartoesInnerTab, setCartoesInnerTab] = useState<'fatura' | 'recorrentes'>('fatura');
 
   // Integração Funcional WhatsApp & Evolution API
   const [whatsAppModalOpen, setWhatsAppModalOpen] = useState(false);
@@ -598,6 +646,123 @@ export default function App() {
       label: `⚪ A Vencer (${rec.dueDateText || 'Dia ' + dueDay})`,
       badgeClass: 'bg-slate-800 text-slate-300 border-slate-700'
     };
+  };
+
+  // 5. Calculador de Métricas e Faturas de Cartões de Crédito
+  const getCardMetrics = (card: CreditCardData) => {
+    // 1. Lançamentos no crédito vinculados a este cartão
+    const cardTransactions = transactions.filter(t => 
+      t.type === 'Saída' && 
+      (t.cardName?.toLowerCase() === card.name.toLowerCase() || 
+       (t.method === 'Crédito' && (!t.cardName || t.cardName.toLowerCase() === card.name.toLowerCase())))
+    );
+
+    // 2. Dívidas recorrentes / parcelamentos vinculados a este cartão
+    const cardRecurring = recurringExpenses.filter(r => 
+      r.active && 
+      (r.cardName?.toLowerCase() === card.name.toLowerCase() || 
+       (r.method === 'Crédito' && (!r.cardName || r.cardName.toLowerCase() === card.name.toLowerCase())))
+    );
+
+    const directTotal = cardTransactions.reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
+    const recurringCurrentMonthTotal = cardRecurring
+      .filter(r => !r.paid)
+      .reduce((acc, r) => acc + (Number(r.installmentAmount) || 0), 0);
+    const currentInvoiceTotal = directTotal + recurringCurrentMonthTotal;
+
+    const futureInvoicesTotal = cardRecurring.reduce((acc, r) => {
+      const remaining = Math.max(0, (r.totalInstallments || 1) - (r.currentInstallment || 1));
+      return acc + (remaining * (Number(r.installmentAmount) || 0));
+    }, 0);
+
+    const totalCommitted = currentInvoiceTotal + futureInvoicesTotal;
+    const limitTotal = card.limit || 5000;
+    const limitAvailable = Math.max(0, limitTotal - totalCommitted);
+
+    const now = new Date();
+    const today = now.getDate();
+    let daysUntilDue = card.dueDay - today;
+    if (daysUntilDue < 0) {
+      const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+      daysUntilDue = (daysInMonth - today) + card.dueDay;
+    }
+
+    const isDueSoon = daysUntilDue <= 5 && daysUntilDue >= 0;
+    const isOverdue = today > card.dueDay && currentInvoiceTotal > 0 && (today - card.dueDay <= 10);
+
+    return {
+      cardTransactions,
+      cardRecurring,
+      currentInvoiceTotal,
+      futureInvoicesTotal,
+      totalCommitted,
+      limitTotal,
+      limitAvailable,
+      daysUntilDue,
+      isDueSoon,
+      isOverdue
+    };
+  };
+
+  const hasAnyCardDueSoon = creditCards.some(card => {
+    const m = getCardMetrics(card);
+    return m.currentInvoiceTotal > 0 && (m.isDueSoon || m.isOverdue);
+  });
+
+  const handlePayCardInvoice = (card: CreditCardData) => {
+    const metrics = getCardMetrics(card);
+    if (metrics.currentInvoiceTotal <= 0) {
+      alert('Esta fatura já está zerada ou sem lançamentos pendentes.');
+      return;
+    }
+
+    const confirmPay = window.confirm(
+      `Confirmar pagamento da fatura do ${card.name} no valor de R$ ${metrics.currentInvoiceTotal.toLocaleString('pt-BR', {minimumFractionDigits: 2})}?\n\nEste valor será debitado do seu Saldo no Dashboard.`
+    );
+    if (!confirmPay) return;
+
+    const recurringIdsToMark = metrics.cardRecurring.filter(r => !r.paid).map(r => r.id);
+    if (recurringIdsToMark.length > 0) {
+      setRecurringExpenses(prev => prev.map(r => {
+        if (recurringIdsToMark.includes(r.id)) {
+          return { ...r, paid: true, paidAt: new Date().toISOString() };
+        }
+        return r;
+      }));
+    }
+
+    const paymentTx: Transaction = {
+      id: `pay_inv_${Date.now()}`,
+      description: `Pagamento Fatura ${card.name}`,
+      category: 'Cartão de Crédito',
+      subcategory: 'Fatura Mensal',
+      city: 'Teresina, PI',
+      amount: metrics.currentInvoiceTotal,
+      type: 'Saída',
+      method: 'PIX',
+      cardName: card.name,
+      date: 'Hoje',
+      status: 'Concluído',
+      createdAt: new Date().toISOString()
+    };
+
+    setTransactions(prev => [paymentTx, ...prev]);
+    kyroCloud.syncSaveTransaction(paymentTx);
+
+    setWhatsappSyncToast({
+      show: true,
+      text: `💳 Fatura do ${card.name} (R$ ${metrics.currentInvoiceTotal.toLocaleString('pt-BR', {minimumFractionDigits: 2})}) PAGA e debitada do Saldo!`
+    });
+    setTimeout(() => setWhatsappSyncToast(null), 5000);
+  };
+
+  const handleDeleteCard = (cardId: string) => {
+    const target = creditCards.find(c => c.id === cardId);
+    if (!target) return;
+    if (window.confirm(`Deseja realmente remover o cartão ${target.name}?`)) {
+      setCreditCards(prev => prev.filter(c => c.id !== cardId));
+      if (selectedCardId === cardId) setSelectedCardId('todos');
+    }
   };
 
   // Mensagens do Assistente IA / WhatsApp
@@ -1121,6 +1286,21 @@ export default function App() {
         setRecurringExpenses(prev => [newRec, ...prev]);
         kyroCloud.syncSaveRecurring(newRec);
 
+        if (newRec.cardName) {
+          const cardExists = creditCards.some(c => c.name.toLowerCase() === newRec.cardName?.toLowerCase());
+          if (!cardExists) {
+            const newCard: CreditCardData = {
+              id: `card_${Date.now()}`,
+              name: newRec.cardName,
+              closingDay: 15,
+              dueDay: newRec.dueDateDay || 20,
+              limit: 5000,
+              color: 'purple'
+            };
+            setCreditCards(prev => [...prev, newCard]);
+          }
+        }
+
         setWhatsappSyncToast({
           show: true,
           text: `🔁 Dívida Recorrente "${newRec.title}" salva! Ficará separada até você confirmar o pagamento.`
@@ -1168,6 +1348,21 @@ export default function App() {
           ...parsed.savedTx,
           status: 'Concluído'
         };
+
+        if (newTx.cardName) {
+          const cardExists = creditCards.some(c => c.name.toLowerCase() === newTx.cardName?.toLowerCase());
+          if (!cardExists) {
+            const newCard: CreditCardData = {
+              id: `card_${Date.now()}`,
+              name: newTx.cardName,
+              closingDay: 15,
+              dueDay: 20,
+              limit: 5000,
+              color: 'purple'
+            };
+            setCreditCards(prev => [...prev, newCard]);
+          }
+        }
 
         setTransactions(prev => [newTx, ...prev]);
         kyroCloud.syncSaveTransaction(newTx);
@@ -1565,6 +1760,25 @@ export default function App() {
             </button>
 
             <button
+              onClick={() => { setActiveTab('cartoes'); setMobileMenuOpen(false); }}
+              className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-sm font-semibold transition-all duration-200 ${
+                activeTab === 'cartoes'
+                  ? 'bg-gradient-to-r from-purple-500/20 to-indigo-500/10 text-purple-300 border border-purple-500/40 shadow-[0_0_22px_rgba(168,85,247,0.22)]'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
+              }`}
+            >
+              <div className="flex items-center gap-3.5">
+                <CreditCard size={19} className={activeTab === 'cartoes' ? 'text-purple-400' : 'text-slate-400'} />
+                <span>Cartões de Crédito</span>
+              </div>
+              {hasAnyCardDueSoon && (
+                <span className="text-[10px] bg-amber-500/20 text-amber-400 border border-amber-500/30 px-1.5 py-0.5 rounded-full font-bold animate-pulse">
+                  Alerta
+                </span>
+              )}
+            </button>
+
+            <button
               onClick={() => { setActiveTab('orcamentos'); setMobileMenuOpen(false); }}
               className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-sm font-semibold transition-all duration-200 ${
                 activeTab === 'orcamentos'
@@ -1757,6 +1971,55 @@ export default function App() {
                       className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:brightness-110 text-slate-950 font-bold text-xs transition-all shadow-md shrink-0 flex items-center justify-center gap-1.5"
                     >
                       <CheckCircle2 size={15} /> Conferir & Dar Baixa
+                    </button>
+                  </div>
+                );
+              })()}
+
+              {/* ================= ALERTA DE VENCIMENTO DE FATURA DE CARTÕES DE CRÉDITO ================= */}
+              {(() => {
+                const cardsDueSoon = creditCards.filter(card => {
+                  const metrics = getCardMetrics(card);
+                  return metrics.currentInvoiceTotal > 0 && (metrics.isDueSoon || metrics.isOverdue);
+                });
+
+                if (cardsDueSoon.length === 0) return null;
+
+                return (
+                  <div className="p-4 rounded-2xl bg-gradient-to-r from-purple-950/40 via-[#1A1429] to-[#12172A] border border-purple-500/40 shadow-[0_0_20px_rgba(168,85,247,0.18)] flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-in fade-in mb-3">
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 rounded-xl bg-purple-500/20 text-purple-300 flex items-center justify-center shrink-0 border border-purple-500/40">
+                        <CreditCard size={22} className="animate-pulse" />
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-sm text-purple-200 flex items-center gap-2">
+                          Aviso de Vencimento de Cartão de Crédito
+                          <span className="px-2 py-0.5 rounded-full text-[10px] bg-purple-500/20 text-purple-300 font-extrabold border border-purple-500/40">
+                            {cardsDueSoon.length} {cardsDueSoon.length === 1 ? 'cartão' : 'cartões'}
+                          </span>
+                        </h4>
+                        <div className="text-xs text-slate-300 mt-1 flex flex-wrap gap-2">
+                          {cardsDueSoon.map(card => {
+                            const m = getCardMetrics(card);
+                            return (
+                              <span key={card.id} className="inline-flex items-center gap-1 bg-purple-900/30 px-2 py-0.5 rounded-md border border-purple-500/30 text-purple-200">
+                                💳 <strong>{card.name}</strong>: Fatura R$ {m.currentInvoiceTotal.toLocaleString('pt-BR', {minimumFractionDigits: 2})} • 
+                                {m.isOverdue ? (
+                                  <span className="text-red-400 font-bold">Venceu dia {card.dueDay}!</span>
+                                ) : (
+                                  <span className="text-amber-300 font-bold">Vence em {m.daysUntilDue} {m.daysUntilDue === 1 ? 'dia' : 'dias'} (Dia {card.dueDay})</span>
+                                )}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setActiveTab('cartoes')}
+                      className="px-4 py-2 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:brightness-110 text-white font-bold text-xs transition-all shadow-md shrink-0 flex items-center justify-center gap-1.5"
+                    >
+                      <CreditCard size={15} /> Ver Faturas dos Cartões
                     </button>
                   </div>
                 );
@@ -2338,6 +2601,397 @@ export default function App() {
                   <p>• <strong>Distribuição por Cidades:</strong> Maior concentração em Teresina (PI), seguida por Caxias (MA) e Oeiras (PI).</p>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* ===================== ABA DEDICADA: CARTÕES DE CRÉDITO & FATURAS ===================== */}
+          {activeTab === 'cartoes' && (
+            <div className="space-y-6 animate-in fade-in">
+              {/* Header da Aba */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-[#111628] p-6 rounded-2xl border border-[#202940] shadow-lg">
+                <div>
+                  <h2 className="text-xl md:text-2xl font-extrabold text-white flex items-center gap-2.5">
+                    <span className="p-2 rounded-xl bg-purple-500/15 text-purple-400 border border-purple-500/30">
+                      <CreditCard size={22} />
+                    </span>
+                    Cartões de Crédito & Faturas
+                  </h2>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Visualize o total a pagar da fatura atual, parcelamentos futuros e limites separados por cada cartão.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2.5">
+                  <button
+                    onClick={() => setNewCardModalOpen(true)}
+                    className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:brightness-110 text-white font-bold text-xs transition-all shadow-md flex items-center gap-2"
+                  >
+                    <Plus size={16} /> Cadastrar Cartão
+                  </button>
+                </div>
+              </div>
+
+              {/* Sub-abas / Filtro por Cartão */}
+              <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
+                <button
+                  onClick={() => setSelectedCardId('todos')}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-2 border ${
+                    selectedCardId === 'todos'
+                      ? 'bg-purple-600/20 text-purple-300 border-purple-500/50 shadow-md'
+                      : 'bg-[#12172A] text-slate-400 border-[#202940] hover:text-white'
+                  }`}
+                >
+                  <Layers size={14} /> Todos os Cartões ({creditCards.length})
+                </button>
+
+                {creditCards.map(c => {
+                  const m = getCardMetrics(c);
+                  return (
+                    <button
+                      key={c.id}
+                      onClick={() => setSelectedCardId(c.id)}
+                      className={`px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-2 border ${
+                        selectedCardId === c.id
+                          ? 'bg-purple-600 text-white border-purple-400 shadow-lg shadow-purple-600/30'
+                          : 'bg-[#12172A] text-slate-400 border-[#202940] hover:text-white'
+                      }`}
+                    >
+                      <span className={`h-2.5 w-2.5 rounded-full ${
+                        c.color === 'purple' ? 'bg-purple-400' :
+                        c.color === 'orange' ? 'bg-orange-400' :
+                        c.color === 'blue' ? 'bg-blue-400' :
+                        c.color === 'red' ? 'bg-red-400' : 'bg-emerald-400'
+                      }`}></span>
+                      <span>{c.name}</span>
+                      {m.currentInvoiceTotal > 0 && (
+                        <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${
+                          m.isOverdue ? 'bg-red-500/30 text-red-300' : m.isDueSoon ? 'bg-amber-500/30 text-amber-300' : 'bg-slate-800 text-slate-300'
+                        }`}>
+                          R$ {m.currentInvoiceTotal.toLocaleString('pt-BR', {minimumFractionDigits: 0})}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Grid de Cartões Físicos / Visual */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                {(selectedCardId === 'todos' ? creditCards : creditCards.filter(c => c.id === selectedCardId)).map(card => {
+                  const m = getCardMetrics(card);
+                  const limitPercent = Math.min(100, Math.round((m.totalCommitted / m.limitTotal) * 100));
+
+                  const gradientClass = 
+                    card.color === 'purple' ? 'from-purple-900 via-indigo-950 to-[#0A0D18] border-purple-500/40' :
+                    card.color === 'orange' ? 'from-orange-900 via-amber-950 to-[#0A0D18] border-orange-500/40' :
+                    card.color === 'blue' ? 'from-blue-900 via-sky-950 to-[#0A0D18] border-blue-500/40' :
+                    card.color === 'red' ? 'from-red-900 via-rose-950 to-[#0A0D18] border-red-500/40' :
+                    'from-slate-800 via-zinc-900 to-[#0A0D18] border-slate-600';
+
+                  return (
+                    <div 
+                      key={card.id}
+                      className={`relative rounded-3xl p-6 bg-gradient-to-br ${gradientClass} border shadow-2xl space-y-4 flex flex-col justify-between overflow-hidden group`}
+                    >
+                      {/* Efeito Glow */}
+                      <div className="absolute top-0 right-0 w-36 h-36 bg-white/5 rounded-full blur-2xl -mr-10 -mt-10 pointer-events-none"></div>
+
+                      <div>
+                        {/* Topo do Cartão */}
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="font-extrabold text-base tracking-wide text-white drop-shadow">
+                              {card.name.toUpperCase()}
+                            </span>
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/10 text-slate-300 font-semibold border border-white/10 uppercase tracking-wider">
+                              Black Private
+                            </span>
+                          </div>
+                          <button
+                            onClick={() => handleDeleteCard(card.id)}
+                            title="Remover Cartão"
+                            className="p-1 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-all opacity-0 group-hover:opacity-100"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+
+                        {/* Chip e Contactless */}
+                        <div className="flex items-center gap-3 my-4">
+                          <div className="w-10 h-7 rounded-md bg-gradient-to-tr from-amber-400 via-yellow-200 to-amber-500 border border-amber-300/40 shadow-inner flex items-center justify-center">
+                            <div className="w-6 h-4 border border-amber-800/40 rounded-sm"></div>
+                          </div>
+                          <Zap size={16} className="text-amber-300/70 rotate-90" />
+                        </div>
+
+                        {/* Número mascarado */}
+                        <p className="font-mono text-sm tracking-widest text-slate-200 drop-shadow">
+                          •••• •••• •••• {card.lastDigits || '4821'}
+                        </p>
+                      </div>
+
+                      {/* Dados de Fatura e Vencimento */}
+                      <div className="space-y-3 pt-3 border-t border-white/10">
+                        <div className="flex justify-between items-end">
+                          <div>
+                            <span className="text-[10px] uppercase tracking-wider text-slate-400 block font-semibold">Fatura Atual</span>
+                            <span className="text-xl font-black text-white">
+                              R$ {m.currentInvoiceTotal.toLocaleString('pt-BR', {minimumFractionDigits: 2})}
+                            </span>
+                          </div>
+
+                          <div className="text-right">
+                            <span className={`text-[10px] px-2 py-0.5 rounded-full border font-bold inline-block ${
+                              m.isOverdue ? 'bg-red-500/20 text-red-300 border-red-500/40' :
+                              m.isDueSoon ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 animate-pulse' :
+                              'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                            }`}>
+                              {m.isOverdue ? `🔴 Venceu dia ${card.dueDay}` :
+                               m.isDueSoon ? (m.daysUntilDue === 0 ? '🟡 Vence HOJE!' : `🟡 Vence em ${m.daysUntilDue}d`) :
+                               `🟢 Vence dia ${card.dueDay}`}
+                            </span>
+                            <p className="text-[10px] text-slate-400 mt-1">Fecha dia {card.closingDay}</p>
+                          </div>
+                        </div>
+
+                        {/* Barra de Limite */}
+                        <div className="space-y-1">
+                          <div className="flex justify-between text-[10px] text-slate-300">
+                            <span>Limite Usado: <strong>{limitPercent}%</strong></span>
+                            <span>Disponível: R$ {m.limitAvailable.toLocaleString('pt-BR', {minimumFractionDigits: 0})}</span>
+                          </div>
+                          <div className="w-full bg-black/40 h-1.5 rounded-full overflow-hidden border border-white/5">
+                            <div 
+                              className={`h-full rounded-full transition-all ${
+                                limitPercent > 85 ? 'bg-red-500' : limitPercent > 50 ? 'bg-amber-400' : 'bg-emerald-400'
+                              }`}
+                              style={{ width: `${limitPercent}%` }}
+                            ></div>
+                          </div>
+                        </div>
+
+                        {/* Botão de Pagar Fatura */}
+                        {m.currentInvoiceTotal > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => handlePayCardInvoice(card)}
+                            className="w-full py-2 rounded-xl bg-white/10 hover:bg-emerald-600 hover:text-white text-slate-200 font-bold text-xs transition-all border border-white/10 flex items-center justify-center gap-1.5 shadow-md"
+                          >
+                            <CheckCircle2 size={14} /> Dar Baixa / Pagar Fatura
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Detalhes de Lançamentos e Parcelamentos por Cartão */}
+              {(() => {
+                const targetCard = selectedCardId === 'todos' ? null : creditCards.find(c => c.id === selectedCardId);
+
+                // Transações no crédito filtradas
+                const displayedTxs = transactions.filter(t => 
+                  t.type === 'Saída' && (
+                    t.method === 'Crédito' || t.category === 'Cartão de Crédito'
+                  ) && (
+                    !targetCard || t.cardName?.toLowerCase() === targetCard.name.toLowerCase()
+                  )
+                );
+
+                // Dívidas recorrentes / parcelamentos filtrados
+                const displayedRecs = recurringExpenses.filter(r => 
+                  r.active && (
+                    r.method === 'Crédito' || r.cardName || r.totalInstallments > 1
+                  ) && (
+                    !targetCard || r.cardName?.toLowerCase() === targetCard.name.toLowerCase()
+                  )
+                );
+
+                return (
+                  <div className="bg-[#111628] rounded-2xl border border-[#202940] p-6 shadow-lg space-y-5">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#1E2740] pb-4">
+                      <div>
+                        <h3 className="text-base font-bold text-white flex items-center gap-2">
+                          <Layers size={18} className="text-purple-400" />
+                          Lançamentos & Parcelamentos {targetCard ? `do ${targetCard.name}` : '(Todos os Cartões)'}
+                        </h3>
+                        <p className="text-xs text-slate-400 mt-0.5">
+                          {displayedTxs.length} compras na fatura e {displayedRecs.length} dívidas parceladas/recorrentes registradas.
+                        </p>
+                      </div>
+
+                      {/* Seletor interno: Fatura Atual vs Parcelas Futuras */}
+                      <div className="flex rounded-xl bg-[#0B0E18] p-1 border border-[#1E2740]">
+                        <button
+                          onClick={() => setCartoesInnerTab('fatura')}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                            cartoesInnerTab === 'fatura'
+                              ? 'bg-purple-600 text-white shadow'
+                              : 'text-slate-400 hover:text-white'
+                          }`}
+                        >
+                          Fatura Atual ({displayedTxs.length})
+                        </button>
+                        <button
+                          onClick={() => setCartoesInnerTab('recorrentes')}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                            cartoesInnerTab === 'recorrentes'
+                              ? 'bg-purple-600 text-white shadow'
+                              : 'text-slate-400 hover:text-white'
+                          }`}
+                        >
+                          Dívidas Parceladas / Recorrentes ({displayedRecs.length})
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Conteúdo Aba A: Fatura Atual (Transações Avulsas no Crédito) */}
+                    {cartoesInnerTab === 'fatura' && (
+                      <div className="space-y-3">
+                        {displayedTxs.length === 0 ? (
+                          <div className="py-12 text-center text-slate-500">
+                            <CreditCard size={36} className="mx-auto mb-2 opacity-30 text-purple-400" />
+                            <p className="text-xs font-medium">Nenhum lançamento no crédito registrado neste cartão ainda.</p>
+                            <p className="text-[11px] text-slate-600 mt-1">Diga ou mande por áudio no WhatsApp: "Passei R$ 120 no crédito Nubank restaurante Oeiras"</p>
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            {displayedTxs.map(t => (
+                              <div key={t.id} className="p-3.5 rounded-xl bg-[#141A2E] border border-[#202940] flex items-center justify-between gap-3 hover:border-purple-500/40 transition-all">
+                                <div className="flex items-center gap-3">
+                                  <div className="h-9 w-9 rounded-xl bg-purple-500/15 text-purple-400 flex items-center justify-center font-bold">
+                                    💳
+                                  </div>
+                                  <div>
+                                    <div className="flex items-center gap-2">
+                                      <h4 className="font-bold text-xs text-white">{t.description}</h4>
+                                      {t.cardName && (
+                                        <span className="px-2 py-0.5 rounded-full text-[10px] bg-purple-900/40 text-purple-300 border border-purple-500/30 font-semibold">
+                                          {t.cardName}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <p className="text-[11px] text-slate-400 mt-0.5">
+                                      {t.category} {t.city ? `• ${t.city}` : ''} • {t.date}
+                                    </p>
+                                  </div>
+                                </div>
+
+                                <div className="text-right">
+                                  <span className="font-extrabold text-sm text-red-400 block">
+                                    - R$ {t.amount.toLocaleString('pt-BR', {minimumFractionDigits: 2})}
+                                  </span>
+                                  <span className="text-[10px] text-slate-500">Crédito</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Conteúdo Aba B: Dívidas Parceladas / Recorrentes vinculadas ao Cartão */}
+                    {cartoesInnerTab === 'recorrentes' && (
+                      <div className="space-y-3">
+                        {displayedRecs.length === 0 ? (
+                          <div className="py-12 text-center text-slate-500">
+                            <Repeat size={36} className="mx-auto mb-2 opacity-30 text-amber-400" />
+                            <p className="text-xs font-medium">Nenhum parcelamento ativo neste cartão.</p>
+                            <p className="text-[11px] text-slate-600 mt-1">Diga: "Adicione dívida no crédito Nubank de 800 dividida em 5x"</p>
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                            {displayedRecs.map(rec => {
+                              const st = getRecurringStatus(rec);
+                              return (
+                                <div key={rec.id} className={`p-4 rounded-xl border space-y-3 transition-all ${
+                                  rec.paid ? 'bg-[#0E1526] border-emerald-500/30' : 'bg-[#141A2E] border-[#222C46]'
+                                }`}>
+                                  <div className="flex justify-between items-start">
+                                    <div>
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <h4 className="font-bold text-slate-100 text-xs">{rec.title}</h4>
+                                        {rec.cardName && (
+                                          <span className="px-2 py-0.5 rounded-full text-[10px] bg-purple-900/40 text-purple-300 border border-purple-500/30 font-semibold">
+                                            💳 {rec.cardName}
+                                          </span>
+                                        )}
+                                        <span className={`px-2 py-0.5 rounded-full text-[10px] border ${st.badgeClass}`}>
+                                          {st.label}
+                                        </span>
+                                      </div>
+                                      <p className="text-[11px] text-amber-400/90 font-medium mt-1">
+                                        Vencimento: <strong>{rec.dueDateText || `Dia ${rec.dueDateDay}`}</strong>
+                                      </p>
+                                    </div>
+
+                                    <div className="text-right">
+                                      <span className="font-extrabold text-white text-sm">
+                                        R$ {rec.installmentAmount.toLocaleString('pt-BR', {minimumFractionDigits: 2})}
+                                      </span>
+                                      <span className="text-[10px] text-slate-400 block">/mês</span>
+                                    </div>
+                                  </div>
+
+                                  {/* Progresso de Parcelas */}
+                                  {rec.totalInstallments > 0 && (
+                                    <div className="pt-2 border-t border-[#1E2740] space-y-1">
+                                      <div className="flex justify-between text-[11px] text-slate-300">
+                                        <span>Parcela: <strong>{rec.currentInstallment} de {rec.totalInstallments}</strong></span>
+                                        <span>Total: R$ {rec.totalAmount.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
+                                      </div>
+                                      <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                                        <div 
+                                          className={`h-full rounded-full ${rec.paid ? 'bg-emerald-500' : 'bg-gradient-to-r from-purple-500 to-indigo-500'}`}
+                                          style={{ width: `${Math.round((rec.currentInstallment / rec.totalInstallments) * 100)}%` }}
+                                        ></div>
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {/* Ação de baixa */}
+                                  <div className="flex items-center justify-between pt-1">
+                                    <span className="text-[11px] text-slate-400">
+                                      {rec.paid ? '✅ Parcela debitada nas saídas' : '⏸️ Aguardando confirmação de paga'}
+                                    </span>
+                                    <div className="flex items-center gap-1.5">
+                                      {!rec.paid ? (
+                                        <button
+                                          type="button"
+                                          onClick={() => handleMarkRecurringAsPaid(rec.id)}
+                                          className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md transition-all flex items-center gap-1"
+                                        >
+                                          <CheckCircle2 size={13} /> Pagar
+                                        </button>
+                                      ) : (
+                                        <button
+                                          type="button"
+                                          onClick={() => handleUnmarkRecurringPaid(rec.id)}
+                                          className="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition-all"
+                                        >
+                                          Desfazer
+                                        </button>
+                                      )}
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDeleteRecurring(rec.id)}
+                                        className="p-1 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-all"
+                                      >
+                                        <Trash2 size={14} />
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           )}
 
@@ -3114,6 +3768,7 @@ export default function App() {
                 totalInstallments: installments,
                 city: f.cidade.value,
                 method: f.metodo.value,
+                cardName: f.cartao?.value || (f.metodo.value === 'Crédito' ? 'Nubank' : undefined),
                 active: true,
                 dueDateDay: parseInt(f.diaVenc.value) || 10,
                 dueDateText: `Dia ${parseInt(f.diaVenc.value) || 10}`,
@@ -3175,18 +3830,112 @@ export default function App() {
                   </select>
                 </div>
                 <div>
+                  <label className="text-slate-400 block mb-1">Cartão Vinculado (se Crédito):</label>
+                  <select name="cartao" className="w-full bg-[#161D32] border border-[#2A3554] p-2 rounded-lg text-slate-100">
+                    <option value="">Automático / Padrão</option>
+                    {creditCards.map(c => (
+                      <option key={c.id} value={c.name}>{c.name} (Vence dia {c.dueDay})</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-slate-400 block mb-1">Dia do Vencimento Mensal:</label>
+                  <input type="number" name="diaVenc" min="1" max="31" defaultValue="10" className="w-full bg-[#161D32] border border-[#2A3554] p-2 rounded-lg text-slate-100" />
+                </div>
+                <div>
                   <label className="text-slate-400 block mb-1">Cidade / Estado:</label>
                   <input name="cidade" defaultValue="Teresina, PI" className="w-full bg-[#161D32] border border-[#2A3554] p-2 rounded-lg text-slate-100" />
                 </div>
               </div>
 
-              <div>
-                <label className="text-slate-400 block mb-1">Dia do Vencimento Mensal:</label>
-                <input type="number" name="diaVenc" min="1" max="31" defaultValue="10" className="w-full bg-[#161D32] border border-[#2A3554] p-2 rounded-lg text-slate-100" />
-              </div>
-
               <button type="submit" className="w-full mt-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition-all shadow-md">
                 Salvar e Ativar Recorrência
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ===================== MODAL DE CADASTRO DE NOVO CARTÃO DE CRÉDITO ===================== */}
+      {newCardModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#12172A] border border-[#2A3554] rounded-2xl max-w-md w-full p-6 shadow-2xl relative animate-in fade-in">
+            <button onClick={() => setNewCardModalOpen(false)} className="absolute top-4 right-4 text-slate-400 hover:text-white">
+              <X size={20} />
+            </button>
+
+            <h3 className="font-bold text-base text-white mb-2 flex items-center gap-2">
+              <CreditCard size={18} className="text-purple-400" /> Cadastrar Cartão de Crédito
+            </h3>
+            <p className="text-xs text-slate-400 mb-4">Adicione seus cartões para separar faturas, parcelamentos e alertas de vencimento:</p>
+
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              const f = e.target as any;
+              const newCard: CreditCardData = {
+                id: `card_${Date.now()}`,
+                name: f.nome.value.trim(),
+                closingDay: parseInt(f.diaFechamento.value) || 15,
+                dueDay: parseInt(f.diaVencimento.value) || 22,
+                limit: parseFloat(f.limite.value) || 5000,
+                color: f.cor.value || 'purple',
+                lastDigits: f.ultimosDigitos.value || '4821'
+              };
+
+              setCreditCards(prev => [...prev, newCard]);
+              setSelectedCardId(newCard.id);
+              setNewCardModalOpen(false);
+              setWhatsappSyncToast({
+                show: true,
+                text: `💳 Cartão "${newCard.name}" cadastrado com sucesso! Fatura pronta para monitoramento.`
+              });
+              setTimeout(() => setWhatsappSyncToast(null), 4000);
+            }} className="space-y-3 text-xs">
+
+              <div>
+                <label className="text-slate-400 block mb-1">Nome do Banco / Cartão:</label>
+                <input required name="nome" placeholder="Ex: Nubank, Inter, Itaú, Santander, C6 Bank..." className="w-full bg-[#161D32] border border-[#2A3554] p-2.5 rounded-lg text-slate-100" />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-slate-400 block mb-1">Dia de Fechamento:</label>
+                  <input required type="number" min="1" max="31" defaultValue="15" name="diaFechamento" className="w-full bg-[#161D32] border border-[#2A3554] p-2 rounded-lg text-slate-100" />
+                </div>
+                <div>
+                  <label className="text-slate-400 block mb-1">Dia de Vencimento:</label>
+                  <input required type="number" min="1" max="31" defaultValue="22" name="diaVencimento" className="w-full bg-[#161D32] border border-[#2A3554] p-2 rounded-lg text-slate-100" />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-slate-400 block mb-1">Limite Total (R$):</label>
+                  <input required type="number" step="0.01" defaultValue="5000" name="limite" className="w-full bg-[#161D32] border border-[#2A3554] p-2 rounded-lg text-slate-100 font-bold text-purple-400" />
+                </div>
+                <div>
+                  <label className="text-slate-400 block mb-1">Últimos 4 Dígitos (opcional):</label>
+                  <input maxLength={4} name="ultimosDigitos" placeholder="Ex: 4821" className="w-full bg-[#161D32] border border-[#2A3554] p-2 rounded-lg text-slate-100" />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-slate-400 block mb-1">Tema / Cor Visual do Cartão:</label>
+                <select name="cor" defaultValue="purple" className="w-full bg-[#161D32] border border-[#2A3554] p-2 rounded-lg text-slate-100">
+                  <option value="purple">🟣 Roxo (Nubank / C6)</option>
+                  <option value="orange">🟠 Laranja (Inter)</option>
+                  <option value="blue">🔵 Azul (Itaú / Caixa / BB)</option>
+                  <option value="red">🔴 Vermelho (Santander / Bradesco)</option>
+                  <option value="black">⚫ Grafite / Black Private</option>
+                  <option value="emerald">🟢 Esmeralda / Verde (Sicredi / Safra)</option>
+                </select>
+              </div>
+
+              <button type="submit" className="w-full mt-4 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:brightness-110 text-white font-bold text-xs transition-all shadow-md">
+                Salvar Cartão
               </button>
             </form>
           </div>
@@ -3423,19 +4172,57 @@ export default function App() {
             <form onSubmit={(e) => {
               e.preventDefault();
               const form = e.target as any;
+              const installments = parseInt(form.parcelas?.value) || 1;
+              const totalVal = parseFloat(form.val.value);
+              const selectedMethod = form.metodo.value;
+              const selectedCard = form.cartao?.value || (selectedMethod === 'Crédito' ? 'Nubank' : undefined);
+
+              if (installments > 1) {
+                // Se parcelado, cadastra automaticamente como dívida recorrente
+                const parcelaVal = Math.round((totalVal / installments) * 100) / 100;
+                const newRec: RecurringExpense = {
+                  id: `rec_${Date.now()}`,
+                  title: `${form.desc.value} (${installments}x)`,
+                  category: form.cat.value || 'Cartão de Crédito',
+                  totalAmount: totalVal,
+                  installmentAmount: parcelaVal,
+                  currentInstallment: 1,
+                  totalInstallments: installments,
+                  city: form.cidade.value || 'Teresina, PI',
+                  method: selectedMethod,
+                  cardName: selectedCard,
+                  active: true,
+                  dueDateDay: 20,
+                  dueDateText: 'Dia 20',
+                  paid: false
+                };
+
+                setRecurringExpenses(prev => [newRec, ...prev]);
+                kyroCloud.syncSaveRecurring(newRec);
+                setNewTxModalOpen(false);
+                setWhatsappSyncToast({
+                  show: true,
+                  text: `🔁 Compra parcelada (${installments}x) adicionada automaticamente em DÍVIDAS RECORRENTES e no Cartão ${selectedCard || ''}!`
+                });
+                setTimeout(() => setWhatsappSyncToast(null), 5000);
+                return;
+              }
+
               const newObj: Transaction = {
                 id: Date.now().toString(),
                 description: form.desc.value,
                 category: form.cat.value,
                 subcategory: form.subcat.value,
                 city: form.cidade.value,
-                amount: parseFloat(form.val.value),
+                amount: totalVal,
                 type: form.tipo.value,
-                method: form.metodo.value,
+                method: selectedMethod,
+                cardName: selectedCard,
                 date: 'Hoje',
                 status: 'Concluído'
               };
               setTransactions(prev => [newObj, ...prev]);
+              kyroCloud.syncSaveTransaction(newObj);
               setNewTxModalOpen(false);
             }} className="space-y-3 text-xs">
               <div>
@@ -3455,7 +4242,7 @@ export default function App() {
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="text-slate-400 block mb-1">Valor (R$)</label>
-                  <input required type="number" step="0.01" name="val" placeholder="0.00" className="w-full bg-[#161D32] border border-[#2A3554] p-2 rounded-lg text-slate-100" />
+                  <input required type="number" step="0.01" name="val" placeholder="0.00" className="w-full bg-[#161D32] border border-[#2A3554] p-2 rounded-lg text-slate-100 font-bold" />
                 </div>
                 <div>
                   <label className="text-slate-400 block mb-1">Tipo</label>
@@ -3470,11 +4257,26 @@ export default function App() {
                   <label className="text-slate-400 block mb-1">Método</label>
                   <select name="metodo" className="w-full bg-[#161D32] border border-[#2A3554] p-2 rounded-lg text-slate-100">
                     <option value="PIX">PIX</option>
-                    <option value="Débito">Débito</option>
                     <option value="Crédito">Crédito</option>
+                    <option value="Débito">Débito</option>
                     <option value="Dinheiro">Dinheiro</option>
                     <option value="Transferência">Transferência</option>
                   </select>
+                </div>
+                <div>
+                  <label className="text-slate-400 block mb-1">Cartão (se Crédito):</label>
+                  <select name="cartao" className="w-full bg-[#161D32] border border-[#2A3554] p-2 rounded-lg text-slate-100">
+                    <option value="">Nenhum / Padrão</option>
+                    {creditCards.map(c => (
+                      <option key={c.id} value={c.name}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-slate-400 block mb-1">Nº de Parcelas (se parcelado):</label>
+                  <input type="number" min="1" max="72" defaultValue="1" name="parcelas" className="w-full bg-[#161D32] border border-[#2A3554] p-2 rounded-lg text-slate-100" />
                 </div>
                 <div>
                   <label className="text-slate-400 block mb-1">Cidade / Estado</label>

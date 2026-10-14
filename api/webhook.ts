@@ -117,6 +117,59 @@ function extractMonetaryValue(text: string): number {
   return 0;
 }
 
+function extractCreditCardName(text: string): string {
+  if (!text) return '';
+  const lower = text.toLowerCase();
+  if (lower.includes('nubank') || lower.includes('nu bank') || lower.includes('roxinho')) return 'Nubank';
+  if (lower.includes('inter') || lower.includes('banco inter')) return 'Inter';
+  if (lower.includes('itaú') || lower.includes('itau')) return 'Itaú';
+  if (lower.includes('bradesco')) return 'Bradesco';
+  if (lower.includes('santander')) return 'Santander';
+  if (lower.includes('c6') || lower.includes('c6 bank')) return 'C6 Bank';
+  if (lower.includes('banco do brasil') || lower.includes('bb') || lower.includes('ourocard')) return 'Banco do Brasil';
+  if (lower.includes('caixa')) return 'Caixa';
+  if (lower.includes('xp')) return 'XP';
+  if (lower.includes('btg')) return 'BTG Pactual';
+  if (lower.includes('porto seguro') || lower.includes('porto')) return 'Porto Seguro';
+  if (lower.includes('mercado pago')) return 'Mercado Pago';
+  if (lower.includes('picpay')) return 'PicPay';
+  if (lower.includes('will') || lower.includes('will bank')) return 'Will Bank';
+  if (lower.includes('neon')) return 'Neon';
+  if (lower.includes('rico')) return 'Rico';
+  if (lower.includes('sicredi')) return 'Sicredi';
+  if (lower.includes('sicoob')) return 'Sicoob';
+
+  const m = text.match(/(?:cart[aã]o\s+(?:de\s+cr[eé]dito\s+)?|no\s+cr[eé]dito\s+|cr[eé]dito\s+)([A-Za-zÀ-ÿ0-9]+)/i);
+  if (m && m[1]) {
+    const candidate = m[1].trim();
+    const skipWords = ['de', 'da', 'do', 'em', 'para', 'com', 'no', 'na', 'um', 'uma', 'vezes', 'parcelas', 'pix', 'saida', 'saída'];
+    if (!skipWords.includes(candidate.toLowerCase()) && candidate.length >= 2) {
+      return candidate.charAt(0).toUpperCase() + candidate.slice(1);
+    }
+  }
+  return '';
+}
+
+function extractInstallments(text: string): number {
+  if (!text) return 1;
+  const lower = text.toLowerCase();
+  const instMatch = lower.match(/(?:dividid[oa]\s*em\s*|em\s*|de\s*)?(\d+)\s*(?:x|vezes|parcelas?)/i);
+  if (instMatch) {
+    const num = parseInt(instMatch[1], 10);
+    if (num > 1 && num <= 72) return num;
+  }
+  const wordNums: Record<string, number> = {
+    'duas': 2, 'dois': 2, 'três': 3, 'tres': 3, 'quatro': 4, 'cinco': 5,
+    'seis': 6, 'sete': 7, 'oito': 8, 'nove': 9, 'dez': 10, 'doze': 12, 'vinte e quatro': 24
+  };
+  for (const [w, n] of Object.entries(wordNums)) {
+    if (lower.includes(`${w} vezes`) || lower.includes(`${w} parcelas`)) {
+      return n;
+    }
+  }
+  return 1;
+}
+
 // 3. Extrator Dinâmico Inteligente (Sem inventar dados ou cidades não mencionadas)
 function parseDynamicFinancialMessage(text: string, isAudio: boolean = false) {
   const clean = (text || '').trim();
@@ -130,22 +183,7 @@ function parseDynamicFinancialMessage(text: string, isAudio: boolean = false) {
   // 2. Extrai valor monetário com alta precisão
   const amount = extractMonetaryValue(clean);
 
-  // 3. Detectar se é dívida recorrente / parcelada
-  const isRecurring = 
-    lower.includes('recorrente') || 
-    lower.includes('divida recorrente') || 
-    lower.includes('dívida recorrente') ||
-    lower.includes('recorrentes') ||
-    lower.includes('parcelada') ||
-    lower.includes('parcelado') ||
-    lower.includes('parcelas') ||
-    lower.includes('dividida em') ||
-    lower.includes('dividido em') ||
-    lower.includes('mensalidade') ||
-    lower.includes('todo mês') ||
-    lower.includes('todo mes');
-
-  // 4. Detectar se é confirmação de pagamento de dívida ("paguei a passagem aérea", "quitei")
+  // 3. Detectar se é confirmação de pagamento de dívida ("paguei a passagem aérea", "quitei")
   const isPaymentConfirm = 
     (lower.includes('paguei') || lower.includes('já paguei') || lower.includes('ja paguei') ||
      lower.includes('quitei') || lower.includes('liquidada') || lower.includes('dar baixa') ||
@@ -168,9 +206,30 @@ function parseDynamicFinancialMessage(text: string, isAudio: boolean = false) {
     };
   }
 
-  // 5. Forma de Pagamento
+  // 4. Detecção de Cartão e Parcelamento
+  const cardName = extractCreditCardName(clean);
+  const detectedInstallments = extractInstallments(clean);
+  const hasInstallments = detectedInstallments > 1;
+
+  // 5. Detectar se é dívida recorrente / parcelada
+  const isRecurring = 
+    hasInstallments ||
+    lower.includes('recorrente') || 
+    lower.includes('divida recorrente') || 
+    lower.includes('dívida recorrente') ||
+    lower.includes('recorrentes') ||
+    lower.includes('parcelada') ||
+    lower.includes('parcelado') ||
+    lower.includes('parcelas') ||
+    lower.includes('dividida em') ||
+    lower.includes('dividido em') ||
+    lower.includes('mensalidade') ||
+    lower.includes('todo mês') ||
+    lower.includes('todo mes');
+
+  // 6. Forma de Pagamento
   let method: 'PIX' | 'Débito' | 'Crédito' | 'Dinheiro' | 'Transferência' = 'PIX';
-  if (lower.includes('crédito') || lower.includes('credito') || lower.includes('cartão') || lower.includes('cartao') || lower.includes('parcela')) {
+  if (cardName || lower.includes('crédito') || lower.includes('credito') || lower.includes('cartão') || lower.includes('cartao') || lower.includes('parcela')) {
     method = 'Crédito';
   } else if (lower.includes('débito') || lower.includes('debito')) {
     method = 'Débito';
@@ -182,7 +241,7 @@ function parseDynamicFinancialMessage(text: string, isAudio: boolean = false) {
     method = 'PIX';
   }
 
-  // 6. Cidade (Apenas se mencionada explicitamente)
+  // 7. Cidade (Apenas se mencionada explicitamente)
   let city = '';
   if (lower.includes('oeiras') || lower.includes('oeira') || lower.includes('ostras')) city = 'Oeiras, PI';
   else if (lower.includes('caxias')) city = 'Caxias, MA';
@@ -195,21 +254,23 @@ function parseDynamicFinancialMessage(text: string, isAudio: boolean = false) {
   else if (lower.includes('floriano')) city = 'Floriano, PI';
   else if (lower.includes('rio de janeiro')) city = 'Rio de Janeiro, RJ';
 
-  // TRATAMENTO DEDICADO PARA DÍVIDAS RECORRENTES
+  // TRATAMENTO DEDICADO PARA DÍVIDAS RECORRENTES E PARCELAMENTOS
   if (isRecurring && amount > 0) {
-    let totalInstallments = 1;
-    const instMatch = lower.match(/(?:dividid[oa]\s*em\s*|em\s*|de\s*)(\d+)\s*(?:vezes|x|parcelas?)/i);
-    if (instMatch) {
-      totalInstallments = parseInt(instMatch[1], 10);
-    } else {
-      const wordNums: Record<string, number> = {
-        'duas': 2, 'dois': 2, 'três': 3, 'tres': 3, 'quatro': 4, 'cinco': 5,
-        'seis': 6, 'sete': 7, 'oito': 8, 'nove': 9, 'dez': 10, 'doze': 12, 'vinte e quatro': 24
-      };
-      for (const [w, n] of Object.entries(wordNums)) {
-        if (lower.includes(`${w} vezes`) || lower.includes(`${w} parcelas`)) {
-          totalInstallments = n;
-          break;
+    let totalInstallments = detectedInstallments > 1 ? detectedInstallments : 1;
+    if (totalInstallments === 1) {
+      const instMatch = lower.match(/(?:dividid[oa]\s*em\s*|em\s*|de\s*)(\d+)\s*(?:vezes|x|parcelas?)/i);
+      if (instMatch) {
+        totalInstallments = parseInt(instMatch[1], 10);
+      } else {
+        const wordNums: Record<string, number> = {
+          'duas': 2, 'dois': 2, 'três': 3, 'tres': 3, 'quatro': 4, 'cinco': 5,
+          'seis': 6, 'sete': 7, 'oito': 8, 'nove': 9, 'dez': 10, 'doze': 12, 'vinte e quatro': 24
+        };
+        for (const [w, n] of Object.entries(wordNums)) {
+          if (lower.includes(`${w} vezes`) || lower.includes(`${w} parcelas`)) {
+            totalInstallments = n;
+            break;
+          }
         }
       }
     }
@@ -245,7 +306,7 @@ function parseDynamicFinancialMessage(text: string, isAudio: boolean = false) {
     } else {
       let rawTitle = clean
         .replace(/(?:r\$\s*|rs\s*)?\d+(?:[.,]\d+)?/gi, '')
-        .replace(/\b(adicione|adicionar|nova|uma|divida|dívida|recorrente|no|valor|de|para|em|vezes|x|parcelas|parcelada|vencimento|dia|dezembro|janeiro|fevereiro|março|abril|maio|junho|julho|agosto|setembro|outubro|novembro)\b/gi, ' ')
+        .replace(/\b(adicione|adicionar|nova|uma|divida|dívida|recorrente|no|valor|de|para|em|vezes|x|parcelas|parcelada|vencimento|dia|dezembro|janeiro|fevereiro|março|abril|maio|junho|julho|agosto|setembro|outubro|novembro|nubank|inter|itau|itaú|bradesco|santander|c6|cartao|cartão|crédito|credito|debito|débito|pix)\b/gi, ' ')
         .replace(/[^\w\sÀ-ÿ]/g, '')
         .trim();
       if (rawTitle) {
@@ -253,8 +314,18 @@ function parseDynamicFinancialMessage(text: string, isAudio: boolean = false) {
       }
     }
 
-    const installmentAmount = amount;
-    const totalAmount = totalInstallments > 0 ? (installmentAmount * totalInstallments) : installmentAmount;
+    let installmentAmount = amount;
+    let totalAmount = amount;
+    const isExplicitPerMonth = lower.includes('parcelas de') || lower.includes('parcela de') || lower.includes('por mês') || lower.includes('por mes') || lower.includes('mensal');
+    if (totalInstallments > 1) {
+      if (isExplicitPerMonth) {
+        installmentAmount = amount;
+        totalAmount = Math.round(installmentAmount * totalInstallments * 100) / 100;
+      } else {
+        totalAmount = amount;
+        installmentAmount = Math.round((amount / totalInstallments) * 100) / 100;
+      }
+    }
 
     const recurringData = {
       id: `rec_${Date.now()}`,
@@ -266,6 +337,7 @@ function parseDynamicFinancialMessage(text: string, isAudio: boolean = false) {
       totalInstallments,
       city: city || 'Teresina, PI',
       method,
+      cardName: cardName || (method === 'Crédito' ? 'Nubank' : undefined),
       active: true,
       dueDateDay,
       dueDateText,
@@ -273,12 +345,15 @@ function parseDynamicFinancialMessage(text: string, isAudio: boolean = false) {
     };
 
     const prefix = isAudio ? '🎙️ [Áudio de Voz]: ' : '💬 ';
-    const reply = `🔁 Dívida Recorrente Adicionada com Sucesso ao KYRO Finance!\n\n${prefix}"${clean}"\n\n• Título: ${title}\n• Parcela Mensal: R$ ${installmentAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}${totalInstallments > 0 ? ` (1/${totalInstallments})` : ''}\n• Total da Dívida: R$ ${totalAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n• Forma: ${method}\n• Vencimento: ${dueDateText}\n• Status: 🟡 Pendente / A Vencer (NÃO debitada)\n\n📌 REGRA DE CONTROLE: Esta dívida fica guardada separadamente na aba de Recorrentes e NÃO foi descontada do seu Saldo Total. O valor de - R$ ${installmentAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} só será debitado do Dashboard quando você der o OK de que ela foi paga!`;
+    const cardLine = recurringData.cardName ? `\n• Cartão Vinculado: 💳 ${recurringData.cardName}` : '';
+    const reply = `🔁 Dívida Recorrente / Parcelamento Adicionado ao KYRO Finance!\n\n${prefix}"${clean}"\n\n• Título: ${title}${cardLine}\n• Parcela: ${totalInstallments > 1 ? `${totalInstallments}x de ` : ''}R$ ${installmentAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}${totalInstallments > 0 ? ` (1/${totalInstallments})` : ''}\n• Total da Dívida: R$ ${totalAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n• Forma: ${method}\n• Vencimento: ${dueDateText}\n• Status: 🟡 Pendente / A Vencer (NÃO debitada)\n\n📌 REGRA DE CONTROLE: Esta dívida fica guardada separadamente na aba de Recorrentes e Cartões de Crédito e NÃO foi descontada do seu Saldo Total. O valor só será debitado do Dashboard quando você der o OK de que ela foi paga!`;
 
     return {
       reply,
       isRecurring: true,
       recurringData,
+      cardName: recurringData.cardName,
+      installments: totalInstallments,
       object: title,
       location: '',
       city: city || ''
@@ -313,6 +388,9 @@ function parseDynamicFinancialMessage(text: string, isAudio: boolean = false) {
   if (location) {
     remaining = remaining.replace(new RegExp(`\\b${location}\\b`, 'gi'), ' ');
   }
+  if (cardName) {
+    remaining = remaining.replace(new RegExp(`\\b${cardName}\\b`, 'gi'), ' ');
+  }
   if (city) {
     const citySimple = city.split(',')[0].trim();
     remaining = remaining.replace(new RegExp(`\\b${citySimple}\\b`, 'gi'), ' ');
@@ -337,15 +415,21 @@ function parseDynamicFinancialMessage(text: string, isAudio: boolean = false) {
   const symbol = type === 'Entrada' ? '+' : '-';
   const prefixAudio = isAudio ? '🎙️ [Áudio de Voz]: ' : '💬 ';
 
-  let reply = `⚡ Lançamento adicionado ao KYRO Finance!\n\n${prefixAudio}"${clean}"\n\n• Tipo: ${type}\n• Objeto: ${object}\n• Valor: ${symbol} R$ ${amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n• Forma: ${method}`;
+  const finalCardName = cardName || (method === 'Crédito' ? 'Nubank' : undefined);
+  let methodDisplay = method === 'Crédito' && finalCardName ? `Crédito (${finalCardName})` : method;
 
+  let reply = `⚡ Lançamento adicionado ao KYRO Finance!\n\n${prefixAudio}"${clean}"\n\n• Tipo: ${type}\n• Objeto: ${object}\n• Valor: ${symbol} R$ ${amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n• Forma: ${methodDisplay}`;
+
+  if (method === 'Crédito' && finalCardName) {
+    reply += `\n• Fatura: Adicionado à fatura do cartão ${finalCardName}`;
+  }
   if (location) {
     reply += `\n• Local: ${location}`;
   }
   if (city) {
     reply += `\n• Cidade: ${city}`;
   }
-  reply += `\n\n✅ Atualizado nas abas de ${type === 'Entrada' ? 'Entradas' : 'Saídas'} e no Dashboard!`;
+  reply += `\n\n✅ Atualizado nas abas de ${type === 'Entrada' ? 'Entradas' : 'Saídas'}${method === 'Crédito' ? ' e Cartões de Crédito' : ''} e no Dashboard!`;
 
   const savedTx = {
     id: Date.now().toString(),
@@ -353,11 +437,14 @@ function parseDynamicFinancialMessage(text: string, isAudio: boolean = false) {
     amount,
     type,
     method,
-    category: location || (type === 'Entrada' ? 'Recebimento' : 'Alimentação / Geral'),
+    cardName: finalCardName,
+    category: location || (type === 'Entrada' ? 'Recebimento' : (method === 'Crédito' ? 'Cartão de Crédito' : 'Alimentação / Geral')),
     subcategory: object,
     city: city || '',
     date: new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }),
     status: 'Concluído' as const,
+    currentInstallment: 1,
+    totalInstallments: 1,
     createdAt: new Date().toISOString()
   };
 
