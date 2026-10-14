@@ -70,15 +70,84 @@ function recordTransaction(tx) {
   }, { timeout: 6000 }).catch(() => {});
 }
 
+// Cache dos metadados de grupos do WhatsApp
+const groupCache = new Map();
+
+async function checkIsAuthorizedGroup(sock, remoteJid) {
+  // Ignora se não for grupo ou for broadcast de status
+  if (!remoteJid || !remoteJid.endsWith('@g.us') || remoteJid === 'status@broadcast') {
+    return { authorized: false, reason: 'Mensagem privada ou broadcast ignorada (apenas grupo Finanças Kyro)' };
+  }
+
+  let groupSubject = groupCache.get(remoteJid);
+  if (!groupSubject) {
+    try {
+      const meta = await sock.groupMetadata(remoteJid);
+      if (meta && meta.subject) {
+        groupSubject = meta.subject;
+        groupCache.set(remoteJid, groupSubject);
+        console.log(`[WhatsApp Grupo Detectado]: "${groupSubject}" (${remoteJid})`);
+      }
+    } catch (err) {
+      console.warn(`[WhatsApp] Falha ao obter metadados do grupo ${remoteJid}:`, err.message);
+    }
+  }
+
+  if (!groupSubject) {
+    return { authorized: false, reason: 'Grupo sem nome identificado' };
+  }
+
+  // Normaliza o título do grupo (sem acentos, minúsculo)
+  const norm = groupSubject
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+
+  // Verifica se é o grupo "Finanças Kyro" (ou variações: "Financas Kyro", "Kyro Finanças", "Finanças - Kyro", etc.)
+  const isKyroFinancas = 
+    (norm.includes('financas') && norm.includes('kyro')) ||
+    norm.includes('financas kyro') ||
+    norm.includes('kyro financas') ||
+    norm.includes('kyro finance');
+
+  if (!isKyroFinancas) {
+    return { authorized: false, reason: `Grupo "${groupSubject}" ignorado. Apenas o grupo "Finanças Kyro" é processado.` };
+  }
+
+  return { authorized: true, groupSubject };
+}
+
 // Extrator Heurístico Local de Emergência (caso a rede/IA caia)
 function extractFallbackTransaction(text) {
   const lower = (text || '').toLowerCase().trim();
-  const valueMatch = text.match(/(?:r\$\s*|rs\s*|valor\s*(?:de\s*)?)?(\d+(?:[.,]\d{1,2})?)/i);
-  if (!valueMatch) return null;
 
-  const rawVal = valueMatch[1].replace(',', '.');
-  const amount = parseFloat(rawVal);
-  if (isNaN(amount) || amount <= 0) return null;
+  // 1. Ignora links, URLs e spam
+  if (lower.includes('http://') || lower.includes('https://') || lower.includes('www.') || lower.includes('.com') || lower.includes('.br/')) {
+    return null;
+  }
+
+  // 2. Deve conter menção explícita de valor monetário OU palavras-chave financeiras
+  const hasCurrency = /(?:r\$\s*|rs\s*|\breais\b)/i.test(text);
+  const hasFinancialKeyword = /(?:gastei|paguei|comprei|recebi|ganhei|sal[aá]rio|pix|d[eé]bito|cr[eé]dito|transfer[eê]ncia|dep[oó]sito|rendimento|lucro|venda|almo[cç]o|jantar|mercado|padaria|supermercado|combust[ií]vel|gasolina|farm[aá]cia|lanche|restaurante|parcela|entrada|sa[ií]da|despesa|conta|boleto|valor)/i.test(text);
+
+  if (!hasCurrency && !hasFinancialKeyword) {
+    return null;
+  }
+
+  // Extrai valor numérico
+  let amount = 0;
+  const currencyMatch = text.match(/(?:r\$\s*|rs\s*|valor\s*(?:de\s*)?)(\d+(?:[.,]\d{1,2})?)/i);
+  if (currencyMatch) {
+    amount = parseFloat(currencyMatch[1].replace(',', '.'));
+  } else {
+    const numMatch = text.match(/(\d+(?:[.,]\d{1,2})?)/);
+    if (numMatch) {
+      amount = parseFloat(numMatch[1].replace(',', '.'));
+    }
+  }
+
+  if (isNaN(amount) || amount <= 0 || amount > 1000000) return null;
 
   let type = 'Saída';
   if (
@@ -108,7 +177,7 @@ function extractFallbackTransaction(text) {
   else if (lower.includes('fortaleza')) city = 'Fortaleza, CE';
   else if (lower.includes('brasília') || lower.includes('brasilia')) city = 'Brasília, DF';
 
-  let description = type === 'Entrada' ? 'Recebimento' : 'Despesa WhatsApp';
+  let description = type === 'Entrada' ? 'Recebimento' : 'Despesa';
   let category = type === 'Entrada' ? 'Recebimento' : 'Outros';
 
   if (lower.includes('padaria') || lower.includes('pão') || lower.includes('café')) {
@@ -126,6 +195,14 @@ function extractFallbackTransaction(text) {
   } else if (lower.includes('combustível') || lower.includes('gasolina') || lower.includes('posto')) {
     description = 'Combustível Posto';
     category = 'Transporte';
+  } else if (lower.includes('farmácia') || lower.includes('farmacia') || lower.includes('remédio') || lower.includes('remedio')) {
+    description = 'Farmácia / Remédio';
+    category = 'Saúde';
+  } else {
+    const cleanWords = text.replace(/[^\w\sÀ-ÿ]/g, '').trim().split(/\s+/).slice(0, 4).join(' ');
+    if (cleanWords && cleanWords.length > 2) {
+      description = cleanWords;
+    }
   }
 
   return {
@@ -206,6 +283,17 @@ async function startSocket() {
       if (!msg.message || msg.key.fromMe) continue;
 
       const remoteJid = msg.key.remoteJid;
+
+      // 1. FILTRO ESTRITO DE SEGURANÇA E PRIVACIDADE:
+      // Apenas mensagens enviadas dentro do grupo oficial "Finanças Kyro" são processadas!
+      // Se alguém mandar mensagem no privado (DM), status ou outro grupo, é COMPLETAMENTE IGNORADO
+      // Nenhuma mensagem automática é enviada para privados ou conversas fora do grupo!
+      const groupCheck = await checkIsAuthorizedGroup(sock, remoteJid);
+      if (!groupCheck.authorized) {
+        // Ignora em silêncio absoluto
+        continue;
+      }
+
       const messageText = 
         msg.message.conversation ||
         msg.message.extendedTextMessage?.text ||
@@ -213,7 +301,9 @@ async function startSocket() {
         '';
 
       const isAudio = !!msg.message.audioMessage;
-      console.log(`📩 Mensagem recebida de ${remoteJid}: "${messageText || (isAudio ? '[Áudio]' : '')}"`);
+      if (!messageText && !isAudio) continue;
+
+      console.log(`📩 [Finanças Kyro] Mensagem recebida: "${messageText || '[Áudio de Voz]'}"`);
 
       // Envia ao Webhook do KYRO
       const payload = {
@@ -221,7 +311,8 @@ async function startSocket() {
         data: {
           key: msg.key,
           message: msg.message
-        }
+        },
+        groupName: groupCheck.groupSubject
       };
 
       let replyText = null;
@@ -261,15 +352,18 @@ async function startSocket() {
       if (savedTx) {
         console.log(`✨ [Transação Detectada]: ${savedTx.description} | R$ ${savedTx.amount} (${savedTx.type})`);
         recordTransaction(savedTx);
-      }
 
-      if (replyText) {
-        try {
-          await sock.sendMessage(remoteJid, { text: replyText }, { quoted: msg });
-          console.log(`✅ Resposta enviada no WhatsApp: "${replyText.substring(0, 50)}..."`);
-        } catch (sendErr) {
-          console.error('[WhatsApp] Erro ao enviar resposta:', sendErr.message);
+        if (replyText) {
+          try {
+            await sock.sendMessage(remoteJid, { text: replyText }, { quoted: msg });
+            console.log(`✅ Resposta enviada no WhatsApp: "${replyText.substring(0, 50)}..."`);
+          } catch (sendErr) {
+            console.error('[WhatsApp] Erro ao enviar resposta:', sendErr.message);
+          }
         }
+      } else {
+        // Mensagem comum de conversa (não é gasto nem finança) -> NÃO responder para não floodar conversas normais
+        console.log(`ℹ️ Mensagem ignorada (não é movimentação financeira).`);
       }
     }
   });

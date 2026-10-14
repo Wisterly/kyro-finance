@@ -32,14 +32,33 @@ const openai = new OpenAI({
 // 3. Parser Heurístico Resiliente (Fallback local offline)
 function parseFinancialMessageHeuristic(text: string) {
   const lower = text.toLowerCase().trim();
-  
-  // Extrai valor em R$ ou número
-  const valueMatch = text.match(/(?:r\$\s*|rs\s*|valor\s*(?:de\s*)?)?(\d+(?:[.,]\d{1,2})?)/i);
-  if (!valueMatch) return null;
 
-  const rawVal = valueMatch[1].replace(',', '.');
-  const amount = parseFloat(rawVal);
-  if (isNaN(amount) || amount <= 0) return null;
+  // 1. Ignora links, URLs e spam
+  if (lower.includes('http://') || lower.includes('https://') || lower.includes('www.') || lower.includes('.com') || lower.includes('.br/')) {
+    return null;
+  }
+
+  // 2. Deve conter menção explícita de valor monetário OU palavras-chave financeiras
+  const hasCurrency = /(?:r\$\s*|rs\s*|\breais\b)/i.test(text);
+  const hasFinancialKeyword = /(?:gastei|paguei|comprei|recebi|ganhei|sal[aá]rio|pix|d[eé]bito|cr[eé]dito|transfer[eê]ncia|dep[oó]sito|rendimento|lucro|venda|almo[cç]o|jantar|mercado|padaria|supermercado|combust[ií]vel|gasolina|farm[aá]cia|lanche|restaurante|parcela|entrada|sa[ií]da|despesa|conta|boleto|valor)/i.test(text);
+
+  if (!hasCurrency && !hasFinancialKeyword) {
+    return null;
+  }
+
+  // Extrai valor em R$ ou número
+  let amount = 0;
+  const currencyMatch = text.match(/(?:r\$\s*|rs\s*|valor\s*(?:de\s*)?)(\d+(?:[.,]\d{1,2})?)/i);
+  if (currencyMatch) {
+    amount = parseFloat(currencyMatch[1].replace(',', '.'));
+  } else {
+    const numMatch = text.match(/(\d+(?:[.,]\d{1,2})?)/);
+    if (numMatch) {
+      amount = parseFloat(numMatch[1].replace(',', '.'));
+    }
+  }
+
+  if (isNaN(amount) || amount <= 0 || amount > 1000000) return null;
 
   // Determina tipo: Entrada ou Saída
   let type: 'Entrada' | 'Saída' = 'Saída';
@@ -441,7 +460,7 @@ Responda EXCLUSIVAMENTE em formato JSON com o seguinte schema:
   }
 
   return {
-    reply: `Olá! Recebi sua mensagem: "${userMessage}".\nPara cadastrar uma movimentação, envie em texto ou áudio, por exemplo: "Almoço 35 no débito em Teresina" ou "Pix de 150 recebido de salário".`,
+    reply: null,
     savedTx: null
   };
 }
@@ -539,11 +558,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // Identifica remetente e destinatário
-    const remoteJid = data?.key?.remoteJid || payload?.sender || payload?.number || 'grupo_kyro@g.us';
+    const remoteJid = data?.key?.remoteJid || payload?.sender || payload?.number || '';
     const isGroup = String(remoteJid).endsWith('@g.us');
     const participant = data?.key?.participant || payload?.participant || remoteJid;
     const phoneNumber = String(participant).replace('@s.whatsapp.net', '').replace('@g.us', '');
     const messageId = data?.key?.id || payload?.id;
+
+    // FILTRO ESTRITO: Apenas mensagens vindas de grupos são permitidas!
+    // Mensagens diretas (DMs no privado), broadcasts e status são ignoradas sem resposta.
+    if (!isGroup && payload?.testPing !== true && payload?.action !== 'ping') {
+      return res.status(200).json({ 
+        status: 'ignored_private_message', 
+        message: 'Apenas mensagens vindas do grupo oficial Finanças Kyro são processadas.' 
+      });
+    }
 
     // 1. Extrai Texto (Evolution API, Meta Cloud API ou Twilio Sandbox)
     let messageText = 
@@ -596,13 +624,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // 3. Processamento de IA & Gravação no Banco
     const result = await processAssistant(messageText, isAudio);
 
-    // 4. Envia Resposta de Feedback no WhatsApp
+    // 4. Envia Resposta de Feedback no WhatsApp SOMENTE se foi um lançamento válido
     const customServerUrl = (req.headers['x-evolution-url'] as string) || payload?.evolutionServerUrl;
     const customApiKey = (req.headers['x-evolution-key'] as string) || payload?.evolutionApiKey;
     const customInstance = (req.headers['x-evolution-instance'] as string) || payload?.evolutionInstance;
     const targetRecipient = isGroup ? remoteJid : phoneNumber;
 
-    if (targetRecipient && targetRecipient !== 'test') {
+    // Se NÃO for transação financeira salva, NUNCA envia mensagem automática (silêncio total)
+    if (result.savedTx && result.reply && targetRecipient && targetRecipient !== 'test') {
       await sendWhatsAppReply({
         targetRecipient,
         message: result.reply,
@@ -613,8 +642,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     return res.status(200).json({
-      status: 'success',
-      replySent: result.reply,
+      status: result.savedTx ? 'success' : 'ignored_non_financial',
+      replySent: result.savedTx ? result.reply : null,
       savedTx: result.savedTx,
       transcribed: isAudio ? messageText : null
     });
