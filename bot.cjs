@@ -33,6 +33,112 @@ let botStatus = {
 };
 
 // ==============================================================
+// PERSISTÊNCIA LOCAL DE TRANSAÇÕES DO WHATSAPP
+// ==============================================================
+const TRANSACTIONS_FILE = path.join(__dirname, 'transactions.json');
+let localStoredTransactions = [];
+try {
+  if (fs.existsSync(TRANSACTIONS_FILE)) {
+    const raw = fs.readFileSync(TRANSACTIONS_FILE, 'utf-8');
+    localStoredTransactions = JSON.parse(raw);
+    console.log(`[Banco Local] ${localStoredTransactions.length} transações carregadas de transactions.json`);
+  }
+} catch (e) {
+  localStoredTransactions = [];
+}
+
+function recordTransaction(tx) {
+  if (!tx || !tx.amount) return;
+  const existing = localStoredTransactions.find(t => String(t.id) === String(tx.id));
+  if (!existing) {
+    localStoredTransactions.unshift(tx);
+    if (localStoredTransactions.length > 200) {
+      localStoredTransactions = localStoredTransactions.slice(0, 200);
+    }
+    try {
+      fs.writeFileSync(TRANSACTIONS_FILE, JSON.stringify(localStoredTransactions, null, 2), 'utf-8');
+      console.log(`💾 [Banco Local] Transação salva em transactions.json: "${tx.description}" - R$ ${tx.amount}`);
+    } catch (errFile) {
+      console.error('[Banco Local] Erro ao salvar transactions.json:', errFile.message);
+    }
+  }
+
+  // Sincroniza em background com o Webhook Vercel na nuvem
+  axios.post(REMOTE_WEBHOOK_URL, {
+    action: 'sync_transactions',
+    transaction: tx
+  }, { timeout: 6000 }).catch(() => {});
+}
+
+// Extrator Heurístico Local de Emergência (caso a rede/IA caia)
+function extractFallbackTransaction(text) {
+  const lower = (text || '').toLowerCase().trim();
+  const valueMatch = text.match(/(?:r\$\s*|rs\s*|valor\s*(?:de\s*)?)?(\d+(?:[.,]\d{1,2})?)/i);
+  if (!valueMatch) return null;
+
+  const rawVal = valueMatch[1].replace(',', '.');
+  const amount = parseFloat(rawVal);
+  if (isNaN(amount) || amount <= 0) return null;
+
+  let type = 'Saída';
+  if (
+    lower.includes('recebi') || lower.includes('ganhei') || lower.includes('salário') ||
+    lower.includes('salario') || lower.includes('depósito') || lower.includes('deposito') ||
+    lower.includes('lucro') || lower.includes('venda') || lower.includes('entrada')
+  ) {
+    type = 'Entrada';
+  }
+
+  let method = 'PIX';
+  if (lower.includes('crédito') || lower.includes('credito') || lower.includes('cartão') || lower.includes('cartao') || lower.includes('parcela')) {
+    method = 'Crédito';
+  } else if (lower.includes('débito') || lower.includes('debito')) {
+    method = 'Débito';
+  } else if (lower.includes('dinheiro') || lower.includes('espécie')) {
+    method = 'Dinheiro';
+  } else if (lower.includes('transferência') || lower.includes('ted') || lower.includes('doc')) {
+    method = 'Transferência';
+  }
+
+  let city = 'Teresina, PI';
+  if (lower.includes('oeiras')) city = 'Oeiras, PI';
+  else if (lower.includes('caxias')) city = 'Caxias, MA';
+  else if (lower.includes('teresina')) city = 'Teresina, PI';
+  else if (lower.includes('são paulo') || lower.includes('sao paulo')) city = 'São Paulo, SP';
+  else if (lower.includes('fortaleza')) city = 'Fortaleza, CE';
+  else if (lower.includes('brasília') || lower.includes('brasilia')) city = 'Brasília, DF';
+
+  let description = type === 'Entrada' ? 'Recebimento' : 'Despesa WhatsApp';
+  let category = type === 'Entrada' ? 'Recebimento' : 'Outros';
+
+  if (lower.includes('padaria') || lower.includes('pão') || lower.includes('café')) {
+    description = 'Padaria / Café';
+    category = 'Alimentação';
+  } else if (lower.includes('mercado') || lower.includes('supermercado') || lower.includes('compras')) {
+    description = 'Supermercado';
+    category = 'Alimentação';
+  } else if (lower.includes('almoço') || lower.includes('restaurante') || lower.includes('jantar')) {
+    description = 'Restaurante / Alimentação';
+    category = 'Alimentação';
+  } else if (lower.includes('salário') || lower.includes('salario')) {
+    description = 'Salário Mensal';
+    category = 'Recebimento';
+  } else if (lower.includes('combustível') || lower.includes('gasolina') || lower.includes('posto')) {
+    description = 'Combustível Posto';
+    category = 'Transporte';
+  }
+
+  return {
+    description,
+    amount,
+    type,
+    method,
+    category,
+    city
+  };
+}
+
+// ==============================================================
 // 1. INICIALIZAÇÃO DO SOCKET BAILEYS (WHATSAPP WEB OFICIAL)
 // ==============================================================
 async function startSocket() {
@@ -119,16 +225,42 @@ async function startSocket() {
       };
 
       let replyText = null;
+      let savedTx = null;
+
       try {
         const res = await axios.post(REMOTE_WEBHOOK_URL, payload, { timeout: 12000 });
         replyText = res.data?.replySent;
+        savedTx = res.data?.savedTx;
       } catch (err) {
         try {
           const resLocal = await axios.post(LOCAL_WEBHOOK_URL, payload, { timeout: 6000 });
           replyText = resLocal.data?.replySent;
+          savedTx = resLocal.data?.savedTx;
         } catch (err2) {
           console.warn('[Webhook] Falha ao enviar para API remota/local:', err2.message);
         }
+      }
+
+      // Se o webhook não conseguiu extrair ou falhou a rede, usa extrator local de emergência
+      if (!savedTx && messageText) {
+        const fallback = extractFallbackTransaction(messageText);
+        if (fallback) {
+          savedTx = {
+            id: Date.now().toString(),
+            ...fallback,
+            date: new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }),
+            status: 'Concluído',
+            createdAt: new Date().toISOString()
+          };
+          const symbol = savedTx.type === 'Entrada' ? '+' : '-';
+          replyText = `⚡ Lançamento adicionado ao KYRO Finance!\n\n💬 "${messageText}"\n\n• Tipo: ${savedTx.type}\n• Objeto: ${savedTx.description}\n• Valor: ${symbol} R$ ${savedTx.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n• Forma: ${savedTx.method}\n• Cidade: ${savedTx.city}\n\n✅ Atualizado nas abas de ${savedTx.type === 'Entrada' ? 'Entradas' : 'Saídas'} e no Dashboard!`;
+        }
+      }
+
+      // Se temos uma transação detectada, salva no banco local e propaga
+      if (savedTx) {
+        console.log(`✨ [Transação Detectada]: ${savedTx.description} | R$ ${savedTx.amount} (${savedTx.type})`);
+        recordTransaction(savedTx);
       }
 
       if (replyText) {
@@ -251,6 +383,48 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(500, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify({ error: e.message }));
     }
+  }
+
+  // Endpoint 4: Listar Transações Registradas pelo Robô (para o painel web sincronizar)
+  if (url.pathname === '/api/transactions' && req.method === 'GET') {
+    // Garante que se o arquivo tiver dados novos, recarrega
+    try {
+      if (fs.existsSync(TRANSACTIONS_FILE)) {
+        const raw = fs.readFileSync(TRANSACTIONS_FILE, 'utf-8');
+        const fileTxs = JSON.parse(raw);
+        if (Array.isArray(fileTxs)) {
+          localStoredTransactions = fileTxs;
+        }
+      }
+    } catch (e) {}
+
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify({
+      transactions: localStoredTransactions,
+      count: localStoredTransactions.length
+    }));
+  }
+
+  // Endpoint 5: Gravar / Sincronizar Transação Externa
+  if (url.pathname === '/api/transactions' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', () => {
+      try {
+        const parsed = JSON.parse(body || '{}');
+        if (parsed.transaction) {
+          recordTransaction(parsed.transaction);
+        } else if (Array.isArray(parsed.transactions)) {
+          for (const t of parsed.transactions) recordTransaction(t);
+        }
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ success: true, count: localStoredTransactions.length }));
+      } catch (err) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: err.message }));
+      }
+    });
+    return;
   }
 
   res.writeHead(404);

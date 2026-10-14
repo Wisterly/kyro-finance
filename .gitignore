@@ -26,3 +26,5 @@ dist-ssr
 *.sw?
 
 .vercel
+auth_info_baileys/
+transactions.json

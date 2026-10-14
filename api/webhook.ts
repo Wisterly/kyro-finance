@@ -146,7 +146,12 @@ function parseFinancialMessageHeuristic(text: string) {
   };
 }
 
-// 4. Salvar Transação no Firestore / Memória
+// 4. Salvar Transação no Firestore / Memória Global
+const globalAny: any = global;
+if (!globalAny.__KYRO_WEBHOOK_TRANSACTIONS__) {
+  globalAny.__KYRO_WEBHOOK_TRANSACTIONS__ = [];
+}
+
 async function saveTransaction(tx: any) {
   const payload = {
     ...tx,
@@ -155,17 +160,24 @@ async function saveTransaction(tx: any) {
     createdAt: new Date().toISOString()
   };
 
-  if (!db) {
-    return { id: Date.now().toString(), ...payload };
+  let savedItem = { id: Date.now().toString(), ...payload };
+
+  if (db) {
+    try {
+      const docRef = await addDoc(collection(db, 'kyro_transactions'), payload);
+      savedItem = { id: docRef.id, ...payload };
+    } catch (err) {
+      console.warn('[Firestore] Erro ao salvar transação:', err);
+    }
   }
 
-  try {
-    const docRef = await addDoc(collection(db, 'kyro_transactions'), payload);
-    return { id: docRef.id, ...payload };
-  } catch (err) {
-    console.warn('[Firestore] Erro ao salvar transação:', err);
-    return { id: Date.now().toString(), ...payload };
+  // Sempre armazena no buffer global em memória para sincronização imediata
+  globalAny.__KYRO_WEBHOOK_TRANSACTIONS__.unshift(savedItem);
+  if (globalAny.__KYRO_WEBHOOK_TRANSACTIONS__.length > 100) {
+    globalAny.__KYRO_WEBHOOK_TRANSACTIONS__ = globalAny.__KYRO_WEBHOOK_TRANSACTIONS__.slice(0, 100);
   }
+
+  return savedItem;
 }
 
 // 5. Transcrever Áudio via OpenAI Whisper
@@ -456,13 +468,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).send(hubChallenge);
     }
 
-    // 2. Consulta de transações recentes do Firestore para auto-sync no Frontend
+    // 2. Consulta de transações recentes (Firestore + Memória Global)
+    let allTxs: any[] = [...(globalAny.__KYRO_WEBHOOK_TRANSACTIONS__ || [])];
+
     try {
       if (db) {
         const q = query(collection(db, 'kyro_transactions'), orderBy('createdAt', 'desc'), limit(50));
         const snap = await getDocs(q);
-        const txs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        return res.status(200).json({ status: 'active', transactions: txs });
+        const cloudTxs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const ids = new Set(allTxs.map(t => t.id));
+        for (const ctx of cloudTxs) {
+          if (!ids.has(ctx.id)) {
+            allTxs.push(ctx);
+          }
+        }
       }
     } catch (e) {
       console.warn('Erro ao listar Firestore:', e);
@@ -470,6 +489,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     return res.status(200).json({
       status: 'active',
+      transactions: allTxs,
+      count: allTxs.length,
       message: 'KYRO WhatsApp Financial Webhook ativo (Texto & Áudio Whisper).',
       endpoint: '/api/webhook'
     });
@@ -489,6 +510,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ok: true,
         timestamp: Date.now(),
         message: 'Conexão com Webhook KYRO validada com sucesso! Rota operacional 24/7.'
+      });
+    }
+
+    // Suporte a sincronização direta de transações do robô local para a nuvem
+    if (payload?.action === 'sync_transactions') {
+      const txsToSync = Array.isArray(payload.transactions) 
+        ? payload.transactions 
+        : (payload.transaction ? [payload.transaction] : []);
+      
+      for (const tx of txsToSync) {
+        if (tx && tx.amount) {
+          await saveTransaction(tx);
+        }
+      }
+
+      return res.status(200).json({
+        status: 'synced',
+        count: globalAny.__KYRO_WEBHOOK_TRANSACTIONS__?.length || 0
       });
     }
 

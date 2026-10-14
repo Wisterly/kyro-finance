@@ -127,6 +127,7 @@ export default function App() {
   const [testWebhookResponse, setTestWebhookResponse] = useState<any>(null);
   const [configSavedToast, setConfigSavedToast] = useState(false);
   const [directMsgToast, setDirectMsgToast] = useState<string | null>(null);
+  const [whatsappSyncToast, setWhatsappSyncToast] = useState<{ show: boolean; text: string } | null>(null);
 
   // Integração Funcional Nuvem / Google
   const [isCloudSynced, setIsCloudSynced] = useState(() => kyroCloud.isConnected);
@@ -347,17 +348,58 @@ export default function App() {
     }
   }, [isCloudSynced]);
 
-  // Sincronização Periódica com o Webhook do Grupo (busca novos lançamentos gravados pelo robô no grupo)
+  // Sincronização Periódica com o Webhook e Robô WhatsApp (Local & Nuvem Vercel)
   useEffect(() => {
     const fetchWebhookTxs = async () => {
       try {
-        const res = await fetch('/api/webhook');
-        const data = await res.json();
-        if (data?.transactions && Array.isArray(data.transactions) && data.transactions.length > 0) {
+        const incoming: any[] = [];
+
+        // 1. Busca transações do Webhook da Vercel /api/webhook
+        try {
+          const res = await fetch('/api/webhook');
+          if (res.ok) {
+            const data = await res.json();
+            if (data?.transactions && Array.isArray(data.transactions)) {
+              incoming.push(...data.transactions);
+            }
+          }
+        } catch (e) {}
+
+        // 2. Busca transações do Servidor do Robô Baileys na porta 3001
+        try {
+          const resLocal = await fetch('http://localhost:3001/api/transactions');
+          if (resLocal.ok) {
+            const dataLocal = await resLocal.json();
+            if (dataLocal?.transactions && Array.isArray(dataLocal.transactions)) {
+              incoming.push(...dataLocal.transactions);
+            }
+          }
+        } catch (e) {}
+
+        if (incoming.length > 0) {
           setTransactions(prev => {
-            const existingIds = new Set(prev.map(t => t.id));
-            const newOnes = data.transactions.filter((t: any) => !existingIds.has(t.id));
+            const existingIds = new Set(prev.map(t => String(t.id)));
+            const newOnes = incoming.filter((t: any) => {
+              if (!t || !t.amount) return false;
+              if (existingIds.has(String(t.id))) return false;
+              
+              // Previne duplicação de transação idêntica
+              const isDuplicate = prev.some(p => 
+                p.description === t.description &&
+                Math.abs(p.amount - t.amount) < 0.01 &&
+                p.type === t.type
+              );
+              return !isDuplicate;
+            });
+
             if (newOnes.length > 0) {
+              const latest = newOnes[0];
+              const symbol = latest.type === 'Entrada' ? '+' : '-';
+              setWhatsappSyncToast({
+                show: true,
+                text: `Lançamento: ${latest.description} (${symbol} R$ ${latest.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}) atualizado no Dashboard e nas abas!`
+              });
+              setTimeout(() => setWhatsappSyncToast(null), 5000);
               return [...newOnes, ...prev];
             }
             return prev;
@@ -369,7 +411,7 @@ export default function App() {
     };
 
     fetchWebhookTxs();
-    const interval = setInterval(fetchWebhookTxs, 4000); // Polling a cada 4 segundos
+    const interval = setInterval(fetchWebhookTxs, 3000); // Polling ativo a cada 3 segundos
     return () => clearInterval(interval);
   }, []);
 
@@ -2895,6 +2937,19 @@ export default function App() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Toast flutuante de Notificação em Tempo Real do WhatsApp */}
+      {whatsappSyncToast && (
+        <div className="fixed bottom-6 right-6 z-50 bg-gradient-to-r from-emerald-600 to-teal-600 text-white px-5 py-3.5 rounded-2xl shadow-2xl flex items-center gap-3 border border-emerald-400/30 animate-in slide-in-from-bottom-5 duration-300">
+          <div className="h-8 w-8 rounded-xl bg-white/20 flex items-center justify-center font-bold">
+            <Zap size={18} className="text-amber-300 animate-pulse" />
+          </div>
+          <div>
+            <p className="text-xs font-bold leading-tight">Lançamento WhatsApp Registrado!</p>
+            <p className="text-[11px] text-emerald-100">{whatsappSyncToast.text}</p>
           </div>
         </div>
       )}
