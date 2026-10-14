@@ -280,90 +280,94 @@ async function startSocket() {
     if (type !== 'notify') return;
 
     for (const msg of messages) {
-      if (!msg.message || msg.key.fromMe) continue;
-
-      const remoteJid = msg.key.remoteJid;
-
-      // 1. FILTRO ESTRITO DE SEGURANÇA E PRIVACIDADE:
-      // Apenas mensagens enviadas dentro do grupo oficial "Finanças Kyro" são processadas!
-      // Se alguém mandar mensagem no privado (DM), status ou outro grupo, é COMPLETAMENTE IGNORADO
-      // Nenhuma mensagem automática é enviada para privados ou conversas fora do grupo!
-      const groupCheck = await checkIsAuthorizedGroup(sock, remoteJid);
-      if (!groupCheck.authorized) {
-        // Ignora em silêncio absoluto
-        continue;
-      }
-
-      const messageText = 
-        msg.message.conversation ||
-        msg.message.extendedTextMessage?.text ||
-        msg.message.imageMessage?.caption ||
-        '';
-
-      const isAudio = !!msg.message.audioMessage;
-      if (!messageText && !isAudio) continue;
-
-      console.log(`📩 [Finanças Kyro] Mensagem recebida: "${messageText || '[Áudio de Voz]'}"`);
-
-      // Envia ao Webhook do KYRO
-      const payload = {
-        event: 'messages.upsert',
-        data: {
-          key: msg.key,
-          message: msg.message
-        },
-        groupName: groupCheck.groupSubject
-      };
-
-      let replyText = null;
-      let savedTx = null;
-
       try {
-        const res = await axios.post(REMOTE_WEBHOOK_URL, payload, { timeout: 12000 });
-        replyText = res.data?.replySent;
-        savedTx = res.data?.savedTx;
-      } catch (err) {
+        if (!msg.message || msg.key.fromMe) continue;
+
+        const remoteJid = msg.key.remoteJid;
+
+        // 1. FILTRO ESTRITO DE SEGURANÇA E PRIVACIDADE:
+        // Apenas mensagens enviadas dentro do grupo oficial "Finanças Kyro" são processadas!
+        // Se alguém mandar mensagem no privado (DM), status ou outro grupo, é COMPLETAMENTE IGNORADO
+        // Nenhuma mensagem automática é enviada para privados ou conversas fora do grupo!
+        const groupCheck = await checkIsAuthorizedGroup(sock, remoteJid);
+        if (!groupCheck.authorized) {
+          // Ignora em silêncio absoluto
+          continue;
+        }
+
+        const messageText = 
+          msg.message.conversation ||
+          msg.message.extendedTextMessage?.text ||
+          msg.message.imageMessage?.caption ||
+          '';
+
+        const isAudio = !!msg.message.audioMessage;
+        if (!messageText && !isAudio) continue;
+
+        console.log(`📩 [Finanças Kyro] Mensagem recebida: "${messageText || '[Áudio de Voz]'}"`);
+
+        // Envia ao Webhook do KYRO
+        const payload = {
+          event: 'messages.upsert',
+          data: {
+            key: msg.key,
+            message: msg.message
+          },
+          groupName: groupCheck.groupSubject
+        };
+
+        let replyText = null;
+        let savedTx = null;
+
         try {
-          const resLocal = await axios.post(LOCAL_WEBHOOK_URL, payload, { timeout: 6000 });
-          replyText = resLocal.data?.replySent;
-          savedTx = resLocal.data?.savedTx;
-        } catch (err2) {
-          console.warn('[Webhook] Falha ao enviar para API remota/local:', err2.message);
-        }
-      }
-
-      // Se o webhook não conseguiu extrair ou falhou a rede, usa extrator local de emergência
-      if (!savedTx && messageText) {
-        const fallback = extractFallbackTransaction(messageText);
-        if (fallback) {
-          savedTx = {
-            id: Date.now().toString(),
-            ...fallback,
-            date: new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }),
-            status: 'Concluído',
-            createdAt: new Date().toISOString()
-          };
-          const symbol = savedTx.type === 'Entrada' ? '+' : '-';
-          replyText = `⚡ Lançamento adicionado ao KYRO Finance!\n\n💬 "${messageText}"\n\n• Tipo: ${savedTx.type}\n• Objeto: ${savedTx.description}\n• Valor: ${symbol} R$ ${savedTx.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n• Forma: ${savedTx.method}\n• Cidade: ${savedTx.city}\n\n✅ Atualizado nas abas de ${savedTx.type === 'Entrada' ? 'Entradas' : 'Saídas'} e no Dashboard!`;
-        }
-      }
-
-      // Se temos uma transação detectada, salva no banco local e propaga
-      if (savedTx) {
-        console.log(`✨ [Transação Detectada]: ${savedTx.description} | R$ ${savedTx.amount} (${savedTx.type})`);
-        recordTransaction(savedTx);
-
-        if (replyText) {
+          const res = await axios.post(REMOTE_WEBHOOK_URL, payload, { timeout: 12000 });
+          replyText = res.data?.replySent;
+          savedTx = res.data?.savedTx;
+        } catch (err) {
           try {
-            await sock.sendMessage(remoteJid, { text: replyText }, { quoted: msg });
-            console.log(`✅ Resposta enviada no WhatsApp: "${replyText.substring(0, 50)}..."`);
-          } catch (sendErr) {
-            console.error('[WhatsApp] Erro ao enviar resposta:', sendErr.message);
+            const resLocal = await axios.post(LOCAL_WEBHOOK_URL, payload, { timeout: 6000 });
+            replyText = resLocal.data?.replySent;
+            savedTx = resLocal.data?.savedTx;
+          } catch (err2) {
+            console.warn('[Webhook] Falha ao enviar para API remota/local:', err2.message);
           }
         }
-      } else {
-        // Mensagem comum de conversa (não é gasto nem finança) -> NÃO responder para não floodar conversas normais
-        console.log(`ℹ️ Mensagem ignorada (não é movimentação financeira).`);
+
+        // Se o webhook não conseguiu extrair ou falhou a rede, usa extrator local de emergência
+        if (!savedTx && messageText) {
+          const fallback = extractFallbackTransaction(messageText);
+          if (fallback) {
+            savedTx = {
+              id: Date.now().toString(),
+              ...fallback,
+              date: new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }),
+              status: 'Concluído',
+              createdAt: new Date().toISOString()
+            };
+            const symbol = savedTx.type === 'Entrada' ? '+' : '-';
+            replyText = `⚡ Lançamento adicionado ao KYRO Finance!\n\n💬 "${messageText}"\n\n• Tipo: ${savedTx.type}\n• Objeto: ${savedTx.description}\n• Valor: ${symbol} R$ ${savedTx.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n• Forma: ${savedTx.method}\n• Cidade: ${savedTx.city}\n\n✅ Atualizado nas abas de ${savedTx.type === 'Entrada' ? 'Entradas' : 'Saídas'} e no Dashboard!`;
+          }
+        }
+
+        // Se temos uma transação detectada, salva no banco local e propaga
+        if (savedTx) {
+          console.log(`✨ [Transação Detectada]: ${savedTx.description} | R$ ${savedTx.amount} (${savedTx.type})`);
+          recordTransaction(savedTx);
+
+          if (replyText) {
+            try {
+              await sock.sendMessage(remoteJid, { text: replyText }, { quoted: msg });
+              console.log(`✅ Resposta enviada no WhatsApp: "${replyText.substring(0, 50)}..."`);
+            } catch (sendErr) {
+              console.error('[WhatsApp] Erro ao enviar resposta:', sendErr.message);
+            }
+          }
+        } else {
+          // Mensagem comum de conversa (não é gasto nem finança) -> NÃO responder para não floodar conversas normais
+          console.log(`ℹ️ Mensagem no grupo ignorada (não é movimentação financeira).`);
+        }
+      } catch (innerErr) {
+        console.error('[WhatsApp] Erro no processamento da mensagem:', innerErr.message);
       }
     }
   });
