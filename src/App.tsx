@@ -354,24 +354,30 @@ export default function App() {
       try {
         const incoming: any[] = [];
 
-        // 1. Busca transações do Webhook da Vercel /api/webhook
+        // 1. Busca transações do Servidor do Robô Baileys na porta 3001
         try {
-          const res = await fetch('/api/webhook');
-          if (res.ok) {
-            const data = await res.json();
-            if (data?.transactions && Array.isArray(data.transactions)) {
-              incoming.push(...data.transactions);
-            }
-          }
-        } catch (e) {}
-
-        // 2. Busca transações do Servidor do Robô Baileys na porta 3001
-        try {
-          const resLocal = await fetch('http://localhost:3001/api/transactions');
+          const ctrlLocal = new AbortController();
+          const tIdLocal = setTimeout(() => ctrlLocal.abort(), 2000);
+          const resLocal = await fetch('http://localhost:3001/api/transactions', { signal: ctrlLocal.signal });
+          clearTimeout(tIdLocal);
           if (resLocal.ok) {
             const dataLocal = await resLocal.json();
             if (dataLocal?.transactions && Array.isArray(dataLocal.transactions)) {
               incoming.push(...dataLocal.transactions);
+            }
+          }
+        } catch (e) {}
+
+        // 2. Busca transações do Webhook da Vercel /api/webhook
+        try {
+          const ctrl = new AbortController();
+          const tId = setTimeout(() => ctrl.abort(), 2000);
+          const res = await fetch('/api/webhook', { signal: ctrl.signal });
+          clearTimeout(tId);
+          if (res.ok) {
+            const data = await res.json();
+            if (data?.transactions && Array.isArray(data.transactions)) {
+              incoming.push(...data.transactions);
             }
           }
         } catch (e) {}
@@ -382,14 +388,7 @@ export default function App() {
             const newOnes = incoming.filter((t: any) => {
               if (!t || !t.amount) return false;
               if (existingIds.has(String(t.id))) return false;
-              
-              // Previne duplicação de transação idêntica
-              const isDuplicate = prev.some(p => 
-                p.description === t.description &&
-                Math.abs(p.amount - t.amount) < 0.01 &&
-                p.type === t.type
-              );
-              return !isDuplicate;
+              return true;
             });
 
             if (newOnes.length > 0) {
@@ -400,7 +399,9 @@ export default function App() {
                 text: `Lançamento: ${latest.description} (${symbol} R$ ${latest.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}) atualizado no Dashboard e nas abas!`
               });
               setTimeout(() => setWhatsappSyncToast(null), 5000);
-              return [...newOnes, ...prev];
+              const updated = [...newOnes, ...prev];
+              localStorage.setItem('kyro_transactions', JSON.stringify(updated));
+              return updated;
             }
             return prev;
           });

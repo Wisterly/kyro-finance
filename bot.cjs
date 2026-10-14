@@ -11,7 +11,8 @@ const {
   useMultiFileAuthState, 
   DisconnectReason, 
   fetchLatestBaileysVersion,
-  Browsers
+  Browsers,
+  downloadMediaMessage
 } = require('@whiskeysockets/baileys');
 const pino = require('pino');
 const axios = require('axios');
@@ -182,99 +183,140 @@ async function checkIsAuthorizedGroup(sock, remoteJid) {
   return { authorized: true, groupSubject };
 }
 
-// Extrator Heurístico Local de Emergência (caso a rede/IA caia)
-function extractFallbackTransaction(text) {
-  const lower = (text || '').toLowerCase().trim();
+// Extrator Inteligente e Dinâmico do KYRO Finance (sem inventar cidades ou dados)
+function parseDynamicFinancialMessage(text, isAudio = false) {
+  const clean = (text || '').trim();
+  const lower = clean.toLowerCase();
 
   // 1. Ignora links, URLs e spam
   if (lower.includes('http://') || lower.includes('https://') || lower.includes('www.') || lower.includes('.com') || lower.includes('.br/')) {
     return null;
   }
 
-  // 2. Deve conter menção explícita de valor monetário OU palavras-chave financeiras
-  const hasCurrency = /(?:r\$\s*|rs\s*|\breais\b)/i.test(text);
-  const hasFinancialKeyword = /(?:gastei|paguei|comprei|recebi|ganhei|sal[aá]rio|pix|d[eé]bito|cr[eé]dito|transfer[eê]ncia|dep[oó]sito|rendimento|lucro|venda|almo[cç]o|jantar|mercado|padaria|supermercado|combust[ií]vel|gasolina|farm[aá]cia|lanche|restaurante|parcela|entrada|sa[ií]da|despesa|conta|boleto|valor)/i.test(text);
-
-  if (!hasCurrency && !hasFinancialKeyword) {
-    return null;
-  }
-
-  // Extrai valor numérico
+  // 2. Extrai valor monetário
   let amount = 0;
-  const currencyMatch = text.match(/(?:r\$\s*|rs\s*|valor\s*(?:de\s*)?)(\d+(?:[.,]\d{1,2})?)/i);
+  const currencyMatch = clean.match(/(?:r\$\s*|rs\s*|valor\s*(?:de\s*)?)(\d+(?:[.,]\d{1,2})?)/i) ||
+                        clean.match(/(\d+(?:[.,]\d{1,2})?)\s*(?:reais|real)/i);
   if (currencyMatch) {
     amount = parseFloat(currencyMatch[1].replace(',', '.'));
   } else {
-    const numMatch = text.match(/(\d+(?:[.,]\d{1,2})?)/);
-    if (numMatch) {
-      amount = parseFloat(numMatch[1].replace(',', '.'));
+    const hasFinancialKeyword = /(?:gastei|paguei|comprei|recebi|ganhei|sal[aá]rio|pix|d[eé]bito|cr[eé]dito|transfer[eê]ncia|dep[oó]sito|rendimento|lucro|venda|entrada|sa[ií]da|despesa|conta|boleto)/i.test(lower);
+    if (hasFinancialKeyword) {
+      const numMatch = clean.match(/(\d+(?:[.,]\d{1,2})?)/);
+      if (numMatch) {
+        amount = parseFloat(numMatch[1].replace(',', '.'));
+      }
     }
   }
 
-  if (isNaN(amount) || amount <= 0 || amount > 1000000) return null;
+  if (isNaN(amount) || amount <= 0 || amount > 10000000) return null;
 
+  // 3. Tipo: Entrada ou Saída
   let type = 'Saída';
   if (
     lower.includes('recebi') || lower.includes('ganhei') || lower.includes('salário') ||
     lower.includes('salario') || lower.includes('depósito') || lower.includes('deposito') ||
-    lower.includes('lucro') || lower.includes('venda') || lower.includes('entrada')
+    lower.includes('rendimento') || lower.includes('lucro') || lower.includes('venda') ||
+    lower.includes('entrada')
   ) {
     type = 'Entrada';
   }
 
+  // 4. Forma de Pagamento
   let method = 'PIX';
   if (lower.includes('crédito') || lower.includes('credito') || lower.includes('cartão') || lower.includes('cartao') || lower.includes('parcela')) {
     method = 'Crédito';
   } else if (lower.includes('débito') || lower.includes('debito')) {
     method = 'Débito';
-  } else if (lower.includes('dinheiro') || lower.includes('espécie')) {
+  } else if (lower.includes('dinheiro') || lower.includes('espécie') || lower.includes('especie')) {
     method = 'Dinheiro';
-  } else if (lower.includes('transferência') || lower.includes('ted') || lower.includes('doc')) {
+  } else if (lower.includes('transferência') || lower.includes('transferencia') || lower.includes('ted') || lower.includes('doc')) {
     method = 'Transferência';
+  } else if (lower.includes('pix')) {
+    method = 'PIX';
   }
 
-  let city = 'Teresina, PI';
+  // 5. Local (se mencionado)
+  let location = '';
+  const localMatch = lower.match(/\b(restaurante|padaria|supermercado|mercado|posto|farm[aá]cia|farmacia|lanchonete|bar|academia|oficina|loja|shopping|barbearia|sal[aá]o|salao|a[cç]ougue|acougue|hospital|cl[ií]nica|clinica|escola|banco)\b/i);
+  if (localMatch) {
+    const rawLocal = localMatch[1].toLowerCase();
+    location = rawLocal.charAt(0).toUpperCase() + rawLocal.slice(1);
+  }
+
+  // 6. Cidade (Apenas se o usuário tiver mencionado explicitamente! Se não disse, fica em branco)
+  let city = '';
   if (lower.includes('oeiras')) city = 'Oeiras, PI';
   else if (lower.includes('caxias')) city = 'Caxias, MA';
   else if (lower.includes('teresina')) city = 'Teresina, PI';
   else if (lower.includes('são paulo') || lower.includes('sao paulo')) city = 'São Paulo, SP';
   else if (lower.includes('fortaleza')) city = 'Fortaleza, CE';
   else if (lower.includes('brasília') || lower.includes('brasilia')) city = 'Brasília, DF';
+  else if (lower.includes('timon')) city = 'Timon, MA';
+  else if (lower.includes('parnaíba') || lower.includes('parnaiba')) city = 'Parnaíba, PI';
+  else if (lower.includes('floriano')) city = 'Floriano, PI';
+  else if (lower.includes('rio de janeiro')) city = 'Rio de Janeiro, RJ';
 
-  let description = type === 'Entrada' ? 'Recebimento' : 'Despesa';
-  let category = type === 'Entrada' ? 'Recebimento' : 'Outros';
+  // 7. Objeto (o item consumido ou a finalidade do gasto)
+  let remaining = clean
+    .replace(/(?:r\$\s*|rs\s*)?\d+(?:[.,]\d{1,2})?\s*(?:reais|real)?/gi, ' ')
+    .replace(/\b(fiz|fazer|gastei|gasto|paguei|pago|comprei|compra|recebi|ganhei|valor|de|em|no|na|um|uma|uns|umas|o|a|os|as|para|pra|com|por|reais|real)\b/gi, ' ')
+    .replace(/\b(pix|d[eé]bito|cr[eé]dito|cart[aã]o|dinheiro|transfer[eê]ncia|ted|doc)\b/gi, ' ');
 
-  if (lower.includes('padaria') || lower.includes('pão') || lower.includes('café')) {
-    description = 'Padaria / Café';
-    category = 'Alimentação';
-  } else if (lower.includes('mercado') || lower.includes('supermercado') || lower.includes('compras')) {
-    description = 'Supermercado';
-    category = 'Alimentação';
-  } else if (lower.includes('almoço') || lower.includes('restaurante') || lower.includes('jantar')) {
-    description = 'Restaurante / Alimentação';
-    category = 'Alimentação';
-  } else if (lower.includes('salário') || lower.includes('salario')) {
-    description = 'Salário Mensal';
-    category = 'Recebimento';
-  } else if (lower.includes('combustível') || lower.includes('gasolina') || lower.includes('posto')) {
-    description = 'Combustível Posto';
-    category = 'Transporte';
-  } else if (lower.includes('farmácia') || lower.includes('farmacia') || lower.includes('remédio') || lower.includes('remedio')) {
-    description = 'Farmácia / Remédio';
-    category = 'Saúde';
-  } else {
-    const cleanWords = text.replace(/[^\w\sÀ-ÿ]/g, '').trim().split(/\s+/).slice(0, 4).join(' ');
-    if (cleanWords && cleanWords.length > 2) {
-      description = cleanWords;
-    }
+  if (location) {
+    remaining = remaining.replace(new RegExp(`\\b${location}\\b`, 'gi'), ' ');
+  }
+  if (city) {
+    const citySimple = city.split(',')[0].trim();
+    remaining = remaining.replace(new RegExp(`\\b${citySimple}\\b`, 'gi'), ' ');
   }
 
-  return {
-    description,
+  const cleanObjectWords = remaining.replace(/[^\w\sÀ-ÿ]/g, '').trim().split(/\s+/).filter(w => w.length > 1);
+  let object = cleanObjectWords.map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+
+  if (!object && location) {
+    object = location;
+  }
+  if (!object && type === 'Entrada') {
+    object = 'Recebimento';
+  }
+  if (!object && type === 'Saída') {
+    object = 'Despesa';
+  }
+
+  // 8. Mensagem de Confirmação no formato padrão solicitado
+  const symbol = type === 'Entrada' ? '+' : '-';
+  const prefixAudio = isAudio ? '🎙️ [Áudio de Voz]: ' : '💬 ';
+
+  let reply = `⚡ Lançamento adicionado ao KYRO Finance!\n\n${prefixAudio}"${clean}"\n\n• Tipo: ${type}\n• Objeto: ${object}\n• Valor: ${symbol} R$ ${amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n• Forma: ${method}`;
+
+  if (location) {
+    reply += `\n• Local: ${location}`;
+  }
+  if (city) {
+    reply += `\n• Cidade: ${city}`;
+  }
+  reply += `\n\n✅ Atualizado nas abas de ${type === 'Entrada' ? 'Entradas' : 'Saídas'} e no Dashboard!`;
+
+  const savedTx = {
+    id: Date.now().toString(),
+    description: object,
     amount,
     type,
     method,
-    category,
+    category: location || (type === 'Entrada' ? 'Recebimento' : 'Alimentação / Geral'),
+    subcategory: object,
+    city: city || '',
+    date: new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }),
+    status: 'Concluído',
+    createdAt: new Date().toISOString()
+  };
+
+  return {
+    reply,
+    savedTx,
+    object,
+    location,
     city
   };
 }
@@ -359,75 +401,76 @@ async function startSocket() {
           continue;
         }
 
-        const messageText = 
+        let messageText = 
           msg.message.conversation ||
           msg.message.extendedTextMessage?.text ||
           msg.message.imageMessage?.caption ||
           '';
 
-        const isAudio = !!msg.message.audioMessage;
+        const isAudio = !!(msg.message.audioMessage || msg.message.voiceMessage);
         if (!messageText && !isAudio) continue;
 
-        console.log(`📩 [Finanças Kyro] Mensagem recebida: "${messageText || '[Áudio de Voz]'}"`);
-
-        // Envia ao Webhook do KYRO
-        const payload = {
-          event: 'messages.upsert',
-          data: {
-            key: msg.key,
-            message: msg.message
-          },
-          groupName: groupCheck.groupSubject
-        };
-
-        let replyText = null;
-        let savedTx = null;
-
-        try {
-          const res = await axios.post(REMOTE_WEBHOOK_URL, payload, { timeout: 12000 });
-          replyText = res.data?.replySent;
-          savedTx = res.data?.savedTx;
-        } catch (err) {
+        // Se for áudio, tenta transcrever com Whisper se chave da OpenAI estiver presente
+        if (isAudio && !messageText) {
           try {
-            const resLocal = await axios.post(LOCAL_WEBHOOK_URL, payload, { timeout: 6000 });
-            replyText = resLocal.data?.replySent;
-            savedTx = resLocal.data?.savedTx;
-          } catch (err2) {
-            console.warn('[Webhook] Falha ao enviar para API remota/local:', err2.message);
+            const audioBuffer = await downloadMediaMessage(
+              msg,
+              'buffer',
+              {},
+              {
+                logger: pino({ level: 'silent' }),
+                reuploadRequest: sock.updateMediaMessage
+              }
+            );
+            if (audioBuffer && process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== 'dummy_key') {
+              const OpenAI = require('openai');
+              const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+              const { toFile } = OpenAI;
+              const file = await toFile(audioBuffer, 'voice.ogg', { type: 'audio/ogg' });
+              const transcription = await openai.audio.transcriptions.create({
+                file,
+                model: 'whisper-1',
+                language: 'pt'
+              });
+              if (transcription?.text) {
+                messageText = transcription.text;
+                console.log(`🎙️ [Whisper Transcrição]: "${messageText}"`);
+              }
+            }
+          } catch (audioErr) {
+            console.warn('[WhatsApp] Erro ao transcrever áudio:', audioErr.message);
+          }
+          if (!messageText) {
+            messageText = '[Áudio de despesa recebido no grupo]';
           }
         }
 
-        // Se o webhook não conseguiu extrair ou falhou a rede, usa extrator local de emergência
-        if (!savedTx && messageText) {
-          const fallback = extractFallbackTransaction(messageText);
-          if (fallback) {
-            savedTx = {
-              id: Date.now().toString(),
-              ...fallback,
-              date: new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }),
-              status: 'Concluído',
-              createdAt: new Date().toISOString()
-            };
-            const symbol = savedTx.type === 'Entrada' ? '+' : '-';
-            replyText = `⚡ Lançamento adicionado ao KYRO Finance!\n\n💬 "${messageText}"\n\n• Tipo: ${savedTx.type}\n• Objeto: ${savedTx.description}\n• Valor: ${symbol} R$ ${savedTx.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n• Forma: ${savedTx.method}\n• Cidade: ${savedTx.city}\n\n✅ Atualizado nas abas de ${savedTx.type === 'Entrada' ? 'Entradas' : 'Saídas'} e no Dashboard!`;
-          }
-        }
+        console.log(`📩 [Finanças Kyro] Mensagem recebida: "${messageText}"`);
 
-        // Se temos uma transação detectada, salva no banco local e propaga
-        if (savedTx) {
+        // Extrai dados financeiros diretamente com a regra dinâmica inteligente
+        const parsed = parseDynamicFinancialMessage(messageText, isAudio);
+
+        if (parsed && parsed.savedTx) {
+          const { savedTx, reply } = parsed;
           console.log(`✨ [Transação Detectada]: ${savedTx.description} | R$ ${savedTx.amount} (${savedTx.type})`);
           recordTransaction(savedTx);
 
-          if (replyText) {
-            try {
-              await sock.sendMessage(remoteJid, { text: replyText }, { quoted: msg });
-              console.log(`✅ Resposta enviada no WhatsApp: "${replyText.substring(0, 50)}..."`);
-            } catch (sendErr) {
-              console.error('[WhatsApp] Erro ao enviar resposta:', sendErr.message);
-            }
+          try {
+            // Envia resposta oficial diretamente no grupo vinculado
+            await sock.sendMessage(remoteJid, { text: reply });
+            console.log(`✅ Resposta enviada com sucesso no grupo ${remoteJid}!`);
+          } catch (sendErr) {
+            console.error('[WhatsApp] Erro ao enviar resposta para o grupo:', sendErr.message);
           }
+
+          // Notifica webhook remoto da Vercel para sincronização na nuvem em background
+          axios.post(REMOTE_WEBHOOK_URL, {
+            action: 'sync_transactions',
+            transaction: savedTx
+          }, { timeout: 6000 }).catch(() => {});
+
         } else {
-          // Mensagem comum de conversa (não é gasto nem finança) -> NÃO responder para não floodar conversas normais
+          // Mensagem comum de conversa (não é gasto nem finança) -> NÃO responder para não poluir o grupo
           console.log(`ℹ️ Mensagem no grupo ignorada (não é movimentação financeira).`);
         }
       } catch (innerErr) {
@@ -465,6 +508,73 @@ const server = http.createServer(async (req, res) => {
       hasQr: !!botStatus.lastQr,
       qr: botStatus.lastQr
     }));
+  }
+
+  // Endpoint 1.1: Webhook GET (Usado pelo Dashboard local via proxy Vite)
+  if (url.pathname === '/api/webhook' && req.method === 'GET') {
+    try {
+      if (fs.existsSync(TRANSACTIONS_FILE)) {
+        const raw = fs.readFileSync(TRANSACTIONS_FILE, 'utf-8');
+        const fileTxs = JSON.parse(raw);
+        if (Array.isArray(fileTxs)) {
+          localStoredTransactions = fileTxs;
+        }
+      }
+    } catch (e) {}
+
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify({
+      status: 'active',
+      transactions: localStoredTransactions,
+      count: localStoredTransactions.length,
+      monitoredGroup
+    }));
+  }
+
+  // Endpoint 1.2: Webhook POST (Simulação ou Ingestão Direta)
+  if (url.pathname === '/api/webhook' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', async () => {
+      try {
+        const payload = JSON.parse(body || '{}');
+
+        if (payload?.action === 'ping' || payload?.testPing) {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({ status: 'pong', ok: true }));
+        }
+
+        if (payload?.action === 'sync_transactions') {
+          const txsToSync = Array.isArray(payload.transactions) 
+            ? payload.transactions 
+            : (payload.transaction ? [payload.transaction] : []);
+          for (const tx of txsToSync) recordTransaction(tx);
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({ status: 'synced', count: localStoredTransactions.length }));
+        }
+
+        const msgText = payload?.Body || payload?.message || payload?.text || '';
+        if (msgText) {
+          const parsed = parseDynamicFinancialMessage(msgText, false);
+          if (parsed && parsed.savedTx) {
+            recordTransaction(parsed.savedTx);
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            return res.end(JSON.stringify({
+              status: 'success',
+              replySent: parsed.reply,
+              savedTx: parsed.savedTx
+            }));
+          }
+        }
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ status: 'ignored_non_financial' }));
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: e.message }));
+      }
+    });
+    return;
   }
 
   // Endpoint 2: Solicitar Código de 8 Dígitos Oficial do WhatsApp

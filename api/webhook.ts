@@ -29,57 +29,48 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY || 'dummy_key'
 });
 
-// 3. Parser Heurístico Resiliente (Fallback local offline)
-function parseFinancialMessageHeuristic(text: string) {
-  const lower = text.toLowerCase().trim();
+// 3. Extrator Dinâmico Inteligente (Sem inventar dados ou cidades não mencionadas)
+function parseDynamicFinancialMessage(text: string, isAudio: boolean = false) {
+  const clean = (text || '').trim();
+  const lower = clean.toLowerCase();
 
   // 1. Ignora links, URLs e spam
   if (lower.includes('http://') || lower.includes('https://') || lower.includes('www.') || lower.includes('.com') || lower.includes('.br/')) {
     return null;
   }
 
-  // 2. Deve conter menção explícita de valor monetário OU palavras-chave financeiras
-  const hasCurrency = /(?:r\$\s*|rs\s*|\breais\b)/i.test(text);
-  const hasFinancialKeyword = /(?:gastei|paguei|comprei|recebi|ganhei|sal[aá]rio|pix|d[eé]bito|cr[eé]dito|transfer[eê]ncia|dep[oó]sito|rendimento|lucro|venda|almo[cç]o|jantar|mercado|padaria|supermercado|combust[ií]vel|gasolina|farm[aá]cia|lanche|restaurante|parcela|entrada|sa[ií]da|despesa|conta|boleto|valor)/i.test(text);
-
-  if (!hasCurrency && !hasFinancialKeyword) {
-    return null;
-  }
-
-  // Extrai valor em R$ ou número
+  // 2. Extrai valor monetário
   let amount = 0;
-  const currencyMatch = text.match(/(?:r\$\s*|rs\s*|valor\s*(?:de\s*)?)(\d+(?:[.,]\d{1,2})?)/i);
+  const currencyMatch = clean.match(/(?:r\$\s*|rs\s*|valor\s*(?:de\s*)?)(\d+(?:[.,]\d{1,2})?)/i) ||
+                        clean.match(/(\d+(?:[.,]\d{1,2})?)\s*(?:reais|real)/i);
   if (currencyMatch) {
     amount = parseFloat(currencyMatch[1].replace(',', '.'));
   } else {
-    const numMatch = text.match(/(\d+(?:[.,]\d{1,2})?)/);
-    if (numMatch) {
-      amount = parseFloat(numMatch[1].replace(',', '.'));
+    const hasFinancialKeyword = /(?:gastei|paguei|comprei|recebi|ganhei|sal[aá]rio|pix|d[eé]bito|cr[eé]dito|transfer[eê]ncia|dep[oó]sito|rendimento|lucro|venda|entrada|sa[ií]da|despesa|conta|boleto)/i.test(lower);
+    if (hasFinancialKeyword) {
+      const numMatch = clean.match(/(\d+(?:[.,]\d{1,2})?)/);
+      if (numMatch) {
+        amount = parseFloat(numMatch[1].replace(',', '.'));
+      }
     }
   }
 
-  if (isNaN(amount) || amount <= 0 || amount > 1000000) return null;
+  if (isNaN(amount) || amount <= 0 || amount > 10000000) return null;
 
-  // Determina tipo: Entrada ou Saída
+  // 3. Tipo: Entrada ou Saída
   let type: 'Entrada' | 'Saída' = 'Saída';
   if (
-    lower.includes('recebi') ||
-    lower.includes('ganhei') ||
-    lower.includes('salário') ||
-    lower.includes('salario') ||
-    lower.includes('depósito') ||
-    lower.includes('deposito') ||
-    lower.includes('rendimento') ||
-    lower.includes('lucro') ||
-    lower.includes('venda') ||
+    lower.includes('recebi') || lower.includes('ganhei') || lower.includes('salário') ||
+    lower.includes('salario') || lower.includes('depósito') || lower.includes('deposito') ||
+    lower.includes('rendimento') || lower.includes('lucro') || lower.includes('venda') ||
     lower.includes('entrada')
   ) {
     type = 'Entrada';
   }
 
-  // Determina método de pagamento
-  let method = 'PIX';
-  if (lower.includes('crédito') || lower.includes('credito') || lower.includes('cartão') || lower.includes('cartao') || lower.includes('vezes') || lower.includes('parcela')) {
+  // 4. Forma de Pagamento
+  let method: 'PIX' | 'Débito' | 'Crédito' | 'Dinheiro' | 'Transferência' = 'PIX';
+  if (lower.includes('crédito') || lower.includes('credito') || lower.includes('cartão') || lower.includes('cartao') || lower.includes('parcela')) {
     method = 'Crédito';
   } else if (lower.includes('débito') || lower.includes('debito')) {
     method = 'Débito';
@@ -87,81 +78,92 @@ function parseFinancialMessageHeuristic(text: string) {
     method = 'Dinheiro';
   } else if (lower.includes('transferência') || lower.includes('transferencia') || lower.includes('ted') || lower.includes('doc')) {
     method = 'Transferência';
+  } else if (lower.includes('pix')) {
+    method = 'PIX';
   }
 
-  // Determina cidade
-  let city = 'Teresina, PI';
+  // 5. Local (se mencionado explicitamente)
+  let location = '';
+  const localMatch = lower.match(/\b(restaurante|padaria|supermercado|mercado|posto|farm[aá]cia|farmacia|lanchonete|bar|academia|oficina|loja|shopping|barbearia|sal[aá]o|salao|a[cç]ougue|acougue|hospital|cl[ií]nica|clinica|escola|banco)\b/i);
+  if (localMatch) {
+    const rawLocal = localMatch[1].toLowerCase();
+    location = rawLocal.charAt(0).toUpperCase() + rawLocal.slice(1);
+  }
+
+  // 6. Cidade (Apenas se o usuário tiver mencionado explicitamente! Se não disse, NUNCA adiciona)
+  let city = '';
   if (lower.includes('oeiras')) city = 'Oeiras, PI';
   else if (lower.includes('caxias')) city = 'Caxias, MA';
   else if (lower.includes('teresina')) city = 'Teresina, PI';
-  else if (lower.includes('são paulo') || lower.includes('sao paulo') || lower.includes('sp')) city = 'São Paulo, SP';
+  else if (lower.includes('são paulo') || lower.includes('sao paulo')) city = 'São Paulo, SP';
   else if (lower.includes('fortaleza')) city = 'Fortaleza, CE';
   else if (lower.includes('brasília') || lower.includes('brasilia')) city = 'Brasília, DF';
+  else if (lower.includes('timon')) city = 'Timon, MA';
+  else if (lower.includes('parnaíba') || lower.includes('parnaiba')) city = 'Parnaíba, PI';
+  else if (lower.includes('floriano')) city = 'Floriano, PI';
+  else if (lower.includes('rio de janeiro')) city = 'Rio de Janeiro, RJ';
 
-  // Determina categoria e descrição
-  let category = type === 'Entrada' ? 'Recebimento' : 'Outros';
-  let subcategory = type === 'Entrada' ? 'Receita Geral' : 'Geral';
-  let description = 'Movimentação WhatsApp';
+  // 7. Objeto (o item consumido ou finalidade)
+  let remaining = clean
+    .replace(/(?:r\$\s*|rs\s*)?\d+(?:[.,]\d{1,2})?\s*(?:reais|real)?/gi, ' ')
+    .replace(/\b(fiz|fazer|gastei|gasto|paguei|pago|comprei|compra|recebi|ganhei|valor|de|em|no|na|um|uma|uns|umas|o|a|os|as|para|pra|com|por|reais|real)\b/gi, ' ')
+    .replace(/\b(pix|d[eé]bito|cr[eé]dito|cart[aã]o|dinheiro|transfer[eê]ncia|ted|doc)\b/gi, ' ');
 
-  if (lower.includes('padaria') || lower.includes('pão') || lower.includes('café')) {
-    category = 'Alimentação';
-    subcategory = 'Padaria & Lanche';
-    description = 'Padaria / Café';
-  } else if (lower.includes('mercado') || lower.includes('supermercado') || lower.includes('compras')) {
-    category = 'Alimentação';
-    subcategory = 'Supermercado';
-    description = 'Supermercado';
-  } else if (lower.includes('salário') || lower.includes('salario')) {
-    category = 'Recebimento';
-    subcategory = 'Salário Fixo';
-    description = 'Salário Mensal';
-  } else if (lower.includes('passagem') || lower.includes('viagem') || lower.includes('aérea') || lower.includes('aerea')) {
-    category = 'Passagem Aérea / Viagem';
-    subcategory = 'Viagens';
-    description = 'Passagem Aérea';
-  } else if (lower.includes('farmácia') || lower.includes('farmacia') || lower.includes('remédio')) {
-    category = 'Saúde';
-    subcategory = 'Medicamentos';
-    description = 'Farmácia';
-  } else if (lower.includes('gasolina') || lower.includes('combustível') || lower.includes('posto') || lower.includes('uber')) {
-    category = 'Transporte';
-    subcategory = 'Combustível / App';
-    description = 'Transporte / Posto';
-  } else if (lower.includes('restaurante') || lower.includes('almoço') || lower.includes('almoco') || lower.includes('jantar')) {
-    category = 'Alimentação';
-    subcategory = 'Restaurante';
-    description = 'Almoço / Restaurante';
-  } else if (lower.includes('pessoal') || lower.includes('academia') || lower.includes('personal')) {
-    category = 'Pessoal / Mensalidade';
-    subcategory = 'Saúde & Treino';
-    description = 'Mensalidade Academia / Personal';
-  } else if (lower.includes('empréstimo') || lower.includes('emprestimo')) {
-    category = 'Empréstimo';
-    subcategory = 'Parcela Empréstimo';
-    description = 'Empréstimo';
-  } else {
-    description = text.slice(0, 35);
+  if (location) {
+    remaining = remaining.replace(new RegExp(`\\b${location}\\b`, 'gi'), ' ');
+  }
+  if (city) {
+    const citySimple = city.split(',')[0].trim();
+    remaining = remaining.replace(new RegExp(`\\b${citySimple}\\b`, 'gi'), ' ');
   }
 
-  // Parcelamento
-  let currentInstallment: number | undefined;
-  let totalInstallments: number | undefined;
-  const instMatch = text.match(/(\d+)\s*x/i);
-  if (instMatch) {
-    totalInstallments = parseInt(instMatch[1]);
-    currentInstallment = 1;
+  const cleanObjectWords = remaining.replace(/[^\w\sÀ-ÿ]/g, '').trim().split(/\s+/).filter(w => w.length > 1);
+  let object = cleanObjectWords.map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+
+  if (!object && location) {
+    object = location;
+  }
+  if (!object && type === 'Entrada') {
+    object = 'Recebimento';
+  }
+  if (!object && type === 'Saída') {
+    object = 'Despesa';
   }
 
-  return {
-    description,
+  // 8. Mensagem de Confirmação no formato padrão solicitado
+  const symbol = type === 'Entrada' ? '+' : '-';
+  const prefixAudio = isAudio ? '🎙️ [Áudio de Voz]: ' : '💬 ';
+
+  let reply = `⚡ Lançamento adicionado ao KYRO Finance!\n\n${prefixAudio}"${clean}"\n\n• Tipo: ${type}\n• Objeto: ${object}\n• Valor: ${symbol} R$ ${amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n• Forma: ${method}`;
+
+  if (location) {
+    reply += `\n• Local: ${location}`;
+  }
+  if (city) {
+    reply += `\n• Cidade: ${city}`;
+  }
+  reply += `\n\n✅ Atualizado nas abas de ${type === 'Entrada' ? 'Entradas' : 'Saídas'} e no Dashboard!`;
+
+  const savedTx = {
+    id: Date.now().toString(),
+    description: object,
     amount,
     type,
-    category,
-    subcategory,
     method,
-    city,
-    currentInstallment,
-    totalInstallments
+    category: location || (type === 'Entrada' ? 'Recebimento' : 'Alimentação / Geral'),
+    subcategory: object,
+    city: city || '',
+    date: new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }),
+    status: 'Concluído',
+    createdAt: new Date().toISOString()
+  };
+
+  return {
+    reply,
+    savedTx,
+    object,
+    location,
+    city
   };
 }
 
@@ -363,99 +365,13 @@ Retorne EXCLUSIVAMENTE um objeto JSON válido (sem markdown, sem texto antes ou 
 }
 
 async function processAssistant(userMessage: string, isAudio: boolean = false) {
-  const parsedFallback = parseFinancialMessageHeuristic(userMessage);
+  const parsed = parseDynamicFinancialMessage(userMessage, isAudio);
 
-  // 1. Tenta OpenAI GPT-4o-mini com JSON Schema Estrito (se houver chave configurada)
-  if (process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== 'dummy_key') {
-    try {
-      const messages: any[] = [
-        {
-          role: 'system',
-          content: `Você é o Agente Financeiro Pessoal do KYRO Finance.
-Analise a mensagem de despesa ou receita informada pelo usuário (via texto ou áudio transcrito).
-Responda EXCLUSIVAMENTE em formato JSON com o seguinte schema:
-{
-  "descricao": string,
-  "valor": number,
-  "categoria": string,
-  "subcategoria": string,
-  "tipo": "Entrada" | "Saída",
-  "forma_pagamento": "PIX" | "Débito" | "Crédito" | "Dinheiro" | "Transferência",
-  "cidade": string
-}`
-        },
-        { role: 'user', content: userMessage }
-      ];
-
-      const completion = await openai.chat.completions.create({
-        model: 'gpt-4o-mini',
-        messages,
-        response_format: { type: 'json_object' }
-      });
-
-      const rawJson = completion.choices[0]?.message?.content;
-      if (rawJson) {
-        const parsed = JSON.parse(rawJson);
-        const mappedTx = {
-          description: parsed.descricao || parsed.description,
-          amount: parseFloat(parsed.valor || parsed.amount),
-          type: (parsed.tipo === 'Entrada' || parsed.tipo === 'entrada' || parsed.type === 'Entrada') ? 'Entrada' : 'Saída',
-          category: parsed.categoria || parsed.category || 'Geral',
-          subcategory: parsed.subcategoria || parsed.subcategory || 'Geral',
-          method: parsed.forma_pagamento || parsed.metodo || 'PIX',
-          city: parsed.cidade || parsed.city || 'Teresina, PI'
-        };
-
-        if (mappedTx.amount > 0) {
-          const savedTx = await saveTransaction(mappedTx);
-          const symbol = mappedTx.type === 'Entrada' ? '+' : '-';
-          const prefixAudio = isAudio ? '🎙️ [Áudio Transcrito por Whisper]: ' : '💬 ';
-
-          return {
-            reply: `✅ Lançamento registrado com sucesso no KYRO Finance!\n\n${prefixAudio}"${userMessage}"\n\n• Tipo: ${mappedTx.type}\n• Objeto: ${mappedTx.description}\n• Categoria: ${mappedTx.category}\n• Valor: ${symbol} R$ ${mappedTx.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n• Pagamento: ${mappedTx.method}\n• Cidade: ${mappedTx.city}\n\n📊 Saldo recalculado e sincronizado no painel!`,
-            savedTx
-          };
-        }
-      }
-    } catch (llmErr) {
-      console.warn('[OpenAI LLM Falhou]:', llmErr);
-    }
-  }
-
-  // 2. Se OpenAI não estiver configurada ou falhar, tenta o Provedor Livre Gratuito (estilo tgpt)
-  const freeParsed = await queryFreeAiProvider(userMessage);
-  if (freeParsed) {
-    const mappedTx = {
-      description: freeParsed.descricao || freeParsed.description || 'Movimentação WhatsApp',
-      amount: parseFloat(freeParsed.valor || freeParsed.amount),
-      type: (freeParsed.tipo === 'Entrada' || freeParsed.tipo === 'entrada') ? 'Entrada' : 'Saída',
-      category: freeParsed.categoria || freeParsed.category || 'Geral',
-      subcategory: freeParsed.subcategoria || freeParsed.subcategory || 'Geral',
-      method: freeParsed.forma_pagamento || freeParsed.metodo || 'PIX',
-      city: freeParsed.cidade || freeParsed.city || 'Teresina, PI'
-    };
-
-    if (mappedTx.amount > 0) {
-      const savedTx = await saveTransaction(mappedTx);
-      const symbol = mappedTx.type === 'Entrada' ? '+' : '-';
-      const prefixAudio = isAudio ? '🎙️ [Áudio]: ' : '💬 ';
-
-      return {
-        reply: `🤖 [IA Copiloto Livre]: Lançamento registrado!\n\n${prefixAudio}"${userMessage}"\n\n• Tipo: ${mappedTx.type}\n• Objeto: ${mappedTx.description}\n• Categoria: ${mappedTx.category}\n• Valor: ${symbol} R$ ${mappedTx.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n• Método: ${mappedTx.method}\n• Cidade: ${mappedTx.city}\n\n✅ Sincronizado automaticamente no seu painel!`,
-        savedTx
-      };
-    }
-  }
-
-  // 2. Fallback Heurístico Robusto
-  if (parsedFallback) {
-    const savedTx = await saveTransaction(parsedFallback);
-    const symbol = parsedFallback.type === 'Entrada' ? '+' : '-';
-    const prefixAudio = isAudio ? '🎙️ [Áudio Reconhecido]: ' : '💬 ';
-
+  if (parsed && parsed.savedTx) {
+    const savedTx = await saveTransaction(parsed.savedTx);
     return {
-      reply: `⚡ Lançamento adicionado ao KYRO Finance!\n\n${prefixAudio}"${userMessage}"\n\n• Tipo: ${parsedFallback.type}\n• Objeto: ${parsedFallback.description}\n• Valor: ${symbol} R$ ${parsedFallback.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n• Forma: ${parsedFallback.method}\n• Cidade: ${parsedFallback.city}\n\n✅ Atualizado nas abas de ${parsedFallback.type === 'Entrada' ? 'Entradas' : 'Saídas'} e no Dashboard!`,
-      savedTx
+      reply: parsed.reply,
+      savedTx: savedTx || parsed.savedTx
     };
   }
 
