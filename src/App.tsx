@@ -224,11 +224,25 @@ export default function App() {
     localStorage.setItem('kyro_recurring', JSON.stringify(recurringExpenses));
   }, [recurringExpenses]);
 
-  // Base de Transações (Persistente)
+  // Base de Transações (Persistente com higienização antiduplicação)
   const [transactions, setTransactions] = useState<Transaction[]>(() => {
     const saved = localStorage.getItem('kyro_transactions');
     if (saved) {
-      try { return JSON.parse(saved); } catch (e) {}
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          // Higienização inicial: remove duplicatas pré-existentes acumuladas em testes anteriores
+          const seen = new Set();
+          const clean = parsed.filter((t: any) => {
+            const signature = `${(t.description || '').trim().toLowerCase()}_${t.amount}_${t.type}_${t.method}_${t.date}`;
+            if (seen.has(signature) || seen.has(String(t.id))) return false;
+            seen.add(signature);
+            seen.add(String(t.id));
+            return true;
+          });
+          return clean;
+        }
+      } catch (e) {}
     }
     return [
       {
@@ -353,6 +367,7 @@ export default function App() {
     const fetchWebhookTxs = async () => {
       try {
         const incoming: any[] = [];
+        let fetchedFromLocal = false;
 
         // 1. Busca transações do Servidor do Robô Baileys na porta 3001
         try {
@@ -364,30 +379,56 @@ export default function App() {
             const dataLocal = await resLocal.json();
             if (dataLocal?.transactions && Array.isArray(dataLocal.transactions)) {
               incoming.push(...dataLocal.transactions);
+              fetchedFromLocal = true;
             }
           }
         } catch (e) {}
 
-        // 2. Busca transações do Webhook da Vercel /api/webhook
-        try {
-          const ctrl = new AbortController();
-          const tId = setTimeout(() => ctrl.abort(), 2000);
-          const res = await fetch('/api/webhook', { signal: ctrl.signal });
-          clearTimeout(tId);
-          if (res.ok) {
-            const data = await res.json();
-            if (data?.transactions && Array.isArray(data.transactions)) {
-              incoming.push(...data.transactions);
+        // 2. Busca da Vercel /api/webhook APENAS se o robô local estiver offline
+        // evitando duplicatas por cruzamento de fontes locais e remotas no mesmo ciclo!
+        if (!fetchedFromLocal) {
+          try {
+            const ctrl = new AbortController();
+            const tId = setTimeout(() => ctrl.abort(), 2000);
+            const res = await fetch('/api/webhook', { signal: ctrl.signal });
+            clearTimeout(tId);
+            if (res.ok) {
+              const data = await res.json();
+              if (data?.transactions && Array.isArray(data.transactions)) {
+                incoming.push(...data.transactions);
+              }
             }
-          }
-        } catch (e) {}
+          } catch (e) {}
+        }
 
         if (incoming.length > 0) {
           setTransactions(prev => {
             const existingIds = new Set(prev.map(t => String(t.id)));
+
             const newOnes = incoming.filter((t: any) => {
               if (!t || !t.amount) return false;
-              if (existingIds.has(String(t.id))) return false;
+              const tid = String(t.id);
+              if (existingIds.has(tid)) return false;
+
+              // Rigorosa antiduplicação: verifica se já existe lançamento idêntico recente
+              const isDuplicate = prev.some(p => {
+                const sameDesc = (p.description || '').trim().toLowerCase() === (t.description || '').trim().toLowerCase();
+                const sameAmount = Math.abs(Number(p.amount) - Number(t.amount)) < 0.01;
+                const sameType = p.type === t.type;
+                const sameMethod = p.method === t.method;
+                if (sameDesc && sameAmount && sameType && sameMethod) {
+                  if (p.createdAt && t.createdAt) {
+                    const diff = Math.abs(new Date(p.createdAt).getTime() - new Date(t.createdAt).getTime());
+                    if (diff < 90000) return true;
+                  } else {
+                    return true;
+                  }
+                }
+                return false;
+              });
+
+              if (isDuplicate) return false;
+              existingIds.add(tid);
               return true;
             });
 

@@ -32,6 +32,8 @@ export interface Transaction {
   currentInstallment?: number;
   totalInstallments?: number;
   receiptUrl?: string;
+  createdAt?: string;
+  whatsappMsgId?: string;
 }
 
 export interface BudgetGoal {

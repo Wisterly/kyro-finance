@@ -177,31 +177,49 @@ if (!globalAny.__KYRO_WEBHOOK_TRANSACTIONS__) {
 }
 
 async function saveTransaction(tx: any) {
+  const txId = tx.id ? String(tx.id) : Date.now().toString();
   const payload = {
     ...tx,
+    id: txId,
     date: tx.date || new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }),
     status: tx.status || 'Concluído',
-    createdAt: new Date().toISOString()
+    createdAt: tx.createdAt || new Date().toISOString()
   };
 
-  let savedItem = { id: Date.now().toString(), ...payload };
+  // Previne duplicação em memória global por ID ou assinatura recente
+  const now = new Date(payload.createdAt).getTime();
+  const exists = globalAny.__KYRO_WEBHOOK_TRANSACTIONS__.some((t: any) => {
+    if (String(t.id) === txId) return true;
+    if (t.whatsappMsgId && payload.whatsappMsgId && t.whatsappMsgId === payload.whatsappMsgId) return true;
+    const sameDesc = (t.description || '').trim().toLowerCase() === (payload.description || '').trim().toLowerCase();
+    const sameAmount = Math.abs(Number(t.amount) - Number(payload.amount)) < 0.01;
+    const sameType = t.type === payload.type;
+    if (sameDesc && sameAmount && sameType) {
+      const tTime = new Date(t.createdAt || 0).getTime();
+      if (Math.abs(now - tTime) < 90000) return true;
+    }
+    return false;
+  });
+
+  if (exists) {
+    return payload;
+  }
 
   if (db) {
     try {
-      const docRef = await addDoc(collection(db, 'kyro_transactions'), payload);
-      savedItem = { id: docRef.id, ...payload };
+      await addDoc(collection(db, 'kyro_transactions'), payload);
     } catch (err) {
       console.warn('[Firestore] Erro ao salvar transação:', err);
     }
   }
 
   // Sempre armazena no buffer global em memória para sincronização imediata
-  globalAny.__KYRO_WEBHOOK_TRANSACTIONS__.unshift(savedItem);
+  globalAny.__KYRO_WEBHOOK_TRANSACTIONS__.unshift(payload);
   if (globalAny.__KYRO_WEBHOOK_TRANSACTIONS__.length > 100) {
     globalAny.__KYRO_WEBHOOK_TRANSACTIONS__ = globalAny.__KYRO_WEBHOOK_TRANSACTIONS__.slice(0, 100);
   }
 
-  return savedItem;
+  return payload;
 }
 
 // 5. Transcrever Áudio via OpenAI Whisper

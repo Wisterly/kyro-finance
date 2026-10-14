@@ -58,18 +58,46 @@ try {
 
 function recordTransaction(tx) {
   if (!tx || !tx.amount) return;
-  const existing = localStoredTransactions.find(t => String(t.id) === String(tx.id));
-  if (!existing) {
-    localStoredTransactions.unshift(tx);
-    if (localStoredTransactions.length > 200) {
-      localStoredTransactions = localStoredTransactions.slice(0, 200);
+  const txId = String(tx.id);
+
+  // 1. Previne duplicata por ID exato
+  const existsById = localStoredTransactions.some(t => String(t.id) === txId);
+  if (existsById) {
+    console.log(`🛡️ [Antiduplicação] Transação com ID ${txId} já registrada.`);
+    return;
+  }
+
+  // 2. Previne duplicata por assinatura idêntica nos últimos 90 segundos
+  const now = new Date(tx.createdAt || Date.now()).getTime();
+  const existsDuplicate = localStoredTransactions.some(t => {
+    const isSameDesc = (t.description || '').trim().toLowerCase() === (tx.description || '').trim().toLowerCase();
+    const isSameAmount = Math.abs(Number(t.amount) - Number(tx.amount)) < 0.01;
+    const isSameType = t.type === tx.type;
+    const isSameMethod = t.method === tx.method;
+    if (isSameDesc && isSameAmount && isSameType && isSameMethod) {
+      const tTime = new Date(t.createdAt || 0).getTime();
+      if (Math.abs(now - tTime) < 90000) {
+        return true;
+      }
     }
-    try {
-      fs.writeFileSync(TRANSACTIONS_FILE, JSON.stringify(localStoredTransactions, null, 2), 'utf-8');
-      console.log(`💾 [Banco Local] Transação salva em transactions.json: "${tx.description}" - R$ ${tx.amount}`);
-    } catch (errFile) {
-      console.error('[Banco Local] Erro ao salvar transactions.json:', errFile.message);
-    }
+    return false;
+  });
+
+  if (existsDuplicate) {
+    console.log(`🛡️ [Antiduplicação] Transação idêntica recente ignorada: "${tx.description}" - R$ ${tx.amount}`);
+    return;
+  }
+
+  localStoredTransactions.unshift(tx);
+  if (localStoredTransactions.length > 200) {
+    localStoredTransactions = localStoredTransactions.slice(0, 200);
+  }
+
+  try {
+    fs.writeFileSync(TRANSACTIONS_FILE, JSON.stringify(localStoredTransactions, null, 2), 'utf-8');
+    console.log(`💾 [Banco Local] Transação única salva: "${tx.description}" - R$ ${tx.amount} (ID: ${tx.id})`);
+  } catch (errFile) {
+    console.error('[Banco Local] Erro ao salvar transactions.json:', errFile.message);
   }
 
   // Sincroniza em background com o Webhook Vercel na nuvem
@@ -384,6 +412,9 @@ async function startSocket() {
     }
   });
 
+  // Cache de IDs de mensagens já processadas para evitar duplicatas do Baileys
+  const processedMessageIds = new Set();
+
   // Escuta mensagens do grupo ou privado
   sock.ev.on('messages.upsert', async ({ messages, type }) => {
     if (type !== 'notify') return;
@@ -391,6 +422,18 @@ async function startSocket() {
     for (const msg of messages) {
       try {
         if (!msg.message || msg.key.fromMe) continue;
+
+        const msgId = msg.key?.id;
+        if (msgId) {
+          if (processedMessageIds.has(msgId)) {
+            continue; // Já processada, ignora duplicata de rede
+          }
+          processedMessageIds.add(msgId);
+          if (processedMessageIds.size > 2000) {
+            const first = processedMessageIds.values().next().value;
+            processedMessageIds.delete(first);
+          }
+        }
 
         const remoteJid = msg.key.remoteJid;
 
@@ -455,6 +498,10 @@ async function startSocket() {
 
         if (parsed && parsed.savedTx) {
           const { savedTx, reply } = parsed;
+          if (msgId) {
+            savedTx.id = msgId;
+            savedTx.whatsappMsgId = msgId;
+          }
           console.log(`✨ [Transação Detectada]: ${savedTx.description} | R$ ${savedTx.amount} (${savedTx.type})`);
           recordTransaction(savedTx);
 
@@ -465,13 +512,6 @@ async function startSocket() {
           } catch (sendErr) {
             console.error('[WhatsApp] Erro ao enviar resposta para o grupo:', sendErr.message);
           }
-
-          // Notifica webhook remoto da Vercel para sincronização na nuvem em background
-          axios.post(REMOTE_WEBHOOK_URL, {
-            action: 'sync_transactions',
-            transaction: savedTx
-          }, { timeout: 6000 }).catch(() => {});
-
         } else {
           // Mensagem comum de conversa (não é gasto nem finança) -> NÃO responder para não poluir o grupo
           console.log(`ℹ️ Mensagem no grupo ignorada (não é movimentação financeira).`);
