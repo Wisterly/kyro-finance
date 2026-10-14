@@ -23,6 +23,14 @@ const HTTP_PORT = process.env.BOT_PORT || 3001;
 const REMOTE_WEBHOOK_URL = 'https://kyro-finance.vercel.app/api/webhook';
 const LOCAL_WEBHOOK_URL = 'http://localhost:3000/api/webhook';
 
+// Garante resiliência 24/7 sem encerramento inesperado
+process.on('uncaughtException', (err) => {
+  console.error('[Bot Resiliência] Exceção tratada:', err?.message || err);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('[Bot Resiliência] Rejeição tratada:', reason?.message || reason);
+});
+
 let sockInstance = null;
 let botStatus = {
   connected: false,
@@ -527,6 +535,15 @@ const server = http.createServer(async (req, res) => {
 
   res.writeHead(404);
   res.end('Not Found');
+});
+
+// Proteção contra encerramento inesperado por exceções do protocolo Signal
+process.on('uncaughtException', (err) => {
+  console.warn('[WhatsApp Bot] Exceção interceptada (processo mantido ativo):', err.message);
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.warn('[WhatsApp Bot] Rejeição interceptada (processo mantido ativo):', reason?.message || reason);
 });
 
 server.listen(HTTP_PORT, () => {
