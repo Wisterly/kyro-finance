@@ -476,9 +476,128 @@ export default function App() {
   // Exclusão de Recorrente
   const handleDeleteRecurring = (id: string) => {
     if (window.confirm("Deseja cancelar esta despesa recorrente?")) {
+      const target = recurringExpenses.find(r => r.id === id);
+      if (target?.transactionId) {
+        setTransactions(prev => prev.filter(t => t.id !== target.transactionId && t.recurringId !== id));
+        kyroCloud.syncDeleteTransaction(target.transactionId);
+      }
       setRecurringExpenses(prev => prev.filter(r => r.id !== id));
       kyroCloud.syncDeleteRecurring(id);
     }
+  };
+
+  // 1. Dar Baixa / Marcar Dívida Recorrente como Paga (SÓ AQUI ela é debitada das saídas e do saldo!)
+  const handleMarkRecurringAsPaid = (recId: string) => {
+    const target = recurringExpenses.find(r => r.id === recId);
+    if (!target) return;
+
+    const txId = `tx_rec_${Date.now()}`;
+    const paidTx: Transaction = {
+      id: txId,
+      description: `${target.title} ${target.totalInstallments > 0 ? `(${target.currentInstallment}/${target.totalInstallments})` : ''} - Parcela Paga`,
+      category: target.category,
+      subcategory: 'Dívida Recorrente / Parcela Paga',
+      city: target.city,
+      amount: target.installmentAmount,
+      type: 'Saída',
+      method: target.method,
+      date: 'Hoje',
+      status: 'Concluído',
+      recurringId: target.id,
+      currentInstallment: target.currentInstallment,
+      totalInstallments: target.totalInstallments,
+      createdAt: new Date().toISOString()
+    };
+
+    setRecurringExpenses(prev => prev.map(r => r.id === recId ? { ...r, paid: true, paidAt: new Date().toISOString(), transactionId: txId } : r));
+    setTransactions(prev => [paidTx, ...prev]);
+    kyroCloud.syncSaveTransaction(paidTx);
+
+    setWhatsappSyncToast({
+      show: true,
+      text: `🎉 ${target.title} confirmada como PAGA! Saída de R$ ${target.installmentAmount.toLocaleString('pt-BR', {minimumFractionDigits:2})} debitada no Dashboard.`
+    });
+    setTimeout(() => setWhatsappSyncToast(null), 5000);
+  };
+
+  // 2. Desfazer Pagamento de Dívida Recorrente (Estorna o valor do saldo)
+  const handleUnmarkRecurringPaid = (recId: string) => {
+    const target = recurringExpenses.find(r => r.id === recId);
+    if (!target) return;
+
+    setRecurringExpenses(prev => prev.map(r => r.id === recId ? { ...r, paid: false, paidAt: undefined, transactionId: undefined } : r));
+    setTransactions(prev => prev.filter(t => t.recurringId !== recId && t.id !== target.transactionId));
+    if (target.transactionId) {
+      kyroCloud.syncDeleteTransaction(target.transactionId);
+    }
+
+    setWhatsappSyncToast({
+      show: true,
+      text: `↩️ Pagamento de ${target.title} desfeito. Valor estornado do Dashboard.`
+    });
+    setTimeout(() => setWhatsappSyncToast(null), 4000);
+  };
+
+  // 3. Dar baixa em dívida via IA / Chat / Áudio por nome
+  const handleConfirmRecurringPaymentByName = (targetName: string): string => {
+    const lowerName = (targetName || '').toLowerCase().trim();
+    const found = recurringExpenses.find(r => 
+      !r.paid && (
+        r.title.toLowerCase().includes(lowerName) ||
+        r.category.toLowerCase().includes(lowerName) ||
+        lowerName.includes(r.title.toLowerCase()) ||
+        (lowerName.includes('passagem') && r.title.toLowerCase().includes('passagem')) ||
+        (lowerName.includes('empréstimo') && r.title.toLowerCase().includes('empréstimo')) ||
+        (lowerName.includes('personal') && r.title.toLowerCase().includes('personal')) ||
+        (lowerName.includes('academia') && r.title.toLowerCase().includes('academia'))
+      )
+    );
+
+    if (found) {
+      handleMarkRecurringAsPaid(found.id);
+      return `✅ Baixa confirmada com sucesso!\n\n• Dívida: ${found.title} (${found.currentInstallment}/${found.totalInstallments || 'Mensal'})\n• Valor Debitado: - R$ ${found.installmentAmount.toLocaleString('pt-BR', {minimumFractionDigits:2})}\n• Status: 🟢 PAGA\n\n💰 O valor de R$ ${found.installmentAmount.toLocaleString('pt-BR', {minimumFractionDigits:2})} agora foi computado nas Saídas do Mês e o seu Saldo Total foi recalculado automaticamente!`;
+    }
+
+    const pendingList = recurringExpenses.filter(r => !r.paid).map(r => `• ${r.title}: R$ ${r.installmentAmount.toLocaleString('pt-BR', {minimumFractionDigits:2})} (Vencimento ${r.dueDateText || 'dia ' + r.dueDateDay})`).join('\n');
+    return `ℹ️ Não encontrei nenhuma dívida pendente exata com o nome "${targetName}".\n\nDívidas pendentes aguardando seu pagamento:\n${pendingList || '• Nenhuma dívida pendente no momento.'}\n\nPara dar baixa, diga: "Paguei a passagem aérea" ou clique no botão "Dar OK / Marcar como Paga" na aba de Recorrentes.`;
+  };
+
+  // 4. Calculador de Status Visual da Dívida Recorrente (Paga, Próxima 5 dias, Em Atraso, Pendente)
+  const getRecurringStatus = (rec: RecurringExpense) => {
+    if (rec.paid) {
+      return {
+        status: 'paga' as const,
+        label: '🟢 Paga',
+        badgeClass: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30 font-bold'
+      };
+    }
+
+    const today = new Date().getDate();
+    const dueDay = rec.dueDateDay || 10;
+    
+    if (today > dueDay) {
+      const daysLate = today - dueDay;
+      return {
+        status: 'atrasada' as const,
+        label: `🔴 Em Atraso (${daysLate} dias)`,
+        badgeClass: 'bg-red-500/15 text-red-400 border-red-500/30 font-bold'
+      };
+    }
+
+    const daysLeft = dueDay - today;
+    if (daysLeft <= 5) {
+      return {
+        status: 'proxima' as const,
+        label: daysLeft === 0 ? '🟡 Vence Hoje!' : `🟡 Vence em ${daysLeft} ${daysLeft === 1 ? 'dia' : 'dias'}`,
+        badgeClass: 'bg-amber-500/15 text-amber-400 border-amber-500/30 font-bold animate-pulse'
+      };
+    }
+
+    return {
+      status: 'pendente' as const,
+      label: `⚪ A Vencer (${rec.dueDateText || 'Dia ' + dueDay})`,
+      badgeClass: 'bg-slate-800 text-slate-300 border-slate-700'
+    };
   };
 
   // Mensagens do Assistente IA / WhatsApp
@@ -992,44 +1111,93 @@ export default function App() {
     const isAudio = type === 'audio';
     const isImage = type === 'image';
 
-    // Extrai dados financeiros diretamente com o algoritmo dinâmico idêntico ao WhatsApp
+    // Extrai dados financeiros diretamente com o algoritmo dinâmico de alta precisão
     const parsed = parseDynamicFinancialMessage(text, isAudio, isImage);
 
-    if (parsed && parsed.savedTx) {
-      const newTx: Transaction = {
-        ...parsed.savedTx,
-        status: 'Concluído'
-      };
+    if (parsed) {
+      // Caso 1: Cadastro de Dívida Recorrente (NÃO debita do saldo até o usuário dar o OK de paga!)
+      if (parsed.isRecurring && parsed.recurringData) {
+        const newRec = parsed.recurringData;
+        setRecurringExpenses(prev => [newRec, ...prev]);
+        kyroCloud.syncSaveRecurring(newRec);
 
-      // Adiciona ao Dashboard imediatamente e persiste
-      setTransactions(prev => [newTx, ...prev]);
-      kyroCloud.syncSaveTransaction(newTx);
+        setWhatsappSyncToast({
+          show: true,
+          text: `🔁 Dívida Recorrente "${newRec.title}" salva! Ficará separada até você confirmar o pagamento.`
+        });
+        setTimeout(() => setWhatsappSyncToast(null), 5000);
 
-      // Dispara toast no Dashboard
-      const symbol = newTx.type === 'Entrada' ? '+' : '-';
-      setWhatsappSyncToast({
-        show: true,
-        text: `Lançamento: ${newTx.description} (${symbol} R$ ${newTx.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}) atualizado no Dashboard e nas abas!`
-      });
-      setTimeout(() => setWhatsappSyncToast(null), 5000);
+        const aiReplyMsg: ChatMessage = {
+          id: (Date.now() + 2).toString(),
+          sender: 'ia',
+          text: parsed.reply,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        };
 
-      const aiReplyMsg: ChatMessage = {
-        id: (Date.now() + 2).toString(),
-        sender: 'ia',
-        text: parsed.reply,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      };
+        setMessages(prev => {
+          if (replaceMessageId) {
+            return prev.map(m => m.id === replaceMessageId ? aiReplyMsg : m);
+          }
+          return [...prev, aiReplyMsg];
+        });
+        return;
+      }
 
-      setMessages(prev => {
-        if (replaceMessageId) {
-          return prev.map(m => m.id === replaceMessageId ? aiReplyMsg : m);
-        }
-        return [...prev, aiReplyMsg];
-      });
+      // Caso 2: Confirmação de Pagamento de Dívida Recorrente ("Paguei a passagem aérea")
+      if (parsed.isPaymentConfirmation) {
+        const replyText = handleConfirmRecurringPaymentByName(parsed.paymentTargetName || parsed.object || '');
+        const aiReplyMsg: ChatMessage = {
+          id: (Date.now() + 2).toString(),
+          sender: 'ia',
+          text: replyText,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        };
 
-    } else {
-      // Se não for lançamento financeiro direto, processa como consulta
-      const reply = processIaText(text);
+        setMessages(prev => {
+          if (replaceMessageId) {
+            return prev.map(m => m.id === replaceMessageId ? aiReplyMsg : m);
+          }
+          return [...prev, aiReplyMsg];
+        });
+        return;
+      }
+
+      // Caso 3: Lançamento Financeiro Avulso (Entrada ou Saída)
+      if (parsed.savedTx) {
+        const newTx: Transaction = {
+          ...parsed.savedTx,
+          status: 'Concluído'
+        };
+
+        setTransactions(prev => [newTx, ...prev]);
+        kyroCloud.syncSaveTransaction(newTx);
+
+        const symbol = newTx.type === 'Entrada' ? '+' : '-';
+        setWhatsappSyncToast({
+          show: true,
+          text: `Lançamento: ${newTx.description} (${symbol} R$ ${newTx.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}) atualizado no Dashboard e nas abas!`
+        });
+        setTimeout(() => setWhatsappSyncToast(null), 5000);
+
+        const aiReplyMsg: ChatMessage = {
+          id: (Date.now() + 2).toString(),
+          sender: 'ia',
+          text: parsed.reply,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        };
+
+        setMessages(prev => {
+          if (replaceMessageId) {
+            return prev.map(m => m.id === replaceMessageId ? aiReplyMsg : m);
+          }
+          return [...prev, aiReplyMsg];
+        });
+        return;
+      }
+    }
+
+    // Se não for lançamento financeiro direto nem comando de dívida, processa como consulta
+    const reply = processIaText(text);
       const aiReplyMsg: ChatMessage = {
         id: (Date.now() + 2).toString(),
         sender: 'ia',
@@ -1043,7 +1211,6 @@ export default function App() {
         }
         return [...prev, aiReplyMsg];
       });
-    }
   };
 
   const handleSendMessage = async () => {
@@ -1551,6 +1718,50 @@ export default function App() {
           {/* ABA 1: DASHBOARD */}
           {activeTab === 'dashboard' && (
             <>
+              {/* ================= ALERTA DE DÍVIDAS RECORRENTES (5 DIAS OU EM ATRASO) ================= */}
+              {(() => {
+                const pendingAlerts = recurringExpenses.filter(r => {
+                  if (r.paid || !r.active) return false;
+                  const today = new Date().getDate();
+                  const due = r.dueDateDay || 10;
+                  return today > due || (due - today <= 5 && due >= today);
+                });
+
+                if (pendingAlerts.length === 0) return null;
+
+                const overdueCount = pendingAlerts.filter(r => new Date().getDate() > (r.dueDateDay || 10)).length;
+                const upcomingCount = pendingAlerts.length - overdueCount;
+
+                return (
+                  <div className="p-4 rounded-2xl bg-[#1B1812] border border-amber-500/40 shadow-[0_0_20px_rgba(245,158,11,0.15)] flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-in fade-in mb-2">
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0 border border-amber-500/40">
+                        <AlertCircle size={22} className="animate-pulse" />
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-sm text-amber-300 flex items-center gap-2">
+                          Alertas de Vencimento de Dívidas Recorrentes
+                          <span className="px-2 py-0.5 rounded-full text-[10px] bg-amber-500/20 text-amber-300 font-extrabold border border-amber-500/40">
+                            {pendingAlerts.length} {pendingAlerts.length === 1 ? 'pendência' : 'pendências'}
+                          </span>
+                        </h4>
+                        <p className="text-xs text-slate-300 mt-0.5">
+                          {overdueCount > 0 && <span className="text-red-400 font-bold mr-2">🔴 {overdueCount} em atraso</span>}
+                          {upcomingCount > 0 && <span className="text-amber-300 font-medium">🟡 {upcomingCount} vencendo em até 5 dias</span>}
+                          <span className="text-slate-400 ml-1.5">• Não debitadas do saldo até você dar o OK de paga!</span>
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => { setActiveKpiModal('saidas'); setSaidasTab('recorrentes'); }}
+                      className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:brightness-110 text-slate-950 font-bold text-xs transition-all shadow-md shrink-0 flex items-center justify-center gap-1.5"
+                    >
+                      <CheckCircle2 size={15} /> Conferir & Dar Baixa
+                    </button>
+                  </div>
+                );
+              })()}
+
               {/* ================= CARDS DE INDICADORES (KPIs) ================= */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5">
                 
@@ -2765,58 +2976,102 @@ export default function App() {
                   {recurringExpenses.length === 0 ? (
                     <p className="text-xs text-slate-500 text-center py-6">Nenhuma saída recorrente cadastrada no momento.</p>
                   ) : (
-                    recurringExpenses.map(rec => (
-                      <div key={rec.id} className="p-4 rounded-xl bg-[#141A2E] border border-[#222C46] space-y-2 hover:border-amber-500/40 transition-all group">
-                        <div className="flex justify-between items-start">
-                          <div className="flex items-center gap-2.5">
-                            <span className="p-2 rounded-lg bg-amber-500/15 text-amber-400 font-bold text-base">
-                              {rec.category.includes('Passagem') ? '✈️' : rec.category.includes('Empréstimo') ? '🏦' : '👤'}
-                            </span>
-                            <div>
-                              <h4 className="font-bold text-slate-100 text-sm">{rec.title}</h4>
-                              <p className="text-xs text-amber-400/90 font-medium">{rec.category} • Vencimento dia {rec.dueDateDay}</p>
+                    recurringExpenses.map(rec => {
+                      const st = getRecurringStatus(rec);
+                      return (
+                        <div key={rec.id} className={`p-4 rounded-xl border space-y-2.5 transition-all group ${
+                          rec.paid ? 'bg-[#0E1526] border-emerald-500/30' : 'bg-[#141A2E] border-[#222C46] hover:border-amber-500/40'
+                        }`}>
+                          <div className="flex justify-between items-start">
+                            <div className="flex items-center gap-2.5">
+                              <span className="p-2 rounded-lg bg-amber-500/15 text-amber-400 font-bold text-base">
+                                {rec.category.includes('Passagem') ? '✈️' : rec.category.includes('Empréstimo') ? '🏦' : '👤'}
+                              </span>
+                              <div>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <h4 className="font-bold text-slate-100 text-sm">{rec.title}</h4>
+                                  <span className={`px-2 py-0.5 rounded-full text-[10px] border ${st.badgeClass}`}>
+                                    {st.label}
+                                  </span>
+                                </div>
+                                <p className="text-xs text-amber-400/90 font-medium">
+                                  {rec.category} • Vencimento: <strong>{rec.dueDateText || `Dia ${rec.dueDateDay}`}</strong>
+                                </p>
+                              </div>
                             </div>
-                          </div>
 
-                          <div className="flex items-center gap-3">
                             <div className="text-right">
                               <span className="font-extrabold text-white text-base">
                                 R$ {rec.installmentAmount.toLocaleString('pt-BR', {minimumFractionDigits:2})}
                               </span>
                               <span className="text-xs text-slate-400 block">/mês</span>
                             </div>
-                            <button
-                              onClick={() => handleDeleteRecurring(rec.id)}
-                              title="Excluir despesa recorrente"
-                              className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-all"
-                            >
-                              <Trash2 size={16} />
-                            </button>
                           </div>
-                        </div>
 
-                        {/* Progresso de Parcelas */}
-                        {rec.totalInstallments > 0 ? (
-                          <div className="pt-2 border-t border-[#1E2740] space-y-1">
-                            <div className="flex justify-between text-[11px] text-slate-300">
-                              <span>Parcela: <strong>{rec.currentInstallment} de {rec.totalInstallments}</strong></span>
-                              <span>Total financiado: R$ {rec.totalAmount.toLocaleString('pt-BR', {minimumFractionDigits:2})}</span>
-                            </div>
-                            <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
-                              <div 
-                                className="bg-gradient-to-r from-amber-500 to-orange-500 h-full rounded-full" 
-                                style={{ width: `${Math.round((rec.currentInstallment / rec.totalInstallments) * 100)}%` }}
-                              ></div>
+                          {/* Status de Contabilização no Saldo */}
+                          <div className="flex items-center justify-between text-[11px] pt-1">
+                            {rec.paid ? (
+                              <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                                <CheckCircle2 size={13} /> Debitado no Dashboard (- R$ {rec.installmentAmount.toLocaleString('pt-BR', {minimumFractionDigits:2})})
+                              </span>
+                            ) : (
+                              <span className="text-slate-400 font-medium flex items-center gap-1">
+                                ⏸️ NÃO debitado do Saldo (Aguardando seu OK de paga)
+                              </span>
+                            )}
+
+                            <div className="flex items-center gap-2">
+                              {!rec.paid ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleMarkRecurringAsPaid(rec.id)}
+                                  className="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md flex items-center gap-1.5 transition-all"
+                                >
+                                  <CheckCircle2 size={13} /> Dar OK / Marcar como Paga
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => handleUnmarkRecurringPaid(rec.id)}
+                                  className="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition-all"
+                                >
+                                  Desfazer Pagamento
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteRecurring(rec.id)}
+                                title="Excluir dívida recorrente"
+                                className="p-1 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-all"
+                              >
+                                <Trash2 size={15} />
+                              </button>
                             </div>
                           </div>
-                        ) : (
-                          <div className="pt-2 border-t border-[#1E2740] flex justify-between text-[11px] text-emerald-400">
-                            <span>🔁 Mensalidade contínua (renovação automática)</span>
-                            <span>{rec.method} • {rec.city}</span>
-                          </div>
-                        )}
-                      </div>
-                    ))
+
+                          {/* Progresso de Parcelas */}
+                          {rec.totalInstallments > 0 ? (
+                            <div className="pt-2 border-t border-[#1E2740] space-y-1">
+                              <div className="flex justify-between text-[11px] text-slate-300">
+                                <span>Parcela: <strong>{rec.currentInstallment} de {rec.totalInstallments}</strong></span>
+                                <span>Total financiado: R$ {rec.totalAmount.toLocaleString('pt-BR', {minimumFractionDigits:2})}</span>
+                              </div>
+                              <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                                <div 
+                                  className={`h-full rounded-full ${rec.paid ? 'bg-emerald-500' : 'bg-gradient-to-r from-amber-500 to-orange-500'}`}
+                                  style={{ width: `${Math.round((rec.currentInstallment / rec.totalInstallments) * 100)}%` }}
+                                ></div>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="pt-2 border-t border-[#1E2740] flex justify-between text-[11px] text-emerald-400">
+                              <span>🔁 Mensalidade contínua (renovação automática)</span>
+                              <span>{rec.method} • {rec.city}</span>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })
                   )}
                 </div>
               </div>
@@ -2860,30 +3115,22 @@ export default function App() {
                 city: f.cidade.value,
                 method: f.metodo.value,
                 active: true,
-                dueDateDay: parseInt(f.diaVenc.value) || 10
+                dueDateDay: parseInt(f.diaVenc.value) || 10,
+                dueDateText: `Dia ${parseInt(f.diaVenc.value) || 10}`,
+                paid: false
               };
 
               setRecurringExpenses(prev => [newRec, ...prev]);
-
-              // Adicionar primeira parcela nas transações de saída automaticamente
-              const newTx: Transaction = {
-                id: Date.now().toString(),
-                description: `${newRec.title} ${installments > 0 ? '(1/' + installments + ')' : ''}`,
-                category: newRec.category,
-                subcategory: 'Parcela / Recorrência',
-                city: newRec.city,
-                amount: parcelaVal,
-                type: 'Saída',
-                method: newRec.method,
-                date: 'Hoje',
-                status: 'Concluído',
-                currentInstallment: 1,
-                totalInstallments: installments
-              };
-              setTransactions(prev => [newTx, ...prev]);
+              kyroCloud.syncSaveRecurring(newRec);
 
               setNewRecModalOpen(false);
+              setWhatsappSyncToast({
+                show: true,
+                text: `🔁 Dívida Recorrente "${newRec.title}" salva! Ficará separada até você confirmar o pagamento.`
+              });
+              setTimeout(() => setWhatsappSyncToast(null), 4000);
             }} className="space-y-3 text-xs">
+
               <div>
                 <label className="text-slate-400 block mb-1">Título / Descrição da Despesa:</label>
                 <input required name="titulo" placeholder="Ex: Passagem Aérea Fortaleza, Empréstimo..." className="w-full bg-[#161D32] border border-[#2A3554] p-2 rounded-lg text-slate-100" />

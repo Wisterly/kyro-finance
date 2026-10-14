@@ -14,6 +14,11 @@ export interface RecurringExpense {
   method: PaymentMethod;
   active: boolean;
   dueDateDay: number; // Dia de vencimento no mês (ex: dia 10)
+  dueDateText?: string; // ex: "20 de Dezembro" ou "Dia 20"
+  dueMonth?: number; // Mês do vencimento (1 a 12)
+  paid?: boolean; // Se foi confirmada como PAGA pelo usuário
+  paidAt?: string; // Timestamp em que foi marcada como paga
+  transactionId?: string; // ID da transação gerada ao marcar como paga
 }
 
 export interface Transaction {
