@@ -8,8 +8,10 @@ export interface ParsedFinancialResult {
   paymentTargetName?: string;
   cardName?: string;
   installments?: number;
+  product?: string;
   savedTx?: {
     id: string;
+    product?: string;
     description: string;
     amount: number;
     type: 'Entrada' | 'Saída';
@@ -24,6 +26,7 @@ export interface ParsedFinancialResult {
     totalInstallments?: number;
     createdAt: string;
     whatsappMsgId?: string;
+    receiptUrl?: string;
   };
   object: string;
   location: string;
@@ -351,7 +354,7 @@ export function parseDynamicFinancialMessage(
       installmentAmount,
       currentInstallment: 1,
       totalInstallments,
-      city: city || 'Teresina, PI',
+      city: city || 'Sem informação',
       method,
       cardName: cardName || (method === 'Crédito' ? 'Nubank' : undefined),
       active: true,
@@ -370,9 +373,10 @@ export function parseDynamicFinancialMessage(
       recurringData,
       cardName: recurringData.cardName,
       installments: totalInstallments,
+      product: title,
       object: title,
       location: '',
-      city: city || ''
+      city: city || 'Sem informação'
     };
   }
 
@@ -390,40 +394,158 @@ export function parseDynamicFinancialMessage(
     type = 'Entrada';
   }
 
-  // Local (se mencionado)
+  // 1. Detecção do Local / Estabelecimento (Descrição do Gasto)
   let location = '';
-  const localMatch = lower.match(/\b(restaurante|padaria|supermercado|mercado|posto|farm[aá]cia|farmacia|lanchonete|bar|academia|oficina|loja|shopping|barbearia|sal[aá]o|salao|a[cç]ougue|acougue|hospital|cl[ií]nica|clinica|escola|banco)\b/i);
+  const localMatch = lower.match(/(?:^|[\s,.\-!])(farm[aá]cia|drogaria|supermercado|mercado|posto(?:\s+de\s+combust[ií]vel)?|restaurante|pizzaria|hamburgueria|churrascaria|padaria|panificadora|lanchonete|cafeteria|bar|academia|oficina|loja|shopping|barbearia|sal[aá]o|a[cç]ougue|hospital|cl[ií]nica|escola|banco)(?:$|[\s,.\-!])/i);
   if (localMatch) {
     const rawLocal = localMatch[1].toLowerCase();
-    location = rawLocal.charAt(0).toUpperCase() + rawLocal.slice(1);
+    if (rawLocal.includes('farm') || rawLocal.includes('drog')) location = 'Farmácia';
+    else if (rawLocal.includes('mercado')) location = 'Supermercado';
+    else if (rawLocal.includes('posto')) location = 'Posto de Combustível';
+    else if (rawLocal.includes('restaurante') || rawLocal.includes('pizzaria') || rawLocal.includes('hamburgueria') || rawLocal.includes('churrascaria')) location = 'Restaurante';
+    else if (rawLocal.includes('padaria') || rawLocal.includes('panificadora')) location = 'Padaria';
+    else if (rawLocal.includes('lanchonete') || rawLocal.includes('cafeteria')) location = 'Lanchonete';
+    else if (rawLocal.includes('academia')) location = 'Academia';
+    else if (rawLocal.includes('barbearia') || rawLocal.includes('sal')) location = 'Barbearia / Salão';
+    else if (rawLocal.includes('oficina')) location = 'Oficina';
+    else if (rawLocal.includes('shopping') || rawLocal.includes('loja')) location = 'Loja / Shopping';
+    else location = rawLocal.charAt(0).toUpperCase() + rawLocal.slice(1);
   }
 
-  // Objeto (item consumido ou finalidade)
-  let remaining = clean
-    .replace(/(?:r\$\s*|rs\s*)?\d+(?:[.,]\d+)?\s*(?:reais|real)?/gi, ' ')
-    .replace(/\b(fiz|fazer|gastei|gasto|paguei|pago|comprei|compra|recebi|ganhei|valor|de|em|no|na|um|uma|uns|umas|o|a|os|as|para|pra|com|por|reais|real|comprovante|transferência|pix|pagamento|benefici[aá]rio)\b/gi, ' ')
-    .replace(/\b(pix|d[eé]bito|cr[eé]dito|cart[aã]o|dinheiro|transfer[eê]ncia|ted|doc)\b/gi, ' ');
+  // 2. Detecção Inteligente de Produto e Categoria por Demanda Específica
+  let detectedProduct = '';
+  let detectedCategory = '';
 
-  if (location) {
-    remaining = remaining.replace(new RegExp(`\\b${location}\\b`, 'gi'), ' ');
-  }
-  if (cardName) {
-    remaining = remaining.replace(new RegExp(`\\b${cardName}\\b`, 'gi'), ' ');
-  }
-  if (city) {
-    const citySimple = city.split(',')[0].trim();
-    remaining = remaining.replace(new RegExp(`\\b${citySimple}\\b`, 'gi'), ' ');
-    if (citySimple.toLowerCase() === 'oeiras') {
-      remaining = remaining.replace(/\bostras\b/gi, ' ');
+  const productRules: Array<{
+    regex: RegExp;
+    product: string | ((m: string) => string);
+    category: string | ((loc: string) => string);
+  }> = [
+    // Lanches / Chocolates / Doces (Exemplo explícito do usuário: barra de chocolate na farmácia -> Categoria: Lanche)
+    {
+      regex: /(?:^|[\s,.\-!])(barra\s+de\s+chocolate|chocolate|bombom|trufa)(?:$|[\s,.\-!])/i,
+      product: 'Barra de chocolate',
+      category: 'Lanche'
+    },
+    {
+      regex: /(?:^|[\s,.\-!])(hamb[uú]rguer|hamburguer|sandu[ií]che|lanche|salgado|coxinha|pastel|pizza|a[cç]a[ií]|sorvete|picol[eé]|torta|bolo|doce|salgadinho|pipoca)(?:$|[\s,.\-!])/i,
+      product: (m) => m.charAt(0).toUpperCase() + m.slice(1).toLowerCase(),
+      category: 'Lanche'
+    },
+    // Bebidas (Exemplo explícito: água no supermercado -> Categoria: Supermercado)
+    {
+      regex: /(?:^|[\s,.\-!])([aá]gua(?:\s+mineral)?)(?:$|[\s,.\-!])/i,
+      product: 'Água mineral',
+      category: (loc) => loc === 'Supermercado' ? 'Supermercado' : 'Alimentação'
+    },
+    {
+      regex: /(?:^|[\s,.\-!])(refrigerante|coca(?:\s*cola)?|suco|caf[eé]|cerveja|energ[eé]tico)(?:$|[\s,.\-!])/i,
+      product: (m) => m.charAt(0).toUpperCase() + m.slice(1).toLowerCase(),
+      category: (loc) => loc === 'Supermercado' ? 'Supermercado' : 'Alimentação'
+    },
+    // Refeições / Almoço / Comida
+    {
+      regex: /(?:^|[\s,.\-!])(almo[cç]o|jantar|prato\s+feito|pf|marmita|marmitex|self\s*service|frango|carne|peixe|churrasco|rod[ií]zio|sushi)(?:$|[\s,.\-!])/i,
+      product: (m) => m.charAt(0).toUpperCase() + m.slice(1).toLowerCase(),
+      category: (loc) => loc === 'Supermercado' ? 'Supermercado' : 'Alimentação'
+    },
+    // Farmácia / Remédios
+    {
+      regex: /(?:^|[\s,.\-!])(rem[eé]dio|medicamento|dipirona|analg[eé]sico|vitamina|curativo|protetor\s+solar|fralda|pomada|col[ií]rio)(?:$|[\s,.\-!])/i,
+      product: (m) => m.charAt(0).toUpperCase() + m.slice(1).toLowerCase(),
+      category: 'Saúde / Farmácia'
+    },
+    // Transporte / Combustível
+    {
+      regex: /(?:^|[\s,.\-!])(gasolina|etanol|combust[ií]vel|diesel|[oó]leo|troca\s+de\s+[oó]leo|lavagem)(?:$|[\s,.\-!])/i,
+      product: (m) => m.charAt(0).toUpperCase() + m.slice(1).toLowerCase(),
+      category: 'Transporte'
+    },
+    {
+      regex: /(?:^|[\s,.\-!])(uber|t[aá]xi|taxi|corrida|passagem|estacionamento|ped[aá]gio)(?:$|[\s,.\-!])/i,
+      product: (m) => m.charAt(0).toUpperCase() + m.slice(1).toLowerCase(),
+      category: 'Transporte'
+    },
+    // Supermercado / Compras do mês
+    {
+      regex: /(?:^|[\s,.\-!])(compras\s+do\s+m[eê]s|compras|arroz|feij[aã]o|leite|detergente|sab[aã]o|a[cç][uú]car)(?:$|[\s,.\-!])/i,
+      product: (m) => m.charAt(0).toUpperCase() + m.slice(1).toLowerCase(),
+      category: 'Supermercado'
+    },
+    // Vestuário
+    {
+      regex: /(?:^|[\s,.\-!])(camisa|camiseta|cal[cç]a|t[eê]nis|sapato|roupa|vestido|bermuda|sand[aá]lia)(?:$|[\s,.\-!])/i,
+      product: (m) => m.charAt(0).toUpperCase() + m.slice(1).toLowerCase(),
+      category: 'Vestuário'
+    }
+  ];
+
+  for (const rule of productRules) {
+    const match = lower.match(rule.regex);
+    if (match) {
+      detectedProduct = typeof rule.product === 'function' ? rule.product(match[1]) : rule.product;
+      detectedCategory = typeof rule.category === 'function' ? rule.category(location) : rule.category;
+      break;
     }
   }
 
-  const cleanObjectWords = remaining.replace(/[^\w\sÀ-ÿ]/g, '').trim().split(/\s+/).filter(w => w.length > 1);
-  let object = cleanObjectWords.map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+  // Se não detectou produto pela tabela, faz extração de termos residuais
+  if (!detectedProduct) {
+    let remaining = clean
+      .replace(/(?:r\$\s*|rs\s*)?\d+(?:[.,]\d+)?\s*(?:reais|real)?/gi, ' ')
+      .replace(/\b(fiz|fazer|gastei|gasto|paguei|pago|comprei|compra|recebi|ganhei|valor|de|em|no|na|um|uma|uns|umas|o|a|os|as|para|pra|com|por|reais|real|comprovante|transferência|pix|pagamento|benefici[aá]rio)\b/gi, ' ')
+      .replace(/\b(pix|d[eé]bito|cr[eé]dito|cart[aã]o|dinheiro|transfer[eê]ncia|ted|doc)\b/gi, ' ');
 
-  if (!object && location) object = location;
-  if (!object && type === 'Entrada') object = 'Recebimento';
-  if (!object && type === 'Saída') object = 'Despesa';
+    if (location) {
+      remaining = remaining.replace(new RegExp(`\\b${location}\\b`, 'gi'), ' ');
+    }
+    if (cardName) {
+      remaining = remaining.replace(new RegExp(`\\b${cardName}\\b`, 'gi'), ' ');
+    }
+    if (city) {
+      const citySimple = city.split(',')[0].trim();
+      remaining = remaining.replace(new RegExp(`\\b${citySimple}\\b`, 'gi'), ' ');
+      if (citySimple.toLowerCase() === 'oeiras') {
+        remaining = remaining.replace(/\bostras\b/gi, ' ');
+      }
+    }
+
+    const cleanWords = remaining.replace(/[^\w\sÀ-ÿ]/g, '').trim().split(/\s+/).filter(w => w.length > 1);
+    if (cleanWords.length > 0) {
+      detectedProduct = cleanWords.map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+    }
+  }
+
+  // 3. Definição da Descrição do Gasto (Estabelecimento / Finalidade)
+  let description = location;
+  if (!description) {
+    description = type === 'Entrada' ? 'Recebimento' : (detectedProduct ? 'Estabelecimento Comercial' : 'Despesa Avulsa');
+  }
+
+  // 4. Definição Final da Categoria
+  if (!detectedCategory) {
+    if (type === 'Entrada') {
+      detectedCategory = 'Recebimento';
+    } else if (location === 'Supermercado') {
+      detectedCategory = 'Supermercado';
+    } else if (location === 'Farmácia') {
+      detectedCategory = 'Saúde / Farmácia';
+    } else if (location === 'Restaurante' || location === 'Padaria' || location === 'Lanchonete') {
+      detectedCategory = 'Alimentação';
+    } else if (location === 'Posto de Combustível') {
+      detectedCategory = 'Transporte';
+    } else if (method === 'Crédito') {
+      detectedCategory = 'Cartão de Crédito';
+    } else {
+      detectedCategory = 'Outros';
+    }
+  }
+
+  // 5. Cidade Obrigatória (Se não informada, "Sem informação")
+  const finalCity = city || 'Sem informação';
+
+  // 6. Produto formatado
+  const finalProduct = detectedProduct || (type === 'Entrada' ? 'Receita' : description);
 
   const symbol = type === 'Entrada' ? '+' : '-';
   let prefix = '💬 ';
@@ -433,29 +555,24 @@ export function parseDynamicFinancialMessage(
   const finalCardName = cardName || (method === 'Crédito' ? 'Nubank' : undefined);
   let methodDisplay = method === 'Crédito' && finalCardName ? `Crédito (${finalCardName})` : method;
 
-  let reply = `⚡ Lançamento adicionado ao KYRO Finance!\n\n${prefix}"${clean}"\n\n• Tipo: ${type}\n• Objeto: ${object}\n• Valor: ${symbol} R$ ${amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n• Forma: ${methodDisplay}`;
+  let reply = `⚡ Lançamento adicionado ao KYRO Finance!\n\n${prefix}"${clean}"\n\n• Tipo: ${type}\n• Produto: ${finalProduct}\n• Descrição do Gasto: ${description}\n• Categoria: ${detectedCategory}\n• Valor: ${symbol} R$ ${amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n• Forma: ${methodDisplay}\n• Cidade: ${finalCity}`;
 
   if (method === 'Crédito' && finalCardName) {
     reply += `\n• Fatura: Adicionado à fatura do cartão ${finalCardName}`;
-  }
-  if (location) {
-    reply += `\n• Local: ${location}`;
-  }
-  if (city) {
-    reply += `\n• Cidade: ${city}`;
   }
   reply += `\n\n✅ Atualizado nas abas de ${type === 'Entrada' ? 'Entradas' : 'Saídas'}${method === 'Crédito' ? ' e Cartões de Crédito' : ''} e no Dashboard!`;
 
   const savedTx = {
     id: Date.now().toString(),
-    description: object,
+    product: finalProduct,
+    description: description,
     amount,
     type,
     method,
     cardName: finalCardName,
-    category: location || (type === 'Entrada' ? 'Recebimento' : (method === 'Crédito' ? 'Cartão de Crédito' : 'Alimentação / Geral')),
-    subcategory: object,
-    city: city || '',
+    category: detectedCategory,
+    subcategory: finalProduct,
+    city: finalCity,
     date: new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }),
     status: 'Concluído' as const,
     currentInstallment: 1,
@@ -468,8 +585,9 @@ export function parseDynamicFinancialMessage(
     savedTx,
     cardName: finalCardName,
     installments: 1,
-    object,
-    location,
-    city
+    product: finalProduct,
+    object: finalProduct,
+    location: description,
+    city: finalCity
   };
 }

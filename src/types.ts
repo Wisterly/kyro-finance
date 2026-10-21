@@ -36,10 +36,11 @@ export interface RecurringExpense {
 
 export interface Transaction {
   id: string;
-  description: string;
-  category: string;
+  product?: string; // Produto adquirido (ex: "Barra de chocolate", "Água mineral", "Frango", "Hambúrguer", "Combustível")
+  description: string; // Descrição do gasto / Local / Estabelecimento (ex: "Farmácia", "Supermercado", "Restaurante", "Posto")
+  category: string; // Categoria (ex: "Lanche", "Alimentação", "Supermercado", "Saúde / Farmácia", "Transporte")
   subcategory?: string;
-  city: string;
+  city: string; // Cidade (ex: "Oeiras, PI", "Teresina, PI" ou "Sem informação")
   amount: number;
   type: TransactionType;
   method: PaymentMethod;

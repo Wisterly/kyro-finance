@@ -14,6 +14,7 @@ import {
   MoreVertical, 
   Mic, 
   Image as ImageIcon,
+  Camera,
   Sparkles,
   Menu,
   X,
@@ -67,6 +68,7 @@ import { Transaction, ChatMessage, PaymentMethod, TransactionType, RecurringExpe
 import { kyroCloud } from './firebase';
 import { WhatsAppTab } from './components/WhatsAppTab';
 import { parseDynamicFinancialMessage } from './utils/financialParser';
+import { processUploadedFinancialDocument } from './utils/documentExtractor';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'transacoes' | 'orcamentos' | 'mapa' | 'relatorios' | 'whatsapp' | 'configuracoes' | 'cartoes'>('dashboard');
@@ -1258,6 +1260,7 @@ export default function App() {
   const speechRecognitionRef = React.useRef<any>(null);
   const timerIntervalRef = React.useRef<any>(null);
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
+  const cameraInputRef = React.useRef<HTMLInputElement | null>(null);
 
   // Manipulador Unificado do Assistente IA (Texto, Áudio e Imagem de Comprovante)
   const handleProcessUserInteraction = async ({
@@ -1434,29 +1437,44 @@ export default function App() {
   };
 
   // Gravação de Áudio ao Vivo no Chat Lateral
+  // Gravação de Áudio ao Vivo no Chat Lateral (com suporte a Web Speech e Mobile)
+  const [liveAudioTranscript, setLiveAudioTranscript] = useState('');
+  const recordedTextRef = React.useRef<string>('');
+
   const startRecordingAudio = async () => {
     try {
+      recordedTextRef.current = '';
+      setLiveAudioTranscript('');
       const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
       let recognitionInstance: any = null;
-      let recognizedText = '';
 
       if (SpeechRecognition) {
-        recognitionInstance = new SpeechRecognition();
-        recognitionInstance.lang = 'pt-BR';
-        recognitionInstance.continuous = true;
-        recognitionInstance.interimResults = false;
-        recognitionInstance.onresult = (event: any) => {
-          for (let i = event.resultIndex; i < event.results.length; i++) {
-            if (event.results[i].isFinal) {
-              recognizedText += ' ' + event.results[i][0].transcript;
+        try {
+          recognitionInstance = new SpeechRecognition();
+          recognitionInstance.lang = 'pt-BR';
+          recognitionInstance.continuous = true;
+          recognitionInstance.interimResults = true;
+          recognitionInstance.onresult = (event: any) => {
+            let interim = '';
+            for (let i = event.resultIndex; i < event.results.length; i++) {
+              const transcriptPiece = event.results[i][0].transcript;
+              if (event.results[i].isFinal) {
+                recordedTextRef.current += ' ' + transcriptPiece;
+              } else {
+                interim += transcriptPiece;
+              }
             }
-          }
-        };
-        recognitionInstance.onerror = (e: any) => {
-          console.warn('[SpeechRecognition] Erro:', e);
-        };
-        recognitionInstance.start();
-        speechRecognitionRef.current = recognitionInstance;
+            const currentTotal = `${recordedTextRef.current} ${interim}`.trim();
+            setLiveAudioTranscript(currentTotal);
+          };
+          recognitionInstance.onerror = (e: any) => {
+            console.warn('[SpeechRecognition] Erro:', e);
+          };
+          recognitionInstance.start();
+          speechRecognitionRef.current = recognitionInstance;
+        } catch (e) {
+          console.warn('[SpeechRecognition] Falha ao iniciar reconhecimento nativo:', e);
+        }
       }
 
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -1470,7 +1488,12 @@ export default function App() {
         const audioUrl = URL.createObjectURL(audioBlob);
         stream.getTracks().forEach(track => track.stop());
 
-        const finalText = recognizedText.trim() || 'Lançamento de áudio falado no chat';
+        const finalText = recordedTextRef.current.trim() || liveAudioTranscript.trim() || inputMessage.trim();
+
+        if (!finalText) {
+          alert('Não foi possível identificar a voz com clareza. Você também pode digitar ou ditar diretamente no campo de texto.');
+          return;
+        }
 
         setMessages(prev => [...prev, {
           id: Date.now().toString(),
@@ -1497,7 +1520,7 @@ export default function App() {
       }, 1000);
 
     } catch (err: any) {
-      alert('Não foi possível acessar o microfone do seu navegador. Verifique as permissões de áudio.');
+      alert('Não foi possível acessar o microfone do seu navegador. Verifique as permissões de áudio ou digite diretamente na caixa de mensagem.');
     }
   };
 
@@ -1514,61 +1537,60 @@ export default function App() {
     setIsRecordingAudio(false);
   };
 
-  // Upload e OCR de Imagem / Comprovante
-  const handleImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Upload e Análise IA de Documento (Foto, Câmera ou PDF)
+  const handleFileAttachmentChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     e.target.value = '';
 
+    const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+
     const reader = new FileReader();
     reader.onload = async () => {
       const base64Url = reader.result as string;
-      await handleProcessImageComprovante(file, base64Url);
+      await handleProcessDocumentAttachment(file, base64Url, isPdf);
     };
     reader.readAsDataURL(file);
   };
 
-  const handleProcessImageComprovante = async (file: File, imageUrl: string) => {
+  const handleProcessDocumentAttachment = async (file: File, fileUrl: string, isPdf: boolean) => {
     setIsOcrProcessing(true);
 
-    const userImgMsg: ChatMessage = {
+    const userDocMsg: ChatMessage = {
       id: Date.now().toString(),
       sender: 'user',
-      text: '📄 [Comprovante / Recibo anexado para análise da IA]',
-      imageUrl,
+      text: isPdf 
+        ? `📄 [Documento PDF Anexado: "${file.name}"]` 
+        : '📸 [Foto / Comprovante Anexado para Análise da IA]',
+      imageUrl: isPdf ? undefined : fileUrl,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
-    setMessages(prev => [...prev, userImgMsg]);
+    setMessages(prev => [...prev, userDocMsg]);
 
     const loadingId = (Date.now() + 1).toString();
     setMessages(prev => [...prev, {
       id: loadingId,
       sender: 'ia',
-      text: '⏳ Analisando comprovante com IA OCR...',
+      text: isPdf ? '⏳ Lendo e extraindo dados do PDF com IA...' : '⏳ Analisando foto/comprovante com IA OCR...',
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     }]);
 
     try {
-      const { createWorker } = await import('tesseract.js');
-      const worker = await createWorker('por');
-      const ret = await worker.recognize(file);
-      await worker.terminate();
-
-      const ocrText = ret?.data?.text || '';
-      console.log('📄 [OCR Texto Lido]:', ocrText);
+      const docResult = await processUploadedFinancialDocument(file, fileUrl);
+      console.log('📄 [Texto Extraído do Documento]:', docResult.text);
 
       await handleProcessUserInteraction({
         type: 'image',
-        text: ocrText || file.name.replace(/[._-]/g, ' '),
-        imageUrl,
+        text: docResult.text,
+        imageUrl: isPdf ? undefined : fileUrl,
         replaceMessageId: loadingId
       });
     } catch (err: any) {
-      console.warn('[OCR Fallback]:', err);
+      console.warn('[Process Document Error]:', err);
       await handleProcessUserInteraction({
         type: 'image',
         text: file.name.replace(/[._-]/g, ' '),
-        imageUrl,
+        imageUrl: isPdf ? undefined : fileUrl,
         replaceMessageId: loadingId
       });
     } finally {
@@ -1579,6 +1601,7 @@ export default function App() {
   // Filtragem
   const filteredTransactions = transactions.filter(t => {
     const matchSearch = t.description.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                        (t.product && t.product.toLowerCase().includes(searchTerm.toLowerCase())) ||
                         t.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
                         t.city.toLowerCase().includes(searchTerm.toLowerCase());
     const matchMethod = filterMethod === 'todos' ? true : t.method.toLowerCase() === filterMethod.toLowerCase();
@@ -2392,13 +2415,25 @@ export default function App() {
                             className="h-4 w-4 rounded border-slate-700 bg-slate-900 text-amber-500 focus:ring-amber-500 cursor-pointer accent-amber-500"
                           />
                         </td>
-                        <td className="py-3.5 pl-2 font-semibold text-slate-100 flex items-center gap-2">
-                          {tx.description}
-                          {tx.totalInstallments && tx.totalInstallments > 0 && (
-                            <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-1.5 py-0.5 rounded-full font-bold">
-                              {tx.currentInstallment}/{tx.totalInstallments}
-                            </span>
-                          )}
+                        <td className="py-3.5 pl-2 font-semibold text-slate-100">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {tx.product ? (
+                              <>
+                                <span className="px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/40 text-xs font-bold">
+                                  {tx.product}
+                                </span>
+                                <span className="text-slate-400 font-normal text-xs">em</span>
+                                <span className="text-slate-100">{tx.description}</span>
+                              </>
+                            ) : (
+                              <span>{tx.description}</span>
+                            )}
+                            {tx.totalInstallments && tx.totalInstallments > 0 && (
+                              <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-1.5 py-0.5 rounded-full font-bold">
+                                {tx.currentInstallment}/{tx.totalInstallments}
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="py-3.5 text-slate-300 text-xs">{tx.category} • {tx.subcategory}</td>
                         <td className="py-3.5 text-slate-400 text-xs">{tx.city}</td>
@@ -2600,6 +2635,81 @@ export default function App() {
                   <p>• <strong>Lucro Líquido / Sobra:</strong> <span className="text-emerald-400 font-bold">+R$ {(monthIncomes - monthExpenses).toLocaleString('pt-BR', {minimumFractionDigits:2})}</span> ({savingsRate}% de economia).</p>
                   <p>• <strong>Distribuição por Cidades:</strong> Maior concentração em Teresina (PI), seguida por Caxias (MA) e Oeiras (PI).</p>
                 </div>
+              </div>
+
+              {/* Relatório de Vinculação de Gastos por Produto */}
+              <div className="p-5 rounded-xl bg-[#141A2E] border border-[#222C46] space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-bold text-amber-400 flex items-center gap-2">
+                    <Layers size={16} /> Relatório de Gastos por Produto & Vinculação
+                  </h4>
+                  <span className="text-xs text-slate-400">Classificação inteligente automática</span>
+                </div>
+
+                {(() => {
+                  const productMap = new Map<string, { product: string; total: number; count: number; locations: Set<string>; categories: Set<string> }>();
+                  transactions.filter(t => t.type === 'Saída').forEach(t => {
+                    const prodKey = (t.product || t.description).trim();
+                    if (!productMap.has(prodKey)) {
+                      productMap.set(prodKey, {
+                        product: prodKey,
+                        total: 0,
+                        count: 0,
+                        locations: new Set(),
+                        categories: new Set()
+                      });
+                    }
+                    const item = productMap.get(prodKey)!;
+                    item.total += t.amount;
+                    item.count += 1;
+                    if (t.description) item.locations.add(t.description);
+                    if (t.category) item.categories.add(t.category);
+                  });
+
+                  const sortedProducts = Array.from(productMap.values()).sort((a, b) => b.total - a.total);
+
+                  if (sortedProducts.length === 0) {
+                    return <p className="text-xs text-slate-500 py-3">Nenhum produto registrado ainda.</p>;
+                  }
+
+                  return (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-xs border-collapse">
+                        <thead>
+                          <tr className="border-b border-[#1E2740] text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                            <th className="pb-2.5">Produto</th>
+                            <th className="pb-2.5">Categoria</th>
+                            <th className="pb-2.5">Estabelecimento / Local Vinculado</th>
+                            <th className="pb-2.5 text-center">Compras</th>
+                            <th className="pb-2.5 text-right">Total Gasto</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-[#1E2740]/50">
+                          {sortedProducts.map((p, idx) => (
+                            <tr key={idx} className="hover:bg-slate-800/30 transition-colors">
+                              <td className="py-2.5 font-bold text-slate-100 flex items-center gap-1.5">
+                                <span className="h-2 w-2 rounded-full bg-amber-400"></span>
+                                {p.product}
+                              </td>
+                              <td className="py-2.5 text-slate-300">
+                                <span className="px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-300 border border-amber-500/30 text-[10px] font-medium">
+                                  {Array.from(p.categories).join(', ') || 'Geral'}
+                                </span>
+                              </td>
+                              <td className="py-2.5 text-slate-400">
+                                {Array.from(p.locations).join(', ') || 'Estabelecimento'}
+                              </td>
+                              <td className="py-2.5 text-center text-slate-300">{p.count}x</td>
+                              <td className="py-2.5 text-right font-bold text-orange-400">
+                                R$ {p.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           )}
@@ -3174,16 +3284,51 @@ export default function App() {
             </div>
           )}
 
-          {/* Input oculto para selecionar foto/comprovante */}
+          {/* Inputs ocultos para selecionar Arquivo/PDF ou Câmera direta */}
           <input 
             type="file" 
             ref={fileInputRef} 
-            onChange={handleImageFileChange} 
+            onChange={handleFileAttachmentChange} 
+            accept="image/*,application/pdf" 
+            className="hidden" 
+          />
+          <input 
+            type="file" 
+            ref={cameraInputRef} 
+            onChange={handleFileAttachmentChange} 
             accept="image/*" 
+            capture="environment" 
             className="hidden" 
           />
 
-          <div className="flex items-center gap-2 bg-[#12172A] border border-[#202940] rounded-xl px-3 py-2 focus-within:border-amber-500/50 transition-all">
+          <div className="flex items-center gap-1.5 bg-[#12172A] border border-[#202940] rounded-xl px-2.5 py-2 focus-within:border-amber-500/50 transition-all">
+            {/* 1. Botão "+" (Mais): Selecionar Foto ou PDF do Computador / Celular */}
+            <button 
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isOcrProcessing}
+              title="Anexar Arquivo (Foto ou PDF)" 
+              className={`p-1.5 rounded-lg transition-all ${
+                isOcrProcessing 
+                  ? 'bg-amber-500/20 text-amber-400' 
+                  : 'text-slate-400 hover:text-amber-400 hover:bg-slate-800'
+              }`}
+            >
+              {isOcrProcessing ? <Loader2 size={16} className="animate-spin text-amber-400" /> : <Plus size={16} />}
+            </button>
+
+            {/* 2. Botão Câmera: Abre imediatamente a câmera do celular ou notebook */}
+            <button 
+              type="button"
+              onClick={() => cameraInputRef.current?.click()}
+              disabled={isOcrProcessing}
+              title="Tirar Foto com a Câmera" 
+              className="p-1.5 rounded-lg text-slate-400 hover:text-cyan-400 hover:bg-slate-800 transition-all"
+            >
+              <Camera size={16} />
+            </button>
+
+            {/* 3. Botão Microfone: Gravação de Voz / Áudio */}
             <button 
               type="button"
               onClick={isRecordingAudio ? stopRecordingAudio : startRecordingAudio}
@@ -3196,38 +3341,26 @@ export default function App() {
             >
               <Mic size={16} />
             </button>
-            <button 
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isOcrProcessing}
-              title="Anexar Comprovante / Recibo (OCR IA)" 
-              className={`p-1.5 rounded-lg transition-all ${
-                isOcrProcessing 
-                  ? 'bg-amber-500/20 text-amber-400' 
-                  : 'text-slate-400 hover:text-amber-400 hover:bg-slate-800'
-              }`}
-            >
-              {isOcrProcessing ? <Loader2 size={16} className="animate-spin text-amber-400" /> : <ImageIcon size={16} />}
-            </button>
+
             <input
               type="text"
               value={inputMessage}
               onChange={(e) => setInputMessage(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
-              placeholder={isRecordingAudio ? "Gravando áudio..." : "Digite, fale ou envie comprovante..."}
-              className="flex-1 bg-transparent text-xs text-slate-200 placeholder-slate-500 focus:outline-none"
+              placeholder={isRecordingAudio ? (liveAudioTranscript || "Gravando áudio...") : "Digite, fale ou envie comprovante..."}
+              className="flex-1 bg-transparent text-xs text-slate-200 placeholder-slate-500 focus:outline-none min-w-0"
               disabled={isRecordingAudio}
             />
             <button
               onClick={handleSendMessage}
               disabled={isAiLoading || !inputMessage.trim()}
-              className="p-1.5 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 hover:brightness-110 disabled:opacity-40 transition-colors shadow-sm font-bold"
+              className="p-1.5 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 hover:brightness-110 disabled:opacity-40 transition-colors shadow-sm font-bold shrink-0"
             >
               {isAiLoading ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
             </button>
           </div>
           <p className="text-[10px] text-center text-slate-500 mt-2">
-            Texto, Áudio ou Comprovante: a IA divide e lança automaticamente
+            + (Foto/PDF) • Câmera • Áudio • Texto: extração e lançamento automático
           </p>
         </div>
       </aside>
@@ -3444,10 +3577,11 @@ export default function App() {
                   const f = e.target as any;
                   const newExit: Transaction = {
                     id: Date.now().toString(),
+                    product: f.produto?.value?.trim() || undefined,
                     description: f.desc.value,
                     category: f.cat.value,
-                    subcategory: f.cat.value,
-                    city: f.cidade.value,
+                    subcategory: f.produto?.value?.trim() || f.cat.value,
+                    city: f.cidade.value || 'Sem informação',
                     amount: parseFloat(f.valor.value),
                     type: 'Saída',
                     method: f.metodo.value,
@@ -3462,10 +3596,15 @@ export default function App() {
                     <Plus size={14} /> Registrar Nova Saída Manualmente
                   </h4>
                   
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
                     <div>
-                      <label className="text-slate-400 block mb-1">Descrição do Gasto:</label>
-                      <input required name="desc" placeholder="Ex: Supermercado, Almoço, Gasolina..." className="w-full bg-[#161D32] border border-[#2A3554] p-2.5 rounded-lg text-slate-100 outline-none" />
+                      <label className="text-slate-400 block mb-1">Produto (Item Adquirido):</label>
+                      <input name="produto" placeholder="Ex: Barra de chocolate, Água..." className="w-full bg-[#161D32] border border-[#2A3554] p-2.5 rounded-lg text-slate-100 outline-none" />
+                    </div>
+
+                    <div>
+                      <label className="text-slate-400 block mb-1">Descrição do Gasto / Local:</label>
+                      <input required name="desc" placeholder="Ex: Farmácia, Supermercado..." className="w-full bg-[#161D32] border border-[#2A3554] p-2.5 rounded-lg text-slate-100 outline-none" />
                     </div>
 
                     <div>
@@ -3479,8 +3618,9 @@ export default function App() {
                       <label className="text-slate-400 block mb-1">Categoria:</label>
                       <select name="cat" className="w-full bg-[#161D32] border border-[#2A3554] p-2 rounded-lg text-slate-100 outline-none">
                         <option value="Alimentação">Alimentação</option>
-                        <option value="Transporte">Transporte / Posto</option>
+                        <option value="Lanche">Lanche</option>
                         <option value="Supermercado">Supermercado</option>
+                        <option value="Transporte">Transporte / Posto</option>
                         <option value="Saúde">Saúde & Farmácia</option>
                         <option value="Vestuário">Vestuário / Compras</option>
                         <option value="Outros">Outros</option>
@@ -3500,7 +3640,7 @@ export default function App() {
 
                     <div>
                       <label className="text-slate-400 block mb-1">Cidade:</label>
-                      <input name="cidade" defaultValue="Teresina, PI" className="w-full bg-[#161D32] border border-[#2A3554] p-2 rounded-lg text-slate-100 outline-none" />
+                      <input name="cidade" defaultValue="Sem informação" className="w-full bg-[#161D32] border border-[#2A3554] p-2 rounded-lg text-slate-100 outline-none" />
                     </div>
                   </div>
 
@@ -3570,8 +3710,18 @@ export default function App() {
                               {tx.category.includes('Alimentação') ? '🍞' : tx.category.includes('Vestuário') ? '👟' : tx.category.includes('Passagem') ? '✈️' : '🛍️'}
                             </span>
                             <div>
-                              <h4 className="font-bold text-slate-100 text-sm flex items-center gap-2">
-                                {tx.description}
+                              <h4 className="font-bold text-slate-100 text-sm flex items-center gap-1.5 flex-wrap">
+                                {tx.product ? (
+                                  <>
+                                    <span className="text-xs bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded-md font-bold">
+                                      {tx.product}
+                                    </span>
+                                    <span className="text-slate-400 font-normal text-xs">em</span>
+                                    <span>{tx.description}</span>
+                                  </>
+                                ) : (
+                                  <span>{tx.description}</span>
+                                )}
                                 {tx.totalInstallments && tx.totalInstallments > 0 && (
                                   <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-1.5 py-0.5 rounded-full font-bold">
                                     {tx.currentInstallment}/{tx.totalInstallments}
@@ -4210,10 +4360,11 @@ export default function App() {
 
               const newObj: Transaction = {
                 id: Date.now().toString(),
+                product: form.produto?.value?.trim() || undefined,
                 description: form.desc.value,
                 category: form.cat.value,
-                subcategory: form.subcat.value,
-                city: form.cidade.value,
+                subcategory: form.subcat.value || form.produto?.value?.trim() || form.desc.value,
+                city: form.cidade.value || 'Sem informação',
                 amount: totalVal,
                 type: form.tipo.value,
                 method: selectedMethod,
@@ -4225,9 +4376,15 @@ export default function App() {
               kyroCloud.syncSaveTransaction(newObj);
               setNewTxModalOpen(false);
             }} className="space-y-3 text-xs">
-              <div>
-                <label className="text-slate-400 block mb-1">Descrição</label>
-                <input required name="desc" placeholder="Ex: Farmácia, Padaria, Salário..." className="w-full bg-[#161D32] border border-[#2A3554] p-2 rounded-lg text-slate-100" />
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-slate-400 block mb-1">Produto / Item Adquirido</label>
+                  <input name="produto" placeholder="Ex: Barra de chocolate, Água..." className="w-full bg-[#161D32] border border-[#2A3554] p-2 rounded-lg text-slate-100" />
+                </div>
+                <div>
+                  <label className="text-slate-400 block mb-1">Descrição / Local</label>
+                  <input required name="desc" placeholder="Ex: Farmácia, Restaurante..." className="w-full bg-[#161D32] border border-[#2A3554] p-2 rounded-lg text-slate-100" />
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
