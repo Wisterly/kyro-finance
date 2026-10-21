@@ -9,9 +9,11 @@ export interface ParsedFinancialResult {
   cardName?: string;
   installments?: number;
   product?: string;
+  establishment?: string;
   savedTx?: {
     id: string;
     product?: string;
+    establishment?: string;
     description: string;
     amount: number;
     type: 'Entrada' | 'Saída';
@@ -394,25 +396,37 @@ export function parseDynamicFinancialMessage(
     type = 'Entrada';
   }
 
-  // 1. Detecção do Local / Estabelecimento (Descrição do Gasto)
+  // 1. Detecção do Local / Estabelecimento
   let location = '';
-  const localMatch = lower.match(/(?:^|[\s,.\-!])(farm[aá]cia|drogaria|supermercado|mercado|posto(?:\s+de\s+combust[ií]vel)?|restaurante|pizzaria|hamburgueria|churrascaria|padaria|panificadora|lanchonete|cafeteria|bar|academia|oficina|loja|shopping|barbearia|sal[aá]o|a[cç]ougue|hospital|cl[ií]nica|escola|banco)(?:$|[\s,.\-!])/i);
-  if (localMatch) {
-    const rawLocal = localMatch[1].toLowerCase();
-    if (rawLocal.includes('farm') || rawLocal.includes('drog')) location = 'Farmácia';
-    else if (rawLocal.includes('mercado')) location = 'Supermercado';
-    else if (rawLocal.includes('posto')) location = 'Posto de Combustível';
-    else if (rawLocal.includes('restaurante') || rawLocal.includes('pizzaria') || rawLocal.includes('hamburgueria') || rawLocal.includes('churrascaria')) location = 'Restaurante';
-    else if (rawLocal.includes('padaria') || rawLocal.includes('panificadora')) location = 'Padaria';
-    else if (rawLocal.includes('lanchonete') || rawLocal.includes('cafeteria')) location = 'Lanchonete';
-    else if (rawLocal.includes('academia')) location = 'Academia';
-    else if (rawLocal.includes('barbearia') || rawLocal.includes('sal')) location = 'Barbearia / Salão';
-    else if (rawLocal.includes('oficina')) location = 'Oficina';
-    else if (rawLocal.includes('shopping') || rawLocal.includes('loja')) location = 'Loja / Shopping';
-    else location = rawLocal.charAt(0).toUpperCase() + rawLocal.slice(1);
+  const isInternetPurchase = /(?:^|[\s,.\-!])(internet|online|site|web|mercado\s*livre|amazon|shopee|aliexpress|shein|magalu|e-?commerce)(?:$|[\s,.\-!])/i.test(lower);
+  
+  if (isInternetPurchase) {
+    if (lower.includes('mercado livre')) location = 'Mercado Livre (Internet)';
+    else if (lower.includes('amazon')) location = 'Amazon (Internet)';
+    else if (lower.includes('shopee')) location = 'Shopee (Internet)';
+    else if (lower.includes('aliexpress')) location = 'AliExpress (Internet)';
+    else if (lower.includes('shein')) location = 'Shein (Internet)';
+    else location = 'Internet';
+  } else {
+    const localMatch = lower.match(/(?:^|[\s,.\-!])(farm[aá]cia|drogaria|supermercado|mercado|posto(?:\s+de\s+combust[ií]vel)?|restaurante|pizzaria|hamburgueria|churrascaria|padaria|panificadora|lanchonete|cafeteria|bar|academia|oficina|loja|shopping|barbearia|sal[aá]o|a[cç]ougue|hospital|cl[ií]nica|escola|banco|pet\s*shop|veterin[aá]ri[ao])(?:$|[\s,.\-!])/i);
+    if (localMatch) {
+      const rawLocal = localMatch[1].toLowerCase();
+      if (rawLocal.includes('farm') || rawLocal.includes('drog')) location = 'Farmácia';
+      else if (rawLocal.includes('mercado')) location = 'Supermercado';
+      else if (rawLocal.includes('posto')) location = 'Posto de Combustível';
+      else if (rawLocal.includes('restaurante') || rawLocal.includes('pizzaria') || rawLocal.includes('hamburgueria') || rawLocal.includes('churrascaria')) location = 'Restaurante';
+      else if (rawLocal.includes('padaria') || rawLocal.includes('panificadora')) location = 'Padaria';
+      else if (rawLocal.includes('lanchonete') || rawLocal.includes('cafeteria')) location = 'Lanchonete';
+      else if (rawLocal.includes('academia')) location = 'Academia';
+      else if (rawLocal.includes('barbearia') || rawLocal.includes('sal')) location = 'Barbearia / Salão';
+      else if (rawLocal.includes('oficina')) location = 'Oficina';
+      else if (rawLocal.includes('shopping') || rawLocal.includes('loja')) location = 'Loja / Shopping';
+      else if (rawLocal.includes('pet') || rawLocal.includes('veterin')) location = 'Pet Shop';
+      else location = rawLocal.charAt(0).toUpperCase() + rawLocal.slice(1);
+    }
   }
 
-  // 2. Detecção Inteligente de Produto e Categoria por Demanda Específica
+  // 2. Detecção Inteligente e Preditiva de Produto e Categoria por Demanda Específica
   let detectedProduct = '';
   let detectedCategory = '';
 
@@ -421,7 +435,18 @@ export function parseDynamicFinancialMessage(
     product: string | ((m: string) => string);
     category: string | ((loc: string) => string);
   }> = [
-    // Lanches / Chocolates / Doces (Exemplo explícito do usuário: barra de chocolate na farmácia -> Categoria: Lanche)
+    // Compras na Internet & Tecnologia (exemplo do usuário: pagamento na internet de câmera de vigilância -> Categoria: Compras na Internet)
+    {
+      regex: /(?:^|[\s,.\-!])(c[aâ]mera(?:\s+de\s+vigil[aâ]ncia|\s+de\s+seguran[cç]a)?|cftv|sistema\s+de\s+seguran[cç]a)(?:$|[\s,.\-!])/i,
+      product: 'Câmera de vigilância',
+      category: (loc) => isInternetPurchase || loc.includes('Internet') ? 'Compras na Internet' : 'Segurança & Eletrônicos'
+    },
+    {
+      regex: /(?:^|[\s,.\-!])(fone(?:\s+de\s+ouvido)?|headset|carregador|cabo\s+usb|mouse|teclado|monitor|notebook|celular|smartphone)(?:$|[\s,.\-!])/i,
+      product: (m) => m.charAt(0).toUpperCase() + m.slice(1).toLowerCase(),
+      category: () => isInternetPurchase ? 'Compras na Internet' : 'Tecnologia & Eletrônicos'
+    },
+    // Lanches / Chocolates / Doces (ex: barra de chocolate na farmácia -> Categoria: Lanche)
     {
       regex: /(?:^|[\s,.\-!])(barra\s+de\s+chocolate|chocolate|bombom|trufa)(?:$|[\s,.\-!])/i,
       product: 'Barra de chocolate',
@@ -432,7 +457,7 @@ export function parseDynamicFinancialMessage(
       product: (m) => m.charAt(0).toUpperCase() + m.slice(1).toLowerCase(),
       category: 'Lanche'
     },
-    // Bebidas (Exemplo explícito: água no supermercado -> Categoria: Supermercado)
+    // Bebidas (ex: água no supermercado -> Categoria: Supermercado)
     {
       regex: /(?:^|[\s,.\-!])([aá]gua(?:\s+mineral)?)(?:$|[\s,.\-!])/i,
       product: 'Água mineral',
@@ -476,7 +501,19 @@ export function parseDynamicFinancialMessage(
     {
       regex: /(?:^|[\s,.\-!])(camisa|camiseta|cal[cç]a|t[eê]nis|sapato|roupa|vestido|bermuda|sand[aá]lia)(?:$|[\s,.\-!])/i,
       product: (m) => m.charAt(0).toUpperCase() + m.slice(1).toLowerCase(),
-      category: 'Vestuário'
+      category: () => isInternetPurchase ? 'Compras na Internet' : 'Vestuário'
+    },
+    // Animais / Pet
+    {
+      regex: /(?:^|[\s,.\-!])(ra[cç][aã]o|petisco|coleira|veterin[aá]ri[ao]|banho\s+e\s+tosa)(?:$|[\s,.\-!])/i,
+      product: (m) => m.charAt(0).toUpperCase() + m.slice(1).toLowerCase(),
+      category: 'Pet & Animais'
+    },
+    // Educação / Livros
+    {
+      regex: /(?:^|[\s,.\-!])(livro|curso|apostila|mensalidade\s+escolar|faculdade)(?:$|[\s,.\-!])/i,
+      product: (m) => m.charAt(0).toUpperCase() + m.slice(1).toLowerCase(),
+      category: 'Educação'
     }
   ];
 
@@ -497,7 +534,7 @@ export function parseDynamicFinancialMessage(
       .replace(/\b(pix|d[eé]bito|cr[eé]dito|cart[aã]o|dinheiro|transfer[eê]ncia|ted|doc)\b/gi, ' ');
 
     if (location) {
-      remaining = remaining.replace(new RegExp(`\\b${location}\\b`, 'gi'), ' ');
+      remaining = remaining.replace(new RegExp(`\\b${location.split(' ')[0]}\\b`, 'gi'), ' ');
     }
     if (cardName) {
       remaining = remaining.replace(new RegExp(`\\b${cardName}\\b`, 'gi'), ' ');
@@ -516,24 +553,34 @@ export function parseDynamicFinancialMessage(
     }
   }
 
-  // 3. Definição da Descrição do Gasto (Estabelecimento / Finalidade)
-  let description = location;
-  if (!description) {
-    description = type === 'Entrada' ? 'Recebimento' : (detectedProduct ? 'Estabelecimento Comercial' : 'Despesa Avulsa');
+  // 3. Definição do Estabelecimento
+  let establishment = location;
+  if (!establishment) {
+    if (isInternetPurchase) {
+      establishment = 'Internet';
+    } else if (type === 'Entrada') {
+      establishment = 'Recebimento';
+    } else {
+      establishment = detectedProduct ? 'Estabelecimento Comercial' : 'Despesa Avulsa';
+    }
   }
 
-  // 4. Definição Final da Categoria
+  // 4. Previsão Semântica da Categoria (Usa Inteligência Preditiva)
   if (!detectedCategory) {
-    if (type === 'Entrada') {
+    if (isInternetPurchase) {
+      detectedCategory = 'Compras na Internet';
+    } else if (type === 'Entrada') {
       detectedCategory = 'Recebimento';
-    } else if (location === 'Supermercado') {
+    } else if (establishment === 'Supermercado') {
       detectedCategory = 'Supermercado';
-    } else if (location === 'Farmácia') {
+    } else if (establishment === 'Farmácia') {
       detectedCategory = 'Saúde / Farmácia';
-    } else if (location === 'Restaurante' || location === 'Padaria' || location === 'Lanchonete') {
+    } else if (establishment === 'Restaurante' || establishment === 'Padaria' || establishment === 'Lanchonete') {
       detectedCategory = 'Alimentação';
-    } else if (location === 'Posto de Combustível') {
+    } else if (establishment === 'Posto de Combustível') {
       detectedCategory = 'Transporte';
+    } else if (establishment === 'Pet Shop') {
+      detectedCategory = 'Pet & Animais';
     } else if (method === 'Crédito') {
       detectedCategory = 'Cartão de Crédito';
     } else {
@@ -541,11 +588,14 @@ export function parseDynamicFinancialMessage(
     }
   }
 
-  // 5. Cidade Obrigatória (Se não informada, "Sem informação")
-  const finalCity = city || 'Sem informação';
+  // 5. Local / Cidade Obrigatória (Se for internet sem cidade, "Internet"; se não informado, "Sem informação")
+  let finalCity = city;
+  if (!finalCity) {
+    finalCity = isInternetPurchase ? 'Internet' : 'Sem informação';
+  }
 
   // 6. Produto formatado
-  const finalProduct = detectedProduct || (type === 'Entrada' ? 'Receita' : description);
+  const finalProduct = detectedProduct || (type === 'Entrada' ? 'Receita' : establishment);
 
   const symbol = type === 'Entrada' ? '+' : '-';
   let prefix = '💬 ';
@@ -555,7 +605,7 @@ export function parseDynamicFinancialMessage(
   const finalCardName = cardName || (method === 'Crédito' ? 'Nubank' : undefined);
   let methodDisplay = method === 'Crédito' && finalCardName ? `Crédito (${finalCardName})` : method;
 
-  let reply = `⚡ Lançamento adicionado ao KYRO Finance!\n\n${prefix}"${clean}"\n\n• Tipo: ${type}\n• Produto: ${finalProduct}\n• Descrição do Gasto: ${description}\n• Categoria: ${detectedCategory}\n• Valor: ${symbol} R$ ${amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n• Forma: ${methodDisplay}\n• Cidade: ${finalCity}`;
+  let reply = `⚡ Lançamento adicionado ao KYRO Finance!\n\n${prefix}"${clean}"\n\n• Tipo: ${type}\n• Produto: ${finalProduct}\n• Estabelecimento: ${establishment}\n• Categoria: ${detectedCategory}\n• Valor: ${symbol} R$ ${amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n• Forma: ${methodDisplay}\n• Local / Cidade: ${finalCity}`;
 
   if (method === 'Crédito' && finalCardName) {
     reply += `\n• Fatura: Adicionado à fatura do cartão ${finalCardName}`;
@@ -565,7 +615,8 @@ export function parseDynamicFinancialMessage(
   const savedTx = {
     id: Date.now().toString(),
     product: finalProduct,
-    description: description,
+    establishment: establishment,
+    description: establishment,
     amount,
     type,
     method,
@@ -586,8 +637,9 @@ export function parseDynamicFinancialMessage(
     cardName: finalCardName,
     installments: 1,
     product: finalProduct,
+    establishment: establishment,
     object: finalProduct,
-    location: description,
+    location: establishment,
     city: finalCity
   };
 }

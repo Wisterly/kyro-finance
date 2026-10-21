@@ -2650,6 +2650,7 @@ export default function App() {
                   const productMap = new Map<string, { product: string; total: number; count: number; locations: Set<string>; categories: Set<string> }>();
                   transactions.filter(t => t.type === 'Saída').forEach(t => {
                     const prodKey = (t.product || t.description).trim();
+                    const estKey = (t.establishment || t.description).trim();
                     if (!productMap.has(prodKey)) {
                       productMap.set(prodKey, {
                         product: prodKey,
@@ -2662,7 +2663,7 @@ export default function App() {
                     const item = productMap.get(prodKey)!;
                     item.total += t.amount;
                     item.count += 1;
-                    if (t.description) item.locations.add(t.description);
+                    if (estKey) item.locations.add(estKey);
                     if (t.category) item.categories.add(t.category);
                   });
 
@@ -3599,12 +3600,12 @@ export default function App() {
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
                     <div>
                       <label className="text-slate-400 block mb-1">Produto (Item Adquirido):</label>
-                      <input name="produto" placeholder="Ex: Barra de chocolate, Água..." className="w-full bg-[#161D32] border border-[#2A3554] p-2.5 rounded-lg text-slate-100 outline-none" />
+                      <input name="produto" placeholder="Ex: Barra de chocolate, Câmera..." className="w-full bg-[#161D32] border border-[#2A3554] p-2.5 rounded-lg text-slate-100 outline-none" />
                     </div>
 
                     <div>
-                      <label className="text-slate-400 block mb-1">Descrição do Gasto / Local:</label>
-                      <input required name="desc" placeholder="Ex: Farmácia, Supermercado..." className="w-full bg-[#161D32] border border-[#2A3554] p-2.5 rounded-lg text-slate-100 outline-none" />
+                      <label className="text-slate-400 block mb-1">Estabelecimento:</label>
+                      <input required name="desc" placeholder="Ex: Farmácia, Internet, Supermercado..." className="w-full bg-[#161D32] border border-[#2A3554] p-2.5 rounded-lg text-slate-100 outline-none" />
                     </div>
 
                     <div>
@@ -3617,12 +3618,16 @@ export default function App() {
                     <div>
                       <label className="text-slate-400 block mb-1">Categoria:</label>
                       <select name="cat" className="w-full bg-[#161D32] border border-[#2A3554] p-2 rounded-lg text-slate-100 outline-none">
-                        <option value="Alimentação">Alimentação</option>
                         <option value="Lanche">Lanche</option>
+                        <option value="Compras na Internet">Compras na Internet</option>
+                        <option value="Alimentação">Alimentação</option>
                         <option value="Supermercado">Supermercado</option>
-                        <option value="Transporte">Transporte / Posto</option>
                         <option value="Saúde">Saúde & Farmácia</option>
+                        <option value="Transporte">Transporte / Posto</option>
+                        <option value="Segurança & Eletrônicos">Segurança & Eletrônicos</option>
                         <option value="Vestuário">Vestuário / Compras</option>
+                        <option value="Pet & Animais">Pet & Animais</option>
+                        <option value="Educação">Educação</option>
                         <option value="Outros">Outros</option>
                       </select>
                     </div>
@@ -3639,8 +3644,8 @@ export default function App() {
                     </div>
 
                     <div>
-                      <label className="text-slate-400 block mb-1">Cidade:</label>
-                      <input name="cidade" defaultValue="Sem informação" className="w-full bg-[#161D32] border border-[#2A3554] p-2 rounded-lg text-slate-100 outline-none" />
+                      <label className="text-slate-400 block mb-1">Local / Cidade:</label>
+                      <input name="cidade" defaultValue="Sem informação" placeholder="Ex: Oeiras, PI, Internet..." className="w-full bg-[#161D32] border border-[#2A3554] p-2 rounded-lg text-slate-100 outline-none" />
                     </div>
                   </div>
 
@@ -4361,6 +4366,7 @@ export default function App() {
               const newObj: Transaction = {
                 id: Date.now().toString(),
                 product: form.produto?.value?.trim() || undefined,
+                establishment: form.desc.value,
                 description: form.desc.value,
                 category: form.cat.value,
                 subcategory: form.subcat.value || form.produto?.value?.trim() || form.desc.value,
@@ -4379,21 +4385,21 @@ export default function App() {
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="text-slate-400 block mb-1">Produto / Item Adquirido</label>
-                  <input name="produto" placeholder="Ex: Barra de chocolate, Água..." className="w-full bg-[#161D32] border border-[#2A3554] p-2 rounded-lg text-slate-100" />
+                  <input name="produto" placeholder="Ex: Barra de chocolate, Câmera..." className="w-full bg-[#161D32] border border-[#2A3554] p-2 rounded-lg text-slate-100" />
                 </div>
                 <div>
-                  <label className="text-slate-400 block mb-1">Descrição / Local</label>
-                  <input required name="desc" placeholder="Ex: Farmácia, Restaurante..." className="w-full bg-[#161D32] border border-[#2A3554] p-2 rounded-lg text-slate-100" />
+                  <label className="text-slate-400 block mb-1">Estabelecimento</label>
+                  <input required name="desc" placeholder="Ex: Farmácia, Internet, Mercado Livre..." className="w-full bg-[#161D32] border border-[#2A3554] p-2 rounded-lg text-slate-100" />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="text-slate-400 block mb-1">Categoria</label>
-                  <input required name="cat" placeholder="Ex: Alimentação, Vestuário" className="w-full bg-[#161D32] border border-[#2A3554] p-2 rounded-lg text-slate-100" />
+                  <input required name="cat" placeholder="Ex: Compras na Internet, Lanche, Mercado..." className="w-full bg-[#161D32] border border-[#2A3554] p-2 rounded-lg text-slate-100" />
                 </div>
                 <div>
                   <label className="text-slate-400 block mb-1">Subcategoria</label>
-                  <input name="subcat" placeholder="Ex: Pães, Roupas, Gasolina" className="w-full bg-[#161D32] border border-[#2A3554] p-2 rounded-lg text-slate-100" />
+                  <input name="subcat" placeholder="Ex: Eletrônicos, Doces, Gasolina" className="w-full bg-[#161D32] border border-[#2A3554] p-2 rounded-lg text-slate-100" />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-2">
