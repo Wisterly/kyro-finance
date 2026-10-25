@@ -43,6 +43,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     let transcribedText = '';
 
+    let cleanMime = 'audio/webm';
+    if (mimeType.includes('mp4') || mimeType.includes('m4a')) cleanMime = 'audio/mp4';
+    else if (mimeType.includes('aac')) cleanMime = 'audio/aac';
+    else if (mimeType.includes('ogg') || mimeType.includes('opus')) cleanMime = 'audio/ogg';
+    else if (mimeType.includes('wav')) cleanMime = 'audio/wav';
+    else if (mimeType.includes('mp3') || mimeType.includes('mpeg')) cleanMime = 'audio/mp3';
+
     // ESTRATÉGIA 1: GOOGLE GEMINI MULTIMODAL AUDIO (Se chave do Gemini estiver configurada)
     const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.VITE_GEMINI_API_KEY;
     if (geminiKey && geminiKey !== 'dummy_key') {
@@ -53,7 +60,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             parts: [
               {
                 inline_data: {
-                  mime_type: mimeType.includes('webm') ? 'audio/webm' : mimeType.includes('ogg') ? 'audio/ogg' : 'audio/mp3',
+                  mime_type: cleanMime,
                   data: cleanBase64
                 }
               },
@@ -76,9 +83,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // ESTRATÉGIA 2: OPENAI WHISPER-1 (Se Whisper estiver configurado e Gemini não transcrito)
     if (!transcribedText && process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== 'dummy_key') {
       try {
-        const ext = mimeType.includes('ogg') || mimeType.includes('opus') ? 'ogg' : mimeType.includes('mp4') ? 'mp4' : 'webm';
+        const ext = cleanMime.includes('mp4') || cleanMime.includes('m4a') ? 'm4a'
+          : cleanMime.includes('aac') ? 'aac'
+          : cleanMime.includes('ogg') ? 'ogg'
+          : cleanMime.includes('wav') ? 'wav'
+          : 'webm';
         const file = await toFile(audioBuffer, `user_voice.${ext}`, {
-          type: mimeType || 'audio/webm'
+          type: cleanMime
         });
 
         const transcription = await openai.audio.transcriptions.create({

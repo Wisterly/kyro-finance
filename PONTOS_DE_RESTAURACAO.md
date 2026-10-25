@@ -152,3 +152,56 @@ A numeração segue rigorosamente a hierarquia de escopo:
   - Alvos de toque acessíveis (`p-2.5`, espaçamento entre linhas e botões com feedback tátil visual).
   - Informações condensadas de produto, cidade, estabelecimento, data e valor formatado com cores de alerta visual (vermelho para saída, verde para entrada).
   - Operação completa 100% por voz ou por toque direto na tela do smartphone.
+
+---
+
+### [PR.005] — Unificação Universal de Áudio & Atualização Imediata Mobile/Desktop
+- **Data/Hora:** 2026-10-25 02:44 (UTC-3)
+- **Tags Git:** `PR.005`, `PR.005.1`, `PR.005.2`
+
+#### `PR.005` — Escopo Geral do Projeto (Universal)
+- **Motor de Áudio Físico e Universal (Zero Erros em Mobile e Desktop):**
+  - Unificação completa da captura de áudio: ativada tanto no computador quanto no celular (Android e iOS).
+  - O `MediaRecorder` detecta automaticamente o melhor MIME type suportado pelo hardware (`audio/webm;codecs=opus`, `audio/mp4`, `audio/aac`, `audio/ogg`).
+  - O stream de áudio físico é gravado independentemente das limitações da API de fala do navegador.
+  - Se a transcrição local não vier com clareza (latência de rede, silêncio do WebKit ou falha de conexão do Chrome), o áudio gravado é enviado imediatamente em base64 para a rota `/api/transcribe` com processamento por **OpenAI Whisper** e **Google Gemini 1.5 Flash**.
+  - Erradicação absoluta e definitiva de qualquer popup `alert()` no sistema.
+- **Service Worker e Cache PWA com Estratégia Network-First:**
+  - Atualização do Service Worker para a versão `kyro-finance-v4-universal`.
+  - Estratégia **Network-First** para documentos e scripts HTML/JS, garantindo que o celular e o desktop sempre baixem imediatamente o código mais recente disponibilizado na Vercel, impedindo que dispositivos móveis fiquem travados em caches antigos.
+  - Limpeza forçada e automática de caches anteriores no ciclo de ativação do Service Worker (`caches.delete`).
+- **Consolidação de Todas as Funcionalidades Anteriores:**
+  - Busca semântica e cancelamento de transações antigas e múltiplos registros (ex: 3 lançamentos em Caxias com card interativo e checkboxes).
+  - Interpretação contextual de gastos diários (combustível, alimentação, farmácia, internet) sem misturar com liquidação de dívidas recorrentes.
+  - Sincronização em nuvem 24 horas via Google Firebase Firestore.
+
+#### `PR.005.1` — Versão Computador (Desktop)
+- Suporte a microfones USB, headsets e microfones embutidos com visualização de transcrição em tempo real na barra lateral direita.
+
+#### `PR.005.2` — Versão Celular (Mobile)
+- Microfone móvel integrado com permissão nativa, suporte a áudio gravado no Android (WebM/Opus) e iPhone Safari (MP4/AAC), com auto-reload PWA ao detectar novos deploys.
+
+---
+
+## TABELA DE CÓDIGOS DE PONTOS DE RESTAURAÇÃO
+
+Se você desejar restaurar qualquer versão anterior ou atual do Kyro Finance, basta colar o código do ponto de restauração na conversa:
+
+| Código do Ponto | Escopo | Descrição Resumida |
+| :--- | :--- | :--- |
+| **`PR.001`** | **Geral (Universal)** | Fundação da arquitetura de Trilho Duplo, Dashboard, Transações e Cartões |
+| **`PR.001.1`** | Desktop | Interface panorâmica com sidebar fixa e tabelas estendidas |
+| **`PR.001.2`** | Mobile | Drawer móvel, classes `.mobile-only` e viewport 390x844px |
+| **`PR.002`** | **Geral (Universal)** | Copiloto Cognitivo sem respostas padrão, manipulação do último lançamento |
+| **`PR.002.1`** | Desktop | Painel de IA lateral direito com histórico de respostas fluidas |
+| **`PR.002.2`** | Mobile | Paridade mobile com digitação por voz e controle touch |
+| **`PR.003`** | **Geral (Universal)** | IA de Áudio Multimodal (Whisper & Gemini) e refinamento de combustíveis |
+| **`PR.003.1`** | Desktop | Fallback de IA no desktop |
+| **`PR.003.2`** | Mobile | Transmissão de chunks no mobile |
+| **`PR.004`** | **Geral (Universal)** | Busca semântica de lançamentos e exclusão interativa com seleção múltipla |
+| **`PR.004.1`** | Desktop | Card interativo na sidebar direita com checkboxes e botão de exclusão em lote |
+| **`PR.004.2`** | Mobile | Card interativo touch-friendly no drawer do smartphone |
+| **`PR.005`** | **Geral (Universal)** | **Unificação definitiva de áudio físico (MediaRecorder multi-formato), PWA Network-First e zero alertas** |
+| **`PR.005.1`** | Desktop | Áudio e transcrição Whisper/Gemini universais no desktop |
+| **`PR.005.2`** | Mobile | Áudio e transcrição Whisper/Gemini universais no celular com auto-update de cache |
+

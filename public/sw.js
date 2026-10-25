@@ -1,4 +1,4 @@
-const CACHE_NAME = 'kyro-finance-v1';
+const CACHE_NAME = 'kyro-finance-v4-universal';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -12,12 +12,12 @@ const STATIC_ASSETS = [
 ];
 
 self.addEventListener('install', (event) => {
+  self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       return cache.addAll(STATIC_ASSETS);
     })
   );
-  self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
@@ -26,49 +26,52 @@ self.addEventListener('activate', (event) => {
       return Promise.all(
         keys.map((key) => {
           if (key !== CACHE_NAME) {
+            console.log('[SW] Removendo cache antigo:', key);
             return caches.delete(key);
           }
         })
       );
-    })
+    }).then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
 self.addEventListener('fetch', (event) => {
-  // Ignora requisições de API para não interceptar as chamadas serverless de IA ou Webhooks
+  // Ignora requisições de API para nunca interceptar rotas de IA, transcrição ou Webhooks
   if (event.request.url.includes('/api/')) {
     return;
   }
 
-  event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      if (cachedResponse) {
-        // Atualiza o cache em background quando online (stale-while-revalidate)
-        fetch(event.request)
-          .then((networkResponse) => {
-            if (networkResponse && networkResponse.status === 200) {
-              caches.open(CACHE_NAME).then((cache) => cache.put(event.request, networkResponse));
-            }
-          })
-          .catch(() => {});
-        return cachedResponse;
-      }
-
-      return fetch(event.request)
+  // Para navegação HTML (index.html e rota raiz): NETWORK-FIRST
+  // Garante que o celular ou desktop sempre receba a versão mais recente e atualizada do app
+  if (event.request.mode === 'navigate' || event.request.destination === 'document') {
+    event.respondWith(
+      fetch(event.request)
         .then((networkResponse) => {
-          if (!networkResponse || networkResponse.status !== 200 || networkResponse.type !== 'basic') {
-            return networkResponse;
+          if (networkResponse && networkResponse.status === 200) {
+            const copy = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
           }
-          const responseToCache = networkResponse.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseToCache));
           return networkResponse;
         })
         .catch(() => {
-          if (event.request.mode === 'navigate') {
-            return caches.match('/');
-          }
-        });
+          return caches.match(event.request).then((cached) => cached || caches.match('/'));
+        })
+    );
+    return;
+  }
+
+  // Para assets estáticos: Stale-While-Revalidate com prioridade de rede
+  event.respondWith(
+    caches.match(event.request).then((cachedResponse) => {
+      const fetchPromise = fetch(event.request).then((networkResponse) => {
+        if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
+          const responseToCache = networkResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseToCache));
+        }
+        return networkResponse;
+      }).catch(() => cachedResponse);
+
+      return cachedResponse || fetchPromise;
     })
   );
 });

@@ -1465,16 +1465,28 @@ export default function App() {
       isRecordingAudioRef.current = true;
       recordedTextRef.current = '';
       setLiveAudioTranscript('');
-      
-      const isMobileDevice = typeof navigator !== 'undefined' && 
-        /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
+      // 1. Detecção do melhor MIME type suportado nativamente pelo dispositivo (Desktop / Android / iOS Safari)
+      let selectedMimeType = '';
+      if (typeof MediaRecorder !== 'undefined') {
+        if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+          selectedMimeType = 'audio/webm;codecs=opus';
+        } else if (MediaRecorder.isTypeSupported('audio/webm')) {
+          selectedMimeType = 'audio/webm';
+        } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
+          selectedMimeType = 'audio/mp4';
+        } else if (MediaRecorder.isTypeSupported('audio/aac')) {
+          selectedMimeType = 'audio/aac';
+        } else if (MediaRecorder.isTypeSupported('audio/ogg')) {
+          selectedMimeType = 'audio/ogg';
+        }
+      }
+
+      // 2. Reconhecimento de Fala Nativo (SpeechRecognition) para feedback visual em tempo real
       const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-      let recognitionInstance: any = null;
-
       if (SpeechRecognition) {
         try {
-          recognitionInstance = new SpeechRecognition();
+          const recognitionInstance = new SpeechRecognition();
           recognitionInstance.lang = 'pt-BR';
           recognitionInstance.continuous = true;
           recognitionInstance.interimResults = true;
@@ -1492,20 +1504,17 @@ export default function App() {
             }
             const currentTotal = `${recordedTextRef.current} ${interim}`.trim();
             setLiveAudioTranscript(currentTotal);
-            // Atualiza imediatamente o campo de texto visível para digitação instantânea sem congelamento
             setInputMessage(currentTotal);
           };
 
           recognitionInstance.onerror = (e: any) => {
-            console.warn('[SpeechRecognition] Alerta/Erro:', e.error || e);
-            // Em dispositivos móveis, caso o WebKit pause por breves silêncios, religa sem interromper
+            console.warn('[SpeechRecognition Info]:', e.error || e);
             if (isRecordingAudioRef.current && (e.error === 'no-speech' || e.error === 'network')) {
               try { recognitionInstance.start(); } catch (err) {}
             }
           };
 
           recognitionInstance.onend = () => {
-            // Se o usuário ainda estiver com o microfone ligado, reinicia para gravação contínua perfeita
             if (isRecordingAudioRef.current) {
               try { recognitionInstance.start(); } catch (err) {}
             }
@@ -1514,113 +1523,112 @@ export default function App() {
           recognitionInstance.start();
           speechRecognitionRef.current = recognitionInstance;
         } catch (e) {
-          console.warn('[SpeechRecognition] Falha ao iniciar reconhecimento nativo:', e);
+          console.warn('[SpeechRecognition Fallback para MediaRecorder]:', e);
         }
       }
 
-      // Em dispositivos móveis (Android/iOS), não acionamos o MediaRecorder simultaneamente se o SpeechRecognition estiver ativo,
-      // pois o getUserMedia bloqueia com lock de hardware o microfone do SpeechRecognizer no Android/WebKit.
-      // Em desktops ou caso o SpeechRecognition não exista, ativamos o fluxo normal de captura de stream:
-      if (!isMobileDevice || !SpeechRecognition) {
-        try {
-          const stream = await navigator.mediaDevices.getUserMedia({ 
-            audio: { echoCancellation: true, noiseSuppression: true } 
-          });
-          const recorder = new MediaRecorder(stream);
-          audioChunksRef.current = [];
-          recorder.ondataavailable = (e) => {
-            if (e.data.size > 0) audioChunksRef.current.push(e.data);
-          };
-          recorder.onstop = async () => {
-            const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-            const audioUrl = URL.createObjectURL(audioBlob);
-            stream.getTracks().forEach(track => track.stop());
+      // 3. Captura Universal e Física do Microfone via MediaRecorder (Desktop e Celular)
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } 
+      });
 
-            let finalText = recordedTextRef.current.trim() || liveAudioTranscript.trim() || inputMessage.trim();
+      const recorder = selectedMimeType 
+        ? new MediaRecorder(stream, { mimeType: selectedMimeType })
+        : new MediaRecorder(stream);
 
-            // Se a API nativa do navegador não transcreveu texto em tempo real (ex: delay nos servidores do Chrome):
-            // Aciona imediatamente o motor Whisper / Gemini do servidor (/api/transcribe)
-            if (!finalText && audioBlob.size > 800) {
-              const tempMsgId = `temp_audio_${Date.now()}`;
-              setMessages(prev => [...prev, {
-                id: tempMsgId,
-                sender: 'user',
-                text: '🎙️ [Áudio de Voz]: Transcrevendo com Inteligência Artificial (Whisper / Gemini)...',
-                audioUrl,
-                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-              }]);
+      audioChunksRef.current = [];
+      recorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
 
-              setInputMessage('');
-              setLiveAudioTranscript('');
-              setIsAiLoading(true);
+      recorder.onstop = async () => {
+        const mime = selectedMimeType || recorder.mimeType || 'audio/webm';
+        const audioBlob = new Blob(audioChunksRef.current, { type: mime });
+        const audioUrl = URL.createObjectURL(audioBlob);
+        stream.getTracks().forEach(track => track.stop());
 
-              try {
-                const reader = new FileReader();
-                const base64Promise = new Promise<string>((resolve) => {
-                  reader.onload = () => resolve(reader.result as string);
-                  reader.onerror = () => resolve('');
-                });
-                reader.readAsDataURL(audioBlob);
-                const audioBase64 = await base64Promise;
+        let finalText = recordedTextRef.current.trim() || liveAudioTranscript.trim() || inputMessage.trim();
 
-                if (audioBase64) {
-                  const res = await fetch('/api/transcribe', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ audioBase64, mimeType: audioBlob.type || 'audio/webm' })
-                  });
-                  const data = await res.json();
-                  if (data?.success && data?.text) {
-                    finalText = data.text.trim();
-                    setMessages(prev => prev.map(m => m.id === tempMsgId ? { ...m, text: `🎙️ "${finalText}"` } : m));
-                  }
-                }
-              } catch (err) {
-                console.warn('[Audio Transcribe Client Fallback]:', err);
-              } finally {
-                setIsAiLoading(false);
+        // 4. Se o navegador não conseguiu transcrever localmente (comum em redes móveis 4G/5G ou iOS):
+        // Envia imediatamente para o backend serverless (/api/transcribe) com Whisper / Gemini
+        if (!finalText && audioBlob.size > 300) {
+          const tempMsgId = `temp_audio_${Date.now()}`;
+          setMessages(prev => [...prev, {
+            id: tempMsgId,
+            sender: 'user',
+            text: '🎙️ [Áudio de Voz]: Transcrevendo com Inteligência Artificial (Whisper / Gemini)...',
+            audioUrl,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          }]);
+
+          setInputMessage('');
+          setLiveAudioTranscript('');
+          setIsAiLoading(true);
+
+          try {
+            const reader = new FileReader();
+            const base64Promise = new Promise<string>((resolve) => {
+              reader.onload = () => resolve(reader.result as string);
+              reader.onerror = () => resolve('');
+            });
+            reader.readAsDataURL(audioBlob);
+            const audioBase64 = await base64Promise;
+
+            if (audioBase64) {
+              const res = await fetch('/api/transcribe', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ audioBase64, mimeType: mime })
+              });
+              const data = await res.json();
+              if (data?.success && data?.text) {
+                finalText = data.text.trim();
+                setMessages(prev => prev.map(m => m.id === tempMsgId ? { ...m, text: `🎙️ "${finalText}"` } : m));
               }
             }
-
-            if (!finalText) {
-              setMessages(prev => [...prev, {
-                id: Date.now().toString(),
-                sender: 'ia',
-                text: 'Não consegui captar a sua voz com nitidez neste momento. Por favor, fale mais próximo ao microfone ou digite na caixa de texto.',
-                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-              }]);
-              return;
-            }
-
-            // Se o texto não veio via fallback do servidor, registra a mensagem normalmente
-            setMessages(prev => {
-              const alreadyHas = prev.some(m => m.audioUrl === audioUrl);
-              if (alreadyHas) return prev;
-              return [...prev, {
-                id: Date.now().toString(),
-                sender: 'user',
-                text: `🎙️ "${finalText}"`,
-                audioUrl,
-                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-              }];
-            });
-
-            setInputMessage('');
-            setLiveAudioTranscript('');
-
-            await handleProcessUserInteraction({
-              type: 'audio',
-              text: finalText,
-              audioUrl
-            });
-          };
-
-          recorder.start(250);
-          mediaRecorderRef.current = recorder;
-        } catch (audioErr) {
-          console.warn('[Audio Stream Info]: Usando modo de transcrição direta de voz por speech API.');
+          } catch (err) {
+            console.warn('[Audio Transcribe Fallback]:', err);
+          } finally {
+            setIsAiLoading(false);
+          }
         }
-      }
+
+        // 5. Se mesmo após Whisper/Gemini não houver fala detectável (ex: microfone mudo)
+        if (!finalText) {
+          setMessages(prev => [...prev, {
+            id: Date.now().toString(),
+            sender: 'ia',
+            text: 'Não consegui captar a sua voz com nitidez neste momento. Por favor, fale mais próximo ao microfone ou digite na caixa de texto.',
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          }]);
+          return;
+        }
+
+        // 6. Mensagem de áudio confirmada -> Processa a inteligência financeira imediatamente
+        setMessages(prev => {
+          const alreadyHas = prev.some(m => m.audioUrl === audioUrl);
+          if (alreadyHas) return prev;
+          return [...prev, {
+            id: Date.now().toString(),
+            sender: 'user',
+            text: `🎙️ "${finalText}"`,
+            audioUrl,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          }];
+        });
+
+        setInputMessage('');
+        setLiveAudioTranscript('');
+
+        await handleProcessUserInteraction({
+          type: 'audio',
+          text: finalText,
+          audioUrl
+        });
+      };
+
+      recorder.start(250);
+      mediaRecorderRef.current = recorder;
 
       setIsRecordingAudio(true);
       setAudioRecordingTime(0);
@@ -1632,10 +1640,12 @@ export default function App() {
 
     } catch (err: any) {
       isRecordingAudioRef.current = false;
+      setIsRecordingAudio(false);
+      console.warn('[Microfone Permissão/Erro]:', err);
       setMessages(prev => [...prev, {
         id: Date.now().toString(),
         sender: 'ia',
-        text: 'Não foi possível acessar o microfone do seu navegador. Verifique as permissões de áudio nas configurações do seu navegador ou digite diretamente no campo de texto.',
+        text: 'Não foi possível acessar o microfone do seu dispositivo. Por favor, autorize a permissão de áudio nas configurações do seu navegador (ícone de cadeado na barra de endereços) ou digite sua mensagem diretamente na caixa de texto.',
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       }]);
     }
@@ -1643,15 +1653,24 @@ export default function App() {
 
   const stopRecordingAudio = async () => {
     isRecordingAudioRef.current = false;
+    setIsRecordingAudio(false);
+
+    if (timerIntervalRef.current) {
+      clearInterval(timerIntervalRef.current);
+      timerIntervalRef.current = null;
+    }
 
     if (speechRecognitionRef.current) {
       try { speechRecognitionRef.current.stop(); } catch (e) {}
     }
 
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-      try { mediaRecorderRef.current.stop(); } catch (e) {}
+      try { 
+        mediaRecorderRef.current.stop(); 
+      } catch (e) {
+        console.warn('[MediaRecorder Stop Erro]:', e);
+      }
     } else {
-      // Caso o MediaRecorder não tenha sido ativado (ex: Mobile Speech nativo), processa diretamente o texto capturado
       const finalText = recordedTextRef.current.trim() || liveAudioTranscript.trim() || inputMessage.trim();
       if (finalText) {
         setMessages(prev => [...prev, {
@@ -1666,21 +1685,8 @@ export default function App() {
           type: 'audio',
           text: finalText
         });
-      } else {
-        setMessages(prev => [...prev, {
-          id: Date.now().toString(),
-          sender: 'ia',
-          text: 'Não consegui captar a sua voz com nitidez neste momento. Por favor, fale mais próximo ao microfone ou digite na caixa de texto.',
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        }]);
       }
     }
-
-    if (timerIntervalRef.current) {
-      clearInterval(timerIntervalRef.current);
-      timerIntervalRef.current = null;
-    }
-    setIsRecordingAudio(false);
   };
 
   // Upload e Análise IA de Documento (Foto, Câmera ou PDF)
