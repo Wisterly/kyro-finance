@@ -210,15 +210,50 @@ A numeração segue rigorosamente a hierarquia de escopo:
 
 ---
 
+### [PR.007] — Banco de Dados Centralizado Universal na Nuvem 24h & Áudio Dedicado Mobile
+- **Data/Hora:** 2026-10-25 03:35 (UTC-3)
+- **Tags Git:** `PR.007`, `PR.007.1`, `PR.007.2`
+
+#### `PR.007` — Escopo Geral do Projeto (Universal)
+- **Banco de Dados Centralizado Oficial na Nuvem (`/api/database.ts`):**
+  - Eliminação completa do isolamento de dados por navegador, dispositivo ou IP.
+  - Qualquer smartphone, computador ou navegador que acesse o link oficial carrega **exatamente a mesma base de dados unificada**: mesmos saldos, mesmos lançamentos reais, mesmos cartões e mesmas despesas.
+  - Sincronização contínua em tempo real (polling inteligente a cada 4 segundos): se você lançar uma compra no Celular A, o Celular B e o Computador atualizam a tela automaticamente e mostram o novo saldo na mesma hora.
+  - Persistência 24 horas conectada ao Google Firebase Firestore no backend com fallback para memória em nuvem no Edge.
+- **Áudio no Celular Sem Colisão de Microfone (Modo Exclusivo Mobile):**
+  - Fim definitivo do microfone mudo após o sinal sonoro ("plim") no Android.
+  - No celular, o motor nativo `SpeechRecognition` recebe controle exclusivo do microfone, impedindo que chamadas paralelas de `getUserMedia` cortem a captura de voz.
+  - A fala do usuário é redigida em tempo real no campo de texto e no visualizador ao vivo enquanto fala, e executada instantaneamente ao concluir.
+
+#### `PR.007.1` — Versão Computador (Desktop)
+- Sincronização contínua com `/api/database` em tela cheia com recálculo automático de saldos e gráficos.
+
+#### `PR.007.2` — Versão Celular (Mobile)
+- Captura de áudio nativa no Android e Safari iOS, eliminação de mocks em novos smartphones e dados 100% idênticos ao computador.
+
+---
+
 ## TABELA DE CÓDIGOS DE PONTOS DE RESTAURAÇÃO
 
 Se você desejar restaurar qualquer versão anterior ou atual do Kyro Finance, basta colar o código do ponto de restauração na conversa:
 
 | Código do Ponto | Escopo | Descrição Resumida |
 | :--- | :--- | :--- |
-| **`PR.006`** | **Geral (Universal)** | **Versão Atual: Pesquisa geral profunda tokenizada (Caxias, cidades, produtos), remoção automática para 1 match, lista com seleção e modal de ajuste/edição para múltiplos matches** |
-| `PR.006.1` | Desktop | Interface desktop panorâmica com card interativo e modal de ajuste de lançamentos |
-| `PR.006.2` | Mobile | Interface móvel com drawer touch, modal de edição responsivo e botões táteis |
+| **`PR.007`** | **Geral (Universal)** | **Versão Atual: Banco de dados centralizado universal na nuvem 24h (mesmos dados em qualquer celular/PC/IP), áudio mobile sem colisão e sincronização contínua** |
+| `PR.007.1` | Desktop | Interface desktop com sincronização em nuvem e painel analítico |
+| `PR.007.2` | Mobile | Interface mobile com áudio nativo exclusivo sem travamentos e dados compartilhados |
+| **`PR.006`** | **Geral (Universal)** | Pesquisa geral profunda tokenizada (Caxias, cidades, produtos), remoção automática para 1 match e modal de ajuste |
+| `PR.006.1` | Desktop | Interface desktop com card interativo e modal de ajuste |
+| `PR.006.2` | Mobile | Interface móvel com drawer touch e modal de edição responsivo |
+| **`PR.005`** | **Geral (Universal)** | Unificação definitiva de áudio físico móvel e desktop, PWA Network-First e zero alertas |
+| `PR.005.1` | Desktop | Áudio e transcrição Whisper/Gemini universais no desktop |
+| `PR.005.2` | Mobile | Áudio e transcrição Whisper/Gemini universais no celular com auto-update de cache |
+| **`PR.004`** | **Geral (Universal)** | Busca semântica de lançamentos e exclusão interativa com seleção múltipla |
+| `PR.004.1` | Desktop | Card interativo na sidebar direita com checkboxes e botão de exclusão em lote |
+| `PR.004.2` | Mobile | Card interativo touch-friendly no drawer do smartphone |
+| **`PR.003`** | **Geral (Universal)** | IA de Áudio Multimodal (Whisper & Gemini) e refinamento de combustíveis |
+| **`PR.002`** | **Geral (Universal)** | Copiloto Cognitivo sem respostas padrão, manipulação do último lançamento |
+| **`PR.001`** | **Geral (Universal)** | Fundação da arquitetura de Trilho Duplo, Dashboard, Transações e Cartões |
 | **`PR.005`** | **Geral (Universal)** | Unificação definitiva de áudio físico móvel e desktop, PWA Network-First e zero alertas |
 | `PR.005.1` | Desktop | Áudio e transcrição Whisper/Gemini universais no desktop |
 | `PR.005.2` | Mobile | Áudio e transcrição Whisper/Gemini universais no celular com auto-update de cache |

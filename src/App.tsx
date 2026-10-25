@@ -439,6 +439,91 @@ export default function App() {
     localStorage.setItem('kyro_transactions', JSON.stringify(transactions));
   }, [transactions]);
 
+  // ==============================================================
+  // BANCO DE DADOS CENTRALIZADO E UNIVERSAL DO KYRO FINANCE (24H)
+  // Compartilhado automaticamente entre todos os Celulares, PCs e IPs
+  // ==============================================================
+  const syncSaveToCentralDb = async (tx: Transaction) => {
+    try {
+      await fetch('/api/database', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'save_transaction', transaction: tx })
+      });
+    } catch (e) {
+      console.warn('[Central DB Sync Error]:', e);
+    }
+  };
+
+  const syncDeleteFromCentralDb = async (id: string) => {
+    try {
+      await fetch('/api/database', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'delete_transaction', id })
+      });
+    } catch (e) {
+      console.warn('[Central DB Delete Error]:', e);
+    }
+  };
+
+  const syncDeleteManyFromCentralDb = async (ids: string[]) => {
+    try {
+      await fetch('/api/database', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'delete_transactions', ids })
+      });
+    } catch (e) {
+      console.warn('[Central DB Delete Many Error]:', e);
+    }
+  };
+
+  // Carregamento Inicial e Sincronização Contínua em Tempo Real com o Banco Central da Nuvem
+  useEffect(() => {
+    let isMounted = true;
+
+    const pullCentralDb = async () => {
+      try {
+        const res = await fetch('/api/database');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data?.success && isMounted) {
+          if (Array.isArray(data.transactions) && data.transactions.length > 0) {
+            setTransactions(prev => {
+              const currentSig = prev.map(t => `${t.id}_${t.amount}`).join('|');
+              const incomingSig = data.transactions.map((t: any) => `${t.id}_${t.amount}`).join('|');
+              if (currentSig !== incomingSig || prev.length === 0) {
+                localStorage.setItem('kyro_transactions', JSON.stringify(data.transactions));
+                return data.transactions;
+              }
+              return prev;
+            });
+          } else if (transactions.length > 0) {
+            // Inicializa o banco central se estiver vazio
+            fetch('/api/database', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                action: 'sync_all',
+                transactions,
+                recurringExpenses,
+                creditCards
+              })
+            }).catch(() => {});
+          }
+        }
+      } catch (err) {}
+    };
+
+    pullCentralDb();
+    const interval = setInterval(pullCentralDb, 4000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, []);
+
   // Listener em tempo real do Firestore se conectado
   useEffect(() => {
     if (kyroCloud.isConnected) {
@@ -550,6 +635,7 @@ export default function App() {
     if (window.confirm("Deseja realmente excluir esta transação? Os saldos serão recalculados instantaneamente.")) {
       setTransactions(prev => prev.filter(t => t.id !== id));
       kyroCloud.syncDeleteTransaction(id);
+      syncDeleteFromCentralDb(id);
       if (selectedTx && selectedTx.id === id) {
         setSelectedTx(null);
       }
@@ -595,6 +681,7 @@ export default function App() {
     setRecurringExpenses(prev => prev.map(r => r.id === recId ? { ...r, paid: true, paidAt: new Date().toISOString(), transactionId: txId } : r));
     setTransactions(prev => [paidTx, ...prev]);
     kyroCloud.syncSaveTransaction(paidTx);
+    syncSaveToCentralDb(paidTx);
 
     setWhatsappSyncToast({
       show: true,
@@ -783,6 +870,7 @@ export default function App() {
 
     setTransactions(prev => [paymentTx, ...prev]);
     kyroCloud.syncSaveTransaction(paymentTx);
+    syncSaveToCentralDb(paymentTx);
 
     setWhatsappSyncToast({
       show: true,
@@ -863,6 +951,7 @@ export default function App() {
     if (window.confirm(`Deseja realmente excluir as ${count} ${label} selecionadas? Os saldos, métricas e o Dashboard serão recalculados instantaneamente.`)) {
       setTransactions(prev => prev.filter(t => !idsToDelete.has(t.id)));
       idsToDelete.forEach(id => kyroCloud.syncDeleteTransaction(id));
+      syncDeleteManyFromCentralDb(Array.from(idsToDelete));
       setSelectedEntryIds(new Set());
       setSelectedExitIds(new Set());
       setSelectedTxTabIds(new Set());
@@ -1154,6 +1243,7 @@ export default function App() {
 
     setTransactions(prev => prev.map(t => t.id === updatedTx.id ? updatedTx : t));
     kyroCloud.syncSaveTransaction(updatedTx);
+    syncSaveToCentralDb(updatedTx);
 
     setWhatsappSyncToast({
       show: true,
@@ -1197,8 +1287,9 @@ export default function App() {
     // 1. Remove do estado local
     setTransactions(prev => prev.filter(t => !txIds.includes(t.id)));
 
-    // 2. Deleta do Firestore
+    // 2. Deleta do Firestore e do Banco Central
     txIds.forEach(id => kyroCloud.syncDeleteTransaction(id));
+    syncDeleteManyFromCentralDb(txIds);
 
     // 3. Limpa seleções pendentes
     setSelectedTxIdsForRemoval(new Set());
@@ -1254,6 +1345,7 @@ export default function App() {
       if (action.actionType === 'single_deleted' && action.updatedTransactions && action.deletedTransactionId) {
         setTransactions(action.updatedTransactions);
         kyroCloud.syncDeleteTransaction(action.deletedTransactionId);
+        syncDeleteFromCentralDb(action.deletedTransactionId);
         setWhatsappSyncToast({
           show: true,
           text: '🗑️ Lançamento removido com sucesso!'
@@ -1287,6 +1379,7 @@ export default function App() {
       if (action.updatedTransactions && action.modifiedTransaction) {
         setTransactions(action.updatedTransactions);
         kyroCloud.syncSaveTransaction(action.modifiedTransaction);
+        syncSaveToCentralDb(action.modifiedTransaction);
         setWhatsappSyncToast({
           show: true,
           text: `✏️ Último lançamento atualizado: R$ ${action.modifiedTransaction.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}!`
@@ -1318,6 +1411,7 @@ export default function App() {
       if (action.updatedTransactions && action.modifiedTransaction) {
         setTransactions(action.updatedTransactions);
         kyroCloud.syncSaveTransaction(action.modifiedTransaction);
+        syncSaveToCentralDb(action.modifiedTransaction);
         setWhatsappSyncToast({
           show: true,
           text: `➕ Informação acrescentada ao último lançamento!`
@@ -1431,6 +1525,7 @@ export default function App() {
 
         setTransactions(prev => [newTx, ...prev]);
         kyroCloud.syncSaveTransaction(newTx);
+        syncSaveToCentralDb(newTx);
 
         const symbol = newTx.type === 'Entrada' ? '+' : '-';
         setWhatsappSyncToast({
@@ -1519,7 +1614,72 @@ export default function App() {
       recordedTextRef.current = '';
       setLiveAudioTranscript('');
 
-      // 1. Detecção do melhor MIME type suportado nativamente pelo dispositivo (Desktop / Android / iOS Safari)
+      const isMobile = typeof navigator !== 'undefined' && 
+        /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+
+      // =====================================================================
+      // MODO 1: CELULAR COM SPEECH RECOGNITION NATIVO (EX: ANDROID CHROME)
+      // Dedica o microfone com exclusividade ao motor do Google para evitar colisão e som mudo
+      // =====================================================================
+      if (isMobile && SpeechRecognition) {
+        try {
+          const recognitionInstance = new SpeechRecognition();
+          recognitionInstance.lang = 'pt-BR';
+          recognitionInstance.continuous = true;
+          recognitionInstance.interimResults = true;
+          recognitionInstance.maxAlternatives = 1;
+
+          recognitionInstance.onresult = (event: any) => {
+            let interim = '';
+            for (let i = event.resultIndex; i < event.results.length; i++) {
+              const transcriptPiece = event.results[i][0].transcript;
+              if (event.results[i].isFinal) {
+                recordedTextRef.current = (recordedTextRef.current + ' ' + transcriptPiece).trim();
+              } else {
+                interim += transcriptPiece;
+              }
+            }
+            const currentTotal = `${recordedTextRef.current} ${interim}`.trim();
+            setLiveAudioTranscript(currentTotal);
+            setInputMessage(currentTotal);
+          };
+
+          recognitionInstance.onerror = (e: any) => {
+            console.warn('[Mobile Speech Recognition]:', e.error || e);
+            if (isRecordingAudioRef.current && (e.error === 'no-speech' || e.error === 'network')) {
+              try { recognitionInstance.start(); } catch (err) {}
+            }
+          };
+
+          recognitionInstance.onend = () => {
+            if (isRecordingAudioRef.current) {
+              try { recognitionInstance.start(); } catch (err) {}
+            }
+          };
+
+          recognitionInstance.start();
+          speechRecognitionRef.current = recognitionInstance;
+          mediaRecorderRef.current = null;
+
+          setIsRecordingAudio(true);
+          setAudioRecordingTime(0);
+
+          if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+          timerIntervalRef.current = setInterval(() => {
+            setAudioRecordingTime(prev => prev + 1);
+          }, 1000);
+
+          return;
+        } catch (mobileSpeechErr) {
+          console.warn('[Mobile Speech Fallback para MediaRecorder]:', mobileSpeechErr);
+        }
+      }
+
+      // =====================================================================
+      // MODO 2: DESKTOP OU SAFARI IOS (MEDIARECORDER COM CAPTURA COMPARTILHADA)
+      // =====================================================================
       let selectedMimeType = '';
       if (typeof MediaRecorder !== 'undefined') {
         if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
@@ -1535,8 +1695,6 @@ export default function App() {
         }
       }
 
-      // 2. Reconhecimento de Fala Nativo (SpeechRecognition) para feedback visual em tempo real
-      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
       if (SpeechRecognition) {
         try {
           const recognitionInstance = new SpeechRecognition();
@@ -1561,7 +1719,6 @@ export default function App() {
           };
 
           recognitionInstance.onerror = (e: any) => {
-            console.warn('[SpeechRecognition Info]:', e.error || e);
             if (isRecordingAudioRef.current && (e.error === 'no-speech' || e.error === 'network')) {
               try { recognitionInstance.start(); } catch (err) {}
             }
@@ -1575,12 +1732,9 @@ export default function App() {
 
           recognitionInstance.start();
           speechRecognitionRef.current = recognitionInstance;
-        } catch (e) {
-          console.warn('[SpeechRecognition Fallback para MediaRecorder]:', e);
-        }
+        } catch (e) {}
       }
 
-      // 3. Captura Universal e Física do Microfone via MediaRecorder (Desktop e Celular)
       const stream = await navigator.mediaDevices.getUserMedia({ 
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } 
       });
@@ -1602,8 +1756,6 @@ export default function App() {
 
         let finalText = recordedTextRef.current.trim() || liveAudioTranscript.trim() || inputMessage.trim();
 
-        // 4. Se o navegador não conseguiu transcrever localmente (comum em redes móveis 4G/5G ou iOS):
-        // Envia imediatamente para o backend serverless (/api/transcribe) com Whisper / Gemini
         if (!finalText && audioBlob.size > 300) {
           const tempMsgId = `temp_audio_${Date.now()}`;
           setMessages(prev => [...prev, {
@@ -1646,7 +1798,6 @@ export default function App() {
           }
         }
 
-        // 5. Se mesmo após Whisper/Gemini não houver fala detectável (ex: microfone mudo)
         if (!finalText) {
           setMessages(prev => [...prev, {
             id: Date.now().toString(),
@@ -1657,7 +1808,6 @@ export default function App() {
           return;
         }
 
-        // 6. Mensagem de áudio confirmada -> Processa a inteligência financeira imediatamente
         setMessages(prev => {
           const alreadyHas = prev.some(m => m.audioUrl === audioUrl);
           if (alreadyHas) return prev;
@@ -1694,11 +1844,10 @@ export default function App() {
     } catch (err: any) {
       isRecordingAudioRef.current = false;
       setIsRecordingAudio(false);
-      console.warn('[Microfone Permissão/Erro]:', err);
       setMessages(prev => [...prev, {
         id: Date.now().toString(),
         sender: 'ia',
-        text: 'Não foi possível acessar o microfone do seu dispositivo. Por favor, autorize a permissão de áudio nas configurações do seu navegador (ícone de cadeado na barra de endereços) ou digite sua mensagem diretamente na caixa de texto.',
+        text: 'Não foi possível acessar o microfone do seu dispositivo. Por favor, autorize a permissão de áudio nas configurações do seu navegador ou digite diretamente na caixa de texto.',
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       }]);
     }
@@ -3951,6 +4100,7 @@ export default function App() {
                   };
                   setTransactions(prev => [newExit, ...prev]);
                   kyroCloud.syncSaveTransaction(newExit);
+                  syncSaveToCentralDb(newExit);
                   f.reset();
                 }} className="p-4 rounded-xl bg-[#0E1322] border border-[#1E2740] space-y-3">
                   <h4 className="text-xs font-bold text-orange-400 uppercase tracking-wider flex items-center gap-1.5">
@@ -4740,6 +4890,7 @@ export default function App() {
               };
               setTransactions(prev => [newObj, ...prev]);
               kyroCloud.syncSaveTransaction(newObj);
+              syncSaveToCentralDb(newObj);
               setNewTxModalOpen(false);
             }} className="space-y-3 text-xs">
               <div className="grid grid-cols-2 gap-2">
