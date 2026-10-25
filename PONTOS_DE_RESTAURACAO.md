@@ -62,3 +62,31 @@ A numeração segue rigorosamente a hierarquia de escopo:
   - Botão de Câmera nativa com disparo automático da câmera traseira do celular (`capture="environment"`).
   - Botão `+` para upload de fotos e documentos PDF diretamente do diretório do dispositivo móvel.
   - Viewport travada para prevenir overflow lateral em telas de 390x844px.
+
+---
+
+### [PR.002] — Paridade Mobile Total, Comandos de Correção e Copiloto Cognitivo
+- **Data/Hora:** 2026-10-25 01:52 (UTC-3)
+- **Tags Git:** `PR.002`, `PR.002.1`, `PR.002.2`
+
+#### `PR.002` — Escopo Geral do Projeto (Universal)
+- **Comandos Interativos de Manipulação do Último Lançamento:**
+  - **Exclusão:** *"remova o último lançamento"*, *"o último lançamento está errado, remova ele"*, *"apague o último levantamento"* — localiza `transactions[0]`, cancela a operação, sincroniza a exclusão no Google Firestore via `kyroCloud.syncDeleteTransaction`, recalcula saídas/entradas e saldos instantaneamente.
+  - **Ajuste:** *"ajuste o valor do último lançamento para R$ X"*, *"mude a forma do último lançamento para débito/crédito/PIX"*, *"mude o cartão para Nubank"*, *"mude a cidade para Oeiras"* — aplica a alteração no último registro e sincroniza em tempo real.
+  - **Enriquecimento:** *"acrescente a informação no último lançamento que a cidade foi Oeiras"*, *"acrescente que o produto foi barra de chocolate"* — atualiza os campos de produto, estabelecimento e localidade.
+- **Copiloto Financeiro Cognitivo (`generateThinkingFinancialReply`):**
+  - Avaliação contextual de liquidez em tempo real (saldo disponível, total de entradas, total de saídas, taxa de sobra).
+  - Orientação orçamentária e consultoria inteligente para perguntas abertas (ex: *"como estão minhas finanças?"*, *"posso gastar R$ 500?"*, *"qual meu maior gasto?"*, *"quais dívidas tenho que pagar?"*).
+  - Controle integrado de faturas de cartões de crédito e limites disponíveis.
+
+#### `PR.002.1` — Versão Computador (Desktop)
+- **Estabilidade Panorâmica:**
+  - Painel lateral direito (`lg:w-96`) com chat em tempo real, visualizador de transcrição com ondas pulsantes e atalhos completos.
+  - Entrada de comandos por digitação ou microfone integrado com reprodução de áudio.
+
+#### `PR.002.2` — Versão Celular (Mobile)
+- **Paridade Absoluta com Desktop:**
+  - **Otimização do Hardware de Áudio Mobile:** Eliminação do conflito de concorrência de hardware (`getUserMedia` vs `SpeechRecognition`) no Android WebKit e iOS Safari, garantindo que o reconhecimento de voz capture a fala com fidelidade máxima, sem congelamentos.
+  - **Caixa de Transcrição ao Vivo no Celular:** Exibição com largura total (`w-full sm:w-96 max-w-full`) da caixa de tradução ao vivo com contador de segundos, badge pulsante e botão de confirmação instantânea *"Concluir & Lançar"*.
+  - **Backdrop com Desfoque (`backdrop-blur-sm`):** Fundo escuro semitransparente ao abrir o chat, permitindo fechar com um toque fora ou no botão fechar.
+  - **Isolamento CSS Rigoroso:** Ajustes de viewport e prevenção de zoom indesejado em formulários móveis dentro de `@media (max-width: 768px)`.

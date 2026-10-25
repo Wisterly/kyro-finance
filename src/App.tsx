@@ -69,6 +69,15 @@ import { kyroCloud } from './firebase';
 import { WhatsAppTab } from './components/WhatsAppTab';
 import { parseDynamicFinancialMessage } from './utils/financialParser';
 import { processUploadedFinancialDocument } from './utils/documentExtractor';
+import {
+  isRemoveLastCommand,
+  isAdjustLastCommand,
+  isEnrichLastCommand,
+  executeRemoveLastTransaction,
+  executeAdjustLastTransaction,
+  executeEnrichLastTransaction,
+  generateThinkingFinancialReply
+} from './utils/aiCopilot';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'transacoes' | 'orcamentos' | 'mapa' | 'relatorios' | 'whatsapp' | 'configuracoes' | 'cartoes'>('dashboard');
@@ -1279,6 +1288,99 @@ export default function App() {
     const isAudio = type === 'audio';
     const isImage = type === 'image';
 
+    // =========================================================================
+    // COMANDO 1: REMOÇÃO DO ÚLTIMO LANÇAMENTO ("remova o último lançamento", etc.)
+    // =========================================================================
+    if (isRemoveLastCommand(text)) {
+      const action = executeRemoveLastTransaction(transactions);
+      if (action.updatedTransactions && action.deletedTransactionId) {
+        setTransactions(action.updatedTransactions);
+        kyroCloud.syncDeleteTransaction(action.deletedTransactionId);
+        setWhatsappSyncToast({
+          show: true,
+          text: '🗑️ Último lançamento removido com sucesso!'
+        });
+        setTimeout(() => setWhatsappSyncToast(null), 4000);
+      }
+
+      const aiReplyMsg: ChatMessage = {
+        id: (Date.now() + 2).toString(),
+        sender: 'ia',
+        text: action.reply,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      };
+
+      setMessages(prev => {
+        if (replaceMessageId) {
+          return prev.map(m => m.id === replaceMessageId ? aiReplyMsg : m);
+        }
+        return [...prev, aiReplyMsg];
+      });
+      return;
+    }
+
+    // =========================================================================
+    // COMANDO 2: AJUSTE DO ÚLTIMO LANÇAMENTO ("ajuste o valor do último para R$...", etc.)
+    // =========================================================================
+    if (isAdjustLastCommand(text)) {
+      const action = executeAdjustLastTransaction(text, transactions);
+      if (action.updatedTransactions && action.modifiedTransaction) {
+        setTransactions(action.updatedTransactions);
+        kyroCloud.syncSaveTransaction(action.modifiedTransaction);
+        setWhatsappSyncToast({
+          show: true,
+          text: `✏️ Último lançamento atualizado: R$ ${action.modifiedTransaction.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}!`
+        });
+        setTimeout(() => setWhatsappSyncToast(null), 4000);
+      }
+
+      const aiReplyMsg: ChatMessage = {
+        id: (Date.now() + 2).toString(),
+        sender: 'ia',
+        text: action.reply,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      };
+
+      setMessages(prev => {
+        if (replaceMessageId) {
+          return prev.map(m => m.id === replaceMessageId ? aiReplyMsg : m);
+        }
+        return [...prev, aiReplyMsg];
+      });
+      return;
+    }
+
+    // =========================================================================
+    // COMANDO 3: ENRIQUECER/ACRESCENTAR INFORMAÇÃO NO ÚLTIMO LANÇAMENTO
+    // =========================================================================
+    if (isEnrichLastCommand(text)) {
+      const action = executeEnrichLastTransaction(text, transactions);
+      if (action.updatedTransactions && action.modifiedTransaction) {
+        setTransactions(action.updatedTransactions);
+        kyroCloud.syncSaveTransaction(action.modifiedTransaction);
+        setWhatsappSyncToast({
+          show: true,
+          text: `➕ Informação acrescentada ao último lançamento!`
+        });
+        setTimeout(() => setWhatsappSyncToast(null), 4000);
+      }
+
+      const aiReplyMsg: ChatMessage = {
+        id: (Date.now() + 2).toString(),
+        sender: 'ia',
+        text: action.reply,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      };
+
+      setMessages(prev => {
+        if (replaceMessageId) {
+          return prev.map(m => m.id === replaceMessageId ? aiReplyMsg : m);
+        }
+        return [...prev, aiReplyMsg];
+      });
+      return;
+    }
+
     // Extrai dados financeiros diretamente com o algoritmo dinâmico de alta precisão
     const parsed = parseDynamicFinancialMessage(text, isAudio, isImage);
 
@@ -1394,21 +1496,31 @@ export default function App() {
       }
     }
 
-    // Se não for lançamento financeiro direto nem comando de dívida, processa como consulta
-    const reply = processIaText(text);
-      const aiReplyMsg: ChatMessage = {
-        id: (Date.now() + 2).toString(),
-        sender: 'ia',
-        text: reply,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      };
+    // Se não for lançamento financeiro direto nem comando de dívida, processa com o Motor Cognitivo Conversacional KYRO
+    const reply = generateThinkingFinancialReply(text, {
+      userName: userFullName,
+      totalBalance,
+      monthIncomes,
+      monthExpenses,
+      savingsRate,
+      transactions,
+      recurringExpenses,
+      creditCards
+    });
 
-      setMessages(prev => {
-        if (replaceMessageId) {
-          return prev.map(m => m.id === replaceMessageId ? aiReplyMsg : m);
-        }
-        return [...prev, aiReplyMsg];
-      });
+    const aiReplyMsg: ChatMessage = {
+      id: (Date.now() + 2).toString(),
+      sender: 'ia',
+      text: reply,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    };
+
+    setMessages(prev => {
+      if (replaceMessageId) {
+        return prev.map(m => m.id === replaceMessageId ? aiReplyMsg : m);
+      }
+      return [...prev, aiReplyMsg];
+    });
   };
 
   const handleSendMessage = async () => {
@@ -1436,15 +1548,20 @@ export default function App() {
     }
   };
 
-  // Gravação de Áudio ao Vivo no Chat Lateral
-  // Gravação de Áudio ao Vivo no Chat Lateral (com suporte a Web Speech e Mobile)
+  // Gravação de Áudio ao Vivo no Chat Lateral (com suporte avançado a Web Speech e Paridade Mobile/Desktop)
   const [liveAudioTranscript, setLiveAudioTranscript] = useState('');
   const recordedTextRef = React.useRef<string>('');
+  const isRecordingAudioRef = React.useRef<boolean>(false);
 
   const startRecordingAudio = async () => {
     try {
+      isRecordingAudioRef.current = true;
       recordedTextRef.current = '';
       setLiveAudioTranscript('');
+      
+      const isMobileDevice = typeof navigator !== 'undefined' && 
+        /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
       const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
       let recognitionInstance: any = null;
 
@@ -1461,7 +1578,7 @@ export default function App() {
             for (let i = event.resultIndex; i < event.results.length; i++) {
               const transcriptPiece = event.results[i][0].transcript;
               if (event.results[i].isFinal) {
-                recordedTextRef.current += ' ' + transcriptPiece;
+                recordedTextRef.current = (recordedTextRef.current + ' ' + transcriptPiece).trim();
               } else {
                 interim += transcriptPiece;
               }
@@ -1474,11 +1591,15 @@ export default function App() {
 
           recognitionInstance.onerror = (e: any) => {
             console.warn('[SpeechRecognition] Alerta/Erro:', e.error || e);
+            // Em dispositivos móveis, caso o WebKit pause por breves silêncios, religa sem interromper
+            if (isRecordingAudioRef.current && (e.error === 'no-speech' || e.error === 'network')) {
+              try { recognitionInstance.start(); } catch (err) {}
+            }
           };
 
           recognitionInstance.onend = () => {
-            // Se ainda estiver no modo gravando e a API pausar por silêncio, reinicia automaticamente
-            if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+            // Se o usuário ainda estiver com o microfone ligado, reinicia para gravação contínua perfeita
+            if (isRecordingAudioRef.current) {
               try { recognitionInstance.start(); } catch (err) {}
             }
           };
@@ -1490,50 +1611,54 @@ export default function App() {
         }
       }
 
-      // Captura de áudio para player e contingência
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ 
-          audio: { echoCancellation: true, noiseSuppression: true } 
-        });
-        const recorder = new MediaRecorder(stream);
-        audioChunksRef.current = [];
-        recorder.ondataavailable = (e) => {
-          if (e.data.size > 0) audioChunksRef.current.push(e.data);
-        };
-        recorder.onstop = async () => {
-          const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-          const audioUrl = URL.createObjectURL(audioBlob);
-          stream.getTracks().forEach(track => track.stop());
-
-          const finalText = recordedTextRef.current.trim() || liveAudioTranscript.trim() || inputMessage.trim();
-
-          if (!finalText) {
-            alert('Não foi possível identificar a voz com clareza. Você também pode digitar ou ditar diretamente no campo de texto.');
-            return;
-          }
-
-          setMessages(prev => [...prev, {
-            id: Date.now().toString(),
-            sender: 'user',
-            text: `🎙️ "${finalText}"`,
-            audioUrl,
-            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-          }]);
-
-          setInputMessage('');
-          setLiveAudioTranscript('');
-
-          await handleProcessUserInteraction({
-            type: 'audio',
-            text: finalText,
-            audioUrl
+      // Em dispositivos móveis (Android/iOS), não acionamos o MediaRecorder simultaneamente se o SpeechRecognition estiver ativo,
+      // pois o getUserMedia bloqueia com lock de hardware o microfone do SpeechRecognizer no Android/WebKit.
+      // Em desktops ou caso o SpeechRecognition não exista, ativamos o fluxo normal de captura de stream:
+      if (!isMobileDevice || !SpeechRecognition) {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ 
+            audio: { echoCancellation: true, noiseSuppression: true } 
           });
-        };
+          const recorder = new MediaRecorder(stream);
+          audioChunksRef.current = [];
+          recorder.ondataavailable = (e) => {
+            if (e.data.size > 0) audioChunksRef.current.push(e.data);
+          };
+          recorder.onstop = async () => {
+            const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+            const audioUrl = URL.createObjectURL(audioBlob);
+            stream.getTracks().forEach(track => track.stop());
 
-        recorder.start(250);
-        mediaRecorderRef.current = recorder;
-      } catch (audioErr) {
-        console.warn('[Audio Stream Info]: Usando modo de transcrição direta de voz por speech API.');
+            const finalText = recordedTextRef.current.trim() || liveAudioTranscript.trim() || inputMessage.trim();
+
+            if (!finalText) {
+              alert('Não foi possível identificar a voz com clareza. Você também pode digitar ou ditar diretamente no campo de texto.');
+              return;
+            }
+
+            setMessages(prev => [...prev, {
+              id: Date.now().toString(),
+              sender: 'user',
+              text: `🎙️ "${finalText}"`,
+              audioUrl,
+              timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            }]);
+
+            setInputMessage('');
+            setLiveAudioTranscript('');
+
+            await handleProcessUserInteraction({
+              type: 'audio',
+              text: finalText,
+              audioUrl
+            });
+          };
+
+          recorder.start(250);
+          mediaRecorderRef.current = recorder;
+        } catch (audioErr) {
+          console.warn('[Audio Stream Info]: Usando modo de transcrição direta de voz por speech API.');
+        }
       }
 
       setIsRecordingAudio(true);
@@ -1545,18 +1670,22 @@ export default function App() {
       }, 1000);
 
     } catch (err: any) {
+      isRecordingAudioRef.current = false;
       alert('Não foi possível acessar o microfone do seu navegador. Verifique as permissões de áudio ou digite diretamente na caixa de mensagem.');
     }
   };
 
-  const stopRecordingAudio = () => {
+  const stopRecordingAudio = async () => {
+    isRecordingAudioRef.current = false;
+
     if (speechRecognitionRef.current) {
       try { speechRecognitionRef.current.stop(); } catch (e) {}
     }
+
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
       try { mediaRecorderRef.current.stop(); } catch (e) {}
     } else {
-      // Caso o MediaRecorder não tenha sido ativado, processa diretamente o texto capturado
+      // Caso o MediaRecorder não tenha sido ativado (ex: Mobile Speech nativo), processa diretamente o texto capturado
       const finalText = recordedTextRef.current.trim() || liveAudioTranscript.trim() || inputMessage.trim();
       if (finalText) {
         setMessages(prev => [...prev, {
@@ -1567,12 +1696,13 @@ export default function App() {
         }]);
         setInputMessage('');
         setLiveAudioTranscript('');
-        handleProcessUserInteraction({
+        await handleProcessUserInteraction({
           type: 'audio',
           text: finalText
         });
       }
     }
+
     if (timerIntervalRef.current) {
       clearInterval(timerIntervalRef.current);
       timerIntervalRef.current = null;
@@ -3253,9 +3383,17 @@ export default function App() {
         </div>
       </main>
 
+      {/* Backdrop suave para o chat no celular */}
+      {chatOpenMobile && (
+        <div 
+          onClick={() => setChatOpenMobile(false)}
+          className="fixed inset-0 bg-black/75 backdrop-blur-sm z-30 lg:hidden transition-opacity duration-300"
+        />
+      )}
+
       {/* ===================== SIDEBAR DIREITA: ASSISTENTE IA & WHATSAPP ===================== */}
       <aside className={`
-        fixed inset-y-0 right-0 z-40 w-80 lg:w-96 bg-[#0E1322] border-l border-[#1B2338] flex flex-col justify-between transition-transform duration-300 ease-in-out
+        fixed inset-y-0 right-0 z-40 w-full sm:w-96 lg:w-96 max-w-full bg-[#0E1322] border-l border-[#1B2338] flex flex-col justify-between transition-transform duration-300 ease-in-out shadow-2xl
         lg:static lg:translate-x-0 ${chatOpenMobile ? 'translate-x-0' : 'translate-x-full lg:translate-x-0'}
       `}>
         <div className="p-5 border-b border-[#1B2338]/80 flex items-center justify-between">
