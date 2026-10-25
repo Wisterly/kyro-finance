@@ -17,9 +17,18 @@ Este documento registra oficialmente todos os **Pontos de Restauração (PR)** e
 - **Tipografia e Viewport Base no Mobile:**
   - Otimizado para viewports a partir de 390x844px sem cortes de texto e sem rolagem horizontal ou vertical indesejada.
 
-### 2. Estrutura de Cada Ponto de Restauração (PR.00X)
-- **`PR.00X.1` — Versão Computador (Desktop):** Mantém a linha de código focada na experiência de desktop ampla e estável.
-- **`PR.00X.2` — Versão Celular (Mobile):** Mantém a linha de código com os ajustes, compactações e responsividade dedicados a telas móveis.
+### 2. Estrutura e Escopos de Cada Ponto de Restauração (PR.00X)
+A numeração segue rigorosamente a hierarquia de escopo:
+
+- **`PR.00X` — Escopo Geral do Projeto (Universal):**
+  - **Quando é acionado:** Quando o usuário solicitar ajustes gerais no projeto (ex: *"quero que ajuste isso no projeto"*).
+  - **O que contempla:** Configurações que valem tanto para a visualização no desktop quanto no celular (ex: nome da aplicação, ícone/favicon do site, regras de negócios globais, modelos de dados, integrações de IA, robô do WhatsApp, webhook e sincronização em nuvem).
+- **`PR.00X.1` — Escopo Específico de Computador (Desktop):**
+  - **Quando é acionado:** Quando o usuário solicitar alterações exclusivas para a tela grande (ex: *"quero que ajuste isso para a visualização do desktop"*).
+  - **O que contempla:** Layout de tela cheia, colunas laterais fixas, tabelas expandidas com múltiplas colunas, dashboards panorâmicos, atalhos de teclado e modais amplos.
+- **`PR.00X.2` — Escopo Específico de Celular (Mobile):**
+  - **Quando é acionado:** Quando o usuário solicitar alterações exclusivas para dispositivos móveis (ex: *"quero que ajuste isso para a visualização do celular / mobile"*).
+  - **O que contempla:** Adaptações de toque (touch), menus gaveta (drawers), barras de navegação inferiores, botões compactos, viewports a partir de 390x844px e recursos nativos de hardware móvel (câmera, microfone mobile).
 
 ### 3. Regra de Ouro (Isolamento de Dados vs Estrutura)
 - **O que entra na restauração:** Toda a estrutura de código (HTML, CSS, TypeScript, layout, componentes).
