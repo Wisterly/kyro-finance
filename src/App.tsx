@@ -884,165 +884,6 @@ export default function App() {
     .filter(r => r.active)
     .reduce((acc, r) => acc + r.installmentAmount, 0);
 
-  // ================= CÉREBRO DA IA (ALIMENTAÇÃO AUTOMÁTICA & CONSULTAS EM TEMPO REAL) =================
-  const processIaText = (text: string) => {
-    const lower = text.toLowerCase().trim();
-
-    // 1. CONSULTA: QUANTO GASTEI POR CIDADE (Oeiras, Caxias, Teresina, São Paulo, Fortaleza, etc.)
-    const citiesToCheck = [
-      { name: 'oeiras', label: 'Oeiras, PI' },
-      { name: 'caxias', label: 'Caxias, MA' },
-      { name: 'teresina', label: 'Teresina, PI' },
-      { name: 'são paulo', label: 'São Paulo, SP' },
-      { name: 'sp', label: 'São Paulo, SP' },
-      { name: 'fortaleza', label: 'Fortaleza, CE' },
-      { name: 'brasília', label: 'Brasília, DF' }
-    ];
-
-    if (lower.includes('quanto') || lower.includes('total') || lower.includes('qual') || lower.includes('saldo')) {
-      // 1.1 Consulta por Cidade
-      for (const c of citiesToCheck) {
-        if (lower.includes(c.name)) {
-          const cityTxs = transactions.filter(t => 
-            t.type === 'Saída' && t.city.toLowerCase().includes(c.name)
-          );
-          const cityTotal = cityTxs.reduce((acc, t) => acc + t.amount, 0);
-
-          if (cityTxs.length === 0) {
-            return `📍 Consulta para ${c.label}:\nNão encontrei nenhuma despesa registrada nesta cidade este mês.`;
-          }
-
-          const details = cityTxs.map(t => `• ${t.description}: R$ ${t.amount.toLocaleString('pt-BR', {minimumFractionDigits:2})} (${t.method})`).join('\n');
-          return `📍 Gastos em ${c.label} este mês:\n${details}\n\n💰 Total gasto na cidade: R$ ${cityTotal.toLocaleString('pt-BR', {minimumFractionDigits:2})}.`;
-        }
-      }
-
-      // 1.2 Consulta por Métodos de Pagamento (PIX, Débito, Crédito, Dinheiro)
-      if (lower.includes('pix')) {
-        const pixTxs = transactions.filter(t => t.type === 'Saída' && t.method === 'PIX');
-        const total = pixTxs.reduce((a, b) => a + b.amount, 0);
-        const list = pixTxs.map(t => `• ${t.description} (${t.city}): R$ ${t.amount.toLocaleString('pt-BR', {minimumFractionDigits:2})}`).join('\n');
-        return `💳 Total gasto via PIX este mês: R$ ${total.toLocaleString('pt-BR', {minimumFractionDigits:2})}\n\nDetalhamento:\n${list || '• Nenhuma saída em PIX no momento.'}`;
-      }
-
-      if (lower.includes('débito') || lower.includes('debito')) {
-        const debTxs = transactions.filter(t => t.type === 'Saída' && t.method === 'Débito');
-        const total = debTxs.reduce((a, b) => a + b.amount, 0);
-        const list = debTxs.map(t => `• ${t.description} (${t.city}): R$ ${t.amount.toLocaleString('pt-BR', {minimumFractionDigits:2})}`).join('\n');
-        return `💳 Total gasto no Débito este mês: R$ ${total.toLocaleString('pt-BR', {minimumFractionDigits:2})}\n\nDetalhamento:\n${list || '• Nenhuma saída no débito no momento.'}`;
-      }
-
-      if (lower.includes('crédito') || lower.includes('credito') || lower.includes('cartão')) {
-        const credTxs = transactions.filter(t => t.type === 'Saída' && t.method === 'Crédito');
-        const total = credTxs.reduce((a, b) => a + b.amount, 0);
-        const list = credTxs.map(t => `• ${t.description} (${t.city}): R$ ${t.amount.toLocaleString('pt-BR', {minimumFractionDigits:2})}`).join('\n');
-        return `💳 Total gasto no Cartão de Crédito este mês: R$ ${total.toLocaleString('pt-BR', {minimumFractionDigits:2})}\n\nDetalhamento:\n${list || '• Nenhuma saída no crédito no momento.'}`;
-      }
-
-      // 1.3 Consulta Geral de Saldo / Resumo
-      if (lower.includes('saldo') || lower.includes('tenho') || lower.includes('sobrou') || lower.includes('resumo')) {
-        return `📊 Diagnóstico Financeiro de ${userFullName}:\n• Entradas: R$ ${monthIncomes.toLocaleString('pt-BR', {minimumFractionDigits:2})}\n• Saídas: R$ ${monthExpenses.toLocaleString('pt-BR', {minimumFractionDigits:2})}\n• Saldo Líquido Atual: R$ ${totalBalance.toLocaleString('pt-BR', {minimumFractionDigits:2})}\n• Taxa de Sobra: ${savingsRate}%.`;
-      }
-    }
-
-    // 2. ALIMENTAÇÃO AUTOMÁTICA: EXTRAÇÃO DE LANÇAMENTO DA FRASE
-    // Expressão regular para achar valores (ex: 45, 45.00, 45,50, 1.200,00 ou "45 reais")
-    const matchVal = text.match(/(?:r\$\s*)?(\d+(?:[.,]\d+)?)/i);
-    let amount = 0;
-    if (matchVal) {
-      amount = parseFloat(matchVal[1].replace(',', '.'));
-    }
-
-    // Se a IA encontrou um valor e palavras indicativas de transação
-    if (amount > 0) {
-      // Método de pagamento
-      let method: PaymentMethod = 'PIX';
-      if (lower.includes('débito') || lower.includes('debito')) method = 'Débito';
-      else if (lower.includes('crédito') || lower.includes('credito') || lower.includes('cartão')) method = 'Crédito';
-      else if (lower.includes('dinheiro')) method = 'Dinheiro';
-      else if (lower.includes('ted') || lower.includes('transferência') || lower.includes('transferencia')) method = 'Transferência';
-
-      // Cidade
-      let city = 'Teresina, PI';
-      if (lower.includes('oeiras')) city = 'Oeiras, PI';
-      else if (lower.includes('caxias')) city = 'Caxias, MA';
-      else if (lower.includes('são paulo') || lower.includes('sp')) city = 'São Paulo, SP';
-      else if (lower.includes('fortaleza')) city = 'Fortaleza, CE';
-      else if (lower.includes('brasília') || lower.includes('brasilia')) city = 'Brasília, DF';
-
-      // Detectar se é Entrada ou Saída
-      const isIncome = lower.includes('recebi') || lower.includes('salário') || lower.includes('salario') || 
-                       lower.includes('ganhei') || lower.includes('depósito') || lower.includes('vendi') || lower.includes('entrou');
-      const type: TransactionType = isIncome ? 'Entrada' : 'Saída';
-
-      // Categoria e Descrição do Objeto
-      let category = isIncome ? 'Recebimento' : 'Outros';
-      let subcategory = 'Gasto Avulso';
-      let description = 'Compra via Chat IA';
-
-      if (isIncome) {
-        if (lower.includes('salário') || lower.includes('salario')) {
-          description = 'Salário Mensal';
-          subcategory = 'Salário Fixo';
-        } else if (lower.includes('investimento') || lower.includes('rendimento')) {
-          description = 'Rendimento de Investimento';
-          subcategory = 'Dividendos / Lucros';
-        } else {
-          description = 'Recebimento PIX / Renda';
-          subcategory = 'Entrada Avulsa';
-        }
-      } else {
-        if (lower.includes('padaria') || lower.includes('pão') || lower.includes('comida') || lower.includes('almoço') || lower.includes('jantar') || lower.includes('restaurante') || lower.includes('lanche')) {
-          category = 'Alimentação';
-          subcategory = lower.includes('padaria') ? 'Padaria & Lanche' : 'Refeição & Restaurante';
-          description = lower.includes('padaria') ? 'Padaria' : 'Alimentação / Refeição';
-        } else if (lower.includes('roupa') || lower.includes('calçado') || lower.includes('sapato') || lower.includes('tênis') || lower.includes('loja')) {
-          category = 'Vestuário';
-          subcategory = 'Roupas & Calçados';
-          description = 'Loja de Calçados / Vestuário';
-        } else if (lower.includes('passagem') || lower.includes('voo') || lower.includes('aérea') || lower.includes('viagem')) {
-          category = 'Passagem Aérea / Viagem';
-          subcategory = 'Passagens Aéreas';
-          description = 'Passagem Aérea';
-        } else if (lower.includes('empréstimo') || lower.includes('emprestimo')) {
-          category = 'Empréstimo';
-          subcategory = 'Parcela Empréstimo';
-          description = 'Empréstimo Bancário';
-        } else if (lower.includes('gasolina') || lower.includes('posto') || lower.includes('combustível') || lower.includes('uber')) {
-          category = 'Transporte';
-          subcategory = 'Combustível & Transporte';
-          description = 'Posto de Gasolina / Transporte';
-        } else if (lower.includes('farmácia') || lower.includes('farmacia') || lower.includes('remédio')) {
-          category = 'Saúde';
-          subcategory = 'Farmácia & Cuidados';
-          description = 'Farmácia';
-        }
-      }
-
-      // Adicionar nova transação no estado e no banco de dados
-      const newTx: Transaction = {
-        id: Date.now().toString(),
-        description,
-        category,
-        subcategory,
-        city,
-        amount,
-        type,
-        method,
-        date: 'Hoje',
-        status: 'Concluído'
-      };
-
-      setTransactions(prev => [newTx, ...prev]);
-      kyroCloud.syncSaveTransaction(newTx);
-
-      const symbol = type === 'Entrada' ? '+' : '-';
-      return `⚡ Lançamento adicionado e automatizado pela IA com sucesso!\n\n• Tipo: ${type}\n• Objeto: ${description}\n• Categoria: ${category} (${subcategory})\n• Valor: ${symbol} R$ ${amount.toLocaleString('pt-BR', {minimumFractionDigits:2})}\n• Método: ${method}\n• Cidade: ${city}\n\n✅ O Saldo Total, os Gráficos, as Cidades e as Métricas do Dashboard foram recalculados automaticamente!`;
-    }
-
-    return `Entendido, ${userFirstName}! Você pode me enviar lançamentos de gastos ou recebimentos (ex: "gastei 45 no pix na padaria em Oeiras", "recebi 5000 no salário em Teresina"), ou perguntar sobre despesas (ex: "Quanto gastei em Caxias?", "Quanto gastei no Pix?").`;
-  };
-
   // Telefone do Usuário e Telefone do Robô / Persona KYRO
   const cleanUserPhone = userPhone.replace(/\D/g, '') || '558699999999';
   const cleanBotPhone = botPhone.replace(/\D/g, '') || '5586994002892';
@@ -1235,7 +1076,16 @@ export default function App() {
       throw new Error(`HTTP ${response.status}`);
     } catch (err: any) {
       // Fallback gracioso para ambiente local de desenvolvimento sem Vercel Serverless Functions
-      const localReply = processIaText(textToSend);
+      const localReply = generateThinkingFinancialReply(textToSend, {
+        userName: userFullName,
+        totalBalance,
+        monthIncomes,
+        monthExpenses,
+        savingsRate,
+        transactions,
+        recurringExpenses,
+        creditCards
+      });
       setTestWebhookStatus('success');
       setTestWebhookResponse({
         status: 'simulated_local',

@@ -20,52 +20,81 @@ export interface LastTransactionAction {
   modifiedTransaction?: Transaction;
 }
 
-// 1. DETECÇÃO DE COMANDO PARA REMOVER O ÚLTIMO LANÇAMENTO
-export function isRemoveLastCommand(text: string): boolean {
-  if (!text) return false;
-  const lower = text.toLowerCase().trim();
-  
-  const hasRemoveVerb = /(remov|exclu|apag|cancel|desfaz|desfaça|está errado|esta errado|tá errado|ta errado)/i.test(lower);
-  const hasTargetRef = /(último|ultimo|última|ultima|levantamento|lançamento|lancamento|gasto|despesa|registro|que acabei de|que eu acabei)/i.test(lower);
-
-  return (hasRemoveVerb && hasTargetRef) || 
-         lower === 'remova' || 
-         lower === 'excluir' || 
-         lower === 'apagar último' || 
-         lower === 'cancelar último';
+// Normalizador de texto para análise fonética e semântica
+function normalizeText(text: string): string {
+  if (!text) return '';
+  return text
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // remove acentos
+    .replace(/[^\w\s]/gi, ' ') // remove pontuação
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
-// 2. DETECÇÃO DE COMANDO PARA AJUSTAR O ÚLTIMO LANÇAMENTO
-export function isAdjustLastCommand(text: string): boolean {
-  if (!text) return false;
-  const lower = text.toLowerCase().trim();
+// =========================================================================
+// 1. DETECÇÃO ULTRA ROBUSTA: REMOVER / APAGAR / CANCELAR ÚLTIMO LANÇAMENTO
+// =========================================================================
+export function isRemoveLastCommand(rawText: string): boolean {
+  if (!rawText) return false;
+  const norm = normalizeText(rawText);
 
-  const hasAdjustVerb = /(ajust|alter|mud|troc|corrij|corrig|atualiz)/i.test(lower);
-  const hasTargetRef = /(último|ultimo|última|ultima|levantamento|lançamento|lancamento|gasto|despesa|registro)/i.test(lower);
+  // Verbos e intenções de remoção/cancelamento
+  const hasRemoveVerb = /(remov|exclu|apag|cancel|desfaz|desfaca|delet|anul|elimin|retir|tirar|tira|limp|arranc|errado|nao era para|desfa)/i.test(norm);
 
-  const directChangePattern = /(?:o|a|no|na)\s+(?:último|ultimo)\s+(?:lançamento|levantamento|gasto|despesa)?\s+(?:foi|era|para|na verdade foi)\s+/i.test(lower);
+  // Alvos de referência ao último lançamento ou gravação
+  const hasTargetRef = /(ultim|levantamento|lancamento|gasto|despesa|registro|compra|saida|entrada|isso|esse|essa|este|esta|que fiz|que eu fiz|que mandei|que eu mandei|que falei|que eu falei|que acabei de|que eu acabei)/i.test(norm);
+
+  // Comandos diretos e isolados
+  const isDirectSingleCommand = /^(remova|remover|exclua|excluir|apague|apagar|apaga|cancele|cancelar|cancela|desfazer|desfaz|deletar|deleta|tirar|tira|anular|anule|eliminar|elimine|limpar)$/i.test(norm) ||
+    /^(apagar|remover|excluir|cancelar|deletar|tirar|desfazer)\s+(o|a)?\s*(ultimo|ultima|isso|esse|essa|este|esta)$/i.test(norm) ||
+    /^(tira|apaga|cancela|remove|exclui|desfaz)\s+(isso|esse|essa|este|esta|o ultimo|a ultima)$/i.test(norm);
+
+  return (hasRemoveVerb && hasTargetRef) || isDirectSingleCommand;
+}
+
+// =========================================================================
+// 2. DETECÇÃO ULTRA ROBUSTA: AJUSTAR / ALTERAR / MODIFICAR ÚLTIMO LANÇAMENTO
+// =========================================================================
+export function isAdjustLastCommand(rawText: string): boolean {
+  if (!rawText) return false;
+  const norm = normalizeText(rawText);
+
+  // Não confunde com comando de remoção
+  if (isRemoveLastCommand(rawText)) return false;
+
+  const hasAdjustVerb = /(ajust|alter|mud|troc|corrij|corrig|atualiz|modific)/i.test(norm);
+  const hasTargetRef = /(ultim|levantamento|lancamento|gasto|despesa|registro|compra|saida|entrada)/i.test(norm);
+
+  const directChangePattern = /(o|a|no|na)\s+(ultimo|ultima)\s+(lancamento|levantamento|gasto|despesa)?\s*(foi|era|para|na verdade foi|muda para)/i.test(norm);
 
   return (hasAdjustVerb && hasTargetRef) || directChangePattern;
 }
 
-// 3. DETECÇÃO DE COMANDO PARA ACRESCENTAR INFORMAÇÃO NO ÚLTIMO LANÇAMENTO
-export function isEnrichLastCommand(text: string): boolean {
-  if (!text) return false;
-  const lower = text.toLowerCase().trim();
+// =========================================================================
+// 3. DETECÇÃO ULTRA ROBUSTA: ACRESCENTAR / ENRIQUECER ÚLTIMO LANÇAMENTO
+// =========================================================================
+export function isEnrichLastCommand(rawText: string): boolean {
+  if (!rawText) return false;
+  const norm = normalizeText(rawText);
 
-  const hasEnrichVerb = /(acrescent|adicion|coloqu|inclu|bote|põe|poe)/i.test(lower);
-  const hasTargetRef = /(último|ultimo|última|ultima|levantamento|lançamento|lancamento|registro)/i.test(lower);
-  const hasFieldRef = /(informação|informacao|cidade|local|estabelecimento|produto|observação|observacao|nota)/i.test(lower);
+  if (isRemoveLastCommand(rawText) || isAdjustLastCommand(rawText)) return false;
+
+  const hasEnrichVerb = /(acrescent|adicion|coloqu|inclu|bote|bota|poe|ponha|insira)/i.test(norm);
+  const hasTargetRef = /(ultim|levantamento|lancamento|registro|compra|gasto)/i.test(norm);
+  const hasFieldRef = /(informacao|cidade|local|estabelecimento|produto|observacao|nota|cartao)/i.test(norm);
 
   return (hasEnrichVerb && (hasTargetRef || hasFieldRef));
 }
 
+// =========================================================================
 // EXECUÇÃO: REMOVER ÚLTIMO LANÇAMENTO
+// =========================================================================
 export function executeRemoveLastTransaction(transactions: Transaction[]): LastTransactionAction {
   if (!transactions || transactions.length === 0) {
     return {
       type: 'remove',
-      reply: '⚠️ Não encontrei nenhum lançamento financeiro recente para remover. Seu histórico está sem movimentações pendentes.'
+      reply: '⚠️ **Nenhum lançamento recente encontrado:** Seu histórico de transações está vazio no momento, portanto não há o que remover.'
     };
   }
 
@@ -74,15 +103,16 @@ export function executeRemoveLastTransaction(transactions: Transaction[]): LastT
 
   const formattedAmount = target.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
   const typeText = target.type === 'Entrada' ? 'Entrada (+)' : 'Saída (-)';
+  const itemName = target.product || target.description || 'Lançamento avulso';
+  const localName = target.establishment || target.city || 'Geral';
 
   const reply = `🗑️ **Último Lançamento Removido com Sucesso!**\n\n` +
-    `• **Tipo:** ${typeText}\n` +
-    `• **Produto / Descrição:** ${target.product || target.description}\n` +
-    `• **Estabelecimento:** ${target.establishment || target.description}\n` +
+    `• **Item Excluído:** ${itemName}\n` +
+    `• **Tipo de Movimentação:** ${typeText}\n` +
     `• **Valor Anulado:** R$ ${formattedAmount}\n` +
     `• **Forma de Pagamento:** ${target.method}${target.cardName ? ` (${target.cardName})` : ''}\n` +
-    `• **Local / Cidade:** ${target.city}\n\n` +
-    `✅ **Ajuste Concluído:** O lançamento foi excluído do histórico e o Saldo Geral, Saídas e Entradas foram recalculados no seu Dashboard!`;
+    `• **Local / Estabelecimento:** ${localName} (${target.city})\n\n` +
+    `✅ **Recálculo Concluído:** A operação foi cancelada e seu Saldo Disponível, Total de Saídas e Gráficos foram atualizados imediatamente no Dashboard e nas abas!`;
 
   return {
     type: 'remove',
@@ -92,7 +122,9 @@ export function executeRemoveLastTransaction(transactions: Transaction[]): LastT
   };
 }
 
+// =========================================================================
 // EXECUÇÃO: AJUSTAR ÚLTIMO LANÇAMENTO
+// =========================================================================
 export function executeAdjustLastTransaction(text: string, transactions: Transaction[]): LastTransactionAction {
   if (!transactions || transactions.length === 0) {
     return {
@@ -120,7 +152,7 @@ export function executeAdjustLastTransaction(text: string, transactions: Transac
   else if (lower.includes('débito') || lower.includes('debito')) newMethod = 'Débito';
   else if (lower.includes('crédito') || lower.includes('credito') || lower.includes('cartão') || lower.includes('cartao')) newMethod = 'Crédito';
   else if (lower.includes('dinheiro') || lower.includes('espécie')) newMethod = 'Dinheiro';
-  else if (lower.includes('transferência') || lower.includes('ted') || lower.includes('doc')) newMethod = 'Transferência';
+  else if (lower.includes('transferência') || lower.includes('transferencia') || lower.includes('ted') || lower.includes('doc')) newMethod = 'Transferência';
 
   if (newMethod && newMethod !== target.method) {
     changes.push(`• **Forma de pagamento:** de ${target.method} para **${newMethod}**`);
@@ -140,7 +172,7 @@ export function executeAdjustLastTransaction(text: string, transactions: Transac
   if (lower.includes('oeiras') || lower.includes('oeira') || lower.includes('ostras')) newCity = 'Oeiras, PI';
   else if (lower.includes('teresina')) newCity = 'Teresina, PI';
   else if (lower.includes('caxias')) newCity = 'Caxias, MA';
-  else if (lower.includes('são paulo') || lower.includes('sao paulo')) newCity = 'São Paulo, SP';
+  else if (lower.includes('são paulo') || lower.includes('sao paulo') || lower.includes('sp')) newCity = 'São Paulo, SP';
   else if (lower.includes('fortaleza')) newCity = 'Fortaleza, CE';
   else if (lower.includes('brasília') || lower.includes('brasilia')) newCity = 'Brasília, DF';
   else if (lower.includes('timon')) newCity = 'Timon, MA';
@@ -149,12 +181,12 @@ export function executeAdjustLastTransaction(text: string, transactions: Transac
   else if (lower.includes('internet')) newCity = 'Internet';
 
   if (newCity && newCity !== target.city) {
-    changes.push(`• **Cidade/Local:** de ${target.city} para **${newCity}**`);
+    changes.push(`• **Cidade / Local:** de ${target.city} para **${newCity}**`);
     target.city = newCity;
   }
 
   // 5. Ajuste de Estabelecimento
-  const localMatch = lower.match(/(?:estabelecimento|local|loja|lugar|para|no|na)\s+(farm[aá]cia|supermercado|mercado|posto|padaria|restaurante|lanchonete|academia|oficina)/i);
+  const localMatch = lower.match(/(?:estabelecimento|local|loja|lugar|no|na)\s+(farm[aá]cia|supermercado|mercado|posto|padaria|restaurante|lanchonete|academia|oficina)/i);
   if (localMatch) {
     const rawEst = localMatch[1].toLowerCase();
     let estName = target.establishment || 'Estabelecimento';
@@ -187,15 +219,15 @@ export function executeAdjustLastTransaction(text: string, transactions: Transac
   if (changes.length === 0) {
     return {
       type: 'adjust',
-      reply: `ℹ️ Entendi seu pedido de ajuste no último lançamento ("${target.product || target.description}"), mas não identifiquei o dado exato a alterar. Você pode me dizer por exemplo: "Ajuste o valor para R$ 150", "Mude a forma para Débito" ou "Mude a cidade para Oeiras".`
+      reply: `✏️ Identifiquei que você deseja ajustar o último lançamento ("${target.product || target.description}"), mas não identifiquei qual informação mudar. Exemplos de como me dizer:\n• *"Ajuste o valor para R$ 150"*\n• *"Mude para Crédito Nubank"*\n• *"Ajuste a cidade para Oeiras"*`
     };
   }
 
   const updatedTransactions = [target, ...transactions.slice(1)];
   const reply = `✏️ **Último Lançamento Ajustado com Sucesso!**\n\n` +
     changes.join('\n') + `\n\n` +
-    `• **Resumo Atual:** ${target.product || target.description} (${target.type}) — R$ ${target.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} via ${target.method}${target.cardName ? ` (${target.cardName})` : ''} em ${target.city}.\n\n` +
-    `✅ Todos os cálculos de Saldo e Gráficos foram atualizados no sistema!`;
+    `• **Resumo Atualizado:** ${target.product || target.description} (${target.type}) — R$ ${target.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} via ${target.method}${target.cardName ? ` (${target.cardName})` : ''} em ${target.city}.\n\n` +
+    `✅ Seus saldos e relatórios foram recalculados automaticamente!`;
 
   return {
     type: 'adjust',
@@ -205,7 +237,9 @@ export function executeAdjustLastTransaction(text: string, transactions: Transac
   };
 }
 
+// =========================================================================
 // EXECUÇÃO: ACRESCENTAR INFORMAÇÃO NO ÚLTIMO LANÇAMENTO
+// =========================================================================
 export function executeEnrichLastTransaction(text: string, transactions: Transaction[]): LastTransactionAction {
   if (!transactions || transactions.length === 0) {
     return {
@@ -292,15 +326,15 @@ export function executeEnrichLastTransaction(text: string, transactions: Transac
   if (additions.length === 0) {
     return {
       type: 'enrich',
-      reply: `ℹ️ Entendi seu desejo de enriquecer o último lançamento ("${target.product || target.description}"), mas não identifiquei a informação exata a adicionar. Você pode me dizer por exemplo: "Acrescente que a cidade foi Oeiras", "Acrescente que o produto foi chocolate" ou "Acrescente que foi na Farmácia".`
+      reply: `➕ Entendi que deseja acrescentar detalhes ao último lançamento ("${target.product || target.description}"), mas não identifiquei qual informação adicionar. Você pode me dizer por exemplo: *"Acrescente que a cidade foi Oeiras"* ou *"Acrescente o produto chocolate"*!`
     };
   }
 
   const updatedTransactions = [target, ...transactions.slice(1)];
   const reply = `➕ **Informações Acrescentadas ao Último Lançamento!**\n\n` +
     additions.join('\n') + `\n\n` +
-    `• **Registro Completo Atualizado:**\n` +
-    `  - Produto: ${target.product || 'Não especificado'}\n` +
+    `• **Registro Completo:**\n` +
+    `  - Produto: ${target.product || 'Geral'}\n` +
     `  - Estabelecimento: ${target.establishment || target.description}\n` +
     `  - Valor: R$ ${target.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n` +
     `  - Forma: ${target.method}${target.cardName ? ` (${target.cardName})` : ''}\n` +
@@ -315,144 +349,215 @@ export function executeEnrichLastTransaction(text: string, transactions: Transac
   };
 }
 
-// 4. MOTOR CONVERSACIONAL DE IA COGNITIVA & CONSULTORIA FINANCEIRA
+// =========================================================================
+// 4. MOTOR COGNITIVO CONVERSACIONAL DE IA FINANCEIRA AUTOSSUFICIENTE
+// =========================================================================
 export function generateThinkingFinancialReply(query: string, ctx: FinancialContext): string {
+  const norm = normalizeText(query);
   const lower = query.toLowerCase().trim();
   const userName = ctx.userName ? ctx.userName.split(' ')[0] : 'você';
 
-  // 1. Consulta de Saldo e Visão Geral
+  // 1. Diagnóstico Geral, Saldo e Saúde Financeira
   if (
-    lower.includes('saldo') || 
-    lower.includes('quanto tenho') || 
-    lower.includes('tenho em conta') || 
-    lower.includes('resumo financeiro') ||
-    lower.includes('como estão minhas finanças') ||
-    lower.includes('como estao minhas financas') ||
-    lower.includes('como está minha situação') ||
-    lower.includes('como esta minha situacao') ||
-    lower.includes('minhas finanças') ||
-    lower.includes('minhas financas')
+    norm.includes('saldo') || 
+    norm.includes('quanto tenho') || 
+    norm.includes('tenho em conta') || 
+    norm.includes('resumo financeiro') ||
+    norm.includes('como estao minhas financas') ||
+    norm.includes('como estao') ||
+    norm.includes('minhas financas') ||
+    norm.includes('como esta minha situacao') ||
+    norm.includes('situacao financeira') ||
+    norm.includes('diagnostico')
   ) {
-    const statusSaldo = ctx.totalBalance >= 0 ? '🟢 Positivo e saudável' : '🔴 Atenção: saldo negativo';
-    return `📊 **Diagnóstico Financeiro de ${ctx.userName || 'KYRO'}:**\n\n` +
-      `• **Saldo Líquido Disponível:** R$ ${ctx.totalBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n` +
-      `• **Total de Entradas no Mês:** R$ ${ctx.monthIncomes.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n` +
-      `• **Total de Saídas no Mês:** R$ ${ctx.monthExpenses.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n` +
-      `• **Taxa de Sobra / Poupança:** ${ctx.savingsRate}%\n` +
-      `• **Diagnóstico:** ${statusSaldo}\n\n` +
-      `💡 *Dica do Copiloto:* Manter uma taxa de sobra acima de 20% garante a construção de reservas e estabilidade para emergências.`;
+    const statusSaldo = ctx.totalBalance > 0 
+      ? '🟢 Positivo e com reserva disponível' 
+      : ctx.totalBalance === 0 
+      ? '🟡 Em equilíbrio exato (sem sobra)' 
+      : '🔴 Atenção: saldo em déficit';
+
+    const balStr = ctx.totalBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+    const incStr = ctx.monthIncomes.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+    const expStr = ctx.monthExpenses.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+
+    return `📊 **Diagnóstico Financeiro Completo de ${ctx.userName || 'KYRO'}:**\n\n` +
+      `• **Saldo Líquido Disponível:** R$ ${balStr}\n` +
+      `• **Total de Entradas no Mês:** R$ ${incStr}\n` +
+      `• **Total de Saídas no Mês:** R$ ${expStr}\n` +
+      `• **Taxa de Poupança / Sobra:** ${ctx.savingsRate}%\n` +
+      `• **Condição Atual:** ${statusSaldo}\n\n` +
+      `💡 *Análise do Copiloto:* ${ctx.savingsRate >= 20 ? 'Excelente gestão! Você está conseguindo poupar mais de 20% das suas receitas.' : 'Recomendo manter atenção nos gastos avulsos para elevar sua taxa de sobra para pelo menos 20%.'}`;
   }
 
-  // 2. Consulta por Gastos em Cidades (Oeiras, Teresina, Caxias, etc.)
+  // 2. Gastos por Categoria (Alimentação, Farmácia, Transporte, Vestuário, etc.)
+  const categoryKeywords: Array<{ key: string; label: string; filter: (t: Transaction) => boolean }> = [
+    {
+      key: 'alimenta',
+      label: 'Alimentação & Refeição',
+      filter: (t) => t.category.toLowerCase().includes('aliment') || t.category.toLowerCase().includes('lanche') || t.category.toLowerCase().includes('supermercado')
+    },
+    {
+      key: 'farmacia',
+      label: 'Farmácia & Saúde',
+      filter: (t) => t.category.toLowerCase().includes('saúde') || t.category.toLowerCase().includes('saude') || t.category.toLowerCase().includes('farmácia') || t.category.toLowerCase().includes('farmacia')
+    },
+    {
+      key: 'transporte',
+      label: 'Transporte & Combustível',
+      filter: (t) => t.category.toLowerCase().includes('transporte') || t.description.toLowerCase().includes('posto') || (t.product || '').toLowerCase().includes('gasolina')
+    },
+    {
+      key: 'vestuario',
+      label: 'Vestuário & Roupas',
+      filter: (t) => t.category.toLowerCase().includes('vestu') || t.category.toLowerCase().includes('roupa')
+    },
+    {
+      key: 'internet',
+      label: 'Compras na Internet / Online',
+      filter: (t) => t.category.toLowerCase().includes('internet') || t.city.toLowerCase().includes('internet')
+    },
+    {
+      key: 'viagem',
+      label: 'Viagens & Passagens Aéreas',
+      filter: (t) => t.category.toLowerCase().includes('passagem') || t.category.toLowerCase().includes('viagem')
+    }
+  ];
+
+  for (const cat of categoryKeywords) {
+    if (norm.includes(cat.key)) {
+      const filtered = ctx.transactions.filter(t => t.type === 'Saída' && cat.filter(t));
+      const total = filtered.reduce((sum, t) => sum + t.amount, 0);
+
+      if (filtered.length === 0) {
+        return `🏷️ **Gastos em ${cat.label}:**\nNão identifiquei nenhuma despesa registrada nesta categoria neste período.`;
+      }
+
+      const list = filtered.slice(0, 4).map(t => `• ${t.product || t.description}: R$ ${t.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} (${t.date})`).join('\n');
+      return `🏷️ **Gastos na Categoria: ${cat.label}:**\n\n${list}\n\n💰 **Total Gasto:** R$ ${total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} em ${filtered.length} compra${filtered.length > 1 ? 's' : ''}.`;
+    }
+  }
+
+  // 3. Gastos por Cidade / Localidade
   const cities = [
     { key: 'oeiras', label: 'Oeiras, PI' },
     { key: 'caxias', label: 'Caxias, MA' },
     { key: 'teresina', label: 'Teresina, PI' },
-    { key: 'são paulo', label: 'São Paulo, SP' },
+    { key: 'sao paulo', label: 'São Paulo, SP' },
     { key: 'sp', label: 'São Paulo, SP' },
     { key: 'fortaleza', label: 'Fortaleza, CE' },
-    { key: 'brasília', label: 'Brasília, DF' },
-    { key: 'internet', label: 'Internet / Online' }
+    { key: 'brasilia', label: 'Brasília, DF' },
+    { key: 'timon', label: 'Timon, MA' },
+    { key: 'florian', label: 'Floriano, PI' },
+    { key: 'parnaiba', label: 'Parnaíba, PI' }
   ];
 
   for (const c of cities) {
-    if (lower.includes(c.key)) {
+    if (norm.includes(c.key)) {
       const cityTxs = ctx.transactions.filter(t => 
-        t.type === 'Saída' && t.city.toLowerCase().includes(c.key)
+        t.type === 'Saída' && normalizeText(t.city).includes(c.key)
       );
       const total = cityTxs.reduce((sum, t) => sum + t.amount, 0);
 
       if (cityTxs.length === 0) {
-        return `📍 **Gastos em ${c.label}:**\nNão identifiquei nenhuma despesa registrada nesta localização até o momento.`;
+        return `📍 **Gastos em ${c.label}:**\nNão encontrei nenhuma despesa registrada nesta cidade este mês.`;
       }
 
       const list = cityTxs.slice(0, 5).map(t => `• ${t.product || t.description}: R$ ${t.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} (${t.method})`).join('\n');
-      return `📍 **Detalhamento de Gastos em ${c.label}:**\n\n${list}\n\n💰 **Total Gasto na Região:** R$ ${total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} (${cityTxs.length} transação${cityTxs.length > 1 ? 'ões' : ''}).`;
+      return `📍 **Gastos Registrados em ${c.label}:**\n\n${list}\n\n💰 **Total Gasto na Região:** R$ ${total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} (${cityTxs.length} lançamento${cityTxs.length > 1 ? 's' : ''}).`;
     }
   }
 
-  // 3. Consulta por Métodos de Pagamento (PIX, Cartão, Débito)
-  if (lower.includes('pix')) {
+  // 4. Métodos de Pagamento e Cartões de Crédito
+  if (norm.includes('pix')) {
     const pixTxs = ctx.transactions.filter(t => t.type === 'Saída' && t.method === 'PIX');
     const total = pixTxs.reduce((sum, t) => sum + t.amount, 0);
-    return `💸 **Gastos via PIX:**\n\nVocê já movimentou **R$ ${total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}** via PIX este mês (${pixTxs.length} saídas).`;
+    return `💸 **Gastos Realizados via PIX:**\n\nVocê já pagou **R$ ${total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}** via PIX este mês (${pixTxs.length} lançamentos).`;
   }
 
-  if (lower.includes('crédito') || lower.includes('credito') || lower.includes('fatura') || lower.includes('cartão') || lower.includes('cartao')) {
+  if (norm.includes('credito') || norm.includes('fatura') || norm.includes('cartao') || norm.includes('limite')) {
     const credTxs = ctx.transactions.filter(t => t.type === 'Saída' && t.method === 'Crédito');
     const total = credTxs.reduce((sum, t) => sum + t.amount, 0);
 
     const cardsDetail = ctx.creditCards.map(c => {
-      const cardTotal = credTxs.filter(t => t.cardName?.toLowerCase() === c.name.toLowerCase()).reduce((s, t) => s + t.amount, 0);
+      const cardTotal = credTxs.filter(t => (t.cardName || '').toLowerCase() === c.name.toLowerCase()).reduce((s, t) => s + t.amount, 0);
       const limit = c.limit || 5000;
       const remaining = Math.max(0, limit - cardTotal);
-      return `• **${c.name}:** R$ ${cardTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} na fatura (Limite Disp.: R$ ${remaining.toLocaleString('pt-BR', { minimumFractionDigits: 2 })})`;
-    }).join('\n');
+      return `• **Cartão ${c.name}:**\n  - Fatura acumulada: R$ ${cardTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n  - Limite disponível: R$ ${remaining.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n  - Vencimento da fatura: Dia ${c.dueDay}`;
+    }).join('\n\n');
 
-    return `💳 **Detalhamento das Faturas & Cartões de Crédito:**\n\n` +
-      `• **Total Consolidado no Crédito:** R$ ${total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n\n` +
-      (cardsDetail ? `**Por Cartão:**\n${cardsDetail}\n\n` : '') +
-      `📌 *Lembrete:* As faturas serão debitadas na data de vencimento de cada cartão.`;
+    return `💳 **Situação dos seus Cartões de Crédito & Faturas:**\n\n` +
+      `• **Total Geral em Faturas:** R$ ${total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n\n` +
+      (cardsDetail ? `${cardsDetail}\n\n` : '') +
+      `📌 *Importante:* Seus limites são restabelecidos automaticamente conforme os pagamentos das faturas forem confirmados.`;
   }
 
-  // 4. Dívidas Recorrentes / Parcelamentos Pendentes
-  if (lower.includes('recorrente') || lower.includes('parcela') || lower.includes('dívida') || lower.includes('divida')) {
+  // 5. Dívidas Recorrentes / Parcelamentos Pendentes
+  if (norm.includes('recorrente') || norm.includes('parcela') || norm.includes('divida') || norm.includes('contas a pagar') || norm.includes('pendente')) {
     const pending = ctx.recurringExpenses.filter(r => !r.paid && r.active);
     const totalPending = pending.reduce((sum, r) => sum + (r.installmentAmount || r.totalAmount), 0);
 
     if (pending.length === 0) {
-      return `🎉 **Parabéns, ${userName}!** Você não tem nenhuma dívida recorrente pendente no momento. Todas as suas contas cadastradas já foram confirmadas como pagas.`;
+      return `🎉 **Parabéns, ${userName}!** Você não tem nenhuma dívida recorrente pendente no momento. Todas as suas contas cadastradas já foram pagas.`;
     }
 
     const list = pending.map(r => `• **${r.title}:** R$ ${r.installmentAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} (${r.dueDateText || `Dia ${r.dueDateDay}`})`).join('\n');
-    return `🔁 **Suas Dívidas Recorrentes e Parcelamentos Pendentes:**\n\n${list}\n\n` +
-      `💰 **Compromisso Próximo:** R$ ${totalPending.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n` +
-      `📌 *Importante:* Esses valores ficam protegidos e só serão subtraídos do seu saldo quando você disser que pagou (ex: "Paguei ${pending[0].title}").`;
+    return `🔁 **Suas Dívidas Recorrentes e Contas a Vencer:**\n\n${list}\n\n` +
+      `💰 **Compromisso Total Previsto:** R$ ${totalPending.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n\n` +
+      `📌 *Regra de Controle:* Esses valores ficam protegidos e só saem do seu saldo quando você disser que pagou (ex: *"Paguei ${pending[0].title}"*).`;
   }
 
-  // 5. Maior Gasto do Mês
-  if (lower.includes('maior gasto') || lower.includes('onde gastei mais') || lower.includes('qual o maior')) {
+  // 6. Maior Gasto Registrado
+  if (norm.includes('maior gasto') || norm.includes('onde gastei mais') || norm.includes('qual o maior') || norm.includes('maior despesa')) {
     const expenses = ctx.transactions.filter(t => t.type === 'Saída').sort((a, b) => b.amount - a.amount);
     if (expenses.length === 0) {
-      return 'Você ainda não possui despesas cadastradas este mês.';
+      return 'Você ainda não possui despesas cadastradas neste período.';
     }
     const top = expenses[0];
+    const pct = Math.round((top.amount / (ctx.monthExpenses || 1)) * 100);
     return `🚨 **Seu Maior Gasto Registrado:**\n\n` +
       `• **Item:** ${top.product || top.description}\n` +
       `• **Valor:** R$ ${top.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n` +
       `• **Estabelecimento:** ${top.establishment || top.description}\n` +
       `• **Forma:** ${top.method}${top.cardName ? ` (${top.cardName})` : ''}\n` +
       `• **Local:** ${top.city}\n\n` +
-      `💡 Ele representa cerca de **${Math.round((top.amount / (ctx.monthExpenses || 1)) * 100)}%** de todas as suas saídas do mês.`;
+      `💡 Esta despesa isolada corresponde a aproximadamente **${pct}%** de todos os seus gastos deste mês.`;
   }
 
-  // 6. Consultoria / Dicas / "Posso gastar?"
-  if (lower.includes('posso gastar') || lower.includes('posso comprar') || lower.includes('devo gastar') || lower.includes('dica')) {
+  // 7. Consultoria: Posso gastar? / Avaliação de Viabilidade
+  if (norm.includes('posso gastar') || norm.includes('posso comprar') || norm.includes('devo gastar') || norm.includes('tenho dinheiro para')) {
     const val = extractMonetaryValue(query);
     if (val > 0) {
       if (val > ctx.totalBalance) {
-        return `⚠️ **Recomendação Prudente:**\nVocê quer gastar **R$ ${val.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}**, porém seu saldo líquido atual é de **R$ ${ctx.totalBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}**.\nEssa compra deixaria sua conta no negativo ou comprometeria suas reservas essenciais. Sugiro adiar ou parcelar sem juros apenas se for prioridade.`;
-      } else if (val > ctx.totalBalance * 0.5) {
-        return `🤔 **Atenção:** Esse gasto de **R$ ${val.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}** compromete mais da metade do seu saldo atual (R$ ${ctx.totalBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}). Se tiver contas recorrentes a vencer, recomendo cautela!`;
+        return `⚠️ **Recomendação Prudente:**\nVocê consultou sobre um gasto de **R$ ${val.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}**, porém seu saldo líquido disponível é de **R$ ${ctx.totalBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}**.\nEssa compra deixaria sua conta no negativo ou comprometeria recursos essenciais. Sugiro adiar a compra ou buscar alternativas.`;
+      } else if (val > ctx.totalBalance * 0.4) {
+        return `🤔 **Atenção:** Um gasto de **R$ ${val.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}** consumiria cerca de ${Math.round((val / ctx.totalBalance) * 100)}% de todo o seu saldo líquido atual (R$ ${ctx.totalBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}). Se tiver compromissos fixos até o fim do mês, tenha cautela!`;
       } else {
-        return `✅ **Compra Viável:** Um gasto de **R$ ${val.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}** cabe dentro do seu saldo disponível (R$ ${ctx.totalBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}), deixando ainda uma margem segura de R$ ${(ctx.totalBalance - val).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}.`;
+        return `✅ **Compra Aprovada pelo Planejamento:** O valor de **R$ ${val.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}** é compatível com seu saldo líquido atual (R$ ${ctx.totalBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}). Após a compra, você ainda preservará uma margem segura de R$ ${(ctx.totalBalance - val).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}.`;
       }
     }
-    return `🧠 **Dica Inteligente do Copiloto KYRO:**\nAtualmente sua taxa de poupança está em **${ctx.savingsRate}%**.\nPara otimizar suas finanças, mantenha suas despesas fixas abaixo de 50% dos seus rendimentos, dedique 30% para gastos pessoais e 20% para reserva financeira e investimentos.`;
   }
 
-  // 7. Saudações ou Conversa Aberta
-  if (lower.includes('olá') || lower.includes('ola') || lower.includes('bom dia') || lower.includes('boa tarde') || lower.includes('boa noite') || lower.includes('oi')) {
-    return `Olá, ${userName}! Sou seu Copiloto Financeiro Inteligente KYRO.\n\n` +
-      `Estou pronto para:\n` +
-      `• 🎙️ Ouvir ou ler seus gastos e recebimentos e lançá-los na hora;\n` +
-      `• ✏️ Ajustar, enriquecer ou remover lançamentos anteriores se houver algum erro;\n` +
-      `• 💳 Controlar suas faturas de cartões de crédito e dívidas recorrentes;\n` +
-      `• 📊 Analisar seus saldos, gastos por cidade e indicar sua saúde financeira.\n\n` +
-      `Como posso te ajudar agora?`;
+  // 8. Dicas e Estratégia de Economia
+  if (norm.includes('dica') || norm.includes('como economizar') || norm.includes('ajuda para economizar') || norm.includes('conselho')) {
+    return `🧠 **Conselho Estratégico do Copiloto KYRO:**\n\n` +
+      `1. **Regra 50-30-20:** Direcione 50% para necessidades básicas, 30% para gastos pessoais e 20% para sua reserva de oportunidade.\n` +
+      `2. **Acompanhamento Diário:** Continue ditando ou enviando comprovantes aqui para mantermos seus gráficos sempre em dia.\n` +
+      `3. **Dívidas Recorrentes:** Priorize a liquidação de contas que cobram juros rotativos. Sua taxa de sobra atual é de **${ctx.savingsRate}%**.`;
   }
 
-  // Fallback Inteligente e Contextual
-  return `Entendido, ${userName}! Como seu Copiloto Financeiro, estou monitorando suas finanças (Saldo: R$ ${ctx.totalBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}).\n\n` +
-    `Você pode me ditar lançamentos (ex: *"comprei um chocolate na farmácia por 12 reais no crédito Nubank"*), pedir ajustes (ex: *"remova o último lançamento"*, *"ajuste o valor do último para 20 reais"*), ou perguntar sobre suas despesas (ex: *"quanto gastei em Oeiras?"*).`;
+  // 9. Saudações e Apresentação
+  if (norm.includes('ola') || norm.includes('bom dia') || norm.includes('boa tarde') || norm.includes('boa noite') || norm.includes('oi') || norm.includes('quem e voce') || norm.includes('o que voce faz')) {
+    return `Olá, ${userName}! Sou seu **Copiloto Financeiro Inteligente KYRO**.\n\n` +
+      `Estou conectado às suas finanças em tempo real (Saldo atual: **R$ ${ctx.totalBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}**).\n\n` +
+      `🎯 **O que posso fazer por você agora:**\n` +
+      `• **Lançar:** Fale ou envie áudio de qualquer gasto ou ganho;\n` +
+      `• **Corrigir:** Diga *"remova o último lançamento"* ou *"ajuste o valor para R$ X"* se algo estiver errado;\n` +
+      `• **Consultar:** Pergunte *"quanto gastei em Oeiras?"*, *"qual meu saldo?"* ou *"quanto gastei no cartão?"*;\n` +
+      `• **Analisar Comprovantes:** Clique em **+** para enviar fotos ou PDFs, ou na **Câmera** para foto direta.\n\n` +
+      `Como posso te ajudar hoje?`;
+  }
+
+  // 10. Resposta Cognitiva Geral (Sem Respostas Padrões Engessadas)
+  return `Entendido, ${userName}! Analisei sua mensagem no contexto das suas finanças atuais (Saldo Disponível: **R$ ${ctx.totalBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}** e Total de Saídas: **R$ ${ctx.monthExpenses.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}**).\n\n` +
+    `Você pode ditar novos gastos e ganhos, solicitar relatórios de despesas por cidade ou categoria, gerenciar cartões ou dar comandos de correção (como *"remova o último lançamento"*). Estou à sua disposição!`;
 }

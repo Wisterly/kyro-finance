@@ -70,8 +70,11 @@ A numeração segue rigorosamente a hierarquia de escopo:
 - **Tags Git:** `PR.002`, `PR.002.1`, `PR.002.2`
 
 #### `PR.002` — Escopo Geral do Projeto (Universal)
-- **Comandos Interativos de Manipulação do Último Lançamento:**
-  - **Exclusão:** *"remova o último lançamento"*, *"o último lançamento está errado, remova ele"*, *"apague o último levantamento"* — localiza `transactions[0]`, cancela a operação, sincroniza a exclusão no Google Firestore via `kyroCloud.syncDeleteTransaction`, recalcula saídas/entradas e saldos instantaneamente.
+- **Eliminação Completa de Respostas Padrão Engessadas:**
+  - O antigo método estático `processIaText` foi 100% extinto do projeto. Nenhuma mensagem do usuário recebe respostas pré-formatadas ou caixas de texto genéricas.
+  - Toda interação é avaliada por um motor cognitivo autossuficiente que lê saldos, histórico de transações, limites de crédito, compromissos fixos e dívidas em tempo real.
+- **Comandos Interativos de Manipulação do Último Lançamento (Voz e Texto):**
+  - **Exclusão de Alta Fidelidade Fonética:** Abrange todas as variações faladas e digitadas: *"remover o último lançamento que eu fiz"*, *"remova o último lançamento"*, *"o último lançamento está errado, remova ele"*, *"apague o último"*, *"apague o que acabei de falar"*, *"cancela o último levantamento"*, *"tira o último lançamento"*, *"deleta o último"*, *"desfaça o último"* — localiza `transactions[0]`, cancela a operação, sincroniza a exclusão no Google Firestore via `kyroCloud.syncDeleteTransaction`, recalcula saídas/entradas e saldos instantaneamente com confirmação detalhada.
   - **Ajuste:** *"ajuste o valor do último lançamento para R$ X"*, *"mude a forma do último lançamento para débito/crédito/PIX"*, *"mude o cartão para Nubank"*, *"mude a cidade para Oeiras"* — aplica a alteração no último registro e sincroniza em tempo real.
   - **Enriquecimento:** *"acrescente a informação no último lançamento que a cidade foi Oeiras"*, *"acrescente que o produto foi barra de chocolate"* — atualiza os campos de produto, estabelecimento e localidade.
 - **Copiloto Financeiro Cognitivo (`generateThinkingFinancialReply`):**
