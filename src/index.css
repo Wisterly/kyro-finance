@@ -24,3 +24,50 @@
 ::-webkit-scrollbar-thumb:hover {
   background: #334155;
 }
+
+/* ==============================================================
+   ISOLAMENTO TÉCNICO: DESKTOP vs MOBILE (DIRETRIZ ARQUITETURAL)
+   ============================================================== */
+
+/* Utilitários de Visibilidade Estrita */
+@media (max-width: 768px) {
+  .desktop-only {
+    display: none !important;
+  }
+  .mobile-only {
+    display: block !important;
+  }
+  .mobile-only-flex {
+    display: flex !important;
+  }
+}
+
+@media (min-width: 769px) {
+  .mobile-only,
+  .mobile-only-flex {
+    display: none !important;
+  }
+  .desktop-only {
+    display: block !important;
+  }
+  .desktop-only-flex {
+    display: flex !important;
+  }
+}
+
+/* ==============================================================
+   REGRAS EXCLUSIVAS DE CELULAR (<= 768px)
+   ============================================================== */
+@media (max-width: 768px) {
+  html, body {
+    overflow-x: hidden;
+    max-width: 100vw;
+  }
+}
+
+/* ==============================================================
+   REGRAS EXCLUSIVAS DE COMPUTADOR (>= 769px)
+   ============================================================== */
+@media (min-width: 769px) {
+  /* Layout desktop preservado com estabilidade de grid e viewport ampla */
+}
