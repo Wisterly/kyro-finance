@@ -25,25 +25,19 @@
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
     <script>
+      // Purga imediata de Service Workers e Caches legados para forçar atualização em celulares e PCs
       if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js')
-            .then(reg => {
-              console.log('KYRO PWA registrado com sucesso:', reg.scope);
-              reg.update();
-              reg.onupdatefound = () => {
-                const installing = reg.installing;
-                if (installing) {
-                  installing.onstatechange = () => {
-                    if (installing.state === 'installed' && navigator.serviceWorker.controller) {
-                      console.log('Nova versão do Kyro Finance instalada. Atualizando...');
-                      window.location.reload();
-                    }
-                  };
-                }
-              };
-            })
-            .catch(err => console.log('Falha ao registrar PWA Service Worker:', err));
+        navigator.serviceWorker.getRegistrations().then(function(registrations) {
+          for (var i = 0; i < registrations.length; i++) {
+            registrations[i].unregister();
+          }
+        });
+      }
+      if ('caches' in window) {
+        caches.keys().then(function(names) {
+          for (var i = 0; i < names.length; i++) {
+            caches.delete(names[i]);
+          }
         });
       }
     </script>

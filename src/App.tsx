@@ -143,6 +143,28 @@ export default function App() {
     localStorage.setItem('kyro_credit_cards', JSON.stringify(creditCards));
   }, [creditCards]);
 
+  // Purga agressiva e definitiva de Service Worker e Caches legados em celulares e desktops
+  useEffect(() => {
+    try {
+      if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then((registrations) => {
+          for (const reg of registrations) {
+            reg.unregister().then(() => console.log('[PWA] Service Worker legado desregistrado.'));
+          }
+        });
+      }
+      if (typeof window !== 'undefined' && 'caches' in window) {
+        caches.keys().then((names) => {
+          for (const name of names) {
+            caches.delete(name).then(() => console.log('[PWA] Cache antigo eliminado:', name));
+          }
+        });
+      }
+    } catch (e) {
+      console.warn('[Cache Purge Info]:', e);
+    }
+  }, []);
+
   const [selectedCardId, setSelectedCardId] = useState<string>('todos');
   const [newCardModalOpen, setNewCardModalOpen] = useState(false);
   const [cartoesInnerTab, setCartoesInnerTab] = useState<'fatura' | 'recorrentes'>('fatura');

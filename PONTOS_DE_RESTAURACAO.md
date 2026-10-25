@@ -156,20 +156,20 @@ A numeração segue rigorosamente a hierarquia de escopo:
 ---
 
 ### [PR.005] — Unificação Universal de Áudio & Atualização Imediata Mobile/Desktop
-- **Data/Hora:** 2026-10-25 02:44 (UTC-3)
+- **Data/Hora:** 2026-10-25 02:58 (UTC-3)
 - **Tags Git:** `PR.005`, `PR.005.1`, `PR.005.2`
 
 #### `PR.005` — Escopo Geral do Projeto (Universal)
+- **Purga Imediata de Caches e Service Workers Legados em Dispositivos Móveis:**
+  - Inclusão de rotina executada nos primeiros milissegundos de inicialização em `index.html` e `src/App.tsx` que desregistra qualquer Service Worker legado (`registration.unregister()`) e limpa todas as entradas de cache do navegador móvel (`caches.delete()`).
+  - Geração de novos hashes únicos de bundle no build do Vite (`index-HZRirhOc.js`), forçando navegadores no celular (Android e iOS) a descarregar a versão mais recente em tempo real sem travar em versões antigas.
+  - Inserção de cabeçalhos anti-cache no `vercel.json` (`Cache-Control: no-cache, no-store, must-revalidate`), garantindo entrega instantânea a cada deploy.
 - **Motor de Áudio Físico e Universal (Zero Erros em Mobile e Desktop):**
   - Unificação completa da captura de áudio: ativada tanto no computador quanto no celular (Android e iOS).
   - O `MediaRecorder` detecta automaticamente o melhor MIME type suportado pelo hardware (`audio/webm;codecs=opus`, `audio/mp4`, `audio/aac`, `audio/ogg`).
   - O stream de áudio físico é gravado independentemente das limitações da API de fala do navegador.
   - Se a transcrição local não vier com clareza (latência de rede, silêncio do WebKit ou falha de conexão do Chrome), o áudio gravado é enviado imediatamente em base64 para a rota `/api/transcribe` com processamento por **OpenAI Whisper** e **Google Gemini 1.5 Flash**.
   - Erradicação absoluta e definitiva de qualquer popup `alert()` no sistema.
-- **Service Worker e Cache PWA com Estratégia Network-First:**
-  - Atualização do Service Worker para a versão `kyro-finance-v4-universal`.
-  - Estratégia **Network-First** para documentos e scripts HTML/JS, garantindo que o celular e o desktop sempre baixem imediatamente o código mais recente disponibilizado na Vercel, impedindo que dispositivos móveis fiquem travados em caches antigos.
-  - Limpeza forçada e automática de caches anteriores no ciclo de ativação do Service Worker (`caches.delete`).
 - **Consolidação de Todas as Funcionalidades Anteriores:**
   - Busca semântica e cancelamento de transações antigas e múltiplos registros (ex: 3 lançamentos em Caxias com card interativo e checkboxes).
   - Interpretação contextual de gastos diários (combustível, alimentação, farmácia, internet) sem misturar com liquidação de dívidas recorrentes.
