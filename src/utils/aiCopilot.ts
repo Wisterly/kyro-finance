@@ -34,56 +34,81 @@ function normalizeText(text: string): string {
     .trim();
 }
 
-// Extrator de alvo e termo de busca para remoção
+// Extrator de alvo e termo de busca para remoção com suporte total a plural e linguagem natural
 export function extractRemovalTarget(rawText: string): { isLatest: boolean; searchTerm: string } {
   const norm = normalizeText(rawText);
 
-  // Se menciona explicitamente o último lançamento
-  if (/(ultimo|ultima|que acabei de|que eu acabei|que falei|que mandei|recente|anterior)/i.test(norm)) {
+  // Se menciona explicitamente apenas o último lançamento (e não especificou um nome de cidade ou produto)
+  if (/(ultimo|ultima|que acabei de|que eu acabei|que falei|que mandei|recente|anterior)/i.test(norm) &&
+      !/(caxias|agua|gasolina|combustivel|farmacia|posto|mercado|padaria|restaurante|uber|compra de|gasto de|almoco)/i.test(norm)) {
     return { isLatest: true, searchTerm: 'último' };
   }
 
-  // Remove verbos de remoção e partículas de ligação para obter o termo específico (ex: "caxias", "agua", "farmacia")
-  let cleaned = norm
-    .replace(/^(favor|por favor|gostaria de|quero|pode|poderia)?\s*/i, '')
-    .replace(/^(remova|remover|exclua|excluir|apague|apagar|apaga|cancele|cancelar|cancela|desfazer|desfaz|deletar|deleta|tirar|tira|anular|anule|eliminar|elimine|limpar)\s*/i, '')
-    .replace(/^(o|a|os|as|um|uma)?\s*(lancamento|levantamento|gasto|despesa|registro|compra|saida|entrada)?\s*/i, '')
-    .replace(/^(de|da|do|em|na|no|sobre|referente a|com|para)\s*/i, '')
-    .replace(/^(um|uma)?\s*/i, '')
-    .trim();
+  let cleaned = norm;
+  // Remove saudações e pedidos iniciais
+  cleaned = cleaned.replace(/^(favor|por favor|gostaria de|quero|pode|poderia|ajuda|preciso que voce|faca|faz)?\s*/gi, '');
+  // Remove verbos de remoção / cancelamento
+  cleaned = cleaned.replace(/^(remova|remover|exclua|excluir|apague|apagar|apaga|cancele|cancelar|cancela|desfazer|desfaz|deletar|deleta|tirar|tira|anular|anule|eliminar|elimine|limpar|delet|exclui)\s*/gi, '');
+  
+  // Remove artigos e qualificadores no singular ou plural
+  cleaned = cleaned.replace(/\b(todos os|todas as|os|as|o|a|um|uma|uns|umas|meus|minhas|meu|minha|esse|essa|esses|essas|aquele|aquela|aqueles|aquelas)\b/gi, ' ');
+  // Remove substantivos de transação no singular ou plural
+  cleaned = cleaned.replace(/\b(lancamentos|lancamento|levantamentos|levantamento|gastos|gasto|despesas|despesa|registros|registro|compras|compra|saidas|saida|entradas|entrada|itens|item|contas|conta|pagamentos|pagamento)\b/gi, ' ');
+  // Remove preposições e qualificadores de localidade
+  cleaned = cleaned.replace(/\b(de|da|do|das|dos|em|na|no|nas|nos|sobre|referente a|referentes a|com|para|pela|pelo|cidade de|municipio de|cidade|municipio|localidade|local)\b/gi, ' ');
+  
+  cleaned = cleaned.replace(/\s+/g, ' ').trim();
 
   return { isLatest: false, searchTerm: cleaned || rawText.trim() };
 }
 
-// Mecanismo de busca profunda em todo o histórico de transações
+// Mecanismo de busca profunda em todo o histórico de transações (pesquisa geral e tokenizada)
 export function searchTransactionsByTerm(searchTerm: string, transactions: Transaction[]): Transaction[] {
   if (!searchTerm || !transactions || transactions.length === 0) return [];
-  const termNorm = normalizeText(searchTerm);
+  
+  const rawTerm = normalizeText(searchTerm);
   const numVal = extractMonetaryValue(searchTerm);
 
+  // Palavras vazias a desconsiderar caso tenham restado
+  const stopWords = new Set([
+    'de', 'da', 'do', 'das', 'dos', 'em', 'no', 'na', 'nos', 'nas', 
+    'o', 'a', 'os', 'as', 'um', 'uma', 'uns', 'umas',
+    'lancamento', 'lancamentos', 'levantamento', 'levantamentos',
+    'gasto', 'gastos', 'despesa', 'despesas', 'compra', 'compras',
+    'registro', 'registros', 'item', 'itens', 'cidade', 'municipio', 'local'
+  ]);
+
+  // Extrai palavras-chave significativas
+  const keywords = rawTerm
+    .split(' ')
+    .map(w => w.trim())
+    .filter(w => w.length > 1 && !stopWords.has(w));
+
   return transactions.filter(t => {
-    // 1. Busca por Cidade (ex: "Caxias", "Oeiras", "Teresina")
-    if (t.city && normalizeText(t.city).includes(termNorm)) return true;
+    // Texto consolidado de todos os campos da transação (pesquisa geral profunda)
+    const consolidatedText = normalizeText(`
+      ${t.city || ''} 
+      ${t.product || ''} 
+      ${t.establishment || ''} 
+      ${t.description || ''} 
+      ${t.category || ''} 
+      ${t.subcategory || ''} 
+      ${t.method || ''} 
+      ${t.cardName || ''} 
+      ${t.date || ''}
+    `);
 
-    // 2. Busca por Produto (ex: "água", "gasolina", "chocolate")
-    if (t.product && normalizeText(t.product).includes(termNorm)) return true;
+    // 1. Se o termo consolidado direto bater
+    if (rawTerm && consolidatedText.includes(rawTerm)) return true;
 
-    // 3. Busca por Estabelecimento ou Descrição (ex: "Farmácia", "Posto", "Supermercado")
-    if (t.establishment && normalizeText(t.establishment).includes(termNorm)) return true;
-    if (t.description && normalizeText(t.description).includes(termNorm)) return true;
+    // 2. Se houver palavras-chave extraídas (ex: "caxias", "agua", "chocolate")
+    if (keywords.length > 0) {
+      const matchAny = keywords.some(k => consolidatedText.includes(k));
+      if (matchAny) return true;
+    }
 
-    // 4. Busca por Categoria
-    if (t.category && normalizeText(t.category).includes(termNorm)) return true;
-
-    // 5. Busca por Forma de Pagamento ou Cartão
-    if (t.method && normalizeText(t.method).includes(termNorm)) return true;
-    if (t.cardName && normalizeText(t.cardName).includes(termNorm)) return true;
-
-    // 6. Busca por Valor Monetário exato
+    // 3. Busca por valor monetário
     if (numVal > 0 && Math.abs(t.amount - numVal) < 0.01) return true;
-
-    // 7. Busca por Data
-    if (t.date && normalizeText(t.date).includes(termNorm)) return true;
 
     return false;
   });
@@ -185,11 +210,11 @@ export function executeSmartRemoveTransaction(rawText: string, transactions: Tra
     };
   }
 
-  // 2.3 Múltiplos lançamentos encontrados (ex: 2 ou 3 de Caxias) -> Disponibiliza seleção interativa no chat!
+  // 2.3 Múltiplos lançamentos encontrados (ex: 2 ou 3 de Caxias) -> Disponibiliza seleção e edição interativa no chat!
   return {
     type: 'remove',
     actionType: 'multiple_found',
-    reply: `🔍 **Encontrei ${matches.length} lançamentos referentes a "${searchTerm}":**\nSelecione abaixo os lançamentos que deseja cancelar ou clique diretamente no botão de excluir de cada um:`,
+    reply: `🔍 **Encontrei ${matches.length} lançamentos referentes a "${searchTerm}":**\nVocê pode selecionar quais deseja remover em lote, excluir individualmente ou clicar no ícone de ajuste ⚙️ para editar valor, método ou estabelecimento de qualquer um deles:`,
     actionableTransactions: matches
   };
 }

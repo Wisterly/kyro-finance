@@ -183,25 +183,49 @@ A numeração segue rigorosamente a hierarquia de escopo:
 
 ---
 
+### [PR.006] — Pesquisa Geral Profunda Tokenizada & Edição Interativa no Chat
+- **Data/Hora:** 2026-10-25 03:05 (UTC-3)
+- **Tags Git:** `PR.006`, `PR.006.1`, `PR.006.2`
+
+#### `PR.006` — Escopo Geral do Projeto (Universal)
+- **Extrator de Alvo com Suporte Plural e Expressões Naturais (`extractRemovalTarget`):**
+  - Correção total de comandos falados no plural: *"remover os lançamentos de Caxias"*, *"remova os lançamentos de Caxias"*, *"apague as despesas de Caxias"*, *"cancela os gastos na cidade de Caxias"*.
+  - Eliminação de falsos positivos na extração, isolando perfeitamente o termo de busca pretendido (`"caxias"`).
+- **Pesquisa Geral Profunda Tokenizada (`searchTransactionsByTerm`):**
+  - A busca não fica mais presa a uma única categoria ou coluna: ela consolida cidade, produto, estabelecimento, descrição, categoria, subcategoria, método de pagamento, nome do cartão de crédito e data.
+  - Se o usuário pedir "Caxias", localiza lançamentos onde Caxias for município, onde for estabelecimento (*"Restaurante Caxias"*) ou onde for produto.
+  - **Ação com 1 Lançamento Encontrado:** Executa automaticamente a ação (remoção/estorno ou ajuste), recalcula os saldos no Dashboard e sincroniza com o Firestore.
+  - **Ação com Múltiplos Lançamentos Encontrados:** Lista todos os registros encontrados diretamente no balão de resposta do chat com opções completas de interação.
+- **Interação Completa no Chat: Exclusão em Lote e Ajuste/Edição Individual:**
+  - Checkboxes interativas para marcar quantos registros desejar (1, 2 ou todos).
+  - Botão de lixeira rápida individual (`Trash2`) para exclusão direta de qualquer item da lista.
+  - Botão de exclusão múltipla em lote: `🗑️ Excluir Selecionados (N)`.
+  - **Botão de Ajuste Rápido (ícone de engrenagem/ajuste ⚙️ `Sliders`):** Abre modal responsivo para alterar Valor (R$), Tipo (Saída/Entrada), Forma de Pagamento (PIX, Débito, Crédito, Dinheiro), Cartão vinculado, Produto, Estabelecimento e Cidade, recalculando métricas financeiras instantaneamente após salvar.
+
+#### `PR.006.1` — Versão Computador (Desktop)
+- Card interativo na sidebar direita (`lg:w-96`) com botões de ajuste e exclusão e modal de edição desktop centralizado.
+
+#### `PR.006.2` — Versão Celular (Mobile)
+- O mesmo card interativo dimensionado para telas de celular (390px), com modal responsivo com rolagem touch suave (`max-h-[90vh] overflow-y-auto`) e alvos de toque ergonômicos.
+
+---
+
 ## TABELA DE CÓDIGOS DE PONTOS DE RESTAURAÇÃO
 
 Se você desejar restaurar qualquer versão anterior ou atual do Kyro Finance, basta colar o código do ponto de restauração na conversa:
 
 | Código do Ponto | Escopo | Descrição Resumida |
 | :--- | :--- | :--- |
-| **`PR.001`** | **Geral (Universal)** | Fundação da arquitetura de Trilho Duplo, Dashboard, Transações e Cartões |
-| **`PR.001.1`** | Desktop | Interface panorâmica com sidebar fixa e tabelas estendidas |
-| **`PR.001.2`** | Mobile | Drawer móvel, classes `.mobile-only` e viewport 390x844px |
-| **`PR.002`** | **Geral (Universal)** | Copiloto Cognitivo sem respostas padrão, manipulação do último lançamento |
-| **`PR.002.1`** | Desktop | Painel de IA lateral direito com histórico de respostas fluidas |
-| **`PR.002.2`** | Mobile | Paridade mobile com digitação por voz e controle touch |
-| **`PR.003`** | **Geral (Universal)** | IA de Áudio Multimodal (Whisper & Gemini) e refinamento de combustíveis |
-| **`PR.003.1`** | Desktop | Fallback de IA no desktop |
-| **`PR.003.2`** | Mobile | Transmissão de chunks no mobile |
+| **`PR.006`** | **Geral (Universal)** | **Versão Atual: Pesquisa geral profunda tokenizada (Caxias, cidades, produtos), remoção automática para 1 match, lista com seleção e modal de ajuste/edição para múltiplos matches** |
+| `PR.006.1` | Desktop | Interface desktop panorâmica com card interativo e modal de ajuste de lançamentos |
+| `PR.006.2` | Mobile | Interface móvel com drawer touch, modal de edição responsivo e botões táteis |
+| **`PR.005`** | **Geral (Universal)** | Unificação definitiva de áudio físico móvel e desktop, PWA Network-First e zero alertas |
+| `PR.005.1` | Desktop | Áudio e transcrição Whisper/Gemini universais no desktop |
+| `PR.005.2` | Mobile | Áudio e transcrição Whisper/Gemini universais no celular com auto-update de cache |
 | **`PR.004`** | **Geral (Universal)** | Busca semântica de lançamentos e exclusão interativa com seleção múltipla |
-| **`PR.004.1`** | Desktop | Card interativo na sidebar direita com checkboxes e botão de exclusão em lote |
-| **`PR.004.2`** | Mobile | Card interativo touch-friendly no drawer do smartphone |
-| **`PR.005`** | **Geral (Universal)** | **Unificação definitiva de áudio físico (MediaRecorder multi-formato), PWA Network-First e zero alertas** |
-| **`PR.005.1`** | Desktop | Áudio e transcrição Whisper/Gemini universais no desktop |
-| **`PR.005.2`** | Mobile | Áudio e transcrição Whisper/Gemini universais no celular com auto-update de cache |
+| `PR.004.1` | Desktop | Card interativo na sidebar direita com checkboxes e botão de exclusão em lote |
+| `PR.004.2` | Mobile | Card interativo touch-friendly no drawer do smartphone |
+| **`PR.003`** | **Geral (Universal)** | IA de Áudio Multimodal (Whisper & Gemini) e refinamento de combustíveis |
+| **`PR.002`** | **Geral (Universal)** | Copiloto Cognitivo sem respostas padrão, manipulação do último lançamento |
+| **`PR.001`** | **Geral (Universal)** | Fundação da arquitetura de Trilho Duplo, Dashboard, Transações e Cartões |
 

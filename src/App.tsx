@@ -1147,6 +1147,37 @@ export default function App() {
 
   // Estado para seleção e exclusão interativa de lançamentos no chat
   const [selectedTxIdsForRemoval, setSelectedTxIdsForRemoval] = useState<Set<string>>(new Set());
+  const [editingTxFromChat, setEditingTxFromChat] = useState<Transaction | null>(null);
+
+  const handleSaveEditedTransaction = (updatedTx: Transaction) => {
+    if (!updatedTx || !updatedTx.id) return;
+
+    setTransactions(prev => prev.map(t => t.id === updatedTx.id ? updatedTx : t));
+    kyroCloud.syncSaveTransaction(updatedTx);
+
+    setWhatsappSyncToast({
+      show: true,
+      text: `✏️ Lançamento "${updatedTx.product || updatedTx.description}" atualizado com sucesso!`
+    });
+    setTimeout(() => setWhatsappSyncToast(null), 4000);
+
+    const typeSign = updatedTx.type === 'Saída' ? '-' : '+';
+    const confirmMsg: ChatMessage = {
+      id: Date.now().toString(),
+      sender: 'ia',
+      text: `✏️ **Lançamento Ajustado com Sucesso!**\n\n` +
+        `• **Item:** ${updatedTx.product || updatedTx.description}\n` +
+        `• **Valor Atualizado:** ${typeSign} R$ ${updatedTx.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n` +
+        `• **Forma de Pagamento:** ${updatedTx.method}${updatedTx.cardName ? ` (${updatedTx.cardName})` : ''}\n` +
+        `• **Local / Estabelecimento:** ${updatedTx.establishment || 'Geral'} (${updatedTx.city || 'Sem cidade'})\n` +
+        `• **Data:** ${updatedTx.date}\n\n` +
+        `✅ Operação concluída: Seus saldos, total de saídas e gráficos foram recalculados imediatamente!`,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    };
+
+    setMessages(prev => [...prev, confirmMsg]);
+    setEditingTxFromChat(null);
+  };
 
   const toggleSelectTxForRemoval = (txId: string) => {
     setSelectedTxIdsForRemoval(prev => {
@@ -3508,17 +3539,31 @@ export default function App() {
                                   </div>
                                 </button>
 
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleRemoveSpecificTransactions([tx.id], msg.id);
-                                  }}
-                                  title="Excluir este lançamento agora"
-                                  className="p-1.5 rounded-lg bg-rose-500/15 hover:bg-rose-500/30 text-rose-400 border border-rose-500/30 transition-all shrink-0 mt-0.5"
-                                >
-                                  <Trash2 size={13} />
-                                </button>
+                                <div className="flex items-center gap-1 shrink-0 mt-0.5">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setEditingTxFromChat({ ...tx });
+                                    }}
+                                    title="Ajustar / Editar este lançamento"
+                                    className="p-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/30 text-amber-400 border border-amber-500/30 transition-all cursor-pointer"
+                                  >
+                                    <Sliders size={13} />
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleRemoveSpecificTransactions([tx.id], msg.id);
+                                    }}
+                                    title="Excluir este lançamento agora"
+                                    className="p-1.5 rounded-lg bg-rose-500/15 hover:bg-rose-500/30 text-rose-400 border border-rose-500/30 transition-all shrink-0 cursor-pointer"
+                                  >
+                                    <Trash2 size={13} />
+                                  </button>
+                                </div>
                               </div>
                             );
                           })}
@@ -4935,6 +4980,148 @@ export default function App() {
                   className="flex-1 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold transition-all shadow-md"
                 >
                   Salvar e Conectar Nuvem
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Ajuste Rápido de Lançamento Selecionado no Chat */}
+      {editingTxFromChat && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#12172A] border border-[#2A3554] rounded-2xl max-w-md w-full p-6 shadow-2xl relative animate-in fade-in max-h-[90vh] overflow-y-auto">
+            <button 
+              type="button"
+              onClick={() => setEditingTxFromChat(null)} 
+              className="absolute top-4 right-4 text-slate-400 hover:text-white"
+            >
+              <X size={20} />
+            </button>
+
+            <div className="flex items-center gap-2 mb-4">
+              <div className="h-8 w-8 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center border border-amber-500/40">
+                <Sliders size={16} />
+              </div>
+              <div>
+                <h3 className="font-bold text-white text-sm">Ajustar Lançamento</h3>
+                <p className="text-[11px] text-slate-400">Modifique os dados abaixo para recalcular saldos</p>
+              </div>
+            </div>
+
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              handleSaveEditedTransaction(editingTxFromChat);
+            }} className="space-y-3 text-xs">
+              
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-slate-400 block mb-1 font-semibold">Tipo:</label>
+                  <select 
+                    value={editingTxFromChat.type}
+                    onChange={(e) => setEditingTxFromChat({ ...editingTxFromChat, type: e.target.value as TransactionType })}
+                    className="w-full bg-[#161D32] border border-[#2A3554] p-2.5 rounded-lg text-slate-100"
+                  >
+                    <option value="Saída">Saída (-)</option>
+                    <option value="Entrada">Entrada (+)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-slate-400 block mb-1 font-semibold">Valor (R$):</label>
+                  <input 
+                    type="number"
+                    step="0.01"
+                    required
+                    value={editingTxFromChat.amount}
+                    onChange={(e) => setEditingTxFromChat({ ...editingTxFromChat, amount: parseFloat(e.target.value) || 0 })}
+                    className="w-full bg-[#161D32] border border-[#2A3554] p-2.5 rounded-lg text-slate-100 font-bold"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-slate-400 block mb-1 font-semibold">Produto / Item:</label>
+                <input 
+                  type="text"
+                  required
+                  value={editingTxFromChat.product || editingTxFromChat.description}
+                  onChange={(e) => setEditingTxFromChat({ 
+                    ...editingTxFromChat, 
+                    product: e.target.value,
+                    description: editingTxFromChat.description || e.target.value 
+                  })}
+                  className="w-full bg-[#161D32] border border-[#2A3554] p-2.5 rounded-lg text-slate-100"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-slate-400 block mb-1 font-semibold">Estabelecimento:</label>
+                  <input 
+                    type="text"
+                    value={editingTxFromChat.establishment || ''}
+                    onChange={(e) => setEditingTxFromChat({ ...editingTxFromChat, establishment: e.target.value })}
+                    className="w-full bg-[#161D32] border border-[#2A3554] p-2.5 rounded-lg text-slate-100"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-slate-400 block mb-1 font-semibold">Cidade / Local:</label>
+                  <input 
+                    type="text"
+                    value={editingTxFromChat.city || ''}
+                    onChange={(e) => setEditingTxFromChat({ ...editingTxFromChat, city: e.target.value })}
+                    className="w-full bg-[#161D32] border border-[#2A3554] p-2.5 rounded-lg text-slate-100"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-slate-400 block mb-1 font-semibold">Forma de Pagamento:</label>
+                  <select 
+                    value={editingTxFromChat.method}
+                    onChange={(e) => setEditingTxFromChat({ ...editingTxFromChat, method: e.target.value as PaymentMethod })}
+                    className="w-full bg-[#161D32] border border-[#2A3554] p-2.5 rounded-lg text-slate-100"
+                  >
+                    <option value="PIX">PIX</option>
+                    <option value="Débito">Débito</option>
+                    <option value="Crédito">Crédito</option>
+                    <option value="Dinheiro">Dinheiro</option>
+                    <option value="Transferência">Transferência</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-slate-400 block mb-1 font-semibold">Cartão de Crédito:</label>
+                  <select 
+                    value={editingTxFromChat.cardName || ''}
+                    onChange={(e) => setEditingTxFromChat({ ...editingTxFromChat, cardName: e.target.value || undefined })}
+                    disabled={editingTxFromChat.method !== 'Crédito'}
+                    className="w-full bg-[#161D32] border border-[#2A3554] p-2.5 rounded-lg text-slate-100 disabled:opacity-40"
+                  >
+                    <option value="">Nenhum / Não vinculado</option>
+                    {creditCards.map(c => (
+                      <option key={c.id} value={c.name}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingTxFromChat(null)}
+                  className="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold transition-all"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:brightness-110 text-slate-950 font-bold transition-all shadow-md"
+                >
+                  Salvar Ajustes
                 </button>
               </div>
             </form>
