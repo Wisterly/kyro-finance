@@ -1454,6 +1454,8 @@ export default function App() {
           recognitionInstance.lang = 'pt-BR';
           recognitionInstance.continuous = true;
           recognitionInstance.interimResults = true;
+          recognitionInstance.maxAlternatives = 1;
+          
           recognitionInstance.onresult = (event: any) => {
             let interim = '';
             for (let i = event.resultIndex; i < event.results.length; i++) {
@@ -1466,10 +1468,21 @@ export default function App() {
             }
             const currentTotal = `${recordedTextRef.current} ${interim}`.trim();
             setLiveAudioTranscript(currentTotal);
+            // Atualiza imediatamente o campo de texto visível para digitação instantânea sem congelamento
+            setInputMessage(currentTotal);
           };
+
           recognitionInstance.onerror = (e: any) => {
-            console.warn('[SpeechRecognition] Erro:', e);
+            console.warn('[SpeechRecognition] Alerta/Erro:', e.error || e);
           };
+
+          recognitionInstance.onend = () => {
+            // Se ainda estiver no modo gravando e a API pausar por silêncio, reinicia automaticamente
+            if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+              try { recognitionInstance.start(); } catch (err) {}
+            }
+          };
+
           recognitionInstance.start();
           speechRecognitionRef.current = recognitionInstance;
         } catch (e) {
@@ -1477,44 +1490,56 @@ export default function App() {
         }
       }
 
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream);
-      audioChunksRef.current = [];
-      recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) audioChunksRef.current.push(e.data);
-      };
-      recorder.onstop = async () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        const audioUrl = URL.createObjectURL(audioBlob);
-        stream.getTracks().forEach(track => track.stop());
-
-        const finalText = recordedTextRef.current.trim() || liveAudioTranscript.trim() || inputMessage.trim();
-
-        if (!finalText) {
-          alert('Não foi possível identificar a voz com clareza. Você também pode digitar ou ditar diretamente no campo de texto.');
-          return;
-        }
-
-        setMessages(prev => [...prev, {
-          id: Date.now().toString(),
-          sender: 'user',
-          text: `🎙️ "${finalText}"`,
-          audioUrl,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        }]);
-
-        await handleProcessUserInteraction({
-          type: 'audio',
-          text: finalText,
-          audioUrl
+      // Captura de áudio para player e contingência
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+          audio: { echoCancellation: true, noiseSuppression: true } 
         });
-      };
+        const recorder = new MediaRecorder(stream);
+        audioChunksRef.current = [];
+        recorder.ondataavailable = (e) => {
+          if (e.data.size > 0) audioChunksRef.current.push(e.data);
+        };
+        recorder.onstop = async () => {
+          const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+          const audioUrl = URL.createObjectURL(audioBlob);
+          stream.getTracks().forEach(track => track.stop());
 
-      recorder.start();
-      mediaRecorderRef.current = recorder;
+          const finalText = recordedTextRef.current.trim() || liveAudioTranscript.trim() || inputMessage.trim();
+
+          if (!finalText) {
+            alert('Não foi possível identificar a voz com clareza. Você também pode digitar ou ditar diretamente no campo de texto.');
+            return;
+          }
+
+          setMessages(prev => [...prev, {
+            id: Date.now().toString(),
+            sender: 'user',
+            text: `🎙️ "${finalText}"`,
+            audioUrl,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          }]);
+
+          setInputMessage('');
+          setLiveAudioTranscript('');
+
+          await handleProcessUserInteraction({
+            type: 'audio',
+            text: finalText,
+            audioUrl
+          });
+        };
+
+        recorder.start(250);
+        mediaRecorderRef.current = recorder;
+      } catch (audioErr) {
+        console.warn('[Audio Stream Info]: Usando modo de transcrição direta de voz por speech API.');
+      }
+
       setIsRecordingAudio(true);
       setAudioRecordingTime(0);
 
+      if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
       timerIntervalRef.current = setInterval(() => {
         setAudioRecordingTime(prev => prev + 1);
       }, 1000);
@@ -1529,10 +1554,28 @@ export default function App() {
       try { speechRecognitionRef.current.stop(); } catch (e) {}
     }
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-      mediaRecorderRef.current.stop();
+      try { mediaRecorderRef.current.stop(); } catch (e) {}
+    } else {
+      // Caso o MediaRecorder não tenha sido ativado, processa diretamente o texto capturado
+      const finalText = recordedTextRef.current.trim() || liveAudioTranscript.trim() || inputMessage.trim();
+      if (finalText) {
+        setMessages(prev => [...prev, {
+          id: Date.now().toString(),
+          sender: 'user',
+          text: `🎙️ "${finalText}"`,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        }]);
+        setInputMessage('');
+        setLiveAudioTranscript('');
+        handleProcessUserInteraction({
+          type: 'audio',
+          text: finalText
+        });
+      }
     }
     if (timerIntervalRef.current) {
       clearInterval(timerIntervalRef.current);
+      timerIntervalRef.current = null;
     }
     setIsRecordingAudio(false);
   };
@@ -3261,19 +3304,36 @@ export default function App() {
         </div>
 
         <div className="p-4 border-t border-[#1B2338]/80 bg-[#0A0D18]/90">
-          {/* Indicador de Gravação de Áudio ao Vivo */}
+          {/* Indicador de Gravação de Áudio ao Vivo com Feedback Visual Imediato */}
           {isRecordingAudio && (
-            <div className="mb-2.5 p-2 rounded-xl bg-red-500/15 border border-red-500/30 flex items-center justify-between text-xs text-red-300 animate-in fade-in">
-              <span className="flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full bg-red-500 animate-ping"></span>
-                Gravando voz... 00:{audioRecordingTime < 10 ? `0${audioRecordingTime}` : audioRecordingTime}
-              </span>
-              <button 
-                onClick={stopRecordingAudio}
-                className="px-2.5 py-1 rounded-lg bg-red-500 hover:bg-red-600 text-white font-bold text-[10px] transition-all"
-              >
-                Parar & Lançar
-              </button>
+            <div className="mb-2.5 p-3 rounded-2xl bg-gradient-to-r from-red-950/60 via-[#181124] to-[#12172A] border border-red-500/40 text-xs text-slate-100 flex flex-col gap-2 animate-in fade-in shadow-xl">
+              <div className="flex items-center justify-between">
+                <span className="flex items-center gap-2 font-bold text-red-400 text-xs">
+                  <span className="relative flex h-3 w-3">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+                  </span>
+                  Ouvindo sua voz ao vivo ({audioRecordingTime}s)...
+                </span>
+                <button 
+                  type="button"
+                  onClick={stopRecordingAudio}
+                  className="px-3 py-1 rounded-lg bg-red-500 hover:bg-red-600 text-white font-bold text-xs transition-all shadow-md flex items-center gap-1.5"
+                >
+                  <Check size={13} /> Concluir & Lançar
+                </button>
+              </div>
+
+              {liveAudioTranscript ? (
+                <div className="p-2 rounded-xl bg-black/40 border border-amber-500/30 text-amber-200 text-xs font-medium leading-relaxed max-h-24 overflow-y-auto">
+                  <span className="text-amber-400 font-bold block text-[10px] uppercase tracking-wider mb-0.5">Transcrição ao Vivo:</span>
+                  "{liveAudioTranscript}"
+                </div>
+              ) : (
+                <p className="text-[11px] text-slate-400 italic">
+                  Fale agora com clareza. Suas palavras aparecerão aqui e na caixa de texto simultaneamente.
+                </p>
+              )}
             </div>
           )}
 
@@ -3348,9 +3408,8 @@ export default function App() {
               value={inputMessage}
               onChange={(e) => setInputMessage(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
-              placeholder={isRecordingAudio ? (liveAudioTranscript || "Gravando áudio...") : "Digite, fale ou envie comprovante..."}
-              className="flex-1 bg-transparent text-xs text-slate-200 placeholder-slate-500 focus:outline-none min-w-0"
-              disabled={isRecordingAudio}
+              placeholder={isRecordingAudio ? "Fale agora... ouvindo sua voz em tempo real..." : "Digite, fale ou envie comprovante..."}
+              className="flex-1 bg-transparent text-xs text-slate-200 placeholder-slate-400 focus:outline-none min-w-0"
             />
             <button
               onClick={handleSendMessage}
