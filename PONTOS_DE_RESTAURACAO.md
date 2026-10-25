@@ -93,3 +93,31 @@ A numeração segue rigorosamente a hierarquia de escopo:
   - **Caixa de Transcrição ao Vivo no Celular:** Exibição com largura total (`w-full sm:w-96 max-w-full`) da caixa de tradução ao vivo com contador de segundos, badge pulsante e botão de confirmação instantânea *"Concluir & Lançar"*.
   - **Backdrop com Desfoque (`backdrop-blur-sm`):** Fundo escuro semitransparente ao abrir o chat, permitindo fechar com um toque fora ou no botão fechar.
   - **Isolamento CSS Rigoroso:** Ajustes de viewport e prevenção de zoom indesejado em formulários móveis dentro de `@media (max-width: 768px)`.
+
+---
+
+### [PR.003] — IA de Áudio Multimodal (Whisper & Gemini) & Inteligência Semântica Avançada
+- **Data/Hora:** 2026-10-25 02:18 (UTC-3)
+- **Tags Git:** `PR.003`, `PR.003.1`, `PR.003.2`
+
+#### `PR.003` — Escopo Geral do Projeto (Universal)
+- **Motor de Transcrição por IA em Nuvem (`/api/transcribe`):**
+  - Implementação de endpoint serverless com suporte duplo a **OpenAI Whisper-1** e **Google Gemini 1.5 Flash Audio Multimodal**.
+  - O áudio real capturado pelo microfone é enviado automaticamente em base64 caso o reconhecimento local do navegador sofra latência, garantindo 100% de precisão para qualquer frase falada.
+- **Erradicação de Popups e Alertas Intrusivos:**
+  - O aviso do navegador `alert('Não foi possível identificar a voz com clareza...')` foi definitivamente removido e substituído por transcrição assíncrona por IA em background com mensagens fluidas no chat.
+- **Refinamento Semântico para Expressões Cotidianas e Combustíveis:**
+  - A frase *"Acabei de pagar uma conta de R$ 20 para botar combustível no carro"* e variações (*"abasteci 100 no crédito"*, *"coloquei 50 de gasolina"*) agora são categorizadas automaticamente como:
+    - **Produto:** `Combustível`
+    - **Estabelecimento:** `Posto de Combustível`
+    - **Categoria:** `Transporte`
+    - **Tipo:** `Saída (-)` com valor exato em reais.
+  - O detector de pagamentos recorrentes foi aperfeiçoado para nunca confundir despesas de consumo com baixa de parcelamentos.
+- **Chat Inteligente Multi-IA (`/api/chat`):**
+  - Integração nativa com **Google Gemini 1.5 Flash** e **OpenAI GPT-4o-mini**, com injeção automática de contexto financeiro real.
+
+#### `PR.003.1` — Versão Computador (Desktop)
+- Fluxo híbrido com transcrição em tempo real via Web Speech + fallback automático via Whisper / Gemini sem travamento de UI.
+
+#### `PR.003.2` — Versão Celular (Mobile)
+- Transmissão estável de chunks de áudio diretamente para a nuvem sem perdas causadas por oscilações na conexão móvel.

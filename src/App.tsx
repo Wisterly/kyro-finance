@@ -1479,20 +1479,74 @@ export default function App() {
             const audioUrl = URL.createObjectURL(audioBlob);
             stream.getTracks().forEach(track => track.stop());
 
-            const finalText = recordedTextRef.current.trim() || liveAudioTranscript.trim() || inputMessage.trim();
+            let finalText = recordedTextRef.current.trim() || liveAudioTranscript.trim() || inputMessage.trim();
+
+            // Se a API nativa do navegador não transcreveu texto em tempo real (ex: delay nos servidores do Chrome):
+            // Aciona imediatamente o motor Whisper / Gemini do servidor (/api/transcribe)
+            if (!finalText && audioBlob.size > 800) {
+              const tempMsgId = `temp_audio_${Date.now()}`;
+              setMessages(prev => [...prev, {
+                id: tempMsgId,
+                sender: 'user',
+                text: '🎙️ [Áudio de Voz]: Transcrevendo com Inteligência Artificial (Whisper / Gemini)...',
+                audioUrl,
+                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+              }]);
+
+              setInputMessage('');
+              setLiveAudioTranscript('');
+              setIsAiLoading(true);
+
+              try {
+                const reader = new FileReader();
+                const base64Promise = new Promise<string>((resolve) => {
+                  reader.onload = () => resolve(reader.result as string);
+                  reader.onerror = () => resolve('');
+                });
+                reader.readAsDataURL(audioBlob);
+                const audioBase64 = await base64Promise;
+
+                if (audioBase64) {
+                  const res = await fetch('/api/transcribe', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ audioBase64, mimeType: audioBlob.type || 'audio/webm' })
+                  });
+                  const data = await res.json();
+                  if (data?.success && data?.text) {
+                    finalText = data.text.trim();
+                    setMessages(prev => prev.map(m => m.id === tempMsgId ? { ...m, text: `🎙️ "${finalText}"` } : m));
+                  }
+                }
+              } catch (err) {
+                console.warn('[Audio Transcribe Client Fallback]:', err);
+              } finally {
+                setIsAiLoading(false);
+              }
+            }
 
             if (!finalText) {
-              alert('Não foi possível identificar a voz com clareza. Você também pode digitar ou ditar diretamente no campo de texto.');
+              setMessages(prev => [...prev, {
+                id: Date.now().toString(),
+                sender: 'ia',
+                text: 'Não consegui captar a sua voz com nitidez neste momento. Por favor, fale mais próximo ao microfone ou digite na caixa de texto.',
+                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+              }]);
               return;
             }
 
-            setMessages(prev => [...prev, {
-              id: Date.now().toString(),
-              sender: 'user',
-              text: `🎙️ "${finalText}"`,
-              audioUrl,
-              timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-            }]);
+            // Se o texto não veio via fallback do servidor, registra a mensagem normalmente
+            setMessages(prev => {
+              const alreadyHas = prev.some(m => m.audioUrl === audioUrl);
+              if (alreadyHas) return prev;
+              return [...prev, {
+                id: Date.now().toString(),
+                sender: 'user',
+                text: `🎙️ "${finalText}"`,
+                audioUrl,
+                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+              }];
+            });
 
             setInputMessage('');
             setLiveAudioTranscript('');
@@ -1521,7 +1575,12 @@ export default function App() {
 
     } catch (err: any) {
       isRecordingAudioRef.current = false;
-      alert('Não foi possível acessar o microfone do seu navegador. Verifique as permissões de áudio ou digite diretamente na caixa de mensagem.');
+      setMessages(prev => [...prev, {
+        id: Date.now().toString(),
+        sender: 'ia',
+        text: 'Não foi possível acessar o microfone do seu navegador. Verifique as permissões de áudio nas configurações do seu navegador ou digite diretamente no campo de texto.',
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      }]);
     }
   };
 
@@ -1550,6 +1609,13 @@ export default function App() {
           type: 'audio',
           text: finalText
         });
+      } else {
+        setMessages(prev => [...prev, {
+          id: Date.now().toString(),
+          sender: 'ia',
+          text: 'Não consegui captar a sua voz com nitidez neste momento. Por favor, fale mais próximo ao microfone ou digite na caixa de texto.',
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        }]);
       }
     }
 

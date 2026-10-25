@@ -200,12 +200,17 @@ export function parseDynamicFinancialMessage(
   // 2. Extrai valor monetário com algoritmo de alta precisão
   const amount = extractMonetaryValue(clean);
 
-  // 3. Detectar se é CONFIRMAÇÃO DE PAGAMENTO ("Paguei a passagem aérea", "Marcar empréstimo como pago")
-  const isPaymentConfirm = 
-    (lower.includes('paguei') || lower.includes('já paguei') || lower.includes('ja paguei') ||
-     lower.includes('quitei') || lower.includes('liquidada') || lower.includes('dar baixa') ||
-     lower.includes('marcar como paga') || lower.includes('marcar como pago') || lower.includes('conta paga')) &&
-    !lower.includes('adicione') && !lower.includes('adicionar');
+  // 3. Detectar se é CONFIRMAÇÃO DE BAIXA DE DÍVIDA RECORRENTE ("Dar baixa no empréstimo", "Marcar passagem aérea como paga")
+  // Importante: Se houver valor monetário e menção a compra/consumo (ex: "paguei 50 reais de gasolina", "paguei 20 no almoço"), é um lançamento de despesa, NÃO baixa!
+  const hasExpenseContext = amount > 0 && /(gasolina|combust[ií]vel|padaria|almo[cç]o|farm[aá]cia|uber|mercado|compra|lanche|reais|real)/i.test(lower);
+
+  const isPaymentConfirm = !hasExpenseContext && (
+    lower.includes('dar baixa') || 
+    lower.includes('marcar como paga') || 
+    lower.includes('marcar como pago') ||
+    lower.includes('liquidada') ||
+    ( (lower.includes('quitei') || lower.includes('já paguei') || lower.includes('ja paguei') || lower.includes('paguei a ') || lower.includes('paguei o ')) && !hasExpenseContext && amount === 0 )
+  ) && !lower.includes('adicione') && !lower.includes('adicionar');
 
   if (isPaymentConfirm) {
     const cleanTarget = clean
@@ -482,8 +487,8 @@ export function parseDynamicFinancialMessage(
     },
     // Transporte / Combustível
     {
-      regex: /(?:^|[\s,.\-!])(gasolina|etanol|combust[ií]vel|diesel|[oó]leo|troca\s+de\s+[oó]leo|lavagem)(?:$|[\s,.\-!])/i,
-      product: (m) => m.charAt(0).toUpperCase() + m.slice(1).toLowerCase(),
+      regex: /(?:^|[\s,.\-!])(gasolina|etanol|combust[ií]vel|diesel|[oó]leo|troca\s+de\s+[oó]leo|lavagem|abastec|abasteci|abastecer|botar\s+combust[ií]vel|colocar\s+gasolina)(?:$|[\s,.\-!])/i,
+      product: 'Combustível',
       category: 'Transporte'
     },
     {
@@ -560,6 +565,10 @@ export function parseDynamicFinancialMessage(
       establishment = 'Internet';
     } else if (type === 'Entrada') {
       establishment = 'Recebimento';
+    } else if (detectedCategory === 'Transporte' || detectedProduct?.toLowerCase().includes('combust') || detectedProduct?.toLowerCase().includes('gasolina') || lower.includes('abastecer') || lower.includes('combustível') || lower.includes('combustivel')) {
+      establishment = 'Posto de Combustível';
+    } else if (detectedCategory === 'Saúde / Farmácia' || lower.includes('remédio') || lower.includes('medicamento')) {
+      establishment = 'Farmácia';
     } else {
       establishment = detectedProduct ? 'Estabelecimento Comercial' : 'Despesa Avulsa';
     }
