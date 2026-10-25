@@ -14,10 +14,12 @@ export interface FinancialContext {
 
 export interface LastTransactionAction {
   type: 'remove' | 'adjust' | 'enrich' | 'none';
+  actionType?: 'single_deleted' | 'multiple_found' | 'none_found' | 'history_empty';
   reply: string;
   updatedTransactions?: Transaction[];
   deletedTransactionId?: string;
   modifiedTransaction?: Transaction;
+  actionableTransactions?: Transaction[];
 }
 
 // Normalizador de texto para análise fonética e semântica
@@ -32,26 +34,168 @@ function normalizeText(text: string): string {
     .trim();
 }
 
+// Extrator de alvo e termo de busca para remoção
+export function extractRemovalTarget(rawText: string): { isLatest: boolean; searchTerm: string } {
+  const norm = normalizeText(rawText);
+
+  // Se menciona explicitamente o último lançamento
+  if (/(ultimo|ultima|que acabei de|que eu acabei|que falei|que mandei|recente|anterior)/i.test(norm)) {
+    return { isLatest: true, searchTerm: 'último' };
+  }
+
+  // Remove verbos de remoção e partículas de ligação para obter o termo específico (ex: "caxias", "agua", "farmacia")
+  let cleaned = norm
+    .replace(/^(favor|por favor|gostaria de|quero|pode|poderia)?\s*/i, '')
+    .replace(/^(remova|remover|exclua|excluir|apague|apagar|apaga|cancele|cancelar|cancela|desfazer|desfaz|deletar|deleta|tirar|tira|anular|anule|eliminar|elimine|limpar)\s*/i, '')
+    .replace(/^(o|a|os|as|um|uma)?\s*(lancamento|levantamento|gasto|despesa|registro|compra|saida|entrada)?\s*/i, '')
+    .replace(/^(de|da|do|em|na|no|sobre|referente a|com|para)\s*/i, '')
+    .replace(/^(um|uma)?\s*/i, '')
+    .trim();
+
+  return { isLatest: false, searchTerm: cleaned || rawText.trim() };
+}
+
+// Mecanismo de busca profunda em todo o histórico de transações
+export function searchTransactionsByTerm(searchTerm: string, transactions: Transaction[]): Transaction[] {
+  if (!searchTerm || !transactions || transactions.length === 0) return [];
+  const termNorm = normalizeText(searchTerm);
+  const numVal = extractMonetaryValue(searchTerm);
+
+  return transactions.filter(t => {
+    // 1. Busca por Cidade (ex: "Caxias", "Oeiras", "Teresina")
+    if (t.city && normalizeText(t.city).includes(termNorm)) return true;
+
+    // 2. Busca por Produto (ex: "água", "gasolina", "chocolate")
+    if (t.product && normalizeText(t.product).includes(termNorm)) return true;
+
+    // 3. Busca por Estabelecimento ou Descrição (ex: "Farmácia", "Posto", "Supermercado")
+    if (t.establishment && normalizeText(t.establishment).includes(termNorm)) return true;
+    if (t.description && normalizeText(t.description).includes(termNorm)) return true;
+
+    // 4. Busca por Categoria
+    if (t.category && normalizeText(t.category).includes(termNorm)) return true;
+
+    // 5. Busca por Forma de Pagamento ou Cartão
+    if (t.method && normalizeText(t.method).includes(termNorm)) return true;
+    if (t.cardName && normalizeText(t.cardName).includes(termNorm)) return true;
+
+    // 6. Busca por Valor Monetário exato
+    if (numVal > 0 && Math.abs(t.amount - numVal) < 0.01) return true;
+
+    // 7. Busca por Data
+    if (t.date && normalizeText(t.date).includes(termNorm)) return true;
+
+    return false;
+  });
+}
+
 // =========================================================================
-// 1. DETECÇÃO ULTRA ROBUSTA: REMOVER / APAGAR / CANCELAR ÚLTIMO LANÇAMENTO
+// 1. DETECÇÃO ULTRA ROBUSTA: REMOVER / APAGAR / CANCELAR (ÚLTIMO OU ESPECÍFICO)
 // =========================================================================
-export function isRemoveLastCommand(rawText: string): boolean {
+export function isRemoveTransactionCommand(rawText: string): boolean {
   if (!rawText) return false;
   const norm = normalizeText(rawText);
 
   // Verbos e intenções de remoção/cancelamento
   const hasRemoveVerb = /(remov|exclu|apag|cancel|desfaz|desfaca|delet|anul|elimin|retir|tirar|tira|limp|arranc|errado|nao era para|desfa)/i.test(norm);
 
-  // Alvos de referência ao último lançamento ou gravação
-  const hasTargetRef = /(ultim|levantamento|lancamento|gasto|despesa|registro|compra|saida|entrada|isso|esse|essa|este|esta|que fiz|que eu fiz|que mandei|que eu mandei|que falei|que eu falei|que acabei de|que eu acabei)/i.test(norm);
+  // Alvos de referência: último OU termos como lançamento, gasto, despesa, ou nomes de cidades, produtos, etc.
+  const hasTargetRef = /(ultim|levantamento|lancamento|gasto|despesa|registro|compra|saida|entrada|isso|esse|essa|este|esta|que fiz|que eu fiz|que mandei|que falei|que acabei de|caxias|oeiras|teresina|agua|farmacia|posto|gasolina)/i.test(norm);
 
   // Comandos diretos e isolados
   const isDirectSingleCommand = /^(remova|remover|exclua|excluir|apague|apagar|apaga|cancele|cancelar|cancela|desfazer|desfaz|deletar|deleta|tirar|tira|anular|anule|eliminar|elimine|limpar)$/i.test(norm) ||
-    /^(apagar|remover|excluir|cancelar|deletar|tirar|desfazer)\s+(o|a)?\s*(ultimo|ultima|isso|esse|essa|este|esta)$/i.test(norm) ||
-    /^(tira|apaga|cancela|remove|exclui|desfaz)\s+(isso|esse|essa|este|esta|o ultimo|a ultima)$/i.test(norm);
+    /^(apagar|remover|excluir|cancelar|deletar|tirar|desfazer)\s+/i.test(norm) ||
+    /^(tira|apaga|cancela|remove|exclui|desfaz)\s+/i.test(norm);
 
   return (hasRemoveVerb && hasTargetRef) || isDirectSingleCommand;
 }
+
+export const isRemoveLastCommand = isRemoveTransactionCommand;
+
+// =========================================================================
+// EXECUÇÃO INTELIGENTE DE REMOÇÃO: ÚLTIMO, BUSCA DIRETA OU SELEÇÃO INTERATIVA
+// =========================================================================
+export function executeSmartRemoveTransaction(rawText: string, transactions: Transaction[]): LastTransactionAction {
+  if (!transactions || transactions.length === 0) {
+    return {
+      type: 'remove',
+      actionType: 'history_empty',
+      reply: '⚠️ **Nenhum lançamento encontrado:** Seu histórico de transações está vazio no momento, portanto não há o que remover.'
+    };
+  }
+
+  const { isLatest, searchTerm } = extractRemovalTarget(rawText);
+
+  // Caso 1: Usuário pediu para remover explicitamente o último lançamento
+  if (isLatest) {
+    const target = transactions[0];
+    const remaining = transactions.slice(1);
+    const formattedAmount = target.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+    const typeText = target.type === 'Entrada' ? 'Entrada (+)' : 'Saída (-)';
+    const itemName = target.product || target.description || 'Lançamento avulso';
+    const localName = target.establishment || target.city || 'Geral';
+
+    return {
+      type: 'remove',
+      actionType: 'single_deleted',
+      reply: `🗑️ **Último Lançamento Removido com Sucesso!**\n\n` +
+        `• **Item Excluído:** ${itemName}\n` +
+        `• **Tipo:** ${typeText}\n` +
+        `• **Valor Anulado:** R$ ${formattedAmount}\n` +
+        `• **Forma:** ${target.method}${target.cardName ? ` (${target.cardName})` : ''}\n` +
+        `• **Local:** ${localName} (${target.city})\n\n` +
+        `✅ Operação concluída: Saldo, Saídas e Entradas foram recalculados no Dashboard!`,
+      updatedTransactions: remaining,
+      deletedTransactionId: target.id
+    };
+  }
+
+  // Caso 2: Usuário especificou um critério de busca (ex: "Caxias", "água", "farmácia")
+  const matches = searchTransactionsByTerm(searchTerm, transactions);
+
+  // 2.1 Nenhum lançamento encontrado com o termo
+  if (matches.length === 0) {
+    return {
+      type: 'remove',
+      actionType: 'none_found',
+      reply: `⚠️ Não encontrei nenhum lançamento no seu histórico referente a "${searchTerm}". Você pode verificar a lista completa de despesas na aba "Lançamentos".`
+    };
+  }
+
+  // 2.2 Exatamente 1 lançamento encontrado -> Remove automaticamente com confirmação!
+  if (matches.length === 1) {
+    const target = matches[0];
+    const remaining = transactions.filter(t => t.id !== target.id);
+    const formattedAmount = target.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+    const typeText = target.type === 'Entrada' ? 'Entrada (+)' : 'Saída (-)';
+
+    return {
+      type: 'remove',
+      actionType: 'single_deleted',
+      reply: `🗑️ **Lançamento Encontrado e Removido com Sucesso!**\n\n` +
+        `• **Item Excluído:** ${target.product || target.description}\n` +
+        `• **Tipo:** ${typeText}\n` +
+        `• **Valor Anulado:** R$ ${formattedAmount}\n` +
+        `• **Local / Cidade:** ${target.city}\n` +
+        `• **Forma:** ${target.method}${target.cardName ? ` (${target.cardName})` : ''}\n` +
+        `• **Data:** ${target.date}\n\n` +
+        `✅ O Saldo Geral e seus relatórios foram recalculados instantaneamente!`,
+      updatedTransactions: remaining,
+      deletedTransactionId: target.id
+    };
+  }
+
+  // 2.3 Múltiplos lançamentos encontrados (ex: 2 ou 3 de Caxias) -> Disponibiliza seleção interativa no chat!
+  return {
+    type: 'remove',
+    actionType: 'multiple_found',
+    reply: `🔍 **Encontrei ${matches.length} lançamentos referentes a "${searchTerm}":**\nSelecione abaixo os lançamentos que deseja cancelar ou clique diretamente no botão de excluir de cada um:`,
+    actionableTransactions: matches
+  };
+}
+
+export const executeRemoveLastTransaction = (transactions: Transaction[]) => 
+  executeSmartRemoveTransaction('último', transactions);
 
 // =========================================================================
 // 2. DETECÇÃO ULTRA ROBUSTA: AJUSTAR / ALTERAR / MODIFICAR ÚLTIMO LANÇAMENTO
@@ -85,41 +229,6 @@ export function isEnrichLastCommand(rawText: string): boolean {
   const hasFieldRef = /(informacao|cidade|local|estabelecimento|produto|observacao|nota|cartao)/i.test(norm);
 
   return (hasEnrichVerb && (hasTargetRef || hasFieldRef));
-}
-
-// =========================================================================
-// EXECUÇÃO: REMOVER ÚLTIMO LANÇAMENTO
-// =========================================================================
-export function executeRemoveLastTransaction(transactions: Transaction[]): LastTransactionAction {
-  if (!transactions || transactions.length === 0) {
-    return {
-      type: 'remove',
-      reply: '⚠️ **Nenhum lançamento recente encontrado:** Seu histórico de transações está vazio no momento, portanto não há o que remover.'
-    };
-  }
-
-  const target = transactions[0];
-  const remaining = transactions.slice(1);
-
-  const formattedAmount = target.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
-  const typeText = target.type === 'Entrada' ? 'Entrada (+)' : 'Saída (-)';
-  const itemName = target.product || target.description || 'Lançamento avulso';
-  const localName = target.establishment || target.city || 'Geral';
-
-  const reply = `🗑️ **Último Lançamento Removido com Sucesso!**\n\n` +
-    `• **Item Excluído:** ${itemName}\n` +
-    `• **Tipo de Movimentação:** ${typeText}\n` +
-    `• **Valor Anulado:** R$ ${formattedAmount}\n` +
-    `• **Forma de Pagamento:** ${target.method}${target.cardName ? ` (${target.cardName})` : ''}\n` +
-    `• **Local / Estabelecimento:** ${localName} (${target.city})\n\n` +
-    `✅ **Recálculo Concluído:** A operação foi cancelada e seu Saldo Disponível, Total de Saídas e Gráficos foram atualizados imediatamente no Dashboard e nas abas!`;
-
-  return {
-    type: 'remove',
-    reply,
-    updatedTransactions: remaining,
-    deletedTransactionId: target.id
-  };
 }
 
 // =========================================================================

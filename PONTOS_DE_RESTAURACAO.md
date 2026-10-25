@@ -121,3 +121,34 @@ A numeração segue rigorosamente a hierarquia de escopo:
 
 #### `PR.003.2` — Versão Celular (Mobile)
 - Transmissão estável de chunks de áudio diretamente para a nuvem sem perdas causadas por oscilações na conexão móvel.
+
+---
+
+### [PR.004] — Busca Semântica e Remoção Interativa de Múltiplos Lançamentos
+- **Data/Hora:** 2026-10-25 02:40 (UTC-3)
+- **Tags Git:** `PR.004`, `PR.004.1`, `PR.004.2`
+
+#### `PR.004` — Escopo Geral do Projeto (Universal)
+- **Cancelamento e Remoção Específica por Critério Semântico:**
+  - O comando de cancelamento não fica mais restrito exclusivamente a `transactions[0]`.
+  - Quando o usuário solicita remoções como *"remova o lançamento de Caxias"*, *"cancele o gasto de água"*, *"apague a compra da farmácia"*, o sistema varre todo o histórico de lançamentos (inclusive os mais antigos) analisando cidade, produto, estabelecimento, descrição e categoria com normalização fonética sem acentos (`normalizeText` e `searchTransactionsByTerm`).
+  - **Se houver 0 ocorrências:** Resposta amigável informando que o termo não foi localizado, sem gerar erros ou popups.
+  - **Se houver exatamente 1 ocorrência:** Exclusão automática direta, sincronização instantânea com o Firebase Cloud via `syncDeleteTransaction`, recálculo de saldos e confirmação com dados detalhados do item anulado.
+  - **Se houver 2 ou mais ocorrências (ex: 3 lançamentos em Caxias):** O sistema não deleta às cegas. Ele gera uma lista acionável (`actionableTransactions`) para que o usuário decida exatamente quais deseja cancelar.
+- **Sincronização Bidirecional e Integridade Financeira:**
+  - O recálculo de saldo líquido, total de saídas, total de entradas e relatórios por produto/estabelecimento é acionado na hora no frontend e sincronizado com o banco de dados.
+
+#### `PR.004.1` — Versão Computador (Desktop)
+- **Card Interativo de Seleção e Exclusão no Chat:**
+  - Componente de seleção visual integrado ao histórico de mensagens na sidebar direita (`lg:w-96`).
+  - Checkboxes interativas estilizadas (`CheckSquare` / `Square`), botão de *"Marcar Todos / Desmarcar Todos"*.
+  - Botão de lixeira rápida individual (`Trash2`) em cada linha com estorno imediato de um único lançamento.
+  - Botão destacado de exclusão em lote: `🗑️ Excluir Selecionados (N)` com confirmação detalhada do valor total estornado.
+  - Badge de status *"Ação já concluída para esta mensagem"* quando a exclusão for efetuada, evitando duplicações acidentais.
+
+#### `PR.004.2` — Versão Celular (Mobile)
+- **Experiência Touch Otimizada no Drawer:**
+  - O card de seleção interativa encaixa-se fluidamente na gaveta lateral mobile sem ultrapassar a largura do viewport (390px).
+  - Alvos de toque acessíveis (`p-2.5`, espaçamento entre linhas e botões com feedback tátil visual).
+  - Informações condensadas de produto, cidade, estabelecimento, data e valor formatado com cores de alerta visual (vermelho para saída, verde para entrada).
+  - Operação completa 100% por voz ou por toque direto na tela do smartphone.

@@ -70,9 +70,11 @@ import { WhatsAppTab } from './components/WhatsAppTab';
 import { parseDynamicFinancialMessage } from './utils/financialParser';
 import { processUploadedFinancialDocument } from './utils/documentExtractor';
 import {
+  isRemoveTransactionCommand,
   isRemoveLastCommand,
   isAdjustLastCommand,
   isEnrichLastCommand,
+  executeSmartRemoveTransaction,
   executeRemoveLastTransaction,
   executeAdjustLastTransaction,
   executeEnrichLastTransaction,
@@ -1121,6 +1123,57 @@ export default function App() {
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
   const cameraInputRef = React.useRef<HTMLInputElement | null>(null);
 
+  // Estado para seleção e exclusão interativa de lançamentos no chat
+  const [selectedTxIdsForRemoval, setSelectedTxIdsForRemoval] = useState<Set<string>>(new Set());
+
+  const toggleSelectTxForRemoval = (txId: string) => {
+    setSelectedTxIdsForRemoval(prev => {
+      const next = new Set(prev);
+      if (next.has(txId)) next.delete(txId);
+      else next.add(txId);
+      return next;
+    });
+  };
+
+  const handleRemoveSpecificTransactions = (txIds: string[], parentMessageId?: string) => {
+    if (!txIds || txIds.length === 0) return;
+
+    const itemsToRemove = transactions.filter(t => txIds.includes(t.id));
+    if (itemsToRemove.length === 0) return;
+
+    // 1. Remove do estado local
+    setTransactions(prev => prev.filter(t => !txIds.includes(t.id)));
+
+    // 2. Deleta do Firestore
+    txIds.forEach(id => kyroCloud.syncDeleteTransaction(id));
+
+    // 3. Limpa seleções pendentes
+    setSelectedTxIdsForRemoval(new Set());
+
+    // 4. Marca o card da mensagem anterior como concluído
+    if (parentMessageId) {
+      setMessages(prev => prev.map(m => m.id === parentMessageId ? { ...m, actionCompleted: true } : m));
+    }
+
+    // 5. Exibe confirmação detalhada no chat
+    const totalVal = itemsToRemove.reduce((s, t) => s + t.amount, 0);
+    const summaryList = itemsToRemove.map(t => `• **${t.product || t.description}:** R$ ${t.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} (${t.city})`).join('\n');
+
+    const confirmMsg: ChatMessage = {
+      id: Date.now().toString(),
+      sender: 'ia',
+      text: `🗑️ **${itemsToRemove.length} lançamento${itemsToRemove.length > 1 ? 's excluídos' : ' excluído'} com sucesso!**\n\n${summaryList}\n\n💰 **Total estornado:** R$ ${totalVal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n✅ Seus saldos, total de saídas e relatórios foram recalculados imediatamente!`,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    };
+
+    setMessages(prev => [...prev, confirmMsg]);
+    setWhatsappSyncToast({
+      show: true,
+      text: `🗑️ ${itemsToRemove.length} lançamento(s) removido(s) com sucesso!`
+    });
+    setTimeout(() => setWhatsappSyncToast(null), 4000);
+  };
+
   // Manipulador Unificado do Assistente IA (Texto, Áudio e Imagem de Comprovante)
   const handleProcessUserInteraction = async ({
     type,
@@ -1139,16 +1192,18 @@ export default function App() {
     const isImage = type === 'image';
 
     // =========================================================================
-    // COMANDO 1: REMOÇÃO DO ÚLTIMO LANÇAMENTO ("remova o último lançamento", etc.)
+    // COMANDO 1: REMOÇÃO INTELIGENTE DE LANÇAMENTOS (ÚLTIMO OU BUSCA POR TERMO/CIDADE)
     // =========================================================================
-    if (isRemoveLastCommand(text)) {
-      const action = executeRemoveLastTransaction(transactions);
-      if (action.updatedTransactions && action.deletedTransactionId) {
+    if (isRemoveTransactionCommand(text)) {
+      const action = executeSmartRemoveTransaction(text, transactions);
+
+      // Se encontrou exatamente 1 e já excluiu automaticamente
+      if (action.actionType === 'single_deleted' && action.updatedTransactions && action.deletedTransactionId) {
         setTransactions(action.updatedTransactions);
         kyroCloud.syncDeleteTransaction(action.deletedTransactionId);
         setWhatsappSyncToast({
           show: true,
-          text: '🗑️ Último lançamento removido com sucesso!'
+          text: '🗑️ Lançamento removido com sucesso!'
         });
         setTimeout(() => setWhatsappSyncToast(null), 4000);
       }
@@ -1157,6 +1212,8 @@ export default function App() {
         id: (Date.now() + 2).toString(),
         sender: 'ia',
         text: action.reply,
+        actionableTransactions: action.actionableTransactions,
+        actionCompleted: false,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       };
 
@@ -3349,6 +3406,123 @@ export default function App() {
                 {msg.audioUrl && (
                   <div className="mt-2 w-full pt-1">
                     <audio src={msg.audioUrl} controls className="w-full h-8 rounded" />
+                  </div>
+                )}
+
+                {/* Card Interativo de Seleção e Remoção Múltipla */}
+                {msg.actionableTransactions && msg.actionableTransactions.length > 0 && (
+                  <div className="mt-3 pt-3 border-t border-slate-700/60 flex flex-col gap-2">
+                    {msg.actionCompleted ? (
+                      <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs flex items-center gap-2">
+                        <CheckCircle2 size={16} className="text-emerald-400 shrink-0" />
+                        <span>Ação já concluída para esta mensagem.</span>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="flex items-center justify-between text-[11px] text-amber-300 font-bold mb-1">
+                          <span>Selecione quais deseja cancelar:</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const allIds = msg.actionableTransactions!.map(t => t.id);
+                              const allSelected = allIds.every(id => selectedTxIdsForRemoval.has(id));
+                              setSelectedTxIdsForRemoval(prev => {
+                                const next = new Set(prev);
+                                if (allSelected) {
+                                  allIds.forEach(id => next.delete(id));
+                                } else {
+                                  allIds.forEach(id => next.add(id));
+                                }
+                                return next;
+                              });
+                            }}
+                            className="text-[10px] text-amber-400/80 hover:text-amber-300 underline"
+                          >
+                            {msg.actionableTransactions.every(t => selectedTxIdsForRemoval.has(t.id)) ? 'Desmarcar Todos' : 'Marcar Todos'}
+                          </button>
+                        </div>
+
+                        <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                          {msg.actionableTransactions.map(tx => {
+                            const isSelected = selectedTxIdsForRemoval.has(tx.id);
+                            return (
+                              <div
+                                key={tx.id}
+                                className={`p-2.5 rounded-xl border transition-all flex items-start justify-between gap-2.5 ${
+                                  isSelected
+                                    ? 'bg-amber-500/15 border-amber-500/60 shadow-sm'
+                                    : 'bg-[#0E1322]/90 border-slate-700/70 hover:border-slate-600'
+                                }`}
+                              >
+                                <button
+                                  type="button"
+                                  onClick={() => toggleSelectTxForRemoval(tx.id)}
+                                  className="flex items-start gap-2 text-left flex-1 cursor-pointer"
+                                >
+                                  <div className="pt-0.5 text-amber-400">
+                                    {isSelected ? <CheckSquare size={16} /> : <Square size={16} className="text-slate-500" />}
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center justify-between gap-1">
+                                      <p className="font-bold text-slate-100 text-xs truncate">
+                                        {tx.product || tx.description}
+                                      </p>
+                                      <span className={`text-[11px] font-bold shrink-0 ${tx.type === 'Saída' ? 'text-rose-400' : 'text-emerald-400'}`}>
+                                        {tx.type === 'Saída' ? '- ' : '+ '}R$ {tx.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                      </span>
+                                    </div>
+                                    <p className="text-[10px] text-slate-400 truncate mt-0.5">
+                                      📍 {tx.city || 'Local'} • 🏢 {tx.establishment || tx.category || 'Geral'}
+                                    </p>
+                                    <p className="text-[9px] text-slate-500 mt-0.5">
+                                      📅 {tx.date} • 💳 {tx.method}{tx.cardName ? ` (${tx.cardName})` : ''}
+                                    </p>
+                                  </div>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleRemoveSpecificTransactions([tx.id], msg.id);
+                                  }}
+                                  title="Excluir este lançamento agora"
+                                  className="p-1.5 rounded-lg bg-rose-500/15 hover:bg-rose-500/30 text-rose-400 border border-rose-500/30 transition-all shrink-0 mt-0.5"
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {/* Botão de Excluir Selecionados */}
+                        <div className="mt-2 pt-2 border-t border-slate-700/40 flex items-center gap-2">
+                          <button
+                            type="button"
+                            disabled={selectedTxIdsForRemoval.size === 0}
+                            onClick={() => {
+                              const idsToDelete = Array.from(selectedTxIdsForRemoval).filter(id => 
+                                msg.actionableTransactions?.some(t => t.id === id)
+                              );
+                              if (idsToDelete.length > 0) {
+                                handleRemoveSpecificTransactions(idsToDelete, msg.id);
+                              }
+                            }}
+                            className={`w-full py-2 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all ${
+                              selectedTxIdsForRemoval.size > 0
+                                ? 'bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-900/40 cursor-pointer'
+                                : 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed'
+                            }`}
+                          >
+                            <Trash2 size={14} />
+                            {selectedTxIdsForRemoval.size > 0
+                              ? `Excluir Selecionados (${selectedTxIdsForRemoval.size})`
+                              : 'Selecione acima para excluir em lote'}
+                          </button>
+                        </div>
+                      </>
+                    )}
                   </div>
                 )}
               </div>

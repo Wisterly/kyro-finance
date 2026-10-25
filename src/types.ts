@@ -70,6 +70,8 @@ export interface ChatMessage {
   timestamp: string;
   audioUrl?: string;
   imageUrl?: string;
+  actionableTransactions?: Transaction[]; // Lançamentos encontrados para seleção e remoção interativa no chat
+  actionCompleted?: boolean; // Se a ação de exclusão já foi executada para esta mensagem
 }
 
 export interface UserProfile {
