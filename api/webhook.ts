@@ -869,24 +869,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).send(hubChallenge);
     }
 
-    // 2. Consulta de transações recentes (Firestore + Memória Global)
+    // 2. Consulta de transações recentes recebidas pelo Webhook (Memória Volátil Recente)
     let allTxs: any[] = [...(globalAny.__KYRO_WEBHOOK_TRANSACTIONS__ || [])];
-
-    try {
-      if (db) {
-        const q = query(collection(db, 'kyro_transactions'), orderBy('createdAt', 'desc'), limit(50));
-        const snap = await getDocs(q);
-        const cloudTxs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        const ids = new Set(allTxs.map(t => t.id));
-        for (const ctx of cloudTxs) {
-          if (!ids.has(ctx.id)) {
-            allTxs.push(ctx);
-          }
-        }
-      }
-    } catch (e) {
-      console.warn('Erro ao listar Firestore:', e);
-    }
+    // Mantém apenas as transações realmente recentes (últimos 3 minutos) para evitar ressuscitar lançamentos deletados
+    const threeMinAgo = Date.now() - (3 * 60 * 1000);
+    allTxs = allTxs.filter(t => {
+      const time = t.createdAt ? new Date(t.createdAt).getTime() : 0;
+      return time > threeMinAgo;
+    });
+    globalAny.__KYRO_WEBHOOK_TRANSACTIONS__ = allTxs;
 
     return res.status(200).json({
       status: 'active',

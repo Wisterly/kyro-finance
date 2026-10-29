@@ -42,10 +42,14 @@ const globalStore: any = global;
 if (!globalStore.__KYRO_CENTRAL_DB__) {
   globalStore.__KYRO_CENTRAL_DB__ = {
     transactions: [],
+    deletedIds: new Set<string>(),
     recurringExpenses: [],
     creditCards: [],
+    initialized: false,
     lastUpdated: new Date().toISOString()
   };
+} else if (!globalStore.__KYRO_CENTRAL_DB__.deletedIds) {
+  globalStore.__KYRO_CENTRAL_DB__.deletedIds = new Set<string>();
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -64,6 +68,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method === 'GET') {
     try {
       let transactions: any[] = [...(globalStore.__KYRO_CENTRAL_DB__.transactions || [])];
+      const deletedSet: Set<string> = globalStore.__KYRO_CENTRAL_DB__.deletedIds || new Set();
 
       // Se o Firestore estiver ativo, busca a coleção oficial 'kyro_transactions'
       if (db) {
@@ -72,20 +77,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           const snapshot = await getDocs(q);
           if (!snapshot.empty) {
             const firestoreTxs: any[] = [];
-            snapshot.forEach(d => firestoreTxs.push({ id: d.id, ...d.data() }));
-            if (firestoreTxs.length > 0) {
-              transactions = firestoreTxs;
-              globalStore.__KYRO_CENTRAL_DB__.transactions = firestoreTxs;
-            }
+            snapshot.forEach(d => {
+              const data = d.data();
+              const id = String(d.id || data.id);
+              // SE O ID ESTIVER NA LISTA DE EXCLUÍDOS, IGNORA SUMARIAMENTE
+              if (!deletedSet.has(id)) {
+                firestoreTxs.push({ id, ...data });
+              }
+            });
+            transactions = firestoreTxs;
+            globalStore.__KYRO_CENTRAL_DB__.transactions = firestoreTxs;
+          } else if (globalStore.__KYRO_CENTRAL_DB__.initialized) {
+            // Se o Firestore está vazio e o banco já foi inicializado, mantém vazio!
+            transactions = [];
+            globalStore.__KYRO_CENTRAL_DB__.transactions = [];
           }
         } catch (err) {
           console.warn('[Central DB GET Firestore]:', err);
         }
       }
 
+      // Filtra transações deletadas
+      transactions = transactions.filter((t: any) => !deletedSet.has(String(t.id)));
+
       return res.status(200).json({
         success: true,
         transactions,
+        deletedIds: Array.from(deletedSet),
         recurringExpenses: globalStore.__KYRO_CENTRAL_DB__.recurringExpenses || [],
         creditCards: globalStore.__KYRO_CENTRAL_DB__.creditCards || [],
         lastUpdated: globalStore.__KYRO_CENTRAL_DB__.lastUpdated,
@@ -104,15 +122,60 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const payload = req.body || {};
       const action = payload.action;
 
+      // 0. Limpeza Total de Transações (clear_all / delete_all_transactions)
+      if (action === 'clear_all' || action === 'delete_all_transactions') {
+        const currentList = globalStore.__KYRO_CENTRAL_DB__.transactions || [];
+        for (const t of currentList) {
+          if (t?.id) globalStore.__KYRO_CENTRAL_DB__.deletedIds.add(String(t.id));
+        }
+        globalStore.__KYRO_CENTRAL_DB__.transactions = [];
+        globalStore.__KYRO_CENTRAL_DB__.initialized = true;
+        globalStore.__KYRO_CENTRAL_DB__.lastUpdated = new Date().toISOString();
+
+        if (db) {
+          try {
+            const q = query(collection(db, 'kyro_transactions'), limit(300));
+            const snap = await getDocs(q);
+            for (const d of snap.docs) {
+              await deleteDoc(d.ref);
+            }
+          } catch (e) {
+            console.warn('[Central DB clear Firestore]:', e);
+          }
+        }
+
+        return res.status(200).json({
+          success: true,
+          message: 'Todas as transações foram excluídas permanentemente do banco central.',
+          transactions: []
+        });
+      }
+
       // 1. Sincronização Completa de Transações (sync_transactions / sync_all)
       if (action === 'sync_all' || action === 'sync_transactions') {
         const incoming = Array.isArray(payload.transactions) ? payload.transactions : [];
-        if (incoming.length > 0) {
-          globalStore.__KYRO_CENTRAL_DB__.transactions = incoming;
-          globalStore.__KYRO_CENTRAL_DB__.lastUpdated = new Date().toISOString();
+        const deletedSet: Set<string> = globalStore.__KYRO_CENTRAL_DB__.deletedIds || new Set();
 
-          if (db) {
-            for (const tx of incoming) {
+        if (Array.isArray(payload.deletedIds)) {
+          payload.deletedIds.forEach((id: string) => deletedSet.add(String(id)));
+        }
+
+        // Filtra os que já foram marcados como deletados
+        const cleanIncoming = incoming.filter((t: any) => !deletedSet.has(String(t.id)));
+
+        globalStore.__KYRO_CENTRAL_DB__.transactions = cleanIncoming;
+        globalStore.__KYRO_CENTRAL_DB__.initialized = true;
+        globalStore.__KYRO_CENTRAL_DB__.lastUpdated = new Date().toISOString();
+
+        if (db) {
+          if (cleanIncoming.length === 0 && incoming.length === 0) {
+            try {
+              const q = query(collection(db, 'kyro_transactions'), limit(300));
+              const snap = await getDocs(q);
+              for (const d of snap.docs) await deleteDoc(d.ref);
+            } catch (e) {}
+          } else {
+            for (const tx of cleanIncoming) {
               if (tx?.id) {
                 try {
                   await setDoc(doc(db, 'kyro_transactions', String(tx.id)), tx, { merge: true });
@@ -121,6 +184,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             }
           }
         }
+
         if (Array.isArray(payload.recurringExpenses)) {
           globalStore.__KYRO_CENTRAL_DB__.recurringExpenses = payload.recurringExpenses;
         }
@@ -130,7 +194,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         return res.status(200).json({
           success: true,
-          message: 'Banco central atualizado com sucesso!',
+          message: 'Banco central sincronizado.',
           count: globalStore.__KYRO_CENTRAL_DB__.transactions.length,
           lastUpdated: globalStore.__KYRO_CENTRAL_DB__.lastUpdated
         });
@@ -144,6 +208,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
 
         const txId = String(tx.id);
+        // Se a transação foi recriada/salva, remove da lista de deletados
+        globalStore.__KYRO_CENTRAL_DB__.deletedIds.delete(txId);
+
         const list = globalStore.__KYRO_CENTRAL_DB__.transactions || [];
         const index = list.findIndex((t: any) => String(t.id) === txId);
 
@@ -154,6 +221,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
 
         globalStore.__KYRO_CENTRAL_DB__.transactions = list;
+        globalStore.__KYRO_CENTRAL_DB__.initialized = true;
         globalStore.__KYRO_CENTRAL_DB__.lastUpdated = new Date().toISOString();
 
         if (db) {
@@ -174,6 +242,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const txId = String(payload.id);
         if (!txId) return res.status(400).json({ error: 'Id obrigatório' });
 
+        globalStore.__KYRO_CENTRAL_DB__.deletedIds.add(txId);
         globalStore.__KYRO_CENTRAL_DB__.transactions = (globalStore.__KYRO_CENTRAL_DB__.transactions || [])
           .filter((t: any) => String(t.id) !== txId);
         globalStore.__KYRO_CENTRAL_DB__.lastUpdated = new Date().toISOString();
@@ -186,7 +255,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         return res.status(200).json({
           success: true,
-          message: `Transação ${txId} removida do banco central.`
+          message: `Transação ${txId} removida do banco central permanentemente.`
         });
       }
 
@@ -194,6 +263,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (action === 'delete_transactions') {
         const ids = Array.isArray(payload.ids) ? payload.ids.map(String) : [];
         if (ids.length === 0) return res.status(400).json({ error: 'Lista de ids obrigatória' });
+
+        for (const id of ids) {
+          globalStore.__KYRO_CENTRAL_DB__.deletedIds.add(id);
+        }
 
         globalStore.__KYRO_CENTRAL_DB__.transactions = (globalStore.__KYRO_CENTRAL_DB__.transactions || [])
           .filter((t: any) => !ids.includes(String(t.id)));
@@ -209,7 +282,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         return res.status(200).json({
           success: true,
-          message: `${ids.length} transações removidas do banco central.`
+          message: `${ids.length} transações removidas do banco central permanentemente.`
         });
       }
 

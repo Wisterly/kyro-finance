@@ -312,128 +312,43 @@ export default function App() {
     localStorage.setItem('kyro_recurring', JSON.stringify(recurringExpenses));
   }, [recurringExpenses]);
 
-  // Base de Transações (Persistente com higienização antiduplicação)
+  // ==============================================================
+  // REGISTRO PERMANENTE DE IDs EXCLUÍDOS (TOMBSTONES ANTILOOP)
+  // Impede que qualquer transação deletada pelo usuário retorne via cache ou webhook
+  // ==============================================================
+  const [deletedTxIds, setDeletedTxIds] = useState<Set<string>>(() => {
+    try {
+      const saved = localStorage.getItem('kyro_deleted_tx_ids');
+      return saved ? new Set(JSON.parse(saved)) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
+
+  const markTransactionsAsDeleted = (ids: (string | number)[]) => {
+    setDeletedTxIds(prev => {
+      const next = new Set(prev);
+      ids.forEach(id => next.add(String(id)));
+      localStorage.setItem('kyro_deleted_tx_ids', JSON.stringify(Array.from(next)));
+      return next;
+    });
+  };
+
+  // Base de Transações (Persistente e Fiel - Sem Mocks Engessados)
   const [transactions, setTransactions] = useState<Transaction[]>(() => {
     const saved = localStorage.getItem('kyro_transactions');
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          // Higienização inicial: remove duplicatas pré-existentes acumuladas em testes anteriores
-          const seen = new Set();
-          const clean = parsed.filter((t: any) => {
-            const signature = `${(t.description || '').trim().toLowerCase()}_${t.amount}_${t.type}_${t.method}_${t.date}`;
-            if (seen.has(signature) || seen.has(String(t.id))) return false;
-            seen.add(signature);
-            seen.add(String(t.id));
-            return true;
-          });
+          const deletedRaw = localStorage.getItem('kyro_deleted_tx_ids');
+          const deletedSet = deletedRaw ? new Set(JSON.parse(deletedRaw)) : new Set();
+          const clean = parsed.filter((t: any) => t && t.id && !deletedSet.has(String(t.id)));
           return clean;
         }
       } catch (e) {}
     }
-    return [
-      {
-        id: '1',
-        description: 'Padaria Bella Vista',
-        category: 'Alimentação',
-        subcategory: 'Pães e Café',
-        city: 'Teresina, PI',
-        amount: 45.00,
-        type: 'Saída',
-        method: 'PIX',
-        date: '12 Out',
-        status: 'Concluído'
-      },
-      {
-        id: '2',
-        description: 'Lojas de Calçados & Roupas',
-        category: 'Vestuário',
-        subcategory: 'Calçados',
-        city: 'Oeiras, PI',
-        amount: 190.00,
-        type: 'Saída',
-        method: 'Débito',
-        date: '11 Out',
-        status: 'Concluído'
-      },
-      {
-        id: '3',
-        description: 'Passagem Aérea (Parcela 3/10)',
-        category: 'Passagem Aérea / Viagem',
-        subcategory: 'Férias',
-        city: 'São Paulo, SP',
-        amount: 240.00,
-        type: 'Saída',
-        method: 'Crédito',
-        date: '10 Out',
-        status: 'Concluído',
-        currentInstallment: 3,
-        totalInstallments: 10
-      },
-      {
-        id: '4',
-        description: 'Empréstimo Bancário (Parcela 6/24)',
-        category: 'Empréstimo',
-        subcategory: 'Parcela Fixa',
-        city: 'Teresina, PI',
-        amount: 500.00,
-        type: 'Saída',
-        method: 'PIX',
-        date: '10 Out',
-        status: 'Concluído',
-        currentInstallment: 6,
-        totalInstallments: 24
-      },
-      {
-        id: '5',
-        description: 'Mensalidade Personal Trainer',
-        category: 'Pessoal / Mensalidade',
-        subcategory: 'Saúde e Treino',
-        city: 'Caxias, MA',
-        amount: 180.00,
-        type: 'Saída',
-        method: 'PIX',
-        date: '05 Out',
-        status: 'Concluído'
-      },
-      {
-        id: '6',
-        description: 'Supermercado Central',
-        category: 'Alimentação',
-        subcategory: 'Compras do Mês',
-        city: 'Caxias, MA',
-        amount: 320.00,
-        type: 'Saída',
-        method: 'Crédito',
-        date: '04 Out',
-        status: 'Concluído'
-      },
-      {
-        id: '7',
-        description: 'Salário Mensal',
-        category: 'Recebimento',
-        subcategory: 'Salário Fixo',
-        city: 'Teresina, PI',
-        amount: 6000.00,
-        type: 'Entrada',
-        method: 'Transferência',
-        date: '05 Out',
-        status: 'Concluído'
-      },
-      {
-        id: '8',
-        description: 'Rendimento de Investimentos',
-        category: 'Recebimento',
-        subcategory: 'Dividendos',
-        city: 'Teresina, PI',
-        amount: 1200.00,
-        type: 'Entrada',
-        method: 'PIX',
-        date: '02 Out',
-        status: 'Concluído'
-      }
-    ];
+    return [];
   });
 
   useEffect(() => {
@@ -446,6 +361,15 @@ export default function App() {
   // ==============================================================
   const syncSaveToCentralDb = async (tx: Transaction) => {
     try {
+      // Se a transação foi salva/recriada, remove da lista de deletados
+      setDeletedTxIds(prev => {
+        if (!prev.has(String(tx.id))) return prev;
+        const next = new Set(prev);
+        next.delete(String(tx.id));
+        localStorage.setItem('kyro_deleted_tx_ids', JSON.stringify(Array.from(next)));
+        return next;
+      });
+
       await fetch('/api/database', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -458,10 +382,11 @@ export default function App() {
 
   const syncDeleteFromCentralDb = async (id: string) => {
     try {
+      markTransactionsAsDeleted([id]);
       await fetch('/api/database', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'delete_transaction', id })
+        body: JSON.stringify({ action: 'delete_transaction', id: String(id) })
       });
     } catch (e) {
       console.warn('[Central DB Delete Error]:', e);
@@ -470,13 +395,41 @@ export default function App() {
 
   const syncDeleteManyFromCentralDb = async (ids: string[]) => {
     try {
+      markTransactionsAsDeleted(ids);
       await fetch('/api/database', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'delete_transactions', ids })
+        body: JSON.stringify({ action: 'delete_transactions', ids: ids.map(String) })
       });
     } catch (e) {
       console.warn('[Central DB Delete Many Error]:', e);
+    }
+  };
+
+  // Limpeza Completa e Definitiva de todas as Transações do Sistema
+  const handleClearAllTransactions = async () => {
+    if (window.confirm("⚠️ ATENÇÃO: Deseja realmente excluir TODOS os lançamentos e zerar o histórico? Esta ação é definitiva e sincronizará todos os dispositivos e a nuvem.")) {
+      const allIds = transactions.map(t => String(t.id));
+      markTransactionsAsDeleted(allIds);
+      setTransactions([]);
+      localStorage.setItem('kyro_transactions', '[]');
+      setSelectedEntryIds(new Set());
+      setSelectedExitIds(new Set());
+      setSelectedTxTabIds(new Set());
+
+      try {
+        await fetch('/api/database', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'clear_all' })
+        });
+      } catch (e) {}
+
+      setWhatsappSyncToast({
+        show: true,
+        text: '🗑️ Todos os lançamentos foram excluídos com sucesso!'
+      });
+      setTimeout(() => setWhatsappSyncToast(null), 4000);
     }
   };
 
@@ -490,29 +443,50 @@ export default function App() {
         if (!res.ok) return;
         const data = await res.json();
         if (data?.success && isMounted) {
-          if (Array.isArray(data.transactions) && data.transactions.length > 0) {
-            setTransactions(prev => {
-              const currentSig = prev.map(t => `${t.id}_${t.amount}`).join('|');
-              const incomingSig = data.transactions.map((t: any) => `${t.id}_${t.amount}`).join('|');
-              if (currentSig !== incomingSig || prev.length === 0) {
-                localStorage.setItem('kyro_transactions', JSON.stringify(data.transactions));
-                return data.transactions;
+          // 1. Sincroniza a lista de IDs excluídos
+          if (Array.isArray(data.deletedIds) && data.deletedIds.length > 0) {
+            setDeletedTxIds(prev => {
+              let changed = false;
+              const next = new Set(prev);
+              data.deletedIds.forEach((id: string) => {
+                if (!next.has(String(id))) {
+                  next.add(String(id));
+                  changed = true;
+                }
+              });
+              if (changed) {
+                localStorage.setItem('kyro_deleted_tx_ids', JSON.stringify(Array.from(next)));
+                return next;
               }
               return prev;
             });
-          } else if (transactions.length > 0) {
-            // Inicializa o banco central se estiver vazio
-            fetch('/api/database', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                action: 'sync_all',
-                transactions,
-                recurringExpenses,
-                creditCards
-              })
-            }).catch(() => {});
           }
+
+          // 2. Transações do servidor filtradas por exclusão (anti-loop)
+          const incomingTxs: any[] = Array.isArray(data.transactions) ? data.transactions : [];
+          const deletedRaw = localStorage.getItem('kyro_deleted_tx_ids');
+          const localDeletedSet = deletedRaw ? new Set(JSON.parse(deletedRaw)) : new Set();
+
+          const cleanIncoming = incomingTxs.filter((t: any) => t && t.id && !localDeletedSet.has(String(t.id)));
+
+          setTransactions(prev => {
+            // Se o servidor estiver vazio (banco zerado), limpa a tela e NÃO re-injeta mocks!
+            if (cleanIncoming.length === 0) {
+              if (prev.length > 0) {
+                localStorage.setItem('kyro_transactions', '[]');
+                return [];
+              }
+              return prev;
+            }
+
+            const currentSig = prev.map(t => `${t.id}_${t.amount}`).join('|');
+            const incomingSig = cleanIncoming.map((t: any) => `${t.id}_${t.amount}`).join('|');
+            if (currentSig !== incomingSig) {
+              localStorage.setItem('kyro_transactions', JSON.stringify(cleanIncoming));
+              return cleanIncoming;
+            }
+            return prev;
+          });
         }
       } catch (err) {}
     };
@@ -529,7 +503,10 @@ export default function App() {
   useEffect(() => {
     if (kyroCloud.isConnected) {
       const unsub = kyroCloud.subscribeTransactions((cloudTxs) => {
-        setTransactions(cloudTxs);
+        const deletedRaw = localStorage.getItem('kyro_deleted_tx_ids');
+        const localDeletedSet = deletedRaw ? new Set(JSON.parse(deletedRaw)) : new Set();
+        const clean = (cloudTxs || []).filter(t => t && t.id && !localDeletedSet.has(String(t.id)));
+        setTransactions(clean);
       });
       return () => unsub();
     }
@@ -558,7 +535,6 @@ export default function App() {
         } catch (e) {}
 
         // 2. Busca da Vercel /api/webhook APENAS se o robô local estiver offline
-        // evitando duplicatas por cruzamento de fontes locais e remotas no mesmo ciclo!
         if (!fetchedFromLocal) {
           try {
             const ctrl = new AbortController();
@@ -577,27 +553,28 @@ export default function App() {
         if (incoming.length > 0) {
           setTransactions(prev => {
             const existingIds = new Set(prev.map(t => String(t.id)));
+            const deletedRaw = localStorage.getItem('kyro_deleted_tx_ids');
+            const localDeletedSet = deletedRaw ? new Set(JSON.parse(deletedRaw)) : new Set();
 
             const newOnes = incoming.filter((t: any) => {
               if (!t || !t.amount) return false;
               const tid = String(t.id);
-              if (existingIds.has(tid)) return false;
+              // SE JÁ EXISTE NA TELA OU FOI EXCLUÍDO PELO USUÁRIO, IGNORA SUMARIAMENTE!
+              if (existingIds.has(tid) || localDeletedSet.has(tid)) return false;
 
-              // Rigorosa antiduplicação: verifica se já existe lançamento idêntico recente
+              // Apenas aceita se for mensagem recebida recentemente (últimos 3 minutos)
+              if (t.createdAt) {
+                const diff = Date.now() - new Date(t.createdAt).getTime();
+                if (diff > 3 * 60 * 1000) return false;
+              }
+
+              // Antiduplicação por assinatura idêntica recente
               const isDuplicate = prev.some(p => {
                 const sameDesc = (p.description || '').trim().toLowerCase() === (t.description || '').trim().toLowerCase();
                 const sameAmount = Math.abs(Number(p.amount) - Number(t.amount)) < 0.01;
                 const sameType = p.type === t.type;
                 const sameMethod = p.method === t.method;
-                if (sameDesc && sameAmount && sameType && sameMethod) {
-                  if (p.createdAt && t.createdAt) {
-                    const diff = Math.abs(new Date(p.createdAt).getTime() - new Date(t.createdAt).getTime());
-                    if (diff < 90000) return true;
-                  } else {
-                    return true;
-                  }
-                }
-                return false;
+                return sameDesc && sameAmount && sameType && sameMethod;
               });
 
               if (isDuplicate) return false;
@@ -3028,6 +3005,13 @@ export default function App() {
                           </td>
                         </tr>
                       ))}
+                      {filteredTransactions.length === 0 && (
+                        <tr>
+                          <td colSpan={4} className="py-8 text-center text-slate-400">
+                            <p className="text-xs text-slate-400">Nenhum lançamento recente. O extrato está 100% limpo.</p>
+                          </td>
+                        </tr>
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -3057,6 +3041,15 @@ export default function App() {
                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-bold transition-all shadow-md ml-1"
                     >
                       <Trash2 size={13} /> Excluir ({selectedTxTabIds.size})
+                    </button>
+                  )}
+                  {transactions.length > 0 && (
+                    <button 
+                      onClick={handleClearAllTransactions}
+                      title="Excluir todos os lançamentos permanentemente e zerar o banco de dados"
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-950/60 hover:bg-rose-900 text-rose-300 hover:text-white border border-rose-600/40 text-xs font-bold transition-all ml-1 cursor-pointer"
+                    >
+                      <Trash2 size={13} /> Zerar Extrato
                     </button>
                   )}
                 </div>
@@ -3152,6 +3145,21 @@ export default function App() {
                         </td>
                       </tr>
                     ))}
+                    {filteredTransactions.length === 0 && (
+                      <tr>
+                        <td colSpan={7} className="py-12 text-center text-slate-400">
+                          <div className="flex flex-col items-center justify-center gap-2">
+                            <div className="h-12 w-12 rounded-2xl bg-slate-800/60 border border-slate-700/60 flex items-center justify-center text-slate-500">
+                              <ArrowLeftRight size={22} />
+                            </div>
+                            <p className="text-sm font-semibold text-slate-300">Nenhum lançamento no extrato</p>
+                            <p className="text-xs text-slate-500 max-w-sm">
+                              Adicione uma entrada ou saída pelo botão "+ Adicionar" ou dite mensagens/áudios no Chat com o Gemini!
+                            </p>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -3891,6 +3899,33 @@ export default function App() {
                       className="px-3.5 py-1.5 rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30 text-xs font-bold transition-all"
                     >
                       Configurar Nuvem
+                    </button>
+                  </div>
+                </div>
+
+                {/* 3. Limpeza Geral e Reset de Lançamentos */}
+                <div className="p-5 rounded-xl bg-[#141A2E] border border-rose-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="flex items-center gap-3.5">
+                    <div className="h-11 w-11 rounded-xl bg-rose-500/15 text-rose-400 flex items-center justify-center font-bold">
+                      <Trash2 size={24} />
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-slate-200">Zerar Base de Dados & Lançamentos</h4>
+                      <p className="text-xs text-slate-400">
+                        {transactions.length > 0 
+                          ? `Atualmente há ${transactions.length} lançamento(s) registrados. Clique para apagar tudo e zerar o saldo.`
+                          : 'A base está atualmente zerada e sem nenhum lançamento.'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <button 
+                      onClick={handleClearAllTransactions}
+                      disabled={transactions.length === 0}
+                      className="px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-bold transition-all shadow-md flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Trash2 size={14} /> Zerar Lançamentos ({transactions.length})
                     </button>
                   </div>
                 </div>

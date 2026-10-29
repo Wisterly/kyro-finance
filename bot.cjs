@@ -1355,25 +1355,35 @@ const server = http.createServer(async (req, res) => {
           const payload = JSON.parse(body || '{}');
           const { action, transaction, transactionId, transactionIds, transactions } = payload;
 
+          const targetId = payload.transactionId || payload.id;
+          const targetIds = payload.transactionIds || payload.ids;
+
           if (action === 'save_transaction' && transaction) {
             recordTransaction(transaction);
             res.writeHead(200, { 'Content-Type': 'application/json' });
             return res.end(JSON.stringify({ success: true, action: 'saved', transaction }));
           }
 
-          if (action === 'delete_transaction' && transactionId) {
-            localStoredTransactions = localStoredTransactions.filter(t => t.id !== transactionId);
-            try { fs.writeFileSync(TRANSACTIONS_FILE, JSON.stringify(localStoredTransactions, null, 2), 'utf-8'); } catch (e) {}
+          if (action === 'clear_all' || action === 'delete_all_transactions') {
+            localStoredTransactions = [];
+            try { fs.writeFileSync(TRANSACTIONS_FILE, JSON.stringify([], null, 2), 'utf-8'); } catch (e) {}
             res.writeHead(200, { 'Content-Type': 'application/json' });
-            return res.end(JSON.stringify({ success: true, action: 'deleted', transactionId }));
+            return res.end(JSON.stringify({ success: true, action: 'cleared_all', count: 0 }));
           }
 
-          if (action === 'delete_transactions' && Array.isArray(transactionIds)) {
-            const setIds = new Set(transactionIds);
-            localStoredTransactions = localStoredTransactions.filter(t => !setIds.has(t.id));
+          if (action === 'delete_transaction' && targetId) {
+            localStoredTransactions = localStoredTransactions.filter(t => String(t.id) !== String(targetId));
             try { fs.writeFileSync(TRANSACTIONS_FILE, JSON.stringify(localStoredTransactions, null, 2), 'utf-8'); } catch (e) {}
             res.writeHead(200, { 'Content-Type': 'application/json' });
-            return res.end(JSON.stringify({ success: true, action: 'bulk_deleted', count: transactionIds.length }));
+            return res.end(JSON.stringify({ success: true, action: 'deleted', transactionId: targetId }));
+          }
+
+          if (action === 'delete_transactions' && Array.isArray(targetIds)) {
+            const setIds = new Set(targetIds.map(String));
+            localStoredTransactions = localStoredTransactions.filter(t => !setIds.has(String(t.id)));
+            try { fs.writeFileSync(TRANSACTIONS_FILE, JSON.stringify(localStoredTransactions, null, 2), 'utf-8'); } catch (e) {}
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            return res.end(JSON.stringify({ success: true, action: 'bulk_deleted', count: targetIds.length }));
           }
 
           if (action === 'sync_all' && Array.isArray(transactions)) {

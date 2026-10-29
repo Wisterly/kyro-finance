@@ -270,13 +270,46 @@ A numeração segue rigorosamente a hierarquia de escopo:
 
 ---
 
+### [PR.009] — Eliminação Definitiva do Loop de Retorno dos Lançamentos Excluídos & Tombstones Anti-Ressurreição
+- **Data/Hora:** 2026-10-25 05:40 (UTC-3)
+- **Tags Git:** `PR.009`, `PR.009.1`, `PR.009.2`
+
+#### `PR.009` — Escopo Geral do Projeto (Universal)
+- **Erradicação do Loop Zumbi de Lançamentos Excluídos:**
+  - Identificada e eliminada a causa raiz que fazia transações excluídas reaparecerem repetidamente após alguns segundos ou ao abrir a aplicação em outro navegador/celular.
+  - **Eliminação de Mock Data Estático:** Os 12 lançamentos de teste padrão que eram re-injetados quando o banco de dados ficava vazio foram completamente eliminados do código-fonte.
+  - **Sistema de Tombstones Persistentes (`deletedTxIds` / `kyro_deleted_tx_ids`):**
+    - Todo ID de transação excluída é registrado em uma lista imutável de exclusão tanto no `localStorage` do cliente quanto na memória central do servidor (`/api/database.ts`).
+    - Qualquer dispositivo que receba uma tentativa de ressuscitação de um ID registrado como excluído bloqueia e descarta imediatamente a transação.
+  - **Blindagem do Polling de Webhook:**
+    - O polling periódico do webhook (`/api/webhook`) foi blindado para cruzar com a lista de exclusões e filtrar estritamente apenas novos eventos legítimos recebidos nos últimos 3 minutos, impedindo o loop de re-inserção.
+  - **Correção da Persistência Canônica no Firestore (`/api/chat.ts`):**
+    - Substituição do `addDoc` (que gerava IDs aleatórios divergentes do ID do lançamento) por `setDoc` com o ID exato da transação (`kyro_transactions/{txId}`), permitindo que exclusões via `deleteDoc` localizem e apaguem o documento real sem deixar resíduos zumbis no banco.
+  - **Ação Oficial `clear_all` e "Zerar Base de Dados":**
+    - Implementação de endpoint de limpeza completa (`/api/database` com `action: 'clear_all'`), excluindo todas as transações da memória e do Firestore sem gerar loops de ressuscitação.
+
+#### `PR.009.1` — Versão Computador (Desktop)
+- Botão "🗑️ Zerar Extrato" integrado à barra de ferramentas da aba Transações com confirmação modal para exclusão em massa com 1 clique.
+- Card avançado de "Zerar Base de Dados & Lançamentos" na aba Configurações, com limpeza simultânea de Firestore, servidor local e navegador.
+- Telas de estado vazio (Empty State) polidas e responsivas no Dashboard e no Extrato quando a base estiver zerada.
+
+#### `PR.009.2` — Versão Celular (Mobile)
+- Botão de zerar extrato responsivo e adaptado para telas móveis (390px) com toque tátil.
+- Sincronização em nuvem instantânea: ao apagar qualquer lançamento no computador ou no celular, a exclusão é refletida imediatamente em todos os outros dispositivos sem atrasos e sem loop.
+- Sincronização segura de tombstones no armazenamento móvel.
+
+---
+
 ## TABELA DE CÓDIGOS DE PONTOS DE RESTAURAÇÃO
 
 Se você desejar restaurar qualquer versão anterior ou atual do Kyro Finance, basta colar o código do ponto de restauração na conversa:
 
 | Código do Ponto | Escopo | Descrição Resumida |
 | :--- | :--- | :--- |
-| **`PR.008`** | **Geral (Universal)** | **Versão Atual: Google Gemini 1.5 Flash Multimodal (Texto, Áudio e Imagem), alimentação automática do sistema, customização de estilo em tabelas e chave pessoal** |
+| **`PR.009`** | **Geral (Universal)** | **Versão Atual: Eliminação definitiva do loop de retorno de lançamentos excluídos, sistema de Tombstones anti-ressurreição e botão Zerar Extrato** |
+| `PR.009.1` | Desktop | Interface desktop com botão Zerar Extrato, cards de limpeza total nas configurações e empty states limpos |
+| `PR.009.2` | Mobile | Interface mobile com sincronização imediata de exclusões em tempo real, proteção contra ressuscitação de dados e zero loops |
+| **`PR.008`** | **Geral (Universal)** | Google Gemini 1.5 Flash Multimodal (Texto, Áudio e Imagem), alimentação automática do sistema, customização de estilo em tabelas e chave pessoal |
 | `PR.008.1` | Desktop | Interface desktop com renderizador de tabelas Markdown, badge Gemini e atalhos completos |
 | `PR.008.2` | Mobile | Interface mobile com botão Gemini na navegação, áudio base64 sem bloqueio e tabelas touch |
 | **`PR.007`** | **Geral (Universal)** | Banco de dados centralizado universal na nuvem 24h (mesmos dados em qualquer celular/PC/IP), áudio mobile sem colisão |

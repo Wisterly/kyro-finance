@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import axios from 'axios';
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getFirestore, collection, addDoc } from 'firebase/firestore';
+import { getFirestore, collection, doc, setDoc } from 'firebase/firestore';
 
 const firebaseConfig = {
   apiKey: process.env.VITE_FIREBASE_API_KEY || process.env.FIREBASE_API_KEY,
@@ -34,8 +34,9 @@ async function saveTransaction(tx: any) {
   if (!db) return payload;
 
   try {
-    const docRef = await addDoc(collection(db, 'kyro_transactions'), payload);
-    return { ...payload, id: docRef.id };
+    const docId = String(payload.id);
+    await setDoc(doc(db, 'kyro_transactions', docId), payload, { merge: true });
+    return payload;
   } catch (err) {
     return payload;
   }
