@@ -72,6 +72,7 @@ export interface ChatMessage {
   imageUrl?: string;
   actionableTransactions?: Transaction[]; // Lançamentos encontrados para seleção e remoção interativa no chat
   actionCompleted?: boolean; // Se a ação de exclusão já foi executada para esta mensagem
+  engine?: string; // Motor de IA utilizado (ex: 'gemini-1.5-flash', 'kyro-local-engine')
 }
 
 export interface UserProfile {

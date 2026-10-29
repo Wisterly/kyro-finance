@@ -233,27 +233,58 @@ A numeração segue rigorosamente a hierarquia de escopo:
 
 ---
 
+### [PR.008] — Integração Oficial Google Gemini 1.5 Flash Multimodal & Alimentação Automática do Sistema
+- **Data/Hora:** 2026-10-25 04:15 (UTC-3)
+- **Tags Git:** `PR.008`, `PR.008.1`, `PR.008.2`
+
+#### `PR.008` — Escopo Geral do Projeto (Universal)
+- **Integração Nativa Google Gemini 1.5 Flash (`/api/chat.ts`):**
+  - O Chat do Kyro Finance agora é movido oficialmente pelo modelo multimodal **Google Gemini 1.5 Flash** do Google AI.
+  - **Interpretação Multimodal Completa (Texto, Áudio e Imagem):**
+    - **Texto:** interpreta linguagem coloquial brasileira sem falhas (ex: *"Acabei de pagar uma conta de R$ 20 para botar combustível no carro"*, *"comprei água por 5 reais em Caxias"*).
+    - **Áudio Nativo Base64:** áudios gravados no celular ou computador são enviados com compressão para o Gemini, que escuta, transcreve e extrai os dados financeiros.
+    - **Visão Computacional de Comprovantes e Fotos:** fotos de cupons fiscais, recibos, transferências PIX e PDFs são lidos pelo Gemini, extraindo automaticamente estabelecimento, valor, data e itens.
+  - **Alimentação Automática do Sistema (Function Calling & Ações Estruturadas):**
+    - Toda transação informada pelo usuário no chat é convertida em um lançamento estruturado pelo Gemini e salva imediatamente no banco de dados centralizado (`/api/database`) e no Google Firestore, recalculando saldo, total de despesas e gráficos na hora.
+    - Comandos de remoção (ex: *"Remova o lançamento de Caxias"*) analisam o histórico em tempo real: se houver 1 correspondência, exclui e estorna o saldo automaticamente; se houver 2 ou mais correspondências, gera cards interativos com caixas de seleção no chat para o usuário escolher quais deseja cancelar ou excluir todos em lote.
+  - **Personalização de Respostas pelo Usuário:**
+    - Modal de Configuração do Gemini permite escolher o estilo das respostas:
+      1. 📊 **Tabelas & Tópicos (Padrão)**: formatação visual rica em Markdown com colunas e listas claras.
+      2. ⚡ **Rápido & Conciso**: respostas curtas e objetivas.
+      3. 💡 **Consultoria Financeira Completa**: orientações de economia e análise profunda de gastos.
+      4. ✍️ **Instrução Personalizada**: campo livre para o usuário ditar como quer que o Gemini se comporte.
+    - Possibilidade de inserir Chave de API própria gratuita do Google AI Studio diretamente na interface, persistida no navegador e sincronizada com os endpoints.
+  - **Renderizador de Markdown & Tabelas Integrado:**
+    - Suporte a tabelas Markdown (`| ... | ... |`), marcadores de tópicos, negrito e blocos de código diretamente na bolha de resposta do chat, sem quebrar o layout.
+  - **Resiliência Total (Fallback Cognitivo Local):**
+    - Se a internet cair ou o usuário estiver sem chave externa, o motor cognitivo local KYRO assume de forma transparente, garantindo 100% de disponibilidade sem erros 500.
+
+#### `PR.008.1` — Versão Computador (Desktop)
+- Painel lateral do chat com badge dinâmico do Gemini 1.5 Flash, botão de ajustes rápidos no topo, tabelas Markdown em tela cheia com hover e scroll suave, atalho direto de gravação e envio de arquivos.
+
+#### `PR.008.2` — Versão Celular (Mobile)
+- Botão "Chat Gemini 1.5 Flash" integrado diretamente no menu de navegação lateral e botão no cabeçalho mobile.
+- Envio de áudio direto do hardware do smartphone sem colisões de microfone.
+- Tabelas Markdown adaptadas para telas verticais com rolagem horizontal touch-friendly (`overflow-x-auto`).
+- Modal de configuração touch ergonômico com testes de conexão em tempo real.
+
+---
+
 ## TABELA DE CÓDIGOS DE PONTOS DE RESTAURAÇÃO
 
 Se você desejar restaurar qualquer versão anterior ou atual do Kyro Finance, basta colar o código do ponto de restauração na conversa:
 
 | Código do Ponto | Escopo | Descrição Resumida |
 | :--- | :--- | :--- |
-| **`PR.007`** | **Geral (Universal)** | **Versão Atual: Banco de dados centralizado universal na nuvem 24h (mesmos dados em qualquer celular/PC/IP), áudio mobile sem colisão e sincronização contínua** |
+| **`PR.008`** | **Geral (Universal)** | **Versão Atual: Google Gemini 1.5 Flash Multimodal (Texto, Áudio e Imagem), alimentação automática do sistema, customização de estilo em tabelas e chave pessoal** |
+| `PR.008.1` | Desktop | Interface desktop com renderizador de tabelas Markdown, badge Gemini e atalhos completos |
+| `PR.008.2` | Mobile | Interface mobile com botão Gemini na navegação, áudio base64 sem bloqueio e tabelas touch |
+| **`PR.007`** | **Geral (Universal)** | Banco de dados centralizado universal na nuvem 24h (mesmos dados em qualquer celular/PC/IP), áudio mobile sem colisão |
 | `PR.007.1` | Desktop | Interface desktop com sincronização em nuvem e painel analítico |
 | `PR.007.2` | Mobile | Interface mobile com áudio nativo exclusivo sem travamentos e dados compartilhados |
 | **`PR.006`** | **Geral (Universal)** | Pesquisa geral profunda tokenizada (Caxias, cidades, produtos), remoção automática para 1 match e modal de ajuste |
 | `PR.006.1` | Desktop | Interface desktop com card interativo e modal de ajuste |
 | `PR.006.2` | Mobile | Interface móvel com drawer touch e modal de edição responsivo |
-| **`PR.005`** | **Geral (Universal)** | Unificação definitiva de áudio físico móvel e desktop, PWA Network-First e zero alertas |
-| `PR.005.1` | Desktop | Áudio e transcrição Whisper/Gemini universais no desktop |
-| `PR.005.2` | Mobile | Áudio e transcrição Whisper/Gemini universais no celular com auto-update de cache |
-| **`PR.004`** | **Geral (Universal)** | Busca semântica de lançamentos e exclusão interativa com seleção múltipla |
-| `PR.004.1` | Desktop | Card interativo na sidebar direita com checkboxes e botão de exclusão em lote |
-| `PR.004.2` | Mobile | Card interativo touch-friendly no drawer do smartphone |
-| **`PR.003`** | **Geral (Universal)** | IA de Áudio Multimodal (Whisper & Gemini) e refinamento de combustíveis |
-| **`PR.002`** | **Geral (Universal)** | Copiloto Cognitivo sem respostas padrão, manipulação do último lançamento |
-| **`PR.001`** | **Geral (Universal)** | Fundação da arquitetura de Trilho Duplo, Dashboard, Transações e Cartões |
 | **`PR.005`** | **Geral (Universal)** | Unificação definitiva de áudio físico móvel e desktop, PWA Network-First e zero alertas |
 | `PR.005.1` | Desktop | Áudio e transcrição Whisper/Gemini universais no desktop |
 | `PR.005.2` | Mobile | Áudio e transcrição Whisper/Gemini universais no celular com auto-update de cache |

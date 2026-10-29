@@ -78,7 +78,8 @@ import {
   executeRemoveLastTransaction,
   executeAdjustLastTransaction,
   executeEnrichLastTransaction,
-  generateThinkingFinancialReply
+  generateThinkingFinancialReply,
+  searchTransactionsByTerm
 } from './utils/aiCopilot';
 
 export default function App() {
@@ -913,6 +914,73 @@ export default function App() {
   const [inputMessage, setInputMessage] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
 
+  // =========================================================================
+  // CONFIGURAÇÕES DO GOOGLE GEMINI 1.5 FLASH (MULTIMODAL & FUNCTION CALLING)
+  // =========================================================================
+  const [geminiApiKey, setGeminiApiKey] = useState<string>(() => {
+    return localStorage.getItem('kyro_gemini_api_key') || '';
+  });
+  const [geminiFormatStyle, setGeminiFormatStyle] = useState<string>(() => {
+    return localStorage.getItem('kyro_gemini_format') || 'tabelas';
+  });
+  const [geminiCustomPrompt, setGeminiCustomPrompt] = useState<string>(() => {
+    return localStorage.getItem('kyro_gemini_custom_prompt') || '';
+  });
+  const [isGeminiModalOpen, setIsGeminiModalOpen] = useState(false);
+  const [isTestingGemini, setIsTestingGemini] = useState(false);
+  const [geminiTestFeedback, setGeminiTestFeedback] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+
+  const handleSaveGeminiConfig = (key: string, format: string, prompt: string) => {
+    setGeminiApiKey(key);
+    setGeminiFormatStyle(format);
+    setGeminiCustomPrompt(prompt);
+    localStorage.setItem('kyro_gemini_api_key', key);
+    localStorage.setItem('kyro_gemini_format', format);
+    localStorage.setItem('kyro_gemini_custom_prompt', prompt);
+    setWhatsappSyncToast({
+      show: true,
+      text: '⚡ Configurações do Google Gemini 1.5 Flash salvas com sucesso!'
+    });
+    setTimeout(() => setWhatsappSyncToast(null), 4000);
+    setIsGeminiModalOpen(false);
+  };
+
+  const handleTestGeminiConnection = async (keyToTest: string) => {
+    setIsTestingGemini(true);
+    setGeminiTestFeedback(null);
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: 'Olá, faça um teste de conexão!',
+          geminiApiKey: keyToTest || geminiApiKey,
+          formattingPreference: geminiFormatStyle,
+          context: { userName: userFullName, transactions: [] }
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data?.reply) {
+        setGeminiTestFeedback({
+          type: 'success',
+          text: `✅ Conectado com sucesso ao ${data.engine === 'gemini-1.5-flash' ? 'Google Gemini 1.5 Flash' : 'Motor Local KYRO'}!`
+        });
+      } else {
+        setGeminiTestFeedback({
+          type: 'error',
+          text: `⚠️ Erro na validação: ${data?.error || 'Verifique a chave informada.'}`
+        });
+      }
+    } catch (err: any) {
+      setGeminiTestFeedback({
+        type: 'error',
+        text: `⚠️ Falha ao conectar: ${err.message}`
+      });
+    } finally {
+      setIsTestingGemini(false);
+    }
+  };
+
   // Estados de Seleção Múltipla para Exclusão em Lote
   const [selectedEntryIds, setSelectedEntryIds] = useState<Set<string>>(new Set());
   const [selectedExitIds, setSelectedExitIds] = useState<Set<string>>(new Set());
@@ -1318,22 +1386,262 @@ export default function App() {
     setTimeout(() => setWhatsappSyncToast(null), 4000);
   };
 
+  // =========================================================================
+  // RENDERIZADOR DE MARKDOWN E TABELAS ESTRUTURADAS DO GEMINI 1.5 FLASH
+  // =========================================================================
+  const renderInlineMarkdown = (text: string) => {
+    const parts = text.split(/(\*\*.*?\*\*|\*.*?\*|`.*?`)/g);
+    return parts.map((part, i) => {
+      if (part.startsWith('**') && part.endsWith('**')) {
+        return <strong key={i} className="font-bold text-slate-100">{part.slice(2, -2)}</strong>;
+      }
+      if (part.startsWith('*') && part.endsWith('*')) {
+        return <em key={i} className="italic text-amber-200">{part.slice(1, -1)}</em>;
+      }
+      if (part.startsWith('`') && part.endsWith('`')) {
+        return <code key={i} className="px-1.5 py-0.5 rounded bg-black/40 text-amber-300 font-mono text-[10px]">{part.slice(1, -1)}</code>;
+      }
+      return part;
+    });
+  };
+
+  const renderFormattedMessageText = (content: string) => {
+    if (!content) return null;
+
+    const lines = content.split('\n');
+    const elements: React.ReactNode[] = [];
+    let tableRows: string[] = [];
+    let inTable = false;
+
+    const flushTable = (keyIndex: number) => {
+      if (tableRows.length === 0) return;
+      const headerRow = tableRows[0];
+      const dataRows = tableRows.slice(2);
+
+      const parseCells = (row: string) => 
+        row.split('|')
+          .map(c => c.trim())
+          .filter((_, idx, arr) => idx > 0 && idx < arr.length - 1);
+
+      const headers = parseCells(headerRow);
+
+      elements.push(
+        <div key={`table-${keyIndex}`} className="my-2.5 overflow-x-auto rounded-xl border border-slate-700/60 bg-[#0c101d] shadow-sm">
+          <table className="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr className="border-b border-slate-700 bg-slate-800/60 text-slate-200">
+                {headers.map((h, i) => (
+                  <th key={i} className="py-2 px-3 font-bold text-amber-300">
+                    {renderInlineMarkdown(h)}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-800 text-slate-300">
+              {dataRows.map((r, rowIdx) => {
+                const cells = parseCells(r);
+                return (
+                  <tr key={rowIdx} className="hover:bg-slate-800/30 transition-colors">
+                    {cells.map((cell, cellIdx) => (
+                      <td key={cellIdx} className="py-2 px-3 text-[11px]">
+                        {renderInlineMarkdown(cell)}
+                      </td>
+                    ))}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      );
+      tableRows = [];
+      inTable = false;
+    };
+
+    lines.forEach((line, index) => {
+      const trimmed = line.trim();
+      if (trimmed.startsWith('|') && trimmed.endsWith('|')) {
+        inTable = true;
+        tableRows.push(trimmed);
+      } else {
+        if (inTable) {
+          flushTable(index);
+        }
+        if (trimmed.length === 0) {
+          elements.push(<div key={`br-${index}`} className="h-1.5" />);
+        } else if (trimmed.startsWith('• ') || trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+          const bulletText = trimmed.replace(/^[•\-*]\s+/, '');
+          elements.push(
+            <div key={`bullet-${index}`} className="flex items-start gap-1.5 my-0.5">
+              <span className="text-amber-400 font-bold shrink-0 mt-0.5">•</span>
+              <span className="flex-1">{renderInlineMarkdown(bulletText)}</span>
+            </div>
+          );
+        } else {
+          elements.push(
+            <p key={`p-${index}`} className="my-0.5 leading-relaxed">
+              {renderInlineMarkdown(line)}
+            </p>
+          );
+        }
+      }
+    });
+
+    if (inTable) {
+      flushTable(lines.length);
+    }
+
+    return <div>{elements}</div>;
+  };
+
   // Manipulador Unificado do Assistente IA (Texto, Áudio e Imagem de Comprovante)
   const handleProcessUserInteraction = async ({
     type,
     text,
     audioUrl,
+    audioBase64,
+    audioMimeType,
     imageUrl,
+    imageBase64,
+    imageMimeType,
     replaceMessageId
   }: {
     type: 'text' | 'audio' | 'image';
     text: string;
     audioUrl?: string;
+    audioBase64?: string;
+    audioMimeType?: string;
     imageUrl?: string;
+    imageBase64?: string;
+    imageMimeType?: string;
     replaceMessageId?: string;
   }) => {
     const isAudio = type === 'audio';
     const isImage = type === 'image';
+
+    // =========================================================================
+    // INTEGRAÇÃO NATIVA COM GOOGLE GEMINI 1.5 FLASH (MULTIMODAL & FUNCTION CALLING)
+    // =========================================================================
+    try {
+      const apiResponse = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: text,
+          audioBase64,
+          audioMimeType,
+          imageBase64,
+          imageMimeType,
+          history: messages.slice(-6).map(m => ({ sender: m.sender, text: m.text })),
+          context: {
+            userName: userFullName,
+            totalBalance,
+            monthIncomes,
+            monthExpenses,
+            transactions: transactions.slice(0, 35),
+            creditCards,
+            recurringExpenses
+          },
+          geminiApiKey: geminiApiKey || undefined,
+          formattingPreference: geminiFormatStyle,
+          customPrompt: geminiCustomPrompt
+        })
+      });
+
+      if (apiResponse.ok) {
+        const data = await apiResponse.json();
+        if (data && data.reply) {
+          const action = data.action || { type: 'none' };
+
+          // 1. Criação de transação pelo Gemini
+          if (action.type === 'create_transaction' && action.transaction) {
+            const tx = action.transaction;
+            const newTx: Transaction = {
+              ...tx,
+              id: tx.id || `tx_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+              date: tx.date || new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }),
+              status: 'Concluído'
+            };
+
+            if (newTx.cardName) {
+              const cardExists = creditCards.some(c => c.name.toLowerCase() === newTx.cardName?.toLowerCase());
+              if (!cardExists) {
+                const newCard: CreditCardData = {
+                  id: `card_${Date.now()}`,
+                  name: newTx.cardName,
+                  closingDay: 15,
+                  dueDay: 20,
+                  limit: 5000,
+                  color: 'purple'
+                };
+                setCreditCards(prev => [...prev, newCard]);
+              }
+            }
+
+            setTransactions(prev => [newTx, ...prev]);
+            kyroCloud.syncSaveTransaction(newTx);
+            syncSaveToCentralDb(newTx);
+
+            setWhatsappSyncToast({
+              show: true,
+              text: `✨ ${newTx.description} (${newTx.type === 'Saída' ? '-' : '+'} R$ ${newTx.amount.toFixed(2)}) lançado com sucesso!`
+            });
+            setTimeout(() => setWhatsappSyncToast(null), 4000);
+          }
+
+          // 2. Remoção de transação pelo Gemini
+          let actionableTxs: Transaction[] | undefined = undefined;
+          if (action.type === 'delete_transactions') {
+            const targetIds: string[] = action.deleteTargetIds || [];
+            const targetTerm = action.deleteTargetTerm || '';
+
+            let matched: Transaction[] = [];
+            if (targetIds.length > 0) {
+              matched = transactions.filter(t => targetIds.includes(t.id));
+            }
+            if (matched.length === 0 && targetTerm) {
+              matched = searchTransactionsByTerm(targetTerm, transactions);
+            }
+
+            if (matched.length === 1) {
+              const toDelete = matched[0];
+              setTransactions(prev => prev.filter(t => t.id !== toDelete.id));
+              kyroCloud.syncDeleteTransaction(toDelete.id);
+              syncDeleteFromCentralDb(toDelete.id);
+
+              setWhatsappSyncToast({
+                show: true,
+                text: `🗑️ Lançamento "${toDelete.product || toDelete.description}" removido com sucesso!`
+              });
+              setTimeout(() => setWhatsappSyncToast(null), 4000);
+            } else if (matched.length > 1) {
+              actionableTxs = matched;
+              setSelectedTxIdsForRemoval(new Set(matched.map(t => t.id)));
+            }
+          }
+
+          const aiReplyMsg: ChatMessage = {
+            id: (Date.now() + 2).toString(),
+            sender: 'ia',
+            text: data.reply,
+            actionableTransactions: actionableTxs,
+            actionCompleted: false,
+            engine: data.engine || 'gemini-1.5-flash',
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          };
+
+          setMessages(prev => {
+            if (replaceMessageId) {
+              return prev.map(m => m.id === replaceMessageId ? aiReplyMsg : m);
+            }
+            return [...prev, aiReplyMsg];
+          });
+          return;
+        }
+      }
+    } catch (geminiApiError) {
+      console.warn('[Gemini 1.5 Flash Chat API Fallback]:', geminiApiError);
+    }
 
     // =========================================================================
     // COMANDO 1: REMOÇÃO INTELIGENTE DE LANÇAMENTOS (ÚLTIMO OU BUSCA POR TERMO/CIDADE)
@@ -1756,12 +2064,26 @@ export default function App() {
 
         let finalText = recordedTextRef.current.trim() || liveAudioTranscript.trim() || inputMessage.trim();
 
-        if (!finalText && audioBlob.size > 300) {
+        // Extrai Base64 do áudio para envio multimodal ao Gemini
+        let audioBase64 = '';
+        if (audioBlob.size > 200) {
+          try {
+            const reader = new FileReader();
+            const base64Promise = new Promise<string>((resolve) => {
+              reader.onload = () => resolve(reader.result as string);
+              reader.onerror = () => resolve('');
+            });
+            reader.readAsDataURL(audioBlob);
+            audioBase64 = await base64Promise;
+          } catch (e) {}
+        }
+
+        if (!finalText && audioBase64) {
           const tempMsgId = `temp_audio_${Date.now()}`;
           setMessages(prev => [...prev, {
             id: tempMsgId,
             sender: 'user',
-            text: '🎙️ [Áudio de Voz]: Transcrevendo com Inteligência Artificial (Whisper / Gemini)...',
+            text: '🎙️ [Áudio de Voz]: Interpretando diretamente com o Google Gemini 1.5 Flash...',
             audioUrl,
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
           }]);
@@ -1771,25 +2093,15 @@ export default function App() {
           setIsAiLoading(true);
 
           try {
-            const reader = new FileReader();
-            const base64Promise = new Promise<string>((resolve) => {
-              reader.onload = () => resolve(reader.result as string);
-              reader.onerror = () => resolve('');
+            const res = await fetch('/api/transcribe', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ audioBase64, mimeType: mime, geminiApiKey: geminiApiKey || undefined })
             });
-            reader.readAsDataURL(audioBlob);
-            const audioBase64 = await base64Promise;
-
-            if (audioBase64) {
-              const res = await fetch('/api/transcribe', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ audioBase64, mimeType: mime })
-              });
-              const data = await res.json();
-              if (data?.success && data?.text) {
-                finalText = data.text.trim();
-                setMessages(prev => prev.map(m => m.id === tempMsgId ? { ...m, text: `🎙️ "${finalText}"` } : m));
-              }
+            const data = await res.json();
+            if (data?.success && data?.text) {
+              finalText = data.text.trim();
+              setMessages(prev => prev.map(m => m.id === tempMsgId ? { ...m, text: `🎙️ "${finalText}"` } : m));
             }
           } catch (err) {
             console.warn('[Audio Transcribe Fallback]:', err);
@@ -1798,7 +2110,7 @@ export default function App() {
           }
         }
 
-        if (!finalText) {
+        if (!finalText && !audioBase64) {
           setMessages(prev => [...prev, {
             id: Date.now().toString(),
             sender: 'ia',
@@ -1814,7 +2126,7 @@ export default function App() {
           return [...prev, {
             id: Date.now().toString(),
             sender: 'user',
-            text: `🎙️ "${finalText}"`,
+            text: finalText ? `🎙️ "${finalText}"` : '🎙️ [Áudio enviado ao Gemini 1.5 Flash]',
             audioUrl,
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
           }];
@@ -1825,8 +2137,10 @@ export default function App() {
 
         await handleProcessUserInteraction({
           type: 'audio',
-          text: finalText,
-          audioUrl
+          text: finalText || 'Por favor analise este áudio e realize o lançamento ou comando financeiro.',
+          audioUrl,
+          audioBase64,
+          audioMimeType: mime
         });
       };
 
@@ -1925,18 +2239,26 @@ export default function App() {
     setMessages(prev => [...prev, {
       id: loadingId,
       sender: 'ia',
-      text: isPdf ? '⏳ Lendo e extraindo dados do PDF com IA...' : '⏳ Analisando foto/comprovante com IA OCR...',
+      text: isPdf ? '⏳ Analisando PDF com Google Gemini 1.5 Flash...' : '⏳ Analisando comprovante com Google Gemini 1.5 Flash (Multimodal)...',
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     }]);
 
     try {
-      const docResult = await processUploadedFinancialDocument(file, fileUrl);
-      console.log('📄 [Texto Extraído do Documento]:', docResult.text);
+      let extractedText = '';
+      try {
+        const docResult = await processUploadedFinancialDocument(file, fileUrl);
+        extractedText = docResult.text;
+        console.log('📄 [Texto Extraído do Documento]:', extractedText);
+      } catch (ocrErr) {
+        console.warn('[OCR Fallback]:', ocrErr);
+      }
 
       await handleProcessUserInteraction({
         type: 'image',
-        text: docResult.text,
+        text: extractedText || file.name.replace(/[._-]/g, ' '),
         imageUrl: isPdf ? undefined : fileUrl,
+        imageBase64: fileUrl,
+        imageMimeType: file.type || (isPdf ? 'application/pdf' : 'image/jpeg'),
         replaceMessageId: loadingId
       });
     } catch (err: any) {
@@ -1945,6 +2267,8 @@ export default function App() {
         type: 'image',
         text: file.name.replace(/[._-]/g, ' '),
         imageUrl: isPdf ? undefined : fileUrl,
+        imageBase64: fileUrl,
+        imageMimeType: file.type || (isPdf ? 'application/pdf' : 'image/jpeg'),
         replaceMessageId: loadingId
       });
     } finally {
@@ -2205,6 +2529,19 @@ export default function App() {
               </div>
               <span className="text-[10px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-1.5 py-0.5 rounded-full font-bold">
                 24h
+              </span>
+            </button>
+
+            <button
+              onClick={() => { setChatOpenMobile(true); setMobileMenuOpen(false); }}
+              className="w-full flex items-center justify-between px-4 py-3 rounded-xl text-sm font-semibold transition-all duration-200 text-amber-300 bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-purple-500/15 border border-amber-500/30 hover:border-amber-400 hover:bg-amber-500/20 cursor-pointer shadow-sm"
+            >
+              <div className="flex items-center gap-3.5">
+                <Sparkles size={19} className="text-amber-400 animate-pulse" />
+                <span>Chat Gemini 1.5 Flash</span>
+              </div>
+              <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded-full font-bold">
+                IA
               </span>
             </button>
 
@@ -3577,21 +3914,37 @@ export default function App() {
         fixed inset-y-0 right-0 z-40 w-full sm:w-96 lg:w-96 max-w-full bg-[#0E1322] border-l border-[#1B2338] flex flex-col justify-between transition-transform duration-300 ease-in-out shadow-2xl
         lg:static lg:translate-x-0 ${chatOpenMobile ? 'translate-x-0' : 'translate-x-full lg:translate-x-0'}
       `}>
-        <div className="p-5 border-b border-[#1B2338]/80 flex items-center justify-between">
+        <div className="p-4 border-b border-[#1B2338]/80 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="h-8 w-8 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center border border-amber-500/40 shadow-[0_0_12px_rgba(245,158,11,0.25)]">
-              <Sparkles size={16} />
+            <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-amber-500/20 via-orange-500/20 to-purple-500/20 text-amber-400 flex items-center justify-center border border-amber-500/40 shadow-[0_0_12px_rgba(245,158,11,0.25)]">
+              <Sparkles size={16} className="text-amber-400 animate-pulse" />
             </div>
             <div>
-              <h3 className="font-bold text-sm text-white">Assistente IA</h3>
-              <p className="text-[11px] text-emerald-400 flex items-center gap-1">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400"></span> Conectado com seu WhatsApp
+              <div className="flex items-center gap-1.5">
+                <h3 className="font-bold text-sm text-white">Gemini 1.5 Flash</h3>
+                <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">IA</span>
+              </div>
+              <p className="text-[10px] text-emerald-400 flex items-center gap-1">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse"></span> 
+                {geminiApiKey ? 'Chave Ativa • Multimodal' : 'Google AI Multimodal • Ativo'}
               </p>
             </div>
           </div>
-          <button onClick={() => setChatOpenMobile(false)} className="lg:hidden text-slate-400 hover:text-white">
-            <X size={18} />
-          </button>
+
+          <div className="flex items-center gap-1.5">
+            <button 
+              type="button"
+              onClick={() => setIsGeminiModalOpen(true)}
+              title="Configurar Chave e Formatação do Gemini"
+              className="p-1.5 px-2 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 hover:border-amber-400 transition-all flex items-center gap-1 text-[11px] font-bold cursor-pointer"
+            >
+              <Sliders size={13} className="text-amber-400" />
+              <span>Ajustes</span>
+            </button>
+            <button onClick={() => setChatOpenMobile(false)} className="lg:hidden text-slate-400 hover:text-white p-1">
+              <X size={18} />
+            </button>
+          </div>
         </div>
 
         <div className="flex-1 p-4 overflow-y-auto space-y-3.5">
@@ -3600,9 +3953,9 @@ export default function App() {
               key={msg.id} 
               className={`flex flex-col ${msg.sender === 'user' ? 'items-end' : 'items-start'}`}
             >
-              <div className={`max-w-[88%] p-3.5 rounded-2xl text-xs leading-relaxed whitespace-pre-line ${
+              <div className={`max-w-[88%] p-3.5 rounded-2xl text-xs leading-relaxed ${
                 msg.sender === 'user'
-                  ? 'bg-[#6D3811] text-amber-100 rounded-tr-none shadow-md border border-amber-600/40'
+                  ? 'bg-[#6D3811] text-amber-100 rounded-tr-none shadow-md border border-amber-600/40 whitespace-pre-line'
                   : 'bg-[#151C30] border border-[#202940] text-slate-200 rounded-tl-none shadow-sm'
               }`}>
                 {msg.imageUrl && (
@@ -3610,7 +3963,16 @@ export default function App() {
                     <img src={msg.imageUrl} alt="Comprovante" className="max-h-48 w-full object-cover rounded-lg" />
                   </div>
                 )}
-                {msg.text}
+                {msg.sender === 'user' ? msg.text : renderFormattedMessageText(msg.text)}
+                {msg.sender === 'ia' && (
+                  <div className="flex items-center justify-between gap-2 mt-2 pt-1 border-t border-slate-700/40 text-[9px] text-amber-400/70">
+                    <span className="flex items-center gap-1">
+                      <Sparkles size={10} className="text-amber-400" />
+                      {msg.engine === 'kyro-local-engine' ? 'Motor Cognitivo KYRO' : 'Google Gemini 1.5 Flash'}
+                    </span>
+                    <span className="text-slate-500">{msg.timestamp}</span>
+                  </div>
+                )}
                 {msg.audioUrl && (
                   <div className="mt-2 w-full pt-1">
                     <audio src={msg.audioUrl} controls className="w-full h-8 rounded" />
@@ -5273,6 +5635,235 @@ export default function App() {
                   className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:brightness-110 text-slate-950 font-bold transition-all shadow-md"
                 >
                   Salvar Ajustes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ===================== MODAL DE CONFIGURAÇÃO DO GOOGLE GEMINI 1.5 FLASH ===================== */}
+      {isGeminiModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#12172A] border border-[#2A3554] rounded-2xl max-w-lg w-full p-6 shadow-2xl relative animate-in fade-in max-h-[92vh] overflow-y-auto">
+            <button 
+              type="button" 
+              onClick={() => setIsGeminiModalOpen(false)} 
+              className="absolute top-4 right-4 text-slate-400 hover:text-white"
+            >
+              <X size={20} />
+            </button>
+
+            <div className="flex items-center gap-3 mb-5">
+              <div className="h-11 w-11 rounded-xl bg-gradient-to-br from-amber-500/20 via-orange-500/20 to-purple-500/20 border border-amber-500/40 text-amber-400 flex items-center justify-center shadow-[0_0_15px_rgba(245,158,11,0.25)]">
+                <Sparkles size={22} className="text-amber-400 animate-pulse" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-bold text-lg text-white">Google Gemini 1.5 Flash</h3>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">IA Multimodal</span>
+                </div>
+                <p className="text-xs text-slate-400">Personalize o formato das respostas e a inteligência do Chat</p>
+              </div>
+            </div>
+
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              const f = e.target as any;
+              handleSaveGeminiConfig(
+                f.apiKey.value.trim(),
+                geminiFormatStyle,
+                f.customPrompt.value
+              );
+            }} className="space-y-4">
+              
+              {/* 1. Chave de API do Google Gemini */}
+              <div className="p-3.5 rounded-xl bg-[#0E1322] border border-[#1E2740] space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+                    <Key size={14} className="text-amber-400" />
+                    Chave de API do Google Gemini (Opcional / Pessoal):
+                  </label>
+                  <a 
+                    href="https://aistudio.google.com/app/apikey" 
+                    target="_blank" 
+                    rel="noreferrer"
+                    className="text-[10px] text-amber-400 hover:underline flex items-center gap-1"
+                  >
+                    <span>Pegar chave grátis</span>
+                    <ExternalLink size={10} />
+                  </a>
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    type="password"
+                    name="apiKey"
+                    defaultValue={geminiApiKey}
+                    placeholder="AIzaSy... (se vazio, usa a chave padrão do servidor)"
+                    className="flex-1 bg-[#161D32] border border-[#2A3554] px-3 py-2 rounded-lg text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const input = document.querySelector('input[name="apiKey"]') as HTMLInputElement;
+                      if (input) handleTestGeminiConnection(input.value);
+                    }}
+                    disabled={isTestingGemini}
+                    className="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 flex items-center gap-1.5 transition-all disabled:opacity-50 cursor-pointer"
+                  >
+                    {isTestingGemini ? <Loader2 size={13} className="animate-spin" /> : <Zap size={13} className="text-amber-400" />}
+                    <span>Testar</span>
+                  </button>
+                </div>
+                <p className="text-[10px] text-slate-400">
+                  O Google Gemini 1.5 Flash é gratuito pelo Google AI Studio e permite análise instantânea de textos, áudios e comprovantes.
+                </p>
+
+                {geminiTestFeedback && (
+                  <div className={`p-2 rounded-lg text-[11px] font-medium flex items-center gap-2 ${
+                    geminiTestFeedback.type === 'success' 
+                      ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-300' 
+                      : 'bg-rose-500/15 border border-rose-500/30 text-rose-300'
+                  }`}>
+                    {geminiTestFeedback.type === 'success' ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
+                    <span>{geminiTestFeedback.text}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* 2. Estilo de Organização e Formatação das Respostas */}
+              <div className="p-3.5 rounded-xl bg-[#0E1322] border border-[#1E2740] space-y-2.5">
+                <label className="text-xs font-bold text-slate-200 block">
+                  Como você quer que o Gemini formate as respostas no Chat?
+                </label>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                  <label className={`p-2.5 rounded-xl border cursor-pointer transition-all flex items-start gap-2 ${
+                    geminiFormatStyle === 'tabelas' 
+                      ? 'bg-amber-500/15 border-amber-500/60 text-slate-100' 
+                      : 'bg-[#161D32] border-[#2A3554] text-slate-300 hover:border-slate-600'
+                  }`}>
+                    <input 
+                      type="radio" 
+                      name="formatStyleChoice" 
+                      value="tabelas" 
+                      checked={geminiFormatStyle === 'tabelas'}
+                      onChange={() => setGeminiFormatStyle('tabelas')}
+                      className="mt-0.5 accent-amber-500" 
+                    />
+                    <div>
+                      <strong className="block text-amber-300 text-xs">📊 Tabelas e Tópicos</strong>
+                      <span className="text-[10px] text-slate-400 block mt-0.5 leading-tight">
+                        Organiza despesas e comparações em tabelas claras e listas com marcadores.
+                      </span>
+                    </div>
+                  </label>
+
+                  <label className={`p-2.5 rounded-xl border cursor-pointer transition-all flex items-start gap-2 ${
+                    geminiFormatStyle === 'conciso' 
+                      ? 'bg-amber-500/15 border-amber-500/60 text-slate-100' 
+                      : 'bg-[#161D32] border-[#2A3554] text-slate-300 hover:border-slate-600'
+                  }`}>
+                    <input 
+                      type="radio" 
+                      name="formatStyleChoice" 
+                      value="conciso" 
+                      checked={geminiFormatStyle === 'conciso'}
+                      onChange={() => setGeminiFormatStyle('conciso')}
+                      className="mt-0.5 accent-amber-500" 
+                    />
+                    <div>
+                      <strong className="block text-amber-300 text-xs">⚡ Rápido e Conciso</strong>
+                      <span className="text-[10px] text-slate-400 block mt-0.5 leading-tight">
+                        Respostas curtas, objetivas e práticas para consultas instantâneas.
+                      </span>
+                    </div>
+                  </label>
+
+                  <label className={`p-2.5 rounded-xl border cursor-pointer transition-all flex items-start gap-2 ${
+                    geminiFormatStyle === 'detalhado' 
+                      ? 'bg-amber-500/15 border-amber-500/60 text-slate-100' 
+                      : 'bg-[#161D32] border-[#2A3554] text-slate-300 hover:border-slate-600'
+                  }`}>
+                    <input 
+                      type="radio" 
+                      name="formatStyleChoice" 
+                      value="detalhado" 
+                      checked={geminiFormatStyle === 'detalhado'}
+                      onChange={() => setGeminiFormatStyle('detalhado')}
+                      className="mt-0.5 accent-amber-500" 
+                    />
+                    <div>
+                      <strong className="block text-amber-300 text-xs">💡 Consultoria Completa</strong>
+                      <span className="text-[10px] text-slate-400 block mt-0.5 leading-tight">
+                        Dicas de economia, análise profunda de gastos e orientação orçamentária.
+                      </span>
+                    </div>
+                  </label>
+
+                  <label className={`p-2.5 rounded-xl border cursor-pointer transition-all flex items-start gap-2 ${
+                    geminiFormatStyle === 'personalizado' 
+                      ? 'bg-amber-500/15 border-amber-500/60 text-slate-100' 
+                      : 'bg-[#161D32] border-[#2A3554] text-slate-300 hover:border-slate-600'
+                  }`}>
+                    <input 
+                      type="radio" 
+                      name="formatStyleChoice" 
+                      value="personalizado" 
+                      checked={geminiFormatStyle === 'personalizado'}
+                      onChange={() => setGeminiFormatStyle('personalizado')}
+                      className="mt-0.5 accent-amber-500" 
+                    />
+                    <div>
+                      <strong className="block text-amber-300 text-xs">✍️ Personalizado</strong>
+                      <span className="text-[10px] text-slate-400 block mt-0.5 leading-tight">
+                        Sua própria regra de fala (digite abaixo como quer que o Gemini responda).
+                      </span>
+                    </div>
+                  </label>
+                </div>
+
+                {/* Campo de Instrução Customizada */}
+                <div className="pt-1">
+                  <label className="text-[11px] text-slate-400 block mb-1">
+                    Instrução Personalizada para o Gemini (Opcional):
+                  </label>
+                  <textarea
+                    name="customPrompt"
+                    defaultValue={geminiCustomPrompt}
+                    rows={2}
+                    placeholder="Ex: 'Sempre me responda de forma motivadora, destacando valores em negrito e resumindo meu saldo restante.'"
+                    className="w-full bg-[#161D32] border border-[#2A3554] p-2 rounded-lg text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-500 leading-relaxed"
+                  />
+                </div>
+              </div>
+
+              {/* 3. Recursos Multimodais Ativos */}
+              <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-xs text-emerald-300 space-y-1">
+                <p className="font-bold flex items-center gap-1.5">
+                  <CheckCircle2 size={14} className="text-emerald-400 shrink-0" />
+                  Alimentação Automática do Sistema Conectada
+                </p>
+                <p className="text-[11px] text-slate-300 leading-relaxed">
+                  Tudo o que você falar por áudio, escrever ou enviar foto/comprovante pelo Chat será interpretado pelo Gemini e lançado instantaneamente no seu banco de dados, Dashboard e gráficos, tanto no computador quanto no celular!
+                </p>
+              </div>
+
+              {/* Botões de Ação */}
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsGeminiModalOpen(false)}
+                  className="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition-all cursor-pointer"
+                >
+                  Fechar
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:brightness-110 text-slate-950 font-bold text-xs transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Sparkles size={14} />
+                  <span>Salvar Preferências</span>
                 </button>
               </div>
             </form>

@@ -51,7 +51,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     else if (mimeType.includes('mp3') || mimeType.includes('mpeg')) cleanMime = 'audio/mp3';
 
     // ESTRATÉGIA 1: GOOGLE GEMINI MULTIMODAL AUDIO (Se chave do Gemini estiver configurada)
-    const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.VITE_GEMINI_API_KEY;
+    const geminiKey = (req.body && req.body.geminiApiKey) || process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.VITE_GEMINI_API_KEY;
     if (geminiKey && geminiKey !== 'dummy_key') {
       try {
         const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`;

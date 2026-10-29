@@ -1328,6 +1328,137 @@ const server = http.createServer(async (req, res) => {
     }));
   }
 
+  // Endpoint 8: Banco de Dados Centralizado Local (/api/database)
+  if (url.pathname === '/api/database') {
+    if (req.method === 'GET') {
+      try {
+        if (fs.existsSync(TRANSACTIONS_FILE)) {
+          const raw = fs.readFileSync(TRANSACTIONS_FILE, 'utf-8');
+          const fileTxs = JSON.parse(raw);
+          if (Array.isArray(fileTxs)) localStoredTransactions = fileTxs;
+        }
+      } catch (e) {}
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({
+        status: 'active',
+        source: 'local-bot-file',
+        transactions: localStoredTransactions,
+        count: localStoredTransactions.length
+      }));
+    }
+
+    if (req.method === 'POST') {
+      let body = '';
+      req.on('data', chunk => { body += chunk; });
+      req.on('end', () => {
+        try {
+          const payload = JSON.parse(body || '{}');
+          const { action, transaction, transactionId, transactionIds, transactions } = payload;
+
+          if (action === 'save_transaction' && transaction) {
+            recordTransaction(transaction);
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            return res.end(JSON.stringify({ success: true, action: 'saved', transaction }));
+          }
+
+          if (action === 'delete_transaction' && transactionId) {
+            localStoredTransactions = localStoredTransactions.filter(t => t.id !== transactionId);
+            try { fs.writeFileSync(TRANSACTIONS_FILE, JSON.stringify(localStoredTransactions, null, 2), 'utf-8'); } catch (e) {}
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            return res.end(JSON.stringify({ success: true, action: 'deleted', transactionId }));
+          }
+
+          if (action === 'delete_transactions' && Array.isArray(transactionIds)) {
+            const setIds = new Set(transactionIds);
+            localStoredTransactions = localStoredTransactions.filter(t => !setIds.has(t.id));
+            try { fs.writeFileSync(TRANSACTIONS_FILE, JSON.stringify(localStoredTransactions, null, 2), 'utf-8'); } catch (e) {}
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            return res.end(JSON.stringify({ success: true, action: 'bulk_deleted', count: transactionIds.length }));
+          }
+
+          if (action === 'sync_all' && Array.isArray(transactions)) {
+            localStoredTransactions = transactions;
+            try { fs.writeFileSync(TRANSACTIONS_FILE, JSON.stringify(localStoredTransactions, null, 2), 'utf-8'); } catch (e) {}
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            return res.end(JSON.stringify({ success: true, action: 'synced_all', count: transactions.length }));
+          }
+
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({ status: 'ok' }));
+        } catch (err) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({ error: err.message }));
+        }
+      });
+      return;
+    }
+  }
+
+  // Endpoint 9: Motor de Chat com Suporte a Gemini 1.5 Flash (/api/chat)
+  if (url.pathname === '/api/chat' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', async () => {
+      try {
+        const payload = JSON.parse(body || '{}');
+        const { message = '', context = {}, geminiApiKey, formattingPreference = 'tabelas', customPrompt = '' } = payload;
+        const effectiveKey = geminiApiKey || process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+
+        if (effectiveKey && effectiveKey !== 'dummy_key') {
+          try {
+            const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${effectiveKey}`;
+            const sysPrompt = `Você é o Google Gemini integrado como Copiloto Financeiro Nativo do KYRO Finance. Contexto: ${JSON.stringify(context)}. Responda OBRIGATORIAMENTE em JSON: {"reply": "sua resposta em markdown com tabelas", "action": {"type": "none"|"create_transaction"|"delete_transactions", "transaction": {...}, "deleteTargetTerm": "...", "deleteTargetIds": [...]}}`;
+            
+            const geminiRes = await axios.post(geminiUrl, {
+              contents: [{ role: 'user', parts: [{ text: `${sysPrompt}\n\nUsuário: "${message}"` }] }],
+              generationConfig: { temperature: 0.2, responseMimeType: 'application/json' }
+            }, { timeout: 15000 });
+
+            const geminiText = geminiRes.data?.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (geminiText) {
+              const parsed = JSON.parse(geminiText.trim());
+              if (parsed.action?.type === 'create_transaction' && parsed.action.transaction) {
+                recordTransaction(parsed.action.transaction);
+              }
+              res.writeHead(200, { 'Content-Type': 'application/json' });
+              return res.end(JSON.stringify({
+                reply: parsed.reply,
+                action: parsed.action,
+                engine: 'gemini-1.5-flash'
+              }));
+            }
+          } catch (gErr) {
+            console.warn('[Local Bot Gemini Chat Fallback]:', gErr.message);
+          }
+        }
+
+        // Fallback cognitivo local
+        const norm = (message || '').toLowerCase();
+        if (/remov|exclua|apagu|cancel|estorn/.test(norm)) {
+          const term = norm.replace(/^(por favor )?(remova|exclua|apague|delete|cancele)\s+(o|a|os|as)?\s*/i, '').replace(/^(lancamento|lancamentos|despesa|gasto)\s+(de|da|do)?\s*/i, '').trim();
+          const matches = localStoredTransactions.filter(t => (t.description||'').toLowerCase().includes(term) || (t.city||'').toLowerCase().includes(term));
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({
+            reply: matches.length > 1 ? `Encontrei ${matches.length} lançamentos referentes a "${term}".` : `Lançamento encontrado para "${term}".`,
+            action: { type: 'delete_transactions', deleteTargetTerm: term, deleteTargetIds: matches.map(m => m.id) },
+            engine: 'kyro-local-engine'
+          }));
+        }
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({
+          reply: `Recebi sua mensagem! O motor KYRO Finance está pronto para lançar despesas e responder suas dúvidas financeiras.`,
+          action: { type: 'none' },
+          engine: 'kyro-local-engine'
+        }));
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: err.message }));
+      }
+    });
+    return;
+  }
+
   res.writeHead(404);
   res.end('Not Found');
 });
