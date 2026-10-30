@@ -457,13 +457,34 @@ A numeração segue rigorosamente a hierarquia de escopo:
 
 ---
 
+### [PR.016] — Listagem e Monitoramento Exclusivo do Grupo "Finanças KYRO" (Exclusão e Ignoramento Total de Outros Grupos)
+- **Data/Hora:** 2026-10-30 00:52 (UTC-3)
+- **Tags Git:** `PR.016`, `PR.016.1`, `PR.016.2`
+
+#### `PR.016` — Escopo Geral do Projeto (Universal)
+- **Listagem e Cache Exclusivos para o Grupo `"Finanças KYRO"` (`120363411839303797@g.us`):**
+  - Todos os outros grupos onde o número conectado participa foram completamente **excluídos da listagem do sistema e ignorados no servidor** (`bot.cjs` e `WhatsAppTab.tsx`).
+  - O cache de metadados do Baileys (`fullGroupMetadataCache` e `groupCache`), o endpoint `/api/groups`, o endpoint `/api/status` e a interface da aba WhatsApp agora mantêm e exibem **única e exclusivamente** o grupo **`Finanças KYRO` (`120363411839303797@g.us`)**.
+  - O filtro `checkIsAuthorizedGroup` e o listener `groups.update` ignoram silenciosamente qualquer outro grupo em 100% do tempo.
+
+#### `PR.016.1` — Versão Computador (Desktop)
+- Na aba WhatsApp & IA (Passo 2), a lista exibe exclusivamente `👥 Finanças KYRO (✓ Vinculado)`, sem poluição visual de outros grupos.
+
+#### `PR.016.2` — Versão Celular (Mobile)
+- Na versão mobile, apenas o grupo `Finanças KYRO` é listado e mantido vinculado, com design responsivo e sincronização instantânea.
+
+---
+
 ## TABELA DE CÓDIGOS DE PONTOS DE RESTAURAÇÃO
 
 Se você desejar restaurar qualquer versão anterior ou atual do Kyro Finance, basta colar o código do ponto de restauração na conversa:
 
 | Código do Ponto | Escopo | Descrição Resumida |
 | :--- | :--- | :--- |
-| **`PR.015`** | **Geral (Universal)** | **Versão Atual: Design 100% Responsivo no WhatsApp (Desktop & Mobile) + Configurações de WhatsApp e Chat Salvas e Espelhadas Automaticamente** |
+| **`PR.016`** | **Geral (Universal)** | **Versão Atual: Listagem e Monitoramento Exclusivo do Grupo `"Finanças KYRO"` (Outros Grupos Excluídos e Ignorados) + Design Responsivo + Sincronia `< 10ms`** |
+| `PR.016.1` | Desktop | Interface desktop exibindo exclusivamente o grupo oficial `"Finanças KYRO"` |
+| `PR.016.2` | Mobile | Interface mobile responsiva exibindo exclusivamente o grupo oficial `"Finanças KYRO"` |
+| **`PR.015`** | **Geral (Universal)** | Design 100% Responsivo no WhatsApp (Desktop & Mobile) + Configurações de WhatsApp e Chat Salvas e Espelhadas Automaticamente |
 | `PR.015.1` | Desktop | Interface desktop com espelhamento em tempo real de todas as configurações de WhatsApp e Chat para o Mobile |
 | `PR.015.2` | Mobile | Interface mobile 100% responsiva (campos e botões touch sem sobreposição) sincronizada com os ajustes do Desktop |
 | **`PR.014`** | **Geral (Universal)** | Resposta Quase Instantânea no Grupo do WhatsApp (`cachedGroupMetadata` + Fast-Path) e Sincronização em Tempo Real no Sistema (`< 10ms` via SSE + Polling Paralelo 1s) |

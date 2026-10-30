@@ -241,11 +241,25 @@ function saveMonitoredGroup(data) {
   ]).catch(() => {});
 }
 
-// Cache completo de metadados de grupos (participants, SenderKeys) e store de mensagens para zerar latência no Baileys
-const groupCache = new Map();
+// Cache completo de metadados APENAS do grupo oficial Finanças KYRO (ignora e exclui quaisquer outros grupos)
+const OFFICIAL_KYRO_GROUP_JID = '120363411839303797@g.us';
+const OFFICIAL_KYRO_GROUP_NAME = 'Finanças KYRO';
+const groupCache = new Map([[OFFICIAL_KYRO_GROUP_JID, OFFICIAL_KYRO_GROUP_NAME]]);
 const fullGroupMetadataCache = new Map();
 const messageStore = new Map();
-let participatingGroups = [];
+let participatingGroups = [
+  { id: OFFICIAL_KYRO_GROUP_JID, subject: OFFICIAL_KYRO_GROUP_NAME, size: 2 }
+];
+
+function isOnlyKyroFinanceGroup(g) {
+  if (!g) return false;
+  const id = String(g.id || '');
+  const subj = String(g.subject || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+  if (id === OFFICIAL_KYRO_GROUP_JID || (monitoredGroup.groupJid && id === monitoredGroup.groupJid)) {
+    return true;
+  }
+  return subj === 'financas kyro' || (subj.includes('finan') && subj.includes('kyro'));
+}
 
 async function fetchParticipatingGroups(sock) {
   const activeSock = sock || sockInstance;
@@ -253,36 +267,33 @@ async function fetchParticipatingGroups(sock) {
   try {
     const groupsObj = await activeSock.groupFetchAllParticipating();
     if (groupsObj && typeof groupsObj === 'object') {
-      // Salva os metadados completos de todos os grupos em memória RAM para o cachedGroupMetadata do Baileys!
+      fullGroupMetadataCache.clear();
+      groupCache.clear();
+
+      const onlyKyroList = [];
       for (const [jid, meta] of Object.entries(groupsObj)) {
-        fullGroupMetadataCache.set(jid, meta);
+        if (isOnlyKyroFinanceGroup(meta)) {
+          fullGroupMetadataCache.set(jid, meta);
+          const item = {
+            id: meta.id,
+            subject: meta.subject || OFFICIAL_KYRO_GROUP_NAME,
+            size: Array.isArray(meta.participants) ? meta.participants.length : (meta.size || 2)
+          };
+          onlyKyroList.push(item);
+          groupCache.set(item.id, item.subject);
+        }
       }
 
-      const rawList = Object.values(groupsObj).map(g => ({
-        id: g.id,
-        subject: g.subject || 'Grupo sem nome',
-        size: Array.isArray(g.participants) ? g.participants.length : (g.size || 0)
-      }));
-
-      // Ordena colocando grupos com nome "Finanças" / "Kyro" em 1º lugar e depois grupos menores (2 a 10 pessoas)
-      rawList.sort((a, b) => {
-        const aNorm = (a.subject || '').toLowerCase();
-        const bNorm = (b.subject || '').toLowerCase();
-        const aIsFin = aNorm.includes('finan') || aNorm.includes('kyro') || aNorm.includes('despes') || aNorm.includes('gasto');
-        const bIsFin = bNorm.includes('finan') || bNorm.includes('kyro') || bNorm.includes('despes') || bNorm.includes('gasto');
-        if (aIsFin && !bIsFin) return -1;
-        if (!aIsFin && bIsFin) return 1;
-        return (a.size || 999) - (b.size || 999);
-      });
-
-      participatingGroups = rawList;
-      for (const g of participatingGroups) {
-        groupCache.set(g.id, g.subject);
+      if (onlyKyroList.length > 0) {
+        participatingGroups = onlyKyroList;
+      } else {
+        participatingGroups = [{ id: OFFICIAL_KYRO_GROUP_JID, subject: OFFICIAL_KYRO_GROUP_NAME, size: 2 }];
+        groupCache.set(OFFICIAL_KYRO_GROUP_JID, OFFICIAL_KYRO_GROUP_NAME);
       }
-      console.log(`📋 [WhatsApp] ${participatingGroups.length} grupos encontrados onde o número é membro.`);
+      console.log(`📋 [WhatsApp] Lista exclusiva mantida: apenas "${OFFICIAL_KYRO_GROUP_NAME}" (${OFFICIAL_KYRO_GROUP_JID}). Outros grupos excluídos/ignorados.`);
     }
   } catch (err) {
-    console.warn('[WhatsApp] Aviso ao listar grupos participantes:', err.message);
+    console.warn('[WhatsApp] Aviso ao validar grupo Finanças KYRO:', err.message);
   }
   return participatingGroups;
 }
@@ -381,61 +392,14 @@ async function checkIsAuthorizedGroup(sock, remoteJid) {
     return { authorized: false, reason: 'Mensagem privada ou broadcast ignorada (apenas grupo)' };
   }
 
-  // 1. Se o JID bater exatamente com o JID do grupo vinculado pelo usuário -> AUTORIZADO IMEDIATAMENTE!
-  if (monitoredGroup.groupJid && remoteJid === monitoredGroup.groupJid) {
-    return { authorized: true, groupSubject: monitoredGroup.groupName || 'Finanças Kyro' };
+  // Aceita EXCLUSIVAMENTE o grupo oficial Finanças KYRO (120363411839303797@g.us) vinculado!
+  // Todos os outros grupos são 100% ignorados!
+  const allowedJid = monitoredGroup.groupJid || OFFICIAL_KYRO_GROUP_JID;
+  if (remoteJid === OFFICIAL_KYRO_GROUP_JID || remoteJid === allowedJid) {
+    return { authorized: true, groupSubject: monitoredGroup.groupName || OFFICIAL_KYRO_GROUP_NAME };
   }
 
-  // 2. Se o usuário já vinculou/travou um grupo específico por JID, NUNCA aceita nem muda para outros grupos!
-  if (monitoredGroup.groupJid && monitoredGroup.lockedByUser) {
-    return { authorized: false, reason: `Grupo ignorado (${remoteJid}) — monitorando exclusivamente ${monitoredGroup.groupName} (${monitoredGroup.groupJid})` };
-  }
-
-  // 3. Busca o nome/título do grupo via metadados apenas para verificar se corresponde ao nome configurado
-  let groupSubject = groupCache.get(remoteJid);
-  if (!groupSubject) {
-    try {
-      const meta = await sock.groupMetadata(remoteJid);
-      if (meta && meta.subject) {
-        groupSubject = meta.subject;
-        groupCache.set(remoteJid, groupSubject);
-      }
-    } catch (err) {}
-  }
-
-  const norm = (groupSubject || '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .trim();
-
-  const normConfig = (monitoredGroup.groupName || '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .trim();
-
-  // Só vincula pelo nome se o nome do grupo realmente bater com o configurado pelo usuário ou tiver termos de finanças
-  const isExactConfigMatch = normConfig && norm && (norm === normConfig || norm.includes(normConfig));
-  const isFinanceNamedGroup = !monitoredGroup.groupJid && (
-    norm.includes('finan') ||
-    norm.includes('kyro') ||
-    norm.includes('despes') ||
-    norm.includes('gasto') ||
-    norm.includes('lancamento') ||
-    norm.includes('controle')
-  );
-
-  if (isExactConfigMatch || isFinanceNamedGroup) {
-    monitoredGroup.groupJid = remoteJid;
-    if (groupSubject) monitoredGroup.groupName = groupSubject;
-    monitoredGroup.lockedByUser = true;
-    saveMonitoredGroup(monitoredGroup);
-    return { authorized: true, groupSubject: monitoredGroup.groupName };
-  }
-
-  // Qualquer outro grupo em que o número faça parte é ESTRITAMENTE IGNORADO e NUNCA sobrescreve o grupo configurado!
-  return { authorized: false, reason: 'Outro grupo ignorado para não alterar a escolha do usuário' };
+  return { authorized: false, reason: 'Outro grupo ignorado (monitorando exclusivamente Finanças KYRO)' };
 }
 
 // Extrator Inteligente e Dinâmico do KYRO Finance (sem inventar cidades ou dados)
@@ -1192,10 +1156,10 @@ async function startSocket() {
 
   sock.ev.on('creds.update', saveCreds);
 
-  // Atualiza o cache de metadados de grupos se algum participante mudar
+  // Atualiza o cache de metadados EXCLUSIVAMENTE do grupo oficial Finanças KYRO
   sock.ev.on('groups.update', async (updates) => {
     for (const u of updates) {
-      if (u.id) {
+      if (u.id === OFFICIAL_KYRO_GROUP_JID || (monitoredGroup.groupJid && u.id === monitoredGroup.groupJid)) {
         try {
           const meta = await sock.groupMetadata(u.id);
           if (meta) fullGroupMetadataCache.set(u.id, meta);

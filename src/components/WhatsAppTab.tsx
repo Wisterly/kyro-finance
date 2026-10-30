@@ -75,8 +75,20 @@ export const WhatsAppTab: React.FC<WhatsAppTabProps> = ({
   const [selectedGroupJid, setSelectedGroupJid] = useState(() => {
     return localStorage.getItem('kyro_group_jid') || '120363411839303797@g.us';
   });
-  const [participatingGroups, setParticipatingGroups] = useState<Array<{ id: string; subject: string; size?: number }>>([]);
+  const [participatingGroups, setParticipatingGroups] = useState<Array<{ id: string; subject: string; size?: number }>>([
+    { id: '120363411839303797@g.us', subject: 'Finanças KYRO', size: 2 }
+  ]);
   const [isLoadingGroups, setIsLoadingGroups] = useState(false);
+
+  const filterOnlyKyroGroup = (groupsList: any[]) => {
+    const filtered = (groupsList || []).filter((g: any) => {
+      if (!g) return false;
+      const id = String(g.id || '');
+      const subj = String(g.subject || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+      return id === '120363411839303797@g.us' || (subj.includes('finan') && subj.includes('kyro'));
+    });
+    return filtered.length > 0 ? filtered : [{ id: '120363411839303797@g.us', subject: 'Finanças KYRO', size: 2 }];
+  };
   const [isSavingGroupLink, setIsSavingGroupLink] = useState(false);
   const [groupLinkSaveSuccess, setGroupLinkSaveSuccess] = useState(false);
   const isEditingGroupRef = React.useRef(false);
@@ -133,7 +145,7 @@ export const WhatsAppTab: React.FC<WhatsAppTabProps> = ({
                 setServerQrCode(data.qr);
               }
               if (Array.isArray(data.groups) && data.groups.length > 0) {
-                setParticipatingGroups(data.groups);
+                setParticipatingGroups(filterOnlyKyroGroup(data.groups));
               }
               if (data.connected) {
                 setIsConnected(true);
@@ -173,7 +185,7 @@ export const WhatsAppTab: React.FC<WhatsAppTabProps> = ({
               setServerQrCode(dataW.botStatus.qr);
             }
             if (Array.isArray(dataW.botStatus.groups) && dataW.botStatus.groups.length > 0) {
-              setParticipatingGroups(dataW.botStatus.groups);
+              setParticipatingGroups(filterOnlyKyroGroup(dataW.botStatus.groups));
             }
             if (dataW.botStatus.connected) {
               setIsConnected(true);
@@ -221,7 +233,7 @@ export const WhatsAppTab: React.FC<WhatsAppTabProps> = ({
             const data = await res.json();
             const list = data.groups || data.botStatus?.groups;
             if (Array.isArray(list) && list.length > 0) {
-              setParticipatingGroups(list);
+              setParticipatingGroups(filterOnlyKyroGroup(list));
               break;
             }
           }
