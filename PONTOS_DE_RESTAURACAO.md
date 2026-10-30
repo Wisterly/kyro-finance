@@ -300,13 +300,48 @@ A numeração segue rigorosamente a hierarquia de escopo:
 
 ---
 
+### [PR.010] — Autonomia Total do Chat Gemini com Aprendizado Ativo de Diretrizes e Ajustes
+- **Data/Hora:** 2026-10-25 06:15 (UTC-3)
+- **Tags Git:** `PR.010`, `PR.010.1`, `PR.010.2`
+
+#### `PR.010` — Escopo Geral do Projeto (Universal)
+- **Autonomia Conversacional e Aprendizado Ativo de Diretrizes:**
+  - O Chat do Gemini agora possui capacidade de cognição ativa para aprender diretrizes de filtragem e comportamento conversando diretamente com o usuário.
+  - O usuário pode simplesmente ditar instruções no próprio chat (ex: *"não coloque alimentação/lanche na descrição, coloque só lanche"*, *"ajuste para colocar apenas o item falado na descrição"*, *"filtre meus áudios assim..."*, *"organize tópicos de Descrição, Valor e Categoria"*).
+  - A IA identifica automaticamente que se trata de uma regra personalizada e retorna a ação `save_user_rule`, memorizando a diretriz permanentemente.
+- **Sincronização Universal de Regras de IA:**
+  - As diretrizes aprendidas são salvas no `localStorage` (`kyro_user_ai_rules`) e sincronizadas no banco central em nuvem (`/api/database.ts` via ação `save_ai_rule`), ficando ativas instantaneamente em todos os celulares, computadores e navegadores.
+  - As diretrizes são injetadas no topo do `systemInstruction` do Gemini com prioridade máxima em todas as mensagens futuras.
+- **Erradicação de Descrições Mescladas com Barras:**
+  - Fim definitivo de rótulos combinados como *"Alimentação / Lanche"* ou *"Transporte / Combustível"*.
+  - A `description` e o `product` contêm estritamente o item específico falado (ex: *"Lanche"*), enquanto a `category` armazena de forma isolada a categoria macro (*"Alimentação"*).
+- **Ajuste Direto de Lançamentos via Chat (`adjust_transaction`):**
+  - O usuário pode pedir ajustes de qualquer lançamento diretamente na conversa (ex: *"mude a descrição do último para Lanche"*, *"ajuste o valor para 25"*), e o Gemini aplica a alteração no estado da aplicação, no Firestore e no banco central.
+- **Apresentação Rica em Tópicos:**
+  - Confirmações de lançamentos e alterações agora são apresentadas com tópicos visuais claros (Descrição, Valor, Categoria, Produto, Estabelecimento, Localidade e Forma de Pagamento).
+- **Gerenciador Visual de Diretrizes no Modal de Configurações:**
+  - Seção *"Diretrizes de Filtragem Aprendidas pelo Gemini"* no modal de ajustes do Chat, exibindo a contagem de regras ativas, permitindo exclusão individual, limpeza total e cadastro manual de novas regras.
+
+#### `PR.010.1` — Versão Computador (Desktop)
+- Painel lateral direito com modal de diretrizes expandido, atalhos de teclado e histórico de aprendizado da IA.
+- Tópicos e tabelas Markdown fluidas em tela ampla.
+
+#### `PR.010.2` — Versão Celular (Mobile)
+- Gerenciamento touch de diretrizes aprendidas com rolagem suave no smartphone (390px).
+- Sincronização em tempo real de novas regras faladas por áudio no celular refletindo imediatamente em computadores.
+
+---
+
 ## TABELA DE CÓDIGOS DE PONTOS DE RESTAURAÇÃO
 
 Se você desejar restaurar qualquer versão anterior ou atual do Kyro Finance, basta colar o código do ponto de restauração na conversa:
 
 | Código do Ponto | Escopo | Descrição Resumida |
 | :--- | :--- | :--- |
-| **`PR.009`** | **Geral (Universal)** | **Versão Atual: Eliminação definitiva do loop de retorno de lançamentos excluídos, sistema de Tombstones anti-ressurreição e botão Zerar Extrato** |
+| **`PR.010`** | **Geral (Universal)** | **Versão Atual: Autonomia Total do Chat Gemini com aprendizado ativo de diretrizes via conversa, fim de descrições mescladas e ajuste direto de lançamentos** |
+| `PR.010.1` | Desktop | Interface desktop com modal de diretrizes expandido, tópicos ricos e badge de regras ativas |
+| `PR.010.2` | Mobile | Interface mobile com gestão touch de regras aprendidas no smartphone e sincronização em tempo real |
+| **`PR.009`** | **Geral (Universal)** | Eliminação definitiva do loop de retorno de lançamentos excluídos, sistema de Tombstones anti-ressurreição e botão Zerar Extrato |
 | `PR.009.1` | Desktop | Interface desktop com botão Zerar Extrato, cards de limpeza total nas configurações e empty states limpos |
 | `PR.009.2` | Mobile | Interface mobile com sincronização imediata de exclusões em tempo real, proteção contra ressuscitação de dados e zero loops |
 | **`PR.008`** | **Geral (Universal)** | Google Gemini 1.5 Flash Multimodal (Texto, Áudio e Imagem), alimentação automática do sistema, customização de estilo em tabelas e chave pessoal |

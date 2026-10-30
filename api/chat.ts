@@ -50,12 +50,43 @@ function normalizeStr(text: string): string {
     .trim();
 }
 
-// Fallback Cognitivo Local Inteligente
-function fallbackCognitiveProcess(text: string, context: any) {
+// Fallback Cognitivo Local Inteligente com Suporte a Diretrizes e Aprendizado
+function fallbackCognitiveProcess(text: string, context: any, userAiRules: string[] = []) {
   const normalized = normalizeStr(text);
   const transactions: any[] = context?.transactions || [];
 
-  // 1. Detecção de Remoção de Lançamento
+  // 1. Detecção de Comando de Regra, Filtragem ou Ajuste de Diretriz
+  // Ex: "não coloque alimentação/lanche na descrição, coloque só lanche", "ajuste para colocar apenas o lanche na descrição", "filtre meus áudios assim..."
+  const isRuleOrAdjustCommand = /(nao\s+coloqu|so\s+coloqu|coloqu\s+apenas|apenas\s+o|ajust.*descri|mud.*descri|a\s+partir\s+de\s+agora|filtr.*audio|aprend|diretriz|regr)/i.test(normalized);
+  if (isRuleOrAdjustCommand && (normalized.includes('descri') || normalized.includes('lanche') || normalized.includes('alimenta') || normalized.includes('filtr') || normalized.includes('regr'))) {
+    const recentWithMixed = transactions.find(t => 
+      normalizeStr(t.description || '').includes('alimentacao') || 
+      normalizeStr(t.description || '').includes('/') ||
+      normalizeStr(t.product || '').includes('/')
+    );
+
+    const generatedRule = normalized.includes('lanche') || normalized.includes('alimenta')
+      ? 'Na descrição de lançamentos, registrar apenas o item específico mencionado (ex: Lanche) e nunca mesclar categoria com barras (ex: Alimentação / Lanche). A categoria fica isolada no campo Categoria.'
+      : `Diretriz de filtragem personalizada: ${text.trim()}`;
+
+    return {
+      reply: `🎯 **Entendido perfeitamente! Diretriz Memorizada com Sucesso!**\n\n- 📌 **Nova Diretriz Aprendida:** Na descrição dos lançamentos, vou registrar estritamente o item específico que você mencionar (ex: **Lanche**), sem nunca mais mesclar com a categoria (**Alimentação**).\n- 🏷️ **Separação Rigorosa:** A categoria continua em seu campo dedicado (**Alimentação**), enquanto a descrição e o produto refletem exatamente o que foi dito (**Lanche**).\n- 💾 **Status:** Esta regra foi salva permanentemente no seu perfil e será respeitada em todos os seus áudios, imagens e textos em qualquer dispositivo.${recentWithMixed ? '\n\n🔄 **Lançamento Anterior Atualizado:** O último lançamento que continha "Alimentação / Lanche" foi ajustado automaticamente para **"Lanche"**!' : ''}`,
+      action: {
+        type: 'save_user_rule',
+        rule: generatedRule,
+        ruleCategory: 'extracao_descricao',
+        adjustRecentTransaction: !!recentWithMixed,
+        targetTxId: recentWithMixed ? recentWithMixed.id : (transactions[0]?.id || null),
+        adjustedFields: {
+          description: 'Lanche',
+          product: 'Lanche',
+          category: 'Alimentação'
+        }
+      }
+    };
+  }
+
+  // 2. Detecção de Remoção de Lançamento
   const isRemove = /remov|exclua|excluir|apagu|apagar|delet|cancel|estorn/.test(normalized);
   if (isRemove) {
     // Extrai o termo alvo
@@ -91,7 +122,7 @@ function fallbackCognitiveProcess(text: string, context: any) {
     }
   }
 
-  // 2. Detecção de Lançamento Financeiro (ex: "Acabei de pagar uma conta de R$ 20 para botar combustível no carro")
+  // 3. Detecção de Lançamento Financeiro (ex: "Acabei de pagar uma conta de R$ 20 para botar combustível no carro")
   const valueMatch = text.match(/R\$\s*([\d.,]+)|(?:r\$|reais|\$)\s*([\d.,]+)|([\d.,]+)\s*(?:reais|conto)/i) 
     || text.match(/(?:paguei|gastei|custou|valor\s+de|conta\s+de)\s+([\d.,]+)/i);
 
@@ -101,7 +132,7 @@ function fallbackCognitiveProcess(text: string, context: any) {
     if (!isNaN(amount) && amount > 0) {
       const isIncome = /(recebi|ganhei|salario|pix\s+recebido|vendi|deposito)/i.test(normalized);
       const isCombustivel = /(combustivel|gasolina|etanol|diesel|posto|abastec|carro|moto)/i.test(normalized);
-      const isAlimentacao = /(padaria|comida|lanche|restaurante|almoco|jantar|cafe|pizza|agua)/i.test(normalized);
+      const isAlimentacao = /(padaria|comida|lanche|restaurante|almoco|jantar|cafe|pizza|agua|hamburguer|pastel)/i.test(normalized);
       const isMercado = /(mercado|supermercado|compras)/i.test(normalized);
 
       let category = 'Outros';
@@ -111,27 +142,55 @@ function fallbackCognitiveProcess(text: string, context: any) {
 
       if (isCombustivel) {
         category = 'Transporte';
-        description = 'Combustível para veículo';
+        description = 'Combustível';
         product = 'Combustível';
         establishment = 'Posto de Combustível';
       } else if (isAlimentacao) {
         category = 'Alimentação';
-        description = 'Alimentação / Lanche';
-        product = 'Alimentação';
-        establishment = 'Restaurante / Padaria';
+        if (/lanche/i.test(normalized)) {
+          description = 'Lanche';
+          product = 'Lanche';
+        } else if (/almoco/i.test(normalized)) {
+          description = 'Almoço';
+          product = 'Almoço';
+        } else if (/jantar/i.test(normalized)) {
+          description = 'Jantar';
+          product = 'Jantar';
+        } else if (/cafe/i.test(normalized)) {
+          description = 'Café';
+          product = 'Café';
+        } else if (/pizza/i.test(normalized)) {
+          description = 'Pizza';
+          product = 'Pizza';
+        } else if (/agua/i.test(normalized)) {
+          description = 'Água';
+          product = 'Água';
+        } else {
+          description = 'Alimentação';
+          product = 'Alimentação';
+        }
+        establishment = /padaria/i.test(normalized) ? 'Padaria' : 'Lanchonete';
       } else if (isMercado) {
         category = 'Supermercado';
-        description = 'Compras de Supermercado';
+        description = 'Compras';
         product = 'Supermercado';
         establishment = 'Supermercado';
       } else if (isIncome) {
         category = 'Renda';
-        description = 'Receita / Ganho';
+        description = 'Receita';
         product = 'Receita';
       }
 
+      // Aplica regras aprendidas do usuário se houver menção
+      for (const rule of userAiRules) {
+        if (rule.toLowerCase().includes('lanche') && isAlimentacao) {
+          description = 'Lanche';
+          product = 'Lanche';
+        }
+      }
+
       return {
-        reply: `✅ **Lançamento Registrado com Sucesso!**\n\n| Item | Detalhe |\n| :--- | :--- |\n| **Descrição** | ${description} |\n| **Valor** | R$ ${amount.toFixed(2)} |\n| **Tipo** | ${isIncome ? 'Entrada' : 'Saída'} |\n| **Categoria** | ${category} |\n\n*Os valores foram atualizados no saldo geral e nos gráficos.*`,
+        reply: `✅ **Lançamento Registrado com Sucesso!**\n\n- 📝 **Descrição:** ${description}\n- 💰 **Valor:** R$ ${amount.toFixed(2)}\n- 🏷️ **Categoria:** ${category}\n- 🛍️ **Produto:** ${product || description}\n- 🏢 **Estabelecimento:** ${establishment || 'Geral'}\n- 💳 **Tipo:** ${isIncome ? 'Entrada (+)' : 'Saída (-)'}\n\n*Os valores foram atualizados no saldo geral e nos gráficos.*`,
         action: {
           type: 'create_transaction',
           transaction: {
@@ -190,7 +249,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     imageMimeType = 'image/jpeg',
     geminiApiKey,
     formattingPreference = 'tabelas',
-    customPrompt = ''
+    customPrompt = '',
+    userAiRules = []
   } = req.body || {};
 
   const effectiveGeminiKey = geminiApiKey || 
@@ -227,49 +287,100 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       let formatInstruction = '';
       if (formattingPreference === 'tabelas') {
-        formatInstruction = 'Sempre que listar dados, despesas, itens ou categorias, use TABELAS MARKDOWN elegantes e organizadas com alinhamento claro. Use tópicos e negrito.';
+        formatInstruction = 'Sempre que listar dados, despesas, itens ou categorias, use tópicos claros E tabelas Markdown elegantes com colunas bem alinhadas.';
       } else if (formattingPreference === 'conciso') {
-        formatInstruction = 'Seja extremamente rápido, direto e objetivo, com respostas curtas e sem enrolação.';
+        formatInstruction = 'Seja extremamente rápido, direto e objetivo, com respostas curtas em tópicos essenciais.';
       } else if (formattingPreference === 'detalhado') {
-        formatInstruction = 'Forneça uma consultoria financeira completa, com análise de impacto no orçamento, dicas de economia e sugestões práticas.';
+        formatInstruction = 'Forneça uma consultoria financeira completa, com análise de impacto no orçamento, dicas de economia e sugestões práticas em tópicos.';
       }
 
       if (customPrompt && customPrompt.trim().length > 0) {
-        formatInstruction += `\nInstrução personalizada do usuário: "${customPrompt.trim()}"`;
+        formatInstruction += `\nInstrução geral personalizada do usuário: "${customPrompt.trim()}"`;
       }
 
-      const systemInstructionText = `Você é o Google Gemini integrado como Copiloto Financeiro Nativo do aplicativo KYRO Finance (Desktop e Mobile no Brasil).
+      let userRulesSection = '';
+      if (Array.isArray(userAiRules) && userAiRules.length > 0) {
+        userRulesSection = `\n\nDIRETRIZES E REGRAS PERSONALIZADAS DO USUÁRIO (APRENDIDAS VIA CHAT - PRIORIDADE MÁXIMA):\n${userAiRules.map((r: string, idx: number) => `${idx + 1}. ${r}`).join('\n')}\n(OBRIGATÓRIO: você DEVE aplicar 100% dessas diretrizes aprendidas ao extrair e categorizar dados de texto, áudio ou imagem!).`;
+      }
+
+      const systemInstructionText = `Você é o Google Gemini integrado como Copiloto Financeiro Nativo com Autonomia Total do aplicativo KYRO Finance (Desktop e Mobile no Brasil).
 Você é especialista em finanças pessoais, contabilidade, gestão de cartões de crédito e interpretação de linguagem coloquial brasileira.
 
 Sua missão é:
 1. Compreender com 100% de precisão textos, áudios e comprovantes em imagem enviados pelo usuário.
-2. Identificar se a mensagem envolve:
-   a) REGISTRO DE TRANSAÇÃO (ex: "Acabei de pagar uma conta de R$ 20 para botar combustível no carro", "comprei remédio 45 na farmácia em Caxias", "recebi 500 de um trabalho");
+2. Identificar a intenção da mensagem:
+   a) REGISTRO DE TRANSAÇÃO (ex: "Acabei de pagar uma conta de R$ 20 para botar combustível no carro", "comprei remédio 45 na farmácia em Caxias", "gastei 15 num lanche");
    b) REMOÇÃO / CANCELAMENTO (ex: "Remova o lançamento de Caxias", "apague a despesa de combustível", "cancele a compra de ontem");
-   c) AJUSTE DE LANÇAMENTO (ex: "o último lançamento foi 35 e não 25");
-   d) CONSULTA OU ANÁLISE GERAL (ex: "organize meus gastos em uma tabela", "quanto gastei esse mês?", "qual meu saldo?").
-3. Manter consistência com os lançamentos existentes no contexto do usuário.
-4. Responder OBRIGATORIAMENTE em JSON válido com a seguinte estrutura estrita:
+   c) AJUSTE DE LANÇAMENTO (ex: "o último lançamento foi 35 e não 25", "mude a descrição do último para Lanche");
+   d) APRENDIZADO DE NOVA REGRA / DIRETRIZ DE FILTRAGEM (ex: "não coloque alimentação/lanche na descrição, coloque só lanche", "a partir de agora filtre meus áudios para colocar na descrição apenas o item falado", "quero que você filtre assim...");
+   e) CONSULTA OU ANÁLISE GERAL (ex: "organize meus gastos em uma tabela", "quanto gastei esse mês?", "qual meu saldo?").
+
+3. REGRA INEGOCIÁVEL DE DESCRIÇÃO E PRODUTO (NUNCA MESCLAR COM CATEGORIA COM BARRAS):
+   - O campo "description" e o campo "product" NUNCA devem conter a Categoria mesclada com barras (JAMAIS use "Alimentação / Lanche", "Transporte / Combustível", etc.).
+   - A "description" deve ser ESTREITAMENTE o item ou produto que o usuário mencionou (ex: se o usuário disse "gastei 15 num lanche", a descrição é "Lanche", o produto é "Lanche" e a categoria é "Alimentação").
+   - A "category" deve conter estritamente a categoria abrangente ("Alimentação", "Transporte", "Saúde", "Supermercado", "Lazer", etc.).
+
+4. AUTONOMIA DE APRENDIZADO DE DIRETRIZES VIA CHAT:
+   - Se o usuário pedir para você ajustar a forma de filtrar áudios, imagens ou textos, ou reclamar/pedir para não colocar determinada descrição (ex: "não coloque alimentação/lanche na descrição, coloque só lanche", "filtre meus áudios assim...", "ajuste para colocar apenas o lanche na descrição", "coloque tópicos de Descrição, Valor, Categoria"):
+   - Você DEVE identificar isso como uma REGRA DE COMPORTAMENTO personalizada!
+   - Retorne a action "save_user_rule" com o texto formal e definitivo da regra em "rule".
+   - Se a mensagem também for motivada por um lançamento recente que continha a descrição inadequada, defina "adjustRecentTransaction": true, informe o ID desse lançamento em "targetTxId" e informe os campos corrigidos em "adjustedFields" (ex: { "description": "Lanche", "product": "Lanche", "category": "Alimentação" }).
+   - Na "reply", responda confirmando calorosamente com tópicos:
+     - 📌 **Nova Diretriz Memorizada**: [Texto claro do que aprendeu]
+     - 🎯 **Como será aplicado**: [Como os próximos áudios/imagens/textos serão filtrados]
+     - 🔄 **Lançamento Anterior**: [Se corrigiu o lançamento recente, informe a alteração com tópicos]
+     - 💾 **Status**: [Salvo universalmente e ativo em todos os celulares e computadores]
+
+5. FORMATO DE APRESENTAÇÃO DE LANÇAMENTOS (TÓPICOS CLAROS):
+   Sempre que registrar ou confirmar uma transação, apresente tópicos bem organizados:
+   - 📝 **Descrição:** [Item específico]
+   - 💰 **Valor:** R$ [Valor]
+   - 🏷️ **Categoria:** [Categoria]
+   - 🛍️ **Produto:** [Item]
+   - 🏢 **Estabelecimento:** [Local]
+   - 📍 **Cidade/Local:** [Cidade]
+   - 💳 **Forma de Pagamento:** [Método]
+
+6. ESTRUTURA ESTREITA DE RESPOSTA (JSON):
+Responda OBRIGATORIAMENTE em JSON válido:
 {
-  "reply": "string (sua resposta conversacional rica em Português do Brasil com Markdown elegante, tabelas quando solicitado, emojis e clareza)",
+  "reply": "string (sua resposta conversacional rica em Português do Brasil com Markdown elegante, tópicos claros, tabelas quando solicitado, emojis e clareza)",
   "action": {
-    "type": "create_transaction" | "delete_transactions" | "adjust_transaction" | "none",
+    "type": "create_transaction" | "delete_transactions" | "adjust_transaction" | "save_user_rule" | "none",
     "transaction": {
-      "description": "string (ex: Combustível no carro)",
-      "product": "string (ex: Combustível)",
-      "establishment": "string (ex: Posto)",
-      "amount": 20.00,
+      "description": "string (ex: Lanche)",
+      "product": "string (ex: Lanche)",
+      "establishment": "string (ex: Lanchonete)",
+      "amount": 15.00,
       "type": "Saída" | "Entrada",
-      "category": "string (ex: Transporte, Alimentação, Supermercado, Saúde, Lazer, Moradia, Salário, etc.)",
+      "category": "string (ex: Alimentação, Transporte, Supermercado, etc.)",
       "subcategory": "string",
       "method": "PIX" | "Débito" | "Crédito" | "Dinheiro" | "Transferência",
-      "cardName": "string (se for cartão de crédito e mencionado)",
-      "city": "string (ex: Caxias, Teresina, Oeiras ou detectada)",
-      "date": "string (ex: 29 de out.)"
+      "cardName": "string",
+      "city": "string",
+      "date": "string"
     },
-    "deleteTargetTerm": "string (termo buscado para exclusão, ex: Caxias)",
-    "deleteTargetIds": ["string"] (IDs dos lançamentos correspondentes identificados no recentTransactions),
-    "reason": "string (justificativa breve da ação)"
+    "deleteTargetTerm": "string",
+    "deleteTargetIds": ["string"],
+    "targetTxId": "string (ID da transação a ser ajustada)",
+    "adjustments": {
+      "description": "string",
+      "amount": 15.00,
+      "category": "string",
+      "product": "string",
+      "establishment": "string",
+      "city": "string",
+      "method": "string"
+    },
+    "rule": "string (quando type for save_user_rule: texto da regra aprendida)",
+    "ruleCategory": "extracao_descricao" | "categorizacao" | "formatacao" | "geral",
+    "adjustRecentTransaction": true | false,
+    "adjustedFields": {
+      "description": "string",
+      "product": "string",
+      "category": "string"
+    },
+    "reason": "string"
   }
 }
 
@@ -281,6 +392,7 @@ REGRAS CRÍTICAS PARA REMOÇÃO:
 
 ESTILO DE FORMATAÇÃO:
 ${formatInstruction}
+${userRulesSection}
 
 CONTEXTO FINANCEIRO DO USUÁRIO ATUAL:
 ${JSON.stringify(compactContext)}`;
@@ -368,6 +480,24 @@ ${JSON.stringify(compactContext)}`;
             parsedResult.action.transaction = savedTx;
           }
 
+          // Se a ação for ajuste direto de transação existente
+          if (parsedResult.action?.type === 'adjust_transaction' && parsedResult.action.targetTxId && parsedResult.action.adjustments) {
+            if (db) {
+              try {
+                await setDoc(doc(db, 'kyro_transactions', String(parsedResult.action.targetTxId)), parsedResult.action.adjustments, { merge: true });
+              } catch (e) {}
+            }
+          }
+
+          // Se a ação for salvar regra com ajuste em transação recente
+          if (parsedResult.action?.type === 'save_user_rule' && parsedResult.action.adjustRecentTransaction && parsedResult.action.targetTxId && parsedResult.action.adjustedFields) {
+            if (db) {
+              try {
+                await setDoc(doc(db, 'kyro_transactions', String(parsedResult.action.targetTxId)), parsedResult.action.adjustedFields, { merge: true });
+              } catch (e) {}
+            }
+          }
+
           return res.status(200).json({
             reply: parsedResult.reply,
             action: parsedResult.action || { type: 'none' },
@@ -382,11 +512,20 @@ ${JSON.stringify(compactContext)}`;
   }
 
   // 2. FALLBACK COGNITIVO NATIVO KYRO (Garante 100% de disponibilidade sem quebrar)
-  const fallback = fallbackCognitiveProcess(message, context);
+  const fallback = fallbackCognitiveProcess(message, context, userAiRules);
   let localSavedTx = null;
   if (fallback.action?.type === 'create_transaction' && fallback.action.transaction) {
     localSavedTx = await saveTransaction(fallback.action.transaction);
     fallback.action.transaction = localSavedTx;
+  }
+
+  // Se houver ajuste no fallback
+  if (fallback.action?.type === 'save_user_rule' && fallback.action.adjustRecentTransaction && fallback.action.targetTxId && fallback.action.adjustedFields) {
+    if (db) {
+      try {
+        await setDoc(doc(db, 'kyro_transactions', String(fallback.action.targetTxId)), fallback.action.adjustedFields, { merge: true });
+      } catch (e) {}
+    }
   }
 
   return res.status(200).json({

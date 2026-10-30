@@ -45,11 +45,17 @@ if (!globalStore.__KYRO_CENTRAL_DB__) {
     deletedIds: new Set<string>(),
     recurringExpenses: [],
     creditCards: [],
+    userAiRules: [],
     initialized: false,
     lastUpdated: new Date().toISOString()
   };
-} else if (!globalStore.__KYRO_CENTRAL_DB__.deletedIds) {
-  globalStore.__KYRO_CENTRAL_DB__.deletedIds = new Set<string>();
+} else {
+  if (!globalStore.__KYRO_CENTRAL_DB__.deletedIds) {
+    globalStore.__KYRO_CENTRAL_DB__.deletedIds = new Set<string>();
+  }
+  if (!globalStore.__KYRO_CENTRAL_DB__.userAiRules) {
+    globalStore.__KYRO_CENTRAL_DB__.userAiRules = [];
+  }
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -104,6 +110,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         success: true,
         transactions,
         deletedIds: Array.from(deletedSet),
+        userAiRules: globalStore.__KYRO_CENTRAL_DB__.userAiRules || [],
         recurringExpenses: globalStore.__KYRO_CENTRAL_DB__.recurringExpenses || [],
         creditCards: globalStore.__KYRO_CENTRAL_DB__.creditCards || [],
         lastUpdated: globalStore.__KYRO_CENTRAL_DB__.lastUpdated,
@@ -190,6 +197,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
         if (Array.isArray(payload.creditCards)) {
           globalStore.__KYRO_CENTRAL_DB__.creditCards = payload.creditCards;
+        }
+        if (Array.isArray(payload.userAiRules)) {
+          globalStore.__KYRO_CENTRAL_DB__.userAiRules = payload.userAiRules;
         }
 
         return res.status(200).json({
@@ -283,6 +293,81 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(200).json({
           success: true,
           message: `${ids.length} transações removidas do banco central permanentemente.`
+        });
+      }
+
+      // 5. Salvar Nova Regra de IA Aprendida (save_ai_rule)
+      if (action === 'save_ai_rule') {
+        const rule = typeof payload.rule === 'string' ? payload.rule.trim() : '';
+        if (!rule) return res.status(400).json({ error: 'Regra obrigatória' });
+
+        const currentRules: string[] = globalStore.__KYRO_CENTRAL_DB__.userAiRules || [];
+        if (!currentRules.includes(rule)) {
+          currentRules.push(rule);
+        }
+        globalStore.__KYRO_CENTRAL_DB__.userAiRules = currentRules;
+        globalStore.__KYRO_CENTRAL_DB__.lastUpdated = new Date().toISOString();
+
+        if (db) {
+          try {
+            await setDoc(doc(db, 'kyro_settings', 'ai_rules'), {
+              rules: currentRules,
+              updatedAt: new Date().toISOString()
+            }, { merge: true });
+          } catch (e) {}
+        }
+
+        return res.status(200).json({
+          success: true,
+          message: 'Regra de IA memorizada no banco central.',
+          userAiRules: currentRules
+        });
+      }
+
+      // 6. Sincronizar / Atualizar Todas as Regras de IA (sync_ai_rules)
+      if (action === 'sync_ai_rules') {
+        const rules = Array.isArray(payload.rules) ? payload.rules.map((r: any) => String(r).trim()).filter(Boolean) : [];
+        globalStore.__KYRO_CENTRAL_DB__.userAiRules = rules;
+        globalStore.__KYRO_CENTRAL_DB__.lastUpdated = new Date().toISOString();
+
+        if (db) {
+          try {
+            await setDoc(doc(db, 'kyro_settings', 'ai_rules'), {
+              rules,
+              updatedAt: new Date().toISOString()
+            }, { merge: true });
+          } catch (e) {}
+        }
+
+        return res.status(200).json({
+          success: true,
+          message: 'Regras de IA sincronizadas no banco central.',
+          userAiRules: rules
+        });
+      }
+
+      // 7. Remover Regra de IA (delete_ai_rule)
+      if (action === 'delete_ai_rule') {
+        const ruleToDelete = typeof payload.rule === 'string' ? payload.rule.trim() : '';
+        const currentRules: string[] = (globalStore.__KYRO_CENTRAL_DB__.userAiRules || [])
+          .filter((r: string) => r !== ruleToDelete);
+        
+        globalStore.__KYRO_CENTRAL_DB__.userAiRules = currentRules;
+        globalStore.__KYRO_CENTRAL_DB__.lastUpdated = new Date().toISOString();
+
+        if (db) {
+          try {
+            await setDoc(doc(db, 'kyro_settings', 'ai_rules'), {
+              rules: currentRules,
+              updatedAt: new Date().toISOString()
+            }, { merge: true });
+          } catch (e) {}
+        }
+
+        return res.status(200).json({
+          success: true,
+          message: 'Regra removida do banco central.',
+          userAiRules: currentRules
         });
       }
 

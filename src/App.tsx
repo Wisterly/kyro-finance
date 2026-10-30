@@ -487,6 +487,19 @@ export default function App() {
             }
             return prev;
           });
+
+          // 3. Sincroniza Regras e Diretrizes do Gemini Aprendidas via Chat
+          if (Array.isArray(data.userAiRules) && data.userAiRules.length > 0) {
+            setUserAiRules(prev => {
+              const set = new Set([...prev, ...data.userAiRules]);
+              const merged = Array.from(set);
+              if (merged.length !== prev.length) {
+                localStorage.setItem('kyro_user_ai_rules', JSON.stringify(merged));
+                return merged;
+              }
+              return prev;
+            });
+          }
         }
       } catch (err) {}
     };
@@ -903,9 +916,78 @@ export default function App() {
   const [geminiCustomPrompt, setGeminiCustomPrompt] = useState<string>(() => {
     return localStorage.getItem('kyro_gemini_custom_prompt') || '';
   });
+  // DIRETRIZES E REGRAS PERSONALIZADAS APRENDIDAS PELO GEMINI VIA CHAT
+  const [userAiRules, setUserAiRules] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('kyro_user_ai_rules');
+      return saved ? JSON.parse(saved) : [
+        'Na descrição de lançamentos, registrar apenas o item específico mencionado (ex: Lanche) e nunca mesclar com barras a categoria (ex: Alimentação / Lanche). A categoria fica no campo Categoria.'
+      ];
+    } catch {
+      return [
+        'Na descrição de lançamentos, registrar apenas o item específico mencionado (ex: Lanche) e nunca mesclar com barras a categoria (ex: Alimentação / Lanche). A categoria fica no campo Categoria.'
+      ];
+    }
+  });
+  const [newRuleInput, setNewRuleInput] = useState('');
   const [isGeminiModalOpen, setIsGeminiModalOpen] = useState(false);
   const [isTestingGemini, setIsTestingGemini] = useState(false);
   const [geminiTestFeedback, setGeminiTestFeedback] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+
+  const handleAddAiRule = (ruleText: string) => {
+    const clean = ruleText.trim();
+    if (!clean) return;
+    setUserAiRules(prev => {
+      if (prev.includes(clean)) return prev;
+      const next = [...prev, clean];
+      localStorage.setItem('kyro_user_ai_rules', JSON.stringify(next));
+      fetch('/api/database', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'save_ai_rule', rule: clean })
+      }).catch(() => {});
+      return next;
+    });
+    setNewRuleInput('');
+    setWhatsappSyncToast({
+      show: true,
+      text: '🧠 Nova diretriz de filtragem gravada com sucesso!'
+    });
+    setTimeout(() => setWhatsappSyncToast(null), 3000);
+  };
+
+  const handleDeleteAiRule = (ruleToDelete: string) => {
+    setUserAiRules(prev => {
+      const next = prev.filter(r => r !== ruleToDelete);
+      localStorage.setItem('kyro_user_ai_rules', JSON.stringify(next));
+      fetch('/api/database', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'delete_ai_rule', rule: ruleToDelete })
+      }).catch(() => {});
+      return next;
+    });
+    setWhatsappSyncToast({
+      show: true,
+      text: '🗑️ Diretriz removida.'
+    });
+    setTimeout(() => setWhatsappSyncToast(null), 3000);
+  };
+
+  const handleClearAllAiRules = () => {
+    setUserAiRules([]);
+    localStorage.setItem('kyro_user_ai_rules', '[]');
+    fetch('/api/database', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'sync_ai_rules', rules: [] })
+    }).catch(() => {});
+    setWhatsappSyncToast({
+      show: true,
+      text: '🧹 Todas as diretrizes de IA foram redefinidas.'
+    });
+    setTimeout(() => setWhatsappSyncToast(null), 3000);
+  };
 
   const handleSaveGeminiConfig = (key: string, format: string, prompt: string) => {
     setGeminiApiKey(key);
@@ -1521,7 +1603,8 @@ export default function App() {
           },
           geminiApiKey: geminiApiKey || undefined,
           formattingPreference: geminiFormatStyle,
-          customPrompt: geminiCustomPrompt
+          customPrompt: geminiCustomPrompt,
+          userAiRules: userAiRules
         })
       });
 
@@ -1595,6 +1678,88 @@ export default function App() {
               actionableTxs = matched;
               setSelectedTxIdsForRemoval(new Set(matched.map(t => t.id)));
             }
+          }
+
+          // 3. Aprendizado e Memorização de Nova Regra de Filtragem pelo Gemini
+          if (action.type === 'save_user_rule') {
+            const ruleText = typeof action.rule === 'string' ? action.rule.trim() : '';
+            if (ruleText) {
+              setUserAiRules(prev => {
+                if (prev.includes(ruleText)) return prev;
+                const next = [...prev, ruleText];
+                localStorage.setItem('kyro_user_ai_rules', JSON.stringify(next));
+                fetch('/api/database', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ action: 'save_ai_rule', rule: ruleText })
+                }).catch(() => {});
+                return next;
+              });
+            }
+
+            // Se a regra requerer ajuste retroativo do lançamento recente
+            if (action.adjustRecentTransaction && action.adjustedFields) {
+              const targetId = action.targetTxId;
+              setTransactions(prev => {
+                let found = false;
+                const updated = prev.map(t => {
+                  if (targetId && t.id === targetId) {
+                    found = true;
+                    const mod = { ...t, ...action.adjustedFields };
+                    kyroCloud.syncSaveTransaction(mod);
+                    syncSaveToCentralDb(mod);
+                    return mod;
+                  }
+                  return t;
+                });
+
+                if (!found && updated.length > 0) {
+                  const idx = updated.findIndex(t => 
+                    (t.description || '').includes('/') || 
+                    (t.description || '').toLowerCase().includes('alimenta')
+                  );
+                  const targetIndex = idx >= 0 ? idx : 0;
+                  const mod = { ...updated[targetIndex], ...action.adjustedFields };
+                  updated[targetIndex] = mod;
+                  kyroCloud.syncSaveTransaction(mod);
+                  syncSaveToCentralDb(mod);
+                }
+
+                localStorage.setItem('kyro_transactions', JSON.stringify(updated));
+                return updated;
+              });
+            }
+
+            setWhatsappSyncToast({
+              show: true,
+              text: '🧠 Nova diretriz de filtragem memorizada pelo Gemini!'
+            });
+            setTimeout(() => setWhatsappSyncToast(null), 4000);
+          }
+
+          // 4. Ajuste Direto de Lançamento pelo Gemini
+          if (action.type === 'adjust_transaction') {
+            const targetId = action.targetTxId;
+            const adjustments = action.adjustments || {};
+            setTransactions(prev => {
+              const updated = prev.map(t => {
+                if (targetId && t.id === targetId) {
+                  const mod = { ...t, ...adjustments };
+                  kyroCloud.syncSaveTransaction(mod);
+                  syncSaveToCentralDb(mod);
+                  return mod;
+                }
+                return t;
+              });
+              localStorage.setItem('kyro_transactions', JSON.stringify(updated));
+              return updated;
+            });
+
+            setWhatsappSyncToast({
+              show: true,
+              text: '✏️ Lançamento ajustado com sucesso!'
+            });
+            setTimeout(() => setWhatsappSyncToast(null), 4000);
           }
 
           const aiReplyMsg: ChatMessage = {
@@ -5882,6 +6047,85 @@ export default function App() {
                 <p className="text-[11px] text-slate-300 leading-relaxed">
                   Tudo o que você falar por áudio, escrever ou enviar foto/comprovante pelo Chat será interpretado pelo Gemini e lançado instantaneamente no seu banco de dados, Dashboard e gráficos, tanto no computador quanto no celular!
                 </p>
+              </div>
+
+              {/* 4. DIRETRIZES & REGRAS APRENDIDAS PELO GEMINI VIA CONVERSA */}
+              <div className="p-3.5 rounded-xl bg-[#161D32] border border-[#2A3554] space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Sparkles size={15} className="text-amber-400" />
+                    <h4 className="text-xs font-bold text-slate-200">
+                      Diretrizes de Filtragem Aprendidas pelo Gemini ({userAiRules.length})
+                    </h4>
+                  </div>
+                  {userAiRules.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleClearAllAiRules}
+                      className="text-[10px] text-rose-400 hover:text-rose-300 transition-colors cursor-pointer"
+                      title="Apagar todas as diretrizes aprendidas"
+                    >
+                      Limpar Todas
+                    </button>
+                  )}
+                </div>
+
+                <p className="text-[11px] text-slate-400 leading-relaxed">
+                  O Gemini aprende com o que você fala no chat (ex: <em>"não coloque alimentação/lanche na descrição, coloque só lanche"</em>). Abaixo estão as regras ativas que ele respeita em todos os seus áudios, textos e fotos:
+                </p>
+
+                {/* Lista de regras memorizadas */}
+                {userAiRules.length === 0 ? (
+                  <div className="p-2.5 rounded-lg bg-[#0F1423] border border-[#1E2640] text-center text-[11px] text-slate-500">
+                    Nenhuma regra personalizada ainda. Peça diretamente no chat para o Gemini ajustar qualquer padrão!
+                  </div>
+                ) : (
+                  <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                    {userAiRules.map((rule, idx) => (
+                      <div
+                        key={idx}
+                        className="p-2 rounded-lg bg-[#0F1423] border border-amber-500/20 flex items-start justify-between gap-2 text-xs group hover:border-amber-500/40 transition-colors"
+                      >
+                        <div className="flex items-start gap-1.5 flex-1 min-w-0">
+                          <span className="text-amber-400 text-[10px] font-bold mt-0.5">#{idx + 1}</span>
+                          <span className="text-slate-200 text-[11px] leading-tight break-words">{rule}</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteAiRule(rule)}
+                          className="text-slate-500 hover:text-rose-400 p-0.5 transition-colors shrink-0 cursor-pointer"
+                          title="Remover esta diretriz"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Input para adicionar nova regra manualmente */}
+                <div className="flex gap-1.5 pt-1">
+                  <input
+                    type="text"
+                    value={newRuleInput}
+                    onChange={(e) => setNewRuleInput(e.target.value)}
+                    placeholder="Ensinar nova regra (ex: 'Na descrição use apenas o item')..."
+                    className="flex-1 bg-[#0F1423] border border-[#2A3554] px-2.5 py-1.5 rounded-lg text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-500"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleAddAiRule(newRuleInput);
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleAddAiRule(newRuleInput)}
+                    className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition-colors shrink-0 cursor-pointer"
+                  >
+                    Ensinar
+                  </button>
+                </div>
               </div>
 
               {/* Botões de Ação */}
