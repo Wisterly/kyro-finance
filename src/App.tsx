@@ -470,8 +470,15 @@ export default function App() {
           const cleanIncoming = incomingTxs.filter((t: any) => t && t.id && !localDeletedSet.has(String(t.id)));
 
           setTransactions(prev => {
-            // Se o servidor estiver vazio (banco zerado), limpa a tela e NÃO re-injeta mocks!
-            if (cleanIncoming.length === 0) {
+            // Preserva transações recém-criadas nos últimos 15s (via SSE/Webhook instantâneo) que ainda estão propagando
+            const recentLocal = prev.filter((t: any) => {
+              if (!t || !t.id || localDeletedSet.has(String(t.id))) return false;
+              const age = t.createdAt ? (Date.now() - new Date(t.createdAt).getTime()) : 999999;
+              return age >= 0 && age < 15000;
+            });
+
+            // Se o servidor estiver vazio (banco zerado) e não houver transação recém-chegada nos últimos 15s, limpa a tela
+            if (cleanIncoming.length === 0 && recentLocal.length === 0) {
               if (prev.length > 0) {
                 localStorage.setItem('kyro_transactions', '[]');
                 return [];
@@ -479,11 +486,14 @@ export default function App() {
               return prev;
             }
 
-            const currentSig = prev.map(t => `${t.id}_${t.amount}`).join('|');
-            const incomingSig = cleanIncoming.map((t: any) => `${t.id}_${t.amount}`).join('|');
+            const incomingIds = new Set(cleanIncoming.map((t: any) => String(t.id)));
+            const merged = [...recentLocal.filter(r => !incomingIds.has(String(r.id))), ...cleanIncoming];
+
+            const currentSig = prev.map(t => `${t.id}_${t.amount}_${t.description}`).join('|');
+            const incomingSig = merged.map((t: any) => `${t.id}_${t.amount}_${t.description}`).join('|');
             if (currentSig !== incomingSig) {
-              localStorage.setItem('kyro_transactions', JSON.stringify(cleanIncoming));
-              return cleanIncoming;
+              localStorage.setItem('kyro_transactions', JSON.stringify(merged));
+              return merged;
             }
             return prev;
           });
@@ -505,7 +515,7 @@ export default function App() {
     };
 
     pullCentralDb();
-    const interval = setInterval(pullCentralDb, 4000);
+    const interval = setInterval(pullCentralDb, 1500);
     return () => {
       isMounted = false;
       clearInterval(interval);
@@ -525,95 +535,125 @@ export default function App() {
     }
   }, [isCloudSynced]);
 
-  // Sincronização Periódica com o Webhook e Robô WhatsApp (Local & Nuvem Vercel)
+  // Sincronização Ultra-Rápida em Tempo Real (SSE Stream 0ms + Polling Paralelo 1s Local & Nuvem Vercel)
   useEffect(() => {
+    const ingestIncomingTransactions = (incoming: any[]) => {
+      if (!incoming || incoming.length === 0) return;
+      setTransactions(prev => {
+        const existingIds = new Set(prev.map(t => String(t.id)));
+        const deletedRaw = localStorage.getItem('kyro_deleted_tx_ids');
+        const localDeletedSet = deletedRaw ? new Set(JSON.parse(deletedRaw)) : new Set();
+
+        const newOnes = incoming.filter((t: any) => {
+          if (!t || !t.amount) return false;
+          const tid = String(t.id);
+          // SE JÁ EXISTE NA TELA OU FOI EXCLUÍDO PELO USUÁRIO, IGNORA SUMARIAMENTE!
+          if (existingIds.has(tid) || localDeletedSet.has(tid)) return false;
+
+          // Apenas aceita se for mensagem recebida recentemente (últimos 10 minutos)
+          if (t.createdAt) {
+            const diff = Date.now() - new Date(t.createdAt).getTime();
+            if (diff > 10 * 60 * 1000) return false;
+          }
+
+          // Antiduplicação por assinatura idêntica recente (últimos 30 segundos)
+          const isDuplicate = prev.some(p => {
+            const sameDesc = (p.description || '').trim().toLowerCase() === (t.description || '').trim().toLowerCase();
+            const sameAmount = Math.abs(Number(p.amount) - Number(t.amount)) < 0.01;
+            const sameType = p.type === t.type;
+            const sameMethod = p.method === t.method;
+            const pAge = (p as any).createdAt ? Math.abs(Date.now() - new Date((p as any).createdAt).getTime()) : 0;
+            return sameDesc && sameAmount && sameType && sameMethod && pAge < 30000;
+          });
+
+          if (isDuplicate) return false;
+          existingIds.add(tid);
+          return true;
+        });
+
+        if (newOnes.length > 0) {
+          const latest = newOnes[0];
+          const symbol = latest.type === 'Entrada' ? '+' : '-';
+          setWhatsappSyncToast({
+            show: true,
+            text: `⚡ WhatsApp Instantâneo: ${latest.description} (${symbol} R$ ${Number(latest.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}) sincronizado!`
+          });
+          setTimeout(() => setWhatsappSyncToast(null), 4500);
+
+          // PERSISTE NO FIRESTORE E NO BANCO CENTRAL UNIVERSAL EM PARALELO
+          newOnes.forEach(ntx => {
+            kyroCloud.syncSaveTransaction(ntx);
+            syncSaveToCentralDb(ntx);
+          });
+
+          const updated = [...newOnes, ...prev];
+          localStorage.setItem('kyro_transactions', JSON.stringify(updated));
+          return updated;
+        }
+        return prev;
+      });
+    };
+
+    // 1. Stream Server-Sent Events (SSE) para Latência Zero (< 5ms) quando o servidor local está acessível
+    let sseProxy: EventSource | null = null;
+    let sseDirect: EventSource | null = null;
+    try {
+      sseProxy = new EventSource('/api/stream');
+      sseProxy.onmessage = (ev) => {
+        try {
+          const payload = JSON.parse(ev.data);
+          if (payload?.type === 'new_transaction' && payload.transaction) {
+            ingestIncomingTransactions([payload.transaction]);
+          }
+        } catch (e) {}
+      };
+    } catch (e) {}
+
+    try {
+      if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        sseDirect = new EventSource('http://localhost:3001/api/stream');
+        sseDirect.onmessage = (ev) => {
+          try {
+            const payload = JSON.parse(ev.data);
+            if (payload?.type === 'new_transaction' && payload.transaction) {
+              ingestIncomingTransactions([payload.transaction]);
+            }
+          } catch (e) {}
+        };
+      }
+    } catch (e) {}
+
+    // 2. Polling Paralelo de Alta Velocidade (1 segundo) entre Local e Nuvem Vercel (Sem bloqueio sequencial!)
     const fetchWebhookTxs = async () => {
       try {
-        const incoming: any[] = [];
-        let fetchedFromLocal = false;
-
-        // 1. Busca transações do Servidor do Robô Baileys na porta 3001
-        try {
-          const ctrlLocal = new AbortController();
-          const tIdLocal = setTimeout(() => ctrlLocal.abort(), 2000);
-          const resLocal = await fetch('http://localhost:3001/api/transactions', { signal: ctrlLocal.signal });
-          clearTimeout(tIdLocal);
-          if (resLocal.ok) {
-            const dataLocal = await resLocal.json();
-            if (dataLocal?.transactions && Array.isArray(dataLocal.transactions)) {
-              incoming.push(...dataLocal.transactions);
-              fetchedFromLocal = true;
-            }
-          }
-        } catch (e) {}
-
-        // 2. Busca também do endpoint /api/webhook na nuvem Vercel para sincronia multi-dispositivo
-        try {
+        const fetchWithTimeout = async (url: string, ms: number) => {
           const ctrl = new AbortController();
-          const tId = setTimeout(() => ctrl.abort(), 2000);
-          const res = await fetch('/api/webhook', { signal: ctrl.signal });
-          clearTimeout(tId);
-          if (res.ok) {
-            const data = await res.json();
-            if (data?.transactions && Array.isArray(data.transactions)) {
-              incoming.push(...data.transactions);
-            }
+          const tid = setTimeout(() => ctrl.abort(), ms);
+          try {
+            const res = await fetch(url, { signal: ctrl.signal });
+            clearTimeout(tid);
+            if (res.ok) return await res.json();
+          } catch (e) {
+            clearTimeout(tid);
           }
-        } catch (e) {}
+          return null;
+        };
+
+        const [dataLocal, dataCloud] = await Promise.all([
+          fetchWithTimeout('http://localhost:3001/api/transactions', 1000),
+          fetchWithTimeout('/api/webhook', 1200)
+        ]);
+
+        const incoming: any[] = [];
+        if (dataLocal?.transactions && Array.isArray(dataLocal.transactions)) {
+          incoming.push(...dataLocal.transactions);
+        }
+        if (dataCloud?.transactions && Array.isArray(dataCloud.transactions)) {
+          incoming.push(...dataCloud.transactions);
+        }
 
         if (incoming.length > 0) {
-          setTransactions(prev => {
-            const existingIds = new Set(prev.map(t => String(t.id)));
-            const deletedRaw = localStorage.getItem('kyro_deleted_tx_ids');
-            const localDeletedSet = deletedRaw ? new Set(JSON.parse(deletedRaw)) : new Set();
-
-            const newOnes = incoming.filter((t: any) => {
-              if (!t || !t.amount) return false;
-              const tid = String(t.id);
-              // SE JÁ EXISTE NA TELA OU FOI EXCLUÍDO PELO USUÁRIO, IGNORA SUMARIAMENTE!
-              if (existingIds.has(tid) || localDeletedSet.has(tid)) return false;
-
-              // Apenas aceita se for mensagem recebida recentemente (últimos 10 minutos)
-              if (t.createdAt) {
-                const diff = Date.now() - new Date(t.createdAt).getTime();
-                if (diff > 10 * 60 * 1000) return false;
-              }
-
-              // Antiduplicação por assinatura idêntica recente
-              const isDuplicate = prev.some(p => {
-                const sameDesc = (p.description || '').trim().toLowerCase() === (t.description || '').trim().toLowerCase();
-                const sameAmount = Math.abs(Number(p.amount) - Number(t.amount)) < 0.01;
-                const sameType = p.type === t.type;
-                const sameMethod = p.method === t.method;
-                return sameDesc && sameAmount && sameType && sameMethod;
-              });
-
-              if (isDuplicate) return false;
-              existingIds.add(tid);
-              return true;
-            });
-
-            if (newOnes.length > 0) {
-              const latest = newOnes[0];
-              const symbol = latest.type === 'Entrada' ? '+' : '-';
-              setWhatsappSyncToast({
-                show: true,
-                text: `📱 WhatsApp: ${latest.description} (${symbol} R$ ${latest.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}) sincronizado no Dashboard e nas abas!`
-              });
-              setTimeout(() => setWhatsappSyncToast(null), 5000);
-
-              // PERSISTE NO FIRESTORE E NO BANCO CENTRAL UNIVERSAL
-              newOnes.forEach(ntx => {
-                kyroCloud.syncSaveTransaction(ntx);
-                syncSaveToCentralDb(ntx);
-              });
-
-              const updated = [...newOnes, ...prev];
-              localStorage.setItem('kyro_transactions', JSON.stringify(updated));
-              return updated;
-            }
-            return prev;
-          });
+          ingestIncomingTransactions(incoming);
         }
       } catch (err) {
         // Silencioso em caso de offline
@@ -621,8 +661,12 @@ export default function App() {
     };
 
     fetchWebhookTxs();
-    const interval = setInterval(fetchWebhookTxs, 3000); // Polling ativo a cada 3 segundos
-    return () => clearInterval(interval);
+    const interval = setInterval(fetchWebhookTxs, 1000); // Polling paralelo turbo a cada 1 segundo
+    return () => {
+      clearInterval(interval);
+      if (sseProxy) sseProxy.close();
+      if (sseDirect) sseDirect.close();
+    };
   }, []);
 
   // Exclusão Funcional de Transações

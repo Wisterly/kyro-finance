@@ -183,11 +183,13 @@ function parseDynamicFinancialMessage(text: string, isAudio: boolean = false) {
   // 2. Extrai valor monetário com alta precisão
   const amount = extractMonetaryValue(clean);
 
-  // 3. Detectar se é confirmação de pagamento de dívida ("paguei a passagem aérea", "quitei")
+  // 3. Detectar se é confirmação de pagamento de dívida ("já paguei a passagem aérea", "quitei", "dar baixa")
+  // Se houver valor monetário explícito ("Paguei 28 reais na padaria"), trata como lançamento normal de Saída!
+  const isExplicitPayoff =
+    lower.includes('quitei') || lower.includes('liquidada') || lower.includes('dar baixa') ||
+    lower.includes('marcar como paga') || lower.includes('marcar como pago') || lower.includes('conta paga');
   const isPaymentConfirm = 
-    (lower.includes('paguei') || lower.includes('já paguei') || lower.includes('ja paguei') ||
-     lower.includes('quitei') || lower.includes('liquidada') || lower.includes('dar baixa') ||
-     lower.includes('marcar como paga') || lower.includes('marcar como pago') || lower.includes('conta paga')) &&
+    (isExplicitPayoff || (amount === 0 && (lower.includes('paguei') || lower.includes('já paguei') || lower.includes('ja paguei')))) &&
     !lower.includes('adicione') && !lower.includes('adicionar');
 
   if (isPaymentConfirm) {
@@ -584,10 +586,10 @@ function parseDynamicFinancialMessage(text: string, isAudio: boolean = false) {
   reply += `\n\n✅ Atualizado nas abas de ${type === 'Entrada' ? 'Entradas' : 'Saídas'}${method === 'Crédito' ? ' e Cartões de Crédito' : ''} e no Dashboard!`;
 
   const savedTx = {
-    id: Date.now().toString(),
+    id: `${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
     product: finalProduct,
     establishment: establishment,
-    description: establishment,
+    description: finalProduct,
     amount,
     type,
     method,

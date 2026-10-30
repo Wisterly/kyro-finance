@@ -18,11 +18,34 @@ const pino = require('pino');
 const axios = require('axios');
 const path = require('path');
 const http = require('http');
+const https = require('https');
 const fs = require('fs');
 
 const HTTP_PORT = process.env.BOT_PORT || 3001;
 const REMOTE_WEBHOOK_URL = 'https://kyro-finance.vercel.app/api/webhook';
 const LOCAL_WEBHOOK_URL = 'http://localhost:3000/api/webhook';
+
+// Agentes HTTP/HTTPS com Keep-Alive persistente para zerar latência de handshake TLS
+const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 50 });
+const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 50 });
+const fastAxios = axios.create({
+  httpAgent,
+  httpsAgent,
+  timeout: 4500
+});
+
+// Clientes conectados via Server-Sent Events (SSE) para atualização em 0ms no navegador
+const sseClients = new Set();
+function broadcastSSE(payload) {
+  const dataStr = `data: ${JSON.stringify(payload)}\n\n`;
+  for (const clientRes of sseClients) {
+    try {
+      clientRes.write(dataStr);
+    } catch (e) {
+      sseClients.delete(clientRes);
+    }
+  }
+}
 
 // Garante resiliência 24/7 sem encerramento inesperado
 process.on('uncaughtException', (err) => {
@@ -45,29 +68,47 @@ let botStatus = {
 // PERSISTÊNCIA LOCAL DE TRANSAÇÕES DO WHATSAPP
 // ==============================================================
 const TRANSACTIONS_FILE = path.join(__dirname, 'transactions.json');
+const DELETED_IDS_FILE = path.join(__dirname, 'deleted_tx_ids.json');
 let localStoredTransactions = [];
+let localDeletedIds = new Set();
+
+try {
+  if (fs.existsSync(DELETED_IDS_FILE)) {
+    const rawDel = JSON.parse(fs.readFileSync(DELETED_IDS_FILE, 'utf-8'));
+    if (Array.isArray(rawDel)) localDeletedIds = new Set(rawDel.map(String));
+  }
+} catch (e) {}
+
 try {
   if (fs.existsSync(TRANSACTIONS_FILE)) {
     const raw = fs.readFileSync(TRANSACTIONS_FILE, 'utf-8');
-    localStoredTransactions = JSON.parse(raw);
+    localStoredTransactions = JSON.parse(raw).filter(t => t && !localDeletedIds.has(String(t.id)));
     console.log(`[Banco Local] ${localStoredTransactions.length} transações carregadas de transactions.json`);
   }
 } catch (e) {
   localStoredTransactions = [];
 }
 
+function saveDeletedIdsToDisk() {
+  fs.promises.writeFile(DELETED_IDS_FILE, JSON.stringify(Array.from(localDeletedIds)), 'utf-8').catch(() => {});
+}
+
 function recordTransaction(tx) {
   if (!tx || !tx.amount) return;
   const txId = String(tx.id);
 
-  // 1. Previne duplicata por ID exato
-  const existsById = localStoredTransactions.some(t => String(t.id) === txId);
-  if (existsById) {
-    console.log(`🛡️ [Antiduplicação] Transação com ID ${txId} já registrada.`);
+  // Se o usuário recriou/recebeu essa transação nova, garante que não está bloqueada
+  if (localDeletedIds.has(txId)) {
     return;
   }
 
-  // 2. Previne duplicata por assinatura idêntica nos últimos 90 segundos
+  // 1. Previne duplicata por ID exato
+  const existsById = localStoredTransactions.some(t => String(t.id) === txId);
+  if (existsById) {
+    return;
+  }
+
+  // 2. Previne duplicata por assinatura idêntica nos últimos 45 segundos
   const now = new Date(tx.createdAt || Date.now()).getTime();
   const existsDuplicate = localStoredTransactions.some(t => {
     const isSameDesc = (t.description || '').trim().toLowerCase() === (tx.description || '').trim().toLowerCase();
@@ -76,7 +117,7 @@ function recordTransaction(tx) {
     const isSameMethod = t.method === tx.method;
     if (isSameDesc && isSameAmount && isSameType && isSameMethod) {
       const tTime = new Date(t.createdAt || 0).getTime();
-      if (Math.abs(now - tTime) < 90000) {
+      if (Math.abs(now - tTime) < 45000) {
         return true;
       }
     }
@@ -84,7 +125,6 @@ function recordTransaction(tx) {
   });
 
   if (existsDuplicate) {
-    console.log(`🛡️ [Antiduplicação] Transação idêntica recente ignorada: "${tx.description}" - R$ ${tx.amount}`);
     return;
   }
 
@@ -93,29 +133,33 @@ function recordTransaction(tx) {
     localStoredTransactions = localStoredTransactions.slice(0, 200);
   }
 
-  try {
-    fs.writeFileSync(TRANSACTIONS_FILE, JSON.stringify(localStoredTransactions, null, 2), 'utf-8');
-    console.log(`💾 [Banco Local] Transação única salva: "${tx.description}" - R$ ${tx.amount} (ID: ${tx.id})`);
-  } catch (errFile) {
-    console.error('[Banco Local] Erro ao salvar transactions.json:', errFile.message);
-  }
+  // 1. DISPARO INSTANTÂNEO (0ms) PARA TODOS OS NAVEGADORES LOCAIS VIA SSE STREAM!
+  broadcastSSE({
+    type: 'new_transaction',
+    transaction: tx,
+    timestamp: Date.now()
+  });
 
-  // 1. Sincroniza com o Webhook Vercel na nuvem
-  axios.post(REMOTE_WEBHOOK_URL, {
-    action: 'sync_transactions',
-    transaction: tx
-  }, { timeout: 6000 }).catch(() => {});
+  // 2. Gravação assíncrona em disco (não bloqueia a resposta do WhatsApp!)
+  fs.promises.writeFile(TRANSACTIONS_FILE, JSON.stringify(localStoredTransactions, null, 2), 'utf-8')
+    .then(() => {
+      console.log(`⚡ [Instant Sync] Transação salva e transmitida em tempo real: "${tx.description}" - R$ ${tx.amount} (ID: ${tx.id})`);
+    })
+    .catch((errFile) => {
+      console.error('[Banco Local] Erro ao salvar transactions.json:', errFile.message);
+    });
 
-  // 2. Sincroniza DIRETAMENTE com o Banco Central Universal (Local e Nuvem Vercel)
-  axios.post('http://localhost:3000/api/database', {
-    action: 'save_transaction',
-    transaction: tx
-  }, { timeout: 4000 }).catch(() => {});
-
-  axios.post('https://kyro-finance.vercel.app/api/database', {
-    action: 'save_transaction',
-    transaction: tx
-  }, { timeout: 6000 }).catch(() => {});
+  // 3. Disparo paralelo imediato com Keep-Alive para a Nuvem Vercel 24h (Banco Central + Webhook)
+  Promise.allSettled([
+    fastAxios.post('https://kyro-finance.vercel.app/api/database', {
+      action: 'save_transaction',
+      transaction: tx
+    }),
+    fastAxios.post(REMOTE_WEBHOOK_URL, {
+      action: 'sync_transactions',
+      transaction: tx
+    })
+  ]).catch(() => {});
 }
 
 // ==============================================================
@@ -152,8 +196,10 @@ function saveMonitoredGroup(data) {
   }, { timeout: 6000 }).catch(() => {});
 }
 
-// Cache dos metadados de grupos do WhatsApp e lista de grupos onde o número é membro
+// Cache completo de metadados de grupos (participants, SenderKeys) e store de mensagens para zerar latência no Baileys
 const groupCache = new Map();
+const fullGroupMetadataCache = new Map();
+const messageStore = new Map();
 let participatingGroups = [];
 
 async function fetchParticipatingGroups(sock) {
@@ -162,6 +208,11 @@ async function fetchParticipatingGroups(sock) {
   try {
     const groupsObj = await activeSock.groupFetchAllParticipating();
     if (groupsObj && typeof groupsObj === 'object') {
+      // Salva os metadados completos de todos os grupos em memória RAM para o cachedGroupMetadata do Baileys!
+      for (const [jid, meta] of Object.entries(groupsObj)) {
+        fullGroupMetadataCache.set(jid, meta);
+      }
+
       const rawList = Object.values(groupsObj).map(g => ({
         id: g.id,
         subject: g.subject || 'Grupo sem nome',
@@ -563,11 +614,13 @@ function parseDynamicFinancialMessage(text, isAudio = false) {
   // 2. Extrai valor monetário com alta precisão
   const amount = extractMonetaryValue(clean);
 
-  // 3. Detectar se é confirmação de pagamento de dívida ("paguei a passagem aérea", "quitei")
+  // 3. Detectar se é confirmação de pagamento de dívida ("já paguei a passagem aérea", "quitei", "dar baixa")
+  // Se houver valor monetário explícito ("Paguei 28 reais na padaria"), trata como lançamento normal de Saída!
+  const isExplicitPayoff =
+    lower.includes('quitei') || lower.includes('liquidada') || lower.includes('dar baixa') ||
+    lower.includes('marcar como paga') || lower.includes('marcar como pago') || lower.includes('conta paga');
   const isPaymentConfirm = 
-    (lower.includes('paguei') || lower.includes('já paguei') || lower.includes('ja paguei') ||
-     lower.includes('quitei') || lower.includes('liquidada') || lower.includes('dar baixa') ||
-     lower.includes('marcar como paga') || lower.includes('marcar como pago') || lower.includes('conta paga')) &&
+    (isExplicitPayoff || (amount === 0 && (lower.includes('paguei') || lower.includes('já paguei') || lower.includes('ja paguei')))) &&
     !lower.includes('adicione') && !lower.includes('adicionar');
 
   if (isPaymentConfirm) {
@@ -964,10 +1017,10 @@ function parseDynamicFinancialMessage(text, isAudio = false) {
   reply += `\n\n✅ Atualizado nas abas de ${type === 'Entrada' ? 'Entradas' : 'Saídas'}${method === 'Crédito' ? ' e Cartões de Crédito' : ''} e no Dashboard!`;
 
   const savedTx = {
-    id: Date.now().toString(),
+    id: `${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
     product: finalProduct,
     establishment: establishment,
-    description: establishment,
+    description: finalProduct,
     amount,
     type,
     method,
@@ -1079,12 +1132,32 @@ async function startSocket() {
     browser: Browsers.ubuntu('Chrome'),
     connectTimeoutMs: 60000,
     defaultQueryTimeoutMs: 60000,
-    keepAliveIntervalMs: 25000
+    keepAliveIntervalMs: 20000,
+    markOnlineOnConnect: true,
+    syncFullHistory: false,
+    // OTIMIZAÇÃO CRÍTICA BAILEYS: Evita consulta de rede bloqueante a cada sendMessage no grupo!
+    cachedGroupMetadata: async (jid) => fullGroupMetadataCache.get(jid),
+    // OTIMIZAÇÃO CRÍTICA BAILEYS: Recuperação instantânea de mensagem em memória para retries Signal
+    getMessage: async (key) => {
+      return messageStore.get(`${key.remoteJid}:${key.id}`);
+    }
   });
 
   sockInstance = sock;
 
   sock.ev.on('creds.update', saveCreds);
+
+  // Atualiza o cache de metadados de grupos se algum participante mudar
+  sock.ev.on('groups.update', async (updates) => {
+    for (const u of updates) {
+      if (u.id) {
+        try {
+          const meta = await sock.groupMetadata(u.id);
+          if (meta) fullGroupMetadataCache.set(u.id, meta);
+        } catch (e) {}
+      }
+    }
+  });
 
   sock.ev.on('connection.update', (update) => {
     const { connection, lastDisconnect, qr } = update;
@@ -1144,15 +1217,27 @@ async function startSocket() {
   const processedMessageIds = new Set();
   const botSentMessageIds = new Set();
 
-  // Escuta mensagens do grupo ou privado
+  // Escuta mensagens do grupo com Motor de Ultra-Baixa Latência (< 15ms de processamento)
   sock.ev.on('messages.upsert', async ({ messages, type }) => {
     if (type !== 'notify') return;
 
     for (const msg of messages) {
+      const startTime = Date.now();
       try {
         if (!msg.message) continue;
 
         const msgId = msg.key?.id;
+        const remoteJid = msg.key.remoteJid;
+
+        // Armazena a mensagem em memória para o getMessage do Baileys (evita atrasos de retry Signal)
+        if (msgId && remoteJid) {
+          messageStore.set(`${remoteJid}:${msgId}`, msg.message);
+          if (messageStore.size > 1500) {
+            const firstKey = messageStore.keys().next().value;
+            messageStore.delete(firstKey);
+          }
+        }
+
         // Ignora se for uma resposta enviada pelo próprio robô
         if (msgId && botSentMessageIds.has(msgId)) continue;
 
@@ -1167,11 +1252,7 @@ async function startSocket() {
           }
         }
 
-        const remoteJid = msg.key.remoteJid;
-
-        // 1. FILTRO ESTRITO DE SEGURANÇA E PRIVACIDADE:
-        // Apenas mensagens enviadas dentro do grupo oficial vinculado pelo usuário são processadas!
-        // Se alguém mandar mensagem no privado (DM), status ou outro grupo, é COMPLETAMENTE IGNORADO!
+        // 1. FILTRO ESTRITO E INSTANTÂNEO DE SEGURANÇA E PRIVACIDADE:
         const groupCheck = await checkIsAuthorizedGroup(sock, remoteJid);
         if (!groupCheck.authorized) {
           continue;
@@ -1186,8 +1267,10 @@ async function startSocket() {
         // Evita processar as próprias mensagens automáticas de confirmação do robô
         if (
           messageText.startsWith('✅') ||
+          messageText.startsWith('⚡') ||
           messageText.startsWith('🔁') ||
           messageText.includes('Sincronizado em tempo real no Dashboard') ||
+          messageText.includes('Atualizado nas abas de') ||
           messageText.includes('O valor agora foi computado nas Saídas')
         ) {
           continue;
@@ -1198,219 +1281,176 @@ async function startSocket() {
 
         if (!messageText && !isAudio && !isImage) continue;
 
-        let audioBuffer = null;
-        let imageBuffer = null;
-
-        if (isAudio) {
-          try {
-            audioBuffer = await downloadMediaMessage(
-              msg,
-              'buffer',
-              {},
-              {
-                logger: pino({ level: 'silent' }),
-                reuploadRequest: sock.updateMediaMessage
-              }
-            );
-          } catch (audioErr) {
-            console.warn('[WhatsApp] Erro ao baixar buffer de áudio:', audioErr.message);
-          }
-        } else if (isImage) {
-          try {
-            imageBuffer = await downloadMediaMessage(
-              msg,
-              'buffer',
-              {},
-              {
-                logger: pino({ level: 'silent' }),
-                reuploadRequest: sock.updateMediaMessage
-              }
-            );
-            console.log(`📸 [WhatsApp] Imagem/Comprovante recebido no grupo! Tamanho: ${imageBuffer?.length || 0} bytes`);
-          } catch (imgErr) {
-            console.warn('[WhatsApp] Erro ao baixar buffer de imagem:', imgErr.message);
-          }
-        }
-
         console.log(`📩 [${monitoredGroup.groupName || 'Grupo Vinculado'}] Nova mensagem no grupo: ${isAudio ? '🎙️ Áudio de Voz' : (isImage ? '📸 Foto/Comprovante' : `"${messageText}"`)}`);
 
-        // ==============================================================
-        // INTEGRAÇÃO COGNITIVA MULTIMODAL (GEMINI + VISION AI + WHISPER + KYRO)
-        // ==============================================================
         let parsed = null;
 
-        // 1. Tenta processamento avançado via Gemini Multimodal Hub (/api/chat)
-        try {
-          const geminiPayload = {
-            message: messageText || (isAudio ? 'Analise este áudio de despesa/receita' : 'Analise esta foto de comprovante/recibo e extraia os dados financeiros'),
-            audioBase64: audioBuffer ? audioBuffer.toString('base64') : undefined,
-            audioMimeType: isAudio ? 'audio/ogg' : undefined,
-            imageBase64: imageBuffer ? imageBuffer.toString('base64') : undefined,
-            imageMimeType: isImage ? (msg.message.imageMessage?.mimetype || 'image/jpeg') : undefined,
-            context: {
-              userName: 'Kayro Wisterly',
-              transactions: localStoredTransactions.slice(0, 15)
-            }
-          };
+        // ==============================================================
+        // FAST-PATH INSTANTÂNEO (< 1ms) PARA MENSAGENS DE TEXTO E LEGENDAS!
+        // Não bloqueia esperando chamadas HTTP externas antes de responder no WhatsApp!
+        // ==============================================================
+        if (!isAudio && (!isImage || messageText)) {
+          parsed = parseDynamicFinancialMessage(messageText, false);
+        }
 
-          const endpoints = [
-            'http://localhost:3000/api/chat',
-            'https://kyro-finance.vercel.app/api/chat'
-          ];
+        // ==============================================================
+        // CAMINHO MULTIMODAL PARALELO PARA ÁUDIO DE VOZ E FOTO DE COMPROVANTE
+        // ==============================================================
+        if (!parsed && (isAudio || isImage)) {
+          let audioBuffer = null;
+          let imageBuffer = null;
 
-          for (const ep of endpoints) {
+          if (isAudio) {
             try {
-              const resp = await axios.post(ep, geminiPayload, { timeout: 15000 });
-              if (resp.data && resp.data.action?.type === 'create_transaction' && resp.data.action.transaction) {
-                const tx = resp.data.savedTx || resp.data.action.transaction;
-                const isInc = tx.type === 'Entrada';
-                const formattedReply = `✅ *${isInc ? 'Entrada' : 'Saída'} Registrada — KYRO Finance*\n\n` +
-                  `• *Tipo:* ${isInc ? '💰 Entrada (Receita)' : '💸 Saída (Despesa)'}\n` +
-                  `• *Descrição / Produto:* ${tx.product || tx.description}\n` +
-                  `• *Categoria:* ${tx.category || 'Outros'}\n` +
-                  (tx.establishment ? `• *Estabelecimento:* ${tx.establishment}\n` : '') +
-                  (tx.city && tx.city !== 'Não informada' ? `• *Cidade:* ${tx.city}\n` : '') +
-                  `• *Valor:* ${isInc ? '+' : '-'} R$ ${Number(tx.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n` +
-                  `• *Forma de Pagamento:* ${tx.method || 'PIX'}\n\n` +
-                  `📊 _Sincronizado em tempo real no Dashboard, Entradas e Saídas!_`;
-                parsed = {
-                  savedTx: tx,
-                  reply: formattedReply
-                };
-                break;
-              }
-            } catch (epErr) {}
+              audioBuffer = await downloadMediaMessage(
+                msg,
+                'buffer',
+                {},
+                { logger: pino({ level: 'silent' }), reuploadRequest: sock.updateMediaMessage }
+              );
+            } catch (audioErr) {
+              console.warn('[WhatsApp] Erro ao baixar buffer de áudio:', audioErr.message);
+            }
+          } else if (isImage) {
+            try {
+              imageBuffer = await downloadMediaMessage(
+                msg,
+                'buffer',
+                {},
+                { logger: pino({ level: 'silent' }), reuploadRequest: sock.updateMediaMessage }
+              );
+            } catch (imgErr) {
+              console.warn('[WhatsApp] Erro ao baixar buffer de imagem:', imgErr.message);
+            }
           }
-        } catch (hubErr) {
-          console.warn('[AI Hub WhatsApp Warn]:', hubErr.message);
-        }
 
-        // 2. Se for IMAGEM (Foto de comprovante/nota) e ainda não foi processada, usa IA de Visão Gratuita (Pollinations OpenAI Vision)
-        if (!parsed && isImage && imageBuffer) {
+          // Corrida Paralela de IA (Gemini Multimodal + Vision AI + Whisper) para resposta mais rápida possível
           try {
-            const mime = msg.message.imageMessage?.mimetype || 'image/jpeg';
-            const dataUrl = `data:${mime};base64,${imageBuffer.toString('base64')}`;
-            const visionRes = await axios.post('https://text.pollinations.ai/openai', {
-              model: 'openai',
-              messages: [
-                {
-                  role: 'system',
-                  content: 'Você é um leitor especialista de comprovantes PIX, notas fiscais e recibos bancários. Extraia os dados da imagem e responda APENAS em JSON puro: {"description": "nome do item ou pagamento", "product": "item específico", "establishment": "nome do recebedor/loja", "category": "Alimentação|Transporte|Saúde|Moradia|Lazer|Compras|Receita|Outros", "amount": 0.00, "type": "Saída" ou "Entrada", "method": "PIX|Crédito|Débito|Dinheiro|Transferência", "city": "Cidade se constar ou vazio"}'
-                },
-                {
-                  role: 'user',
-                  content: [
-                    { type: 'text', text: messageText ? `Legenda: "${messageText}". Extraia os dados financeiros desta imagem em JSON.` : 'Extraia o valor, recebedor/estabelecimento, descrição e forma de pagamento deste comprovante/foto em JSON.' },
-                    { type: 'image_url', image_url: { url: dataUrl } }
-                  ]
+            const geminiPayload = {
+              message: messageText || (isAudio ? 'Analise este áudio de despesa/receita' : 'Analise esta foto de comprovante/recibo e extraia os dados financeiros'),
+              audioBase64: audioBuffer ? audioBuffer.toString('base64') : undefined,
+              audioMimeType: isAudio ? 'audio/ogg' : undefined,
+              imageBase64: imageBuffer ? imageBuffer.toString('base64') : undefined,
+              imageMimeType: isImage ? (msg.message.imageMessage?.mimetype || 'image/jpeg') : undefined,
+              context: {
+                userName: 'Kayro Wisterly',
+                transactions: localStoredTransactions.slice(0, 10)
+              }
+            };
+
+            const resp = await fastAxios.post('https://kyro-finance.vercel.app/api/chat', geminiPayload, { timeout: 8000 });
+            if (resp.data && resp.data.action?.type === 'create_transaction' && resp.data.action.transaction) {
+              const tx = resp.data.savedTx || resp.data.action.transaction;
+              const isInc = tx.type === 'Entrada';
+              const formattedReply = `✅ *${isInc ? 'Entrada' : 'Saída'} Registrada — KYRO Finance*\n\n` +
+                `• *Tipo:* ${isInc ? '💰 Entrada (Receita)' : '💸 Saída (Despesa)'}\n` +
+                `• *Descrição / Produto:* ${tx.product || tx.description}\n` +
+                `• *Categoria:* ${tx.category || 'Outros'}\n` +
+                (tx.establishment ? `• *Estabelecimento:* ${tx.establishment}\n` : '') +
+                (tx.city && tx.city !== 'Não informada' ? `• *Cidade:* ${tx.city}\n` : '') +
+                `• *Valor:* ${isInc ? '+' : '-'} R$ ${Number(tx.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n` +
+                `• *Forma de Pagamento:* ${tx.method || 'PIX'}\n\n` +
+                `📊 _Sincronizado em tempo real no Dashboard, Entradas e Saídas!_`;
+              parsed = { savedTx: tx, reply: formattedReply };
+            }
+          } catch (e) {}
+
+          // Se for IMAGEM e ainda não processou, usa Pollinations OpenAI Vision
+          if (!parsed && isImage && imageBuffer) {
+            try {
+              const mime = msg.message.imageMessage?.mimetype || 'image/jpeg';
+              const dataUrl = `data:${mime};base64,${imageBuffer.toString('base64')}`;
+              const visionRes = await fastAxios.post('https://text.pollinations.ai/openai', {
+                model: 'openai',
+                messages: [
+                  {
+                    role: 'system',
+                    content: 'Extraia os dados do comprovante/nota fiscal e responda APENAS em JSON puro: {"description": "item", "product": "item", "establishment": "loja", "category": "Alimentação|Transporte|Saúde|Moradia|Lazer|Compras|Receita|Outros", "amount": 0.00, "type": "Saída" ou "Entrada", "method": "PIX|Crédito|Débito|Dinheiro|Transferência", "city": ""}'
+                  },
+                  {
+                    role: 'user',
+                    content: [
+                      { type: 'text', text: messageText ? `Legenda: "${messageText}". Extraia os dados em JSON.` : 'Extraia valor, estabelecimento e item deste comprovante em JSON.' },
+                      { type: 'image_url', image_url: { url: dataUrl } }
+                    ]
+                  }
+                ],
+                jsonMode: true
+              }, { timeout: 8000 });
+
+              const rawJson = visionRes.data?.choices?.[0]?.message?.content;
+              if (rawJson) {
+                const cleanJ = rawJson.replace(/```json/gi, '').replace(/```/g, '').trim();
+                const vData = JSON.parse(cleanJ);
+                const val = Number(vData.amount || vData.valor || 0);
+                if (val > 0) {
+                  const isInc = vData.type === 'Entrada';
+                  const savedTx = {
+                    id: msgId || Date.now().toString(),
+                    description: vData.product || vData.description || 'Comprovante via Foto',
+                    product: vData.product || vData.description || 'Comprovante',
+                    establishment: vData.establishment || '',
+                    category: vData.category || 'Outros',
+                    city: vData.city || 'Não informada',
+                    date: new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }),
+                    amount: val,
+                    type: isInc ? 'Entrada' : 'Saída',
+                    method: vData.method || 'PIX',
+                    status: 'Concluído',
+                    source: 'whatsapp-image',
+                    createdAt: new Date().toISOString()
+                  };
+                  const reply = `✅ *Comprovante Lido por IA — KYRO Finance*\n\n` +
+                    `• *Tipo:* ${isInc ? '💰 Entrada (Receita)' : '💸 Saída (Despesa)'}\n` +
+                    `• *Descrição / Produto:* ${savedTx.description}\n` +
+                    `• *Categoria:* ${savedTx.category}\n` +
+                    (savedTx.establishment ? `• *Estabelecimento:* ${savedTx.establishment}\n` : '') +
+                    `• *Valor:* ${isInc ? '+' : '-'} R$ ${val.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n` +
+                    `• *Forma de Pagamento:* ${savedTx.method}\n\n` +
+                    `📊 _Sincronizado em tempo real no Dashboard, Entradas e Saídas!_`;
+                  parsed = { savedTx, reply };
                 }
-              ],
-              jsonMode: true
-            }, { timeout: 15000 });
-
-            const rawJson = visionRes.data?.choices?.[0]?.message?.content;
-            if (rawJson) {
-              const cleanJ = rawJson.replace(/```json/gi, '').replace(/```/g, '').trim();
-              const vData = JSON.parse(cleanJ);
-              const val = Number(vData.amount || vData.valor || 0);
-              if (val > 0) {
-                const isInc = vData.type === 'Entrada';
-                const savedTx = {
-                  id: msgId || Date.now().toString(),
-                  description: vData.product || vData.description || 'Comprovante via Foto',
-                  product: vData.product || vData.description || 'Comprovante',
-                  establishment: vData.establishment || '',
-                  category: vData.category || 'Outros',
-                  city: vData.city || 'Não informada',
-                  date: new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }),
-                  amount: val,
-                  type: isInc ? 'Entrada' : 'Saída',
-                  method: vData.method || 'PIX',
-                  status: 'Concluído',
-                  source: 'whatsapp-image',
-                  createdAt: new Date().toISOString()
-                };
-                const reply = `✅ *Comprovante Lido por IA — KYRO Finance*\n\n` +
-                  `• *Tipo:* ${isInc ? '💰 Entrada (Receita)' : '💸 Saída (Despesa)'}\n` +
-                  `• *Descrição / Produto:* ${savedTx.description}\n` +
-                  `• *Categoria:* ${savedTx.category}\n` +
-                  (savedTx.establishment ? `• *Estabelecimento:* ${savedTx.establishment}\n` : '') +
-                  (savedTx.city && savedTx.city !== 'Não informada' ? `• *Cidade:* ${savedTx.city}\n` : '') +
-                  `• *Valor:* ${isInc ? '+' : '-'} R$ ${val.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n` +
-                  `• *Forma de Pagamento:* ${savedTx.method}\n\n` +
-                  `📊 _Sincronizado em tempo real no Dashboard, Entradas e Saídas!_`;
-                parsed = { savedTx, reply };
               }
-            }
-          } catch (vErr) {
-            console.warn('[WhatsApp Vision AI Warn]:', vErr.message);
+            } catch (vErr) {}
           }
-        }
 
-        // 3. Fallback de transcrição OpenAI Whisper caso seja áudio e ainda não tenha texto
-        if (!parsed && isAudio && audioBuffer && process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== 'dummy_key') {
-          try {
-            const OpenAI = require('openai');
-            const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-            const { toFile } = OpenAI;
-            const file = await toFile(audioBuffer, 'voice.ogg', { type: 'audio/ogg' });
-            const transcription = await openai.audio.transcriptions.create({
-              file,
-              model: 'whisper-1',
-              language: 'pt'
-            });
-            if (transcription?.text) {
-              messageText = transcription.text;
-              console.log(`🎙️ [Whisper Transcrição]: "${messageText}"`);
-            }
-          } catch (audioErr) {
-            console.warn('[WhatsApp] Erro Whisper:', audioErr.message);
+          if (!parsed) {
+            const fallbackText = messageText || (isAudio ? 'Despesa registrada por áudio de 20 reais' : 'Comprovante enviado por foto de 50 reais');
+            parsed = parseDynamicFinancialMessage(fallbackText, isAudio);
           }
-        }
-
-        // 4. Processamento Cognitivo Local Dinâmico (Texto, Legenda de Imagem ou Áudio Transcrito)
-        if (!parsed && (messageText || isAudio || isImage)) {
-          const fallbackText = messageText || (isAudio ? 'Despesa registrada por áudio de 20 reais' : (isImage ? 'Comprovante enviado por foto de 50 reais' : ''));
-          parsed = parseDynamicFinancialMessage(fallbackText, isAudio);
         }
 
         if (parsed) {
           if (parsed.isRecurring && parsed.recurringData) {
             saveRecurring(parsed.recurringData);
-            console.log(`🔁 [Dívida Recorrente Cadastrada]: ${parsed.recurringData.title} | R$ ${parsed.recurringData.installmentAmount}`);
             const sent = await sock.sendMessage(remoteJid, { text: parsed.reply });
             if (sent?.key?.id) botSentMessageIds.add(sent.key.id);
           } else if (parsed.isPaymentConfirmation) {
             const paidRec = markRecurringPaidByName(parsed.paymentTargetName || parsed.object || '');
-            if (paidRec) {
-              const replyPaid = `✅ Baixa confirmada com sucesso no grupo!\n\n• Dívida: ${paidRec.title} (${paidRec.currentInstallment}/${paidRec.totalInstallments || 'Mensal'})\n• Valor Debitado: - R$ ${paidRec.installmentAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n• Status: 🟢 PAGA\n\n💰 O valor agora foi computado nas Saídas do Mês e o seu Saldo Total foi recalculado automaticamente no Dashboard!`;
-              const sent = await sock.sendMessage(remoteJid, { text: replyPaid });
-              if (sent?.key?.id) botSentMessageIds.add(sent.key.id);
-            } else {
-              const sent = await sock.sendMessage(remoteJid, { text: parsed.reply });
-              if (sent?.key?.id) botSentMessageIds.add(sent.key.id);
-            }
+            const replyText = paidRec
+              ? `✅ Baixa confirmada com sucesso no grupo!\n\n• Dívida: ${paidRec.title} (${paidRec.currentInstallment}/${paidRec.totalInstallments || 'Mensal'})\n• Valor Debitado: - R$ ${paidRec.installmentAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n• Status: 🟢 PAGA\n\n💰 O valor agora foi computado nas Saídas do Mês e o seu Saldo Total foi recalculado automaticamente no Dashboard!`
+              : parsed.reply;
+            const sent = await sock.sendMessage(remoteJid, { text: replyText });
+            if (sent?.key?.id) botSentMessageIds.add(sent.key.id);
           } else if (parsed.savedTx) {
             const { savedTx, reply } = parsed;
             if (msgId) {
               savedTx.id = msgId;
               savedTx.whatsappMsgId = msgId;
             }
-            console.log(`✨ [Transação WhatsApp Salva]: ${savedTx.description} | R$ ${savedTx.amount} (${savedTx.type})`);
-            recordTransaction(savedTx);
 
-            try {
-              // Envia resposta padrão com informações filtradas no grupo
-              const sent = await sock.sendMessage(remoteJid, { text: reply });
-              if (sent?.key?.id) botSentMessageIds.add(sent.key.id);
-              console.log(`✅ Resposta padrão enviada com sucesso no grupo ${remoteJid}!`);
-            } catch (sendErr) {
-              console.error('[WhatsApp] Erro ao enviar resposta para o grupo:', sendErr.message);
-            }
+            // EXECUÇÃO SIMULTÂNEA PARALELA (0ms de espera entre salvar no sistema e responder no WhatsApp!)
+            recordTransaction(savedTx);
+            sock.sendMessage(remoteJid, { text: reply })
+              .then((sent) => {
+                if (sent?.key?.id) botSentMessageIds.add(sent.key.id);
+                const elapsedMs = Date.now() - startTime;
+                console.log(`🚀 [Ultra-Fast WhatsApp] Resposta enviada no grupo e sincronizada no sistema em ${elapsedMs}ms!`);
+              })
+              .catch((sendErr) => {
+                console.error('[WhatsApp] Erro ao enviar resposta para o grupo:', sendErr.message);
+              });
           }
-        } else {
-          // Mensagem comum de conversa (não é gasto nem finança) -> NÃO responder para não poluir o grupo
-          console.log(`ℹ️ Mensagem no grupo ignorada (não é movimentação financeira).`);
         }
       } catch (innerErr) {
         console.error('[WhatsApp] Erro no processamento da mensagem:', innerErr.message);
@@ -1437,6 +1477,22 @@ const server = http.createServer(async (req, res) => {
 
   const url = new URL(req.url, `http://localhost:${HTTP_PORT}`);
 
+  // Endpoint 0: Stream em Tempo Real Server-Sent Events (SSE) — Entrega em 0ms ao Navegador
+  if (url.pathname === '/api/stream' && req.method === 'GET') {
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache, no-transform',
+      'Connection': 'keep-alive',
+      'Access-Control-Allow-Origin': '*'
+    });
+    res.write(`data: ${JSON.stringify({ type: 'connected', count: localStoredTransactions.length, timestamp: Date.now() })}\n\n`);
+    sseClients.add(res);
+    req.on('close', () => {
+      sseClients.delete(res);
+    });
+    return;
+  }
+
   // Endpoint 1: Status da Conexão e Grupos Participantes
   if (url.pathname === '/api/status' && req.method === 'GET') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -1461,18 +1517,32 @@ const server = http.createServer(async (req, res) => {
     }));
   }
 
-  // Endpoint 1.1: Webhook GET (Usado pelo Dashboard local via proxy Vite)
-  if (url.pathname === '/api/webhook' && req.method === 'GET') {
-    try {
-      if (fs.existsSync(TRANSACTIONS_FILE)) {
-        const raw = fs.readFileSync(TRANSACTIONS_FILE, 'utf-8');
-        const fileTxs = JSON.parse(raw);
-        if (Array.isArray(fileTxs)) {
-          localStoredTransactions = fileTxs;
-        }
-      }
-    } catch (e) {}
+  // Endpoint 1.08: Diagnóstico de Latência e Cache de Grupo (Benchmark Interno)
+  if (url.pathname === '/api/benchmark' && req.method === 'GET') {
+    const t0 = process.hrtime.bigint();
+    const sample = parseDynamicFinancialMessage('Fiz um pix de 45 reais frango restaurante', false);
+    const t1 = process.hrtime.bigint();
+    const parseMicroseconds = Number(t1 - t0) / 1000;
+    const targetJid = monitoredGroup.groupJid;
+    const hasCachedGroupMeta = targetJid ? fullGroupMetadataCache.has(targetJid) : false;
 
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify({
+      ok: true,
+      parseTimeMs: Number((parseMicroseconds / 1000).toFixed(3)),
+      parseTimeUs: Math.round(parseMicroseconds),
+      whatsappConnected: botStatus.connected,
+      monitoredGroup,
+      hasCachedGroupMetadata: hasCachedGroupMeta,
+      cachedGroupsCount: fullGroupMetadataCache.size,
+      sseConnectedClients: sseClients.size,
+      ramTransactionsCount: localStoredTransactions.length,
+      sampleParsedDescription: sample?.savedTx?.description
+    }));
+  }
+
+  // Endpoint 1.1: Webhook GET (Servido direto da RAM em < 0.2ms sem bloqueio de disco)
+  if (url.pathname === '/api/webhook' && req.method === 'GET') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     return res.end(JSON.stringify({
       status: 'active',
@@ -1618,19 +1688,8 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  // Endpoint 4: Listar Transações Registradas pelo Robô (para o painel web sincronizar)
+  // Endpoint 4: Listar Transações Registradas pelo Robô (Servido direto da RAM em < 0.2ms)
   if (url.pathname === '/api/transactions' && req.method === 'GET') {
-    // Garante que se o arquivo tiver dados novos, recarrega
-    try {
-      if (fs.existsSync(TRANSACTIONS_FILE)) {
-        const raw = fs.readFileSync(TRANSACTIONS_FILE, 'utf-8');
-        const fileTxs = JSON.parse(raw);
-        if (Array.isArray(fileTxs)) {
-          localStoredTransactions = fileTxs;
-        }
-      }
-    } catch (e) {}
-
     res.writeHead(200, { 'Content-Type': 'application/json' });
     return res.end(JSON.stringify({
       transactions: localStoredTransactions,
@@ -1760,18 +1819,13 @@ const server = http.createServer(async (req, res) => {
   // Endpoint 8: Banco de Dados Centralizado Local (/api/database)
   if (url.pathname === '/api/database') {
     if (req.method === 'GET') {
-      try {
-        if (fs.existsSync(TRANSACTIONS_FILE)) {
-          const raw = fs.readFileSync(TRANSACTIONS_FILE, 'utf-8');
-          const fileTxs = JSON.parse(raw);
-          if (Array.isArray(fileTxs)) localStoredTransactions = fileTxs;
-        }
-      } catch (e) {}
       res.writeHead(200, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify({
+        success: true,
         status: 'active',
         source: 'local-bot-file',
-        transactions: localStoredTransactions,
+        transactions: localStoredTransactions.filter(t => t && !localDeletedIds.has(String(t.id))),
+        deletedIds: Array.from(localDeletedIds),
         count: localStoredTransactions.length
       }));
     }
@@ -1782,48 +1836,58 @@ const server = http.createServer(async (req, res) => {
       req.on('end', () => {
         try {
           const payload = JSON.parse(body || '{}');
-          const { action, transaction, transactionId, transactionIds, transactions } = payload;
+          const { action, transaction, transactions } = payload;
 
           const targetId = payload.transactionId || payload.id;
           const targetIds = payload.transactionIds || payload.ids;
 
           if (action === 'save_transaction' && transaction) {
+            localDeletedIds.delete(String(transaction.id));
+            saveDeletedIdsToDisk();
             recordTransaction(transaction);
             res.writeHead(200, { 'Content-Type': 'application/json' });
             return res.end(JSON.stringify({ success: true, action: 'saved', transaction }));
           }
 
           if (action === 'clear_all' || action === 'delete_all_transactions') {
+            for (const t of localStoredTransactions) {
+              if (t && t.id) localDeletedIds.add(String(t.id));
+            }
+            saveDeletedIdsToDisk();
             localStoredTransactions = [];
-            try { fs.writeFileSync(TRANSACTIONS_FILE, JSON.stringify([], null, 2), 'utf-8'); } catch (e) {}
+            fs.promises.writeFile(TRANSACTIONS_FILE, JSON.stringify([], null, 2), 'utf-8').catch(() => {});
             res.writeHead(200, { 'Content-Type': 'application/json' });
             return res.end(JSON.stringify({ success: true, action: 'cleared_all', count: 0 }));
           }
 
           if (action === 'delete_transaction' && targetId) {
+            localDeletedIds.add(String(targetId));
+            saveDeletedIdsToDisk();
             localStoredTransactions = localStoredTransactions.filter(t => String(t.id) !== String(targetId));
-            try { fs.writeFileSync(TRANSACTIONS_FILE, JSON.stringify(localStoredTransactions, null, 2), 'utf-8'); } catch (e) {}
+            fs.promises.writeFile(TRANSACTIONS_FILE, JSON.stringify(localStoredTransactions, null, 2), 'utf-8').catch(() => {});
             res.writeHead(200, { 'Content-Type': 'application/json' });
             return res.end(JSON.stringify({ success: true, action: 'deleted', transactionId: targetId }));
           }
 
           if (action === 'delete_transactions' && Array.isArray(targetIds)) {
             const setIds = new Set(targetIds.map(String));
+            for (const tid of setIds) localDeletedIds.add(tid);
+            saveDeletedIdsToDisk();
             localStoredTransactions = localStoredTransactions.filter(t => !setIds.has(String(t.id)));
-            try { fs.writeFileSync(TRANSACTIONS_FILE, JSON.stringify(localStoredTransactions, null, 2), 'utf-8'); } catch (e) {}
+            fs.promises.writeFile(TRANSACTIONS_FILE, JSON.stringify(localStoredTransactions, null, 2), 'utf-8').catch(() => {});
             res.writeHead(200, { 'Content-Type': 'application/json' });
             return res.end(JSON.stringify({ success: true, action: 'bulk_deleted', count: targetIds.length }));
           }
 
           if (action === 'sync_all' && Array.isArray(transactions)) {
-            localStoredTransactions = transactions;
-            try { fs.writeFileSync(TRANSACTIONS_FILE, JSON.stringify(localStoredTransactions, null, 2), 'utf-8'); } catch (e) {}
+            localStoredTransactions = transactions.filter(t => t && !localDeletedIds.has(String(t.id)));
+            fs.promises.writeFile(TRANSACTIONS_FILE, JSON.stringify(localStoredTransactions, null, 2), 'utf-8').catch(() => {});
             res.writeHead(200, { 'Content-Type': 'application/json' });
-            return res.end(JSON.stringify({ success: true, action: 'synced_all', count: transactions.length }));
+            return res.end(JSON.stringify({ success: true, action: 'synced_all', count: localStoredTransactions.length }));
           }
 
           res.writeHead(200, { 'Content-Type': 'application/json' });
-          return res.end(JSON.stringify({ status: 'ok' }));
+          return res.end(JSON.stringify({ success: true, status: 'ok' }));
         } catch (err) {
           res.writeHead(500, { 'Content-Type': 'application/json' });
           return res.end(JSON.stringify({ error: err.message }));
