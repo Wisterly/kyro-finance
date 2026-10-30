@@ -386,13 +386,39 @@ A numeração segue rigorosamente a hierarquia de escopo:
 
 ---
 
+### [PR.013] — Trava Exclusiva de Grupo no WhatsApp (Link + Lista de Grupos Participantes) sem Sobrescrita Automática e IA Multimodal Ativa
+- **Data/Hora:** 2026-10-30 00:15 (UTC-3)
+- **Tags Git:** `PR.013`, `PR.013.1`, `PR.013.2`
+
+#### `PR.013` — Escopo Geral do Projeto (Universal)
+- **Fim Definitivo da Sobrescrita Automática por Outros Grupos (`bot.cjs` e `WhatsAppTab.tsx`):**
+  - **Causa Raiz Corrigida #1 (`bot.cjs`):** Removida a lógica antiga em `checkIsAuthorizedGroup` que auto-vinculava qualquer outro grupo em que o número conectado recebesse mensagem (ex: grupos grandes de terceiros). Agora o robô possui **Trava Exclusiva (`lockedByUser: true`)**: outros grupos são 100% ignorados e **jamais** alteram o grupo escolhido pelo usuário.
+  - **Causa Raiz Corrigida #2 (`WhatsAppTab.tsx`):** O polling de status a cada 2,5 segundos não sobrescreve mais os campos de texto `groupInviteLink` e `groupName` enquanto o usuário cola o link ou edita o grupo.
+- **Dupla Opção de Vinculação de Grupo (Por Link ou Seleção Direta de Grupos Membros):**
+  - **Opção A (Colar Link do Grupo):** Ao colar o link (`https://chat.whatsapp.com/...`) e clicar em **"Vincular Link"**, o sistema identifica o grupo tanto via metadados do convite quanto varrendo os grupos onde o número conectado já é membro (`resolveGroupFromInviteLink`).
+  - **Opção B (Lista de Grupos que o Número Faz Parte):** Novo endpoint `/api/groups` (`groupFetchAllParticipating`) que lista diretamente na tela todos os grupos em que o WhatsApp conectado é membro (colocando **"Finanças KYRO"** `120363411839303797@g.us` no topo da lista para seleção com 1 clique!).
+- **Leitura Multimodal por IA (Áudio, Texto e Foto de Comprovante) no Grupo Vinculado:**
+  - Processa mensagens enviadas no grupo vinculado (inclusive se enviadas pelo próprio número ou por outro membro do grupo, ignorando apenas as próprias respostas automáticas do robô).
+  - Filtra **Texto**, **Áudio de Voz** e **Imagem/Foto de Comprovante** (usando Gemini 1.5 Flash Multimodal + Pollinations OpenAI Vision + Whisper + Extrator Semântico KYRO), responde no grupo com os tópicos filtrados e insere automaticamente no Dashboard, nas Entradas e nas Saídas.
+
+#### `PR.013.1` — Versão Computador (Desktop)
+- Painel Passo 2 com Opção A (Link de Convite) e Opção B (Seletor clicável dos grupos onde o número é membro), confirmação visual de trava exclusiva e ID oficial do grupo.
+
+#### `PR.013.2` — Versão Celular (Mobile)
+- Seleção touch de grupos participantes e colagem de link sem interferência de polling, sincronizada em tempo real com o servidor local e Vercel 24h.
+
+---
+
 ## TABELA DE CÓDIGOS DE PONTOS DE RESTAURAÇÃO
 
 Se você desejar restaurar qualquer versão anterior ou atual do Kyro Finance, basta colar o código do ponto de restauração na conversa:
 
 | Código do Ponto | Escopo | Descrição Resumida |
 | :--- | :--- | :--- |
-| **`PR.012`** | **Geral (Universal)** | **Versão Atual: QR Code Oficial Criptografado do WhatsApp Web (Baileys) sem erro de leitura, geração sob demanda e sincronização local/nuvem** |
+| **`PR.013`** | **Geral (Universal)** | **Versão Atual: Trava Exclusiva do Grupo Escolhido (por Link ou Lista de Grupos Membros), sem mudar sozinho para outros grupos, e IA Multimodal (Áudio, Texto e Foto)** |
+| `PR.013.1` | Desktop | Interface desktop com seletor de grupos onde o número é membro, colagem livre de link e trava exclusiva |
+| `PR.013.2` | Mobile | Interface mobile com escolha rápida de grupo vinculado e sincronização automática de lançamentos |
+| **`PR.012`** | **Geral (Universal)** | QR Code Oficial Criptografado do WhatsApp Web (Baileys) sem erro de leitura, geração sob demanda e sincronização local/nuvem |
 | `PR.012.1` | Desktop | Interface desktop com QR Code Oficial do WhatsApp Web de alta precisão e atualização com 1 clique |
 | `PR.012.2` | Mobile | Interface mobile sincronizada com status real do WhatsApp Web e grupo monitorado |
 | **`PR.011`** | **Geral (Universal)** | Restauração Plena do Robô WhatsApp no Grupo Oficial com Multimodalidade (Áudio, Texto e Foto), resposta filtrada padrão e sincronização em tempo real |

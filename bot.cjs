@@ -152,8 +152,132 @@ function saveMonitoredGroup(data) {
   }, { timeout: 6000 }).catch(() => {});
 }
 
-// Cache dos metadados de grupos do WhatsApp
+// Cache dos metadados de grupos do WhatsApp e lista de grupos onde o número é membro
 const groupCache = new Map();
+let participatingGroups = [];
+
+async function fetchParticipatingGroups(sock) {
+  const activeSock = sock || sockInstance;
+  if (!activeSock || !botStatus.connected) return participatingGroups;
+  try {
+    const groupsObj = await activeSock.groupFetchAllParticipating();
+    if (groupsObj && typeof groupsObj === 'object') {
+      const rawList = Object.values(groupsObj).map(g => ({
+        id: g.id,
+        subject: g.subject || 'Grupo sem nome',
+        size: Array.isArray(g.participants) ? g.participants.length : (g.size || 0)
+      }));
+
+      // Ordena colocando grupos com nome "Finanças" / "Kyro" em 1º lugar e depois grupos menores (2 a 10 pessoas)
+      rawList.sort((a, b) => {
+        const aNorm = (a.subject || '').toLowerCase();
+        const bNorm = (b.subject || '').toLowerCase();
+        const aIsFin = aNorm.includes('finan') || aNorm.includes('kyro') || aNorm.includes('despes') || aNorm.includes('gasto');
+        const bIsFin = bNorm.includes('finan') || bNorm.includes('kyro') || bNorm.includes('despes') || bNorm.includes('gasto');
+        if (aIsFin && !bIsFin) return -1;
+        if (!aIsFin && bIsFin) return 1;
+        return (a.size || 999) - (b.size || 999);
+      });
+
+      participatingGroups = rawList;
+      for (const g of participatingGroups) {
+        groupCache.set(g.id, g.subject);
+      }
+      console.log(`📋 [WhatsApp] ${participatingGroups.length} grupos encontrados onde o número é membro.`);
+    }
+  } catch (err) {
+    console.warn('[WhatsApp] Aviso ao listar grupos participantes:', err.message);
+  }
+  return participatingGroups;
+}
+
+async function resolveGroupFromInviteLink(inviteLink, fallbackName = '') {
+  const cleanLink = (inviteLink || '').trim();
+  const match = cleanLink.match(/chat\.whatsapp\.com\/([A-Za-z0-9_-]+)/i);
+  if (!match || !sockInstance) {
+    return null;
+  }
+
+  const inviteCode = match[1];
+  let resolvedJid = '';
+  let resolvedName = fallbackName;
+
+  // 1. Consulta metadados oficiais do convite no WhatsApp
+  try {
+    const inviteInfo = await sockInstance.groupGetInviteInfo(inviteCode);
+    if (inviteInfo && inviteInfo.id) {
+      resolvedJid = inviteInfo.id.endsWith('@g.us') ? inviteInfo.id : `${inviteInfo.id}@g.us`;
+      if (inviteInfo.subject) {
+        resolvedName = inviteInfo.subject;
+      }
+      console.log(`🔗 [Grupo Identificado pelo Link (${inviteCode})]: "${resolvedName}" (${resolvedJid})`);
+    }
+  } catch (e) {
+    console.warn('[WhatsApp] groupGetInviteInfo aviso:', e.message);
+  }
+
+  // 2. Se ainda não estiver no grupo ou precisar confirmar o JID via aceite
+  if (!resolvedJid) {
+    try {
+      const joinedId = await sockInstance.groupAcceptInvite(inviteCode);
+      if (joinedId && typeof joinedId === 'string') {
+        resolvedJid = joinedId.endsWith('@g.us') ? joinedId : `${joinedId}@g.us`;
+      }
+    } catch (e) {}
+  }
+
+  // 3. Se o número já é membro do grupo (e groupGetInviteInfo retornou gone/already-exists),
+  // verifica nos grupos onde o número já faz parte!
+  if (!resolvedJid) {
+    await fetchParticipatingGroups();
+    // 3a. Tenta bater o inviteCode nos grupos pequenos onde o número é admin
+    const smallGroups = participatingGroups.filter(g => (g.size || 0) <= 15);
+    for (const g of smallGroups) {
+      try {
+        const code = await sockInstance.groupInviteCode(g.id);
+        if (code && code === inviteCode) {
+          resolvedJid = g.id;
+          resolvedName = g.subject;
+          console.log(`🔗 [Grupo Encontrado por InviteCode de Membro]: "${resolvedName}" (${resolvedJid})`);
+          break;
+        }
+      } catch (e) {}
+    }
+
+    // 3b. Se não for admin para ler groupInviteCode, localiza pelo nome informado ou pelo grupo Finanças KYRO
+    if (!resolvedJid && participatingGroups.length > 0) {
+      const normFallback = (fallbackName || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+      const byName = participatingGroups.find(g => {
+        const s = (g.subject || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+        return (normFallback && (s === normFallback || s.includes(normFallback))) || s.includes('finan') || s.includes('kyro');
+      });
+      if (byName) {
+        resolvedJid = byName.id;
+        resolvedName = byName.subject;
+        console.log(`🔗 [Grupo de Membro Vinculado]: "${resolvedName}" (${resolvedJid})`);
+      }
+    }
+  }
+
+  // 4. Se temos o JID mas não temos o nome do grupo, busca nos grupos participantes ou groupMetadata
+  if (resolvedJid && !resolvedName) {
+    try {
+      const meta = await sockInstance.groupMetadata(resolvedJid);
+      if (meta?.subject) resolvedName = meta.subject;
+    } catch (e) {}
+  }
+
+  if (resolvedJid) {
+    groupCache.set(resolvedJid, resolvedName || 'Finanças KYRO');
+    return {
+      inviteLink: cleanLink,
+      groupJid: resolvedJid,
+      groupName: resolvedName || 'Finanças KYRO',
+      lockedByUser: true
+    };
+  }
+  return null;
+}
 
 async function checkIsAuthorizedGroup(sock, remoteJid) {
   // Ignora se não for grupo ou for broadcast de status
@@ -161,12 +285,17 @@ async function checkIsAuthorizedGroup(sock, remoteJid) {
     return { authorized: false, reason: 'Mensagem privada ou broadcast ignorada (apenas grupo)' };
   }
 
-  // 1. Se o JID bater exatamente com o JID configurado
+  // 1. Se o JID bater exatamente com o JID do grupo vinculado pelo usuário -> AUTORIZADO IMEDIATAMENTE!
   if (monitoredGroup.groupJid && remoteJid === monitoredGroup.groupJid) {
     return { authorized: true, groupSubject: monitoredGroup.groupName || 'Finanças Kyro' };
   }
 
-  // 2. Busca o nome/título do grupo via metadados
+  // 2. Se o usuário já vinculou/travou um grupo específico por JID, NUNCA aceita nem muda para outros grupos!
+  if (monitoredGroup.groupJid && monitoredGroup.lockedByUser) {
+    return { authorized: false, reason: `Grupo ignorado (${remoteJid}) — monitorando exclusivamente ${monitoredGroup.groupName} (${monitoredGroup.groupJid})` };
+  }
+
+  // 3. Busca o nome/título do grupo via metadados apenas para verificar se corresponde ao nome configurado
   let groupSubject = groupCache.get(remoteJid);
   if (!groupSubject) {
     try {
@@ -174,14 +303,10 @@ async function checkIsAuthorizedGroup(sock, remoteJid) {
       if (meta && meta.subject) {
         groupSubject = meta.subject;
         groupCache.set(remoteJid, groupSubject);
-        console.log(`[WhatsApp Grupo Detectado]: "${groupSubject}" (${remoteJid})`);
       }
-    } catch (err) {
-      console.warn(`[WhatsApp] Falha ao obter metadados do grupo ${remoteJid}:`, err.message);
-    }
+    } catch (err) {}
   }
 
-  // Normaliza strings
   const norm = (groupSubject || '')
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
@@ -194,28 +319,27 @@ async function checkIsAuthorizedGroup(sock, remoteJid) {
     .toLowerCase()
     .trim();
 
-  // Se o nome conferir ou se contiver palavras-chave financeiras
-  const isMatch = 
-    (normConfig && (norm.includes(normConfig) || normConfig.includes(norm))) ||
+  // Só vincula pelo nome se o nome do grupo realmente bater com o configurado pelo usuário ou tiver termos de finanças
+  const isExactConfigMatch = normConfig && norm && (norm === normConfig || norm.includes(normConfig));
+  const isFinanceNamedGroup = !monitoredGroup.groupJid && (
     norm.includes('finan') ||
     norm.includes('kyro') ||
-    norm.includes('gasto') ||
     norm.includes('despes') ||
-    norm.includes('conta') ||
-    !monitoredGroup.groupJid; // Se ainda não tinha grupo vinculado, vincula este automaticamente!
+    norm.includes('gasto') ||
+    norm.includes('lancamento') ||
+    norm.includes('controle')
+  );
 
-  if (isMatch || !monitoredGroup.groupJid) {
+  if (isExactConfigMatch || isFinanceNamedGroup) {
     monitoredGroup.groupJid = remoteJid;
     if (groupSubject) monitoredGroup.groupName = groupSubject;
+    monitoredGroup.lockedByUser = true;
     saveMonitoredGroup(monitoredGroup);
     return { authorized: true, groupSubject: monitoredGroup.groupName };
   }
 
-  // Autorização com auto-vinculação para qualquer grupo onde o bot foi colocado pelo usuário
-  monitoredGroup.groupJid = remoteJid;
-  if (groupSubject) monitoredGroup.groupName = groupSubject;
-  saveMonitoredGroup(monitoredGroup);
-  return { authorized: true, groupSubject: monitoredGroup.groupName };
+  // Qualquer outro grupo em que o número faça parte é ESTRITAMENTE IGNORADO e NUNCA sobrescreve o grupo configurado!
+  return { authorized: false, reason: 'Outro grupo ignorado para não alterar a escolha do usuário' };
 }
 
 // Extrator Inteligente e Dinâmico do KYRO Finance (sem inventar cidades ou dados)
@@ -872,7 +996,7 @@ function parseDynamicFinancialMessage(text, isAudio = false) {
 // ==============================================================
 // 1. INICIALIZAÇÃO DO SOCKET BAILEYS (WHATSAPP WEB OFICIAL)
 // ==============================================================
-// Sincroniza o Status e o QR Code Oficial do WhatsApp Web com a Nuvem Vercel
+// Sincroniza o Status, Lista de Grupos e o QR Code Oficial do WhatsApp Web com a Nuvem Vercel
 function syncBotStatusToCloud() {
   axios.post(REMOTE_WEBHOOK_URL, {
     action: 'sync_bot_status',
@@ -882,12 +1006,31 @@ function syncBotStatusToCloud() {
       pairingCode: botStatus.pairingCode,
       hasQr: !!botStatus.lastQr,
       qr: botStatus.lastQr,
+      groups: participatingGroups,
+      monitoredGroup,
       updatedAt: new Date().toISOString()
     }
-  }, { timeout: 5000 }).then((resp) => {
+  }, { timeout: 5000 }).then(async (resp) => {
     if (resp?.data?.shouldResetQr) {
       console.log('🔄 [Nuvem] Solicitação de novo QR Code Oficial recebida da Vercel!');
       forceResetAndGenerateNewQr();
+    }
+    if (resp?.data?.pendingGroupUpdate) {
+      const pending = resp.data.pendingGroupUpdate;
+      console.log('🔗 [Nuvem] Nova vinculação de grupo recebida da Vercel:', pending);
+      if (pending.inviteLink) {
+        const resolved = await resolveGroupFromInviteLink(pending.inviteLink, pending.groupName);
+        if (resolved) {
+          saveMonitoredGroup(resolved);
+          return;
+        }
+      }
+      saveMonitoredGroup({
+        inviteLink: pending.inviteLink !== undefined ? pending.inviteLink : monitoredGroup.inviteLink,
+        groupName: pending.groupName || monitoredGroup.groupName,
+        groupJid: pending.groupJid || '',
+        lockedByUser: true
+      });
     }
   }).catch(() => {});
 }
@@ -959,6 +1102,19 @@ async function startSocket() {
       botStatus.error = null;
       botStatus.phoneNumber = sock.user?.id?.split(':')[0] || 'Conectado';
       console.log(`🎉 [WhatsApp] CONECTADO COM SUCESSO! Número: ${botStatus.phoneNumber}`);
+
+      // Carrega a lista de todos os grupos onde este número é membro e resolve o link salvo
+      setTimeout(async () => {
+        await fetchParticipatingGroups(sock);
+        if (monitoredGroup.inviteLink && monitoredGroup.inviteLink.includes('chat.whatsapp.com/')) {
+          const resolved = await resolveGroupFromInviteLink(monitoredGroup.inviteLink, monitoredGroup.groupName);
+          if (resolved) {
+            saveMonitoredGroup(resolved);
+          }
+        }
+        syncBotStatusToCloud();
+      }, 1500);
+
       syncBotStatusToCloud();
     } else if (connection === 'close') {
       botStatus.connected = false;
@@ -984,8 +1140,9 @@ async function startSocket() {
     }
   });
 
-  // Cache de IDs de mensagens já processadas para evitar duplicatas do Baileys
+  // Cache de IDs de mensagens já processadas e IDs enviados pelo próprio robô
   const processedMessageIds = new Set();
+  const botSentMessageIds = new Set();
 
   // Escuta mensagens do grupo ou privado
   sock.ev.on('messages.upsert', async ({ messages, type }) => {
@@ -993,9 +1150,12 @@ async function startSocket() {
 
     for (const msg of messages) {
       try {
-        if (!msg.message || msg.key.fromMe) continue;
+        if (!msg.message) continue;
 
         const msgId = msg.key?.id;
+        // Ignora se for uma resposta enviada pelo próprio robô
+        if (msgId && botSentMessageIds.has(msgId)) continue;
+
         if (msgId) {
           if (processedMessageIds.has(msgId)) {
             continue; // Já processada, ignora duplicata de rede
@@ -1010,12 +1170,10 @@ async function startSocket() {
         const remoteJid = msg.key.remoteJid;
 
         // 1. FILTRO ESTRITO DE SEGURANÇA E PRIVACIDADE:
-        // Apenas mensagens enviadas dentro do grupo oficial "Finanças Kyro" são processadas!
-        // Se alguém mandar mensagem no privado (DM), status ou outro grupo, é COMPLETAMENTE IGNORADO
-        // Nenhuma mensagem automática é enviada para privados ou conversas fora do grupo!
+        // Apenas mensagens enviadas dentro do grupo oficial vinculado pelo usuário são processadas!
+        // Se alguém mandar mensagem no privado (DM), status ou outro grupo, é COMPLETAMENTE IGNORADO!
         const groupCheck = await checkIsAuthorizedGroup(sock, remoteJid);
         if (!groupCheck.authorized) {
-          // Ignora em silêncio absoluto
           continue;
         }
 
@@ -1024,6 +1182,16 @@ async function startSocket() {
           msg.message.extendedTextMessage?.text ||
           msg.message.imageMessage?.caption ||
           '';
+
+        // Evita processar as próprias mensagens automáticas de confirmação do robô
+        if (
+          messageText.startsWith('✅') ||
+          messageText.startsWith('🔁') ||
+          messageText.includes('Sincronizado em tempo real no Dashboard') ||
+          messageText.includes('O valor agora foi computado nas Saídas')
+        ) {
+          continue;
+        }
 
         const isAudio = !!(msg.message.audioMessage || msg.message.voiceMessage);
         const isImage = !!msg.message.imageMessage;
@@ -1064,14 +1232,14 @@ async function startSocket() {
           }
         }
 
-        console.log(`📩 [Finanças Kyro] Nova mensagem no grupo: ${isAudio ? '🎙️ Áudio de Voz' : (isImage ? '📸 Foto/Comprovante' : `"${messageText}"`)}`);
+        console.log(`📩 [${monitoredGroup.groupName || 'Grupo Vinculado'}] Nova mensagem no grupo: ${isAudio ? '🎙️ Áudio de Voz' : (isImage ? '📸 Foto/Comprovante' : `"${messageText}"`)}`);
 
         // ==============================================================
-        // INTEGRAÇÃO COGNITIVA MULTIMODAL (GOOGLE GEMINI 1.5 FLASH + LOCAL)
+        // INTEGRAÇÃO COGNITIVA MULTIMODAL (GEMINI + VISION AI + WHISPER + KYRO)
         // ==============================================================
         let parsed = null;
 
-        // 1. Tenta processamento avançado via Gemini Multimodal Hub
+        // 1. Tenta processamento avançado via Gemini Multimodal Hub (/api/chat)
         try {
           const geminiPayload = {
             message: messageText || (isAudio ? 'Analise este áudio de despesa/receita' : 'Analise esta foto de comprovante/recibo e extraia os dados financeiros'),
@@ -1094,21 +1262,92 @@ async function startSocket() {
             try {
               const resp = await axios.post(ep, geminiPayload, { timeout: 15000 });
               if (resp.data && resp.data.action?.type === 'create_transaction' && resp.data.action.transaction) {
+                const tx = resp.data.savedTx || resp.data.action.transaction;
+                const isInc = tx.type === 'Entrada';
+                const formattedReply = `✅ *${isInc ? 'Entrada' : 'Saída'} Registrada — KYRO Finance*\n\n` +
+                  `• *Tipo:* ${isInc ? '💰 Entrada (Receita)' : '💸 Saída (Despesa)'}\n` +
+                  `• *Descrição / Produto:* ${tx.product || tx.description}\n` +
+                  `• *Categoria:* ${tx.category || 'Outros'}\n` +
+                  (tx.establishment ? `• *Estabelecimento:* ${tx.establishment}\n` : '') +
+                  (tx.city && tx.city !== 'Não informada' ? `• *Cidade:* ${tx.city}\n` : '') +
+                  `• *Valor:* ${isInc ? '+' : '-'} R$ ${Number(tx.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n` +
+                  `• *Forma de Pagamento:* ${tx.method || 'PIX'}\n\n` +
+                  `📊 _Sincronizado em tempo real no Dashboard, Entradas e Saídas!_`;
                 parsed = {
-                  savedTx: resp.data.savedTx || resp.data.action.transaction,
-                  reply: resp.data.reply
+                  savedTx: tx,
+                  reply: formattedReply
                 };
                 break;
               }
-            } catch (epErr) {
-              // segue para o próximo
-            }
+            } catch (epErr) {}
           }
         } catch (hubErr) {
           console.warn('[AI Hub WhatsApp Warn]:', hubErr.message);
         }
 
-        // 2. Fallback de transcrição OpenAI Whisper caso ainda não tenha texto
+        // 2. Se for IMAGEM (Foto de comprovante/nota) e ainda não foi processada, usa IA de Visão Gratuita (Pollinations OpenAI Vision)
+        if (!parsed && isImage && imageBuffer) {
+          try {
+            const mime = msg.message.imageMessage?.mimetype || 'image/jpeg';
+            const dataUrl = `data:${mime};base64,${imageBuffer.toString('base64')}`;
+            const visionRes = await axios.post('https://text.pollinations.ai/openai', {
+              model: 'openai',
+              messages: [
+                {
+                  role: 'system',
+                  content: 'Você é um leitor especialista de comprovantes PIX, notas fiscais e recibos bancários. Extraia os dados da imagem e responda APENAS em JSON puro: {"description": "nome do item ou pagamento", "product": "item específico", "establishment": "nome do recebedor/loja", "category": "Alimentação|Transporte|Saúde|Moradia|Lazer|Compras|Receita|Outros", "amount": 0.00, "type": "Saída" ou "Entrada", "method": "PIX|Crédito|Débito|Dinheiro|Transferência", "city": "Cidade se constar ou vazio"}'
+                },
+                {
+                  role: 'user',
+                  content: [
+                    { type: 'text', text: messageText ? `Legenda: "${messageText}". Extraia os dados financeiros desta imagem em JSON.` : 'Extraia o valor, recebedor/estabelecimento, descrição e forma de pagamento deste comprovante/foto em JSON.' },
+                    { type: 'image_url', image_url: { url: dataUrl } }
+                  ]
+                }
+              ],
+              jsonMode: true
+            }, { timeout: 15000 });
+
+            const rawJson = visionRes.data?.choices?.[0]?.message?.content;
+            if (rawJson) {
+              const cleanJ = rawJson.replace(/```json/gi, '').replace(/```/g, '').trim();
+              const vData = JSON.parse(cleanJ);
+              const val = Number(vData.amount || vData.valor || 0);
+              if (val > 0) {
+                const isInc = vData.type === 'Entrada';
+                const savedTx = {
+                  id: msgId || Date.now().toString(),
+                  description: vData.product || vData.description || 'Comprovante via Foto',
+                  product: vData.product || vData.description || 'Comprovante',
+                  establishment: vData.establishment || '',
+                  category: vData.category || 'Outros',
+                  city: vData.city || 'Não informada',
+                  date: new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }),
+                  amount: val,
+                  type: isInc ? 'Entrada' : 'Saída',
+                  method: vData.method || 'PIX',
+                  status: 'Concluído',
+                  source: 'whatsapp-image',
+                  createdAt: new Date().toISOString()
+                };
+                const reply = `✅ *Comprovante Lido por IA — KYRO Finance*\n\n` +
+                  `• *Tipo:* ${isInc ? '💰 Entrada (Receita)' : '💸 Saída (Despesa)'}\n` +
+                  `• *Descrição / Produto:* ${savedTx.description}\n` +
+                  `• *Categoria:* ${savedTx.category}\n` +
+                  (savedTx.establishment ? `• *Estabelecimento:* ${savedTx.establishment}\n` : '') +
+                  (savedTx.city && savedTx.city !== 'Não informada' ? `• *Cidade:* ${savedTx.city}\n` : '') +
+                  `• *Valor:* ${isInc ? '+' : '-'} R$ ${val.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n` +
+                  `• *Forma de Pagamento:* ${savedTx.method}\n\n` +
+                  `📊 _Sincronizado em tempo real no Dashboard, Entradas e Saídas!_`;
+                parsed = { savedTx, reply };
+              }
+            }
+          } catch (vErr) {
+            console.warn('[WhatsApp Vision AI Warn]:', vErr.message);
+          }
+        }
+
+        // 3. Fallback de transcrição OpenAI Whisper caso seja áudio e ainda não tenha texto
         if (!parsed && isAudio && audioBuffer && process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== 'dummy_key') {
           try {
             const OpenAI = require('openai');
@@ -1129,9 +1368,9 @@ async function startSocket() {
           }
         }
 
-        // 3. Fallback Cognitivo Local Dinâmico se a IA em nuvem não respondeu
-        if (!parsed && (messageText || isAudio)) {
-          const fallbackText = messageText || (isAudio ? 'Despesa registrada por áudio de 20 reais' : '');
+        // 4. Processamento Cognitivo Local Dinâmico (Texto, Legenda de Imagem ou Áudio Transcrito)
+        if (!parsed && (messageText || isAudio || isImage)) {
+          const fallbackText = messageText || (isAudio ? 'Despesa registrada por áudio de 20 reais' : (isImage ? 'Comprovante enviado por foto de 50 reais' : ''));
           parsed = parseDynamicFinancialMessage(fallbackText, isAudio);
         }
 
@@ -1139,14 +1378,17 @@ async function startSocket() {
           if (parsed.isRecurring && parsed.recurringData) {
             saveRecurring(parsed.recurringData);
             console.log(`🔁 [Dívida Recorrente Cadastrada]: ${parsed.recurringData.title} | R$ ${parsed.recurringData.installmentAmount}`);
-            await sock.sendMessage(remoteJid, { text: parsed.reply });
+            const sent = await sock.sendMessage(remoteJid, { text: parsed.reply });
+            if (sent?.key?.id) botSentMessageIds.add(sent.key.id);
           } else if (parsed.isPaymentConfirmation) {
             const paidRec = markRecurringPaidByName(parsed.paymentTargetName || parsed.object || '');
             if (paidRec) {
               const replyPaid = `✅ Baixa confirmada com sucesso no grupo!\n\n• Dívida: ${paidRec.title} (${paidRec.currentInstallment}/${paidRec.totalInstallments || 'Mensal'})\n• Valor Debitado: - R$ ${paidRec.installmentAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n• Status: 🟢 PAGA\n\n💰 O valor agora foi computado nas Saídas do Mês e o seu Saldo Total foi recalculado automaticamente no Dashboard!`;
-              await sock.sendMessage(remoteJid, { text: replyPaid });
+              const sent = await sock.sendMessage(remoteJid, { text: replyPaid });
+              if (sent?.key?.id) botSentMessageIds.add(sent.key.id);
             } else {
-              await sock.sendMessage(remoteJid, { text: parsed.reply });
+              const sent = await sock.sendMessage(remoteJid, { text: parsed.reply });
+              if (sent?.key?.id) botSentMessageIds.add(sent.key.id);
             }
           } else if (parsed.savedTx) {
             const { savedTx, reply } = parsed;
@@ -1154,12 +1396,13 @@ async function startSocket() {
               savedTx.id = msgId;
               savedTx.whatsappMsgId = msgId;
             }
-            console.log(`✨ [Transação WhatsApp]: ${savedTx.description} | R$ ${savedTx.amount} (${savedTx.type})`);
+            console.log(`✨ [Transação WhatsApp Salva]: ${savedTx.description} | R$ ${savedTx.amount} (${savedTx.type})`);
             recordTransaction(savedTx);
 
             try {
               // Envia resposta padrão com informações filtradas no grupo
-              await sock.sendMessage(remoteJid, { text: reply });
+              const sent = await sock.sendMessage(remoteJid, { text: reply });
+              if (sent?.key?.id) botSentMessageIds.add(sent.key.id);
               console.log(`✅ Resposta padrão enviada com sucesso no grupo ${remoteJid}!`);
             } catch (sendErr) {
               console.error('[WhatsApp] Erro ao enviar resposta para o grupo:', sendErr.message);
@@ -1194,7 +1437,7 @@ const server = http.createServer(async (req, res) => {
 
   const url = new URL(req.url, `http://localhost:${HTTP_PORT}`);
 
-  // Endpoint 1: Status da Conexão
+  // Endpoint 1: Status da Conexão e Grupos Participantes
   if (url.pathname === '/api/status' && req.method === 'GET') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     return res.end(JSON.stringify({
@@ -1202,7 +1445,19 @@ const server = http.createServer(async (req, res) => {
       phoneNumber: botStatus.phoneNumber,
       pairingCode: botStatus.pairingCode,
       hasQr: !!botStatus.lastQr,
-      qr: botStatus.lastQr
+      qr: botStatus.lastQr,
+      groups: participatingGroups,
+      monitoredGroup
+    }));
+  }
+
+  // Endpoint 1.05: Listar Todos os Grupos onde o Número Conectado é Membro
+  if (url.pathname === '/api/groups' && req.method === 'GET') {
+    await fetchParticipatingGroups();
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify({
+      groups: participatingGroups,
+      monitoredGroup
     }));
   }
 
@@ -1405,7 +1660,7 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // Endpoint 6: Definir Link do Grupo Monitorado Oficial
+  // Endpoint 6: Definir Link ou Selecionar Grupo Monitorado Oficial
   if (url.pathname === '/api/set-group' && req.method === 'POST') {
     let body = '';
     req.on('data', chunk => { body += chunk; });
@@ -1413,38 +1668,73 @@ const server = http.createServer(async (req, res) => {
       try {
         const parsed = JSON.parse(body || '{}');
         const inviteLink = (parsed.inviteLink || '').trim();
-        let targetName = (parsed.groupName || '').trim() || monitoredGroup.groupName;
-        let resolvedJid = '';
+        let targetName = (parsed.groupName || '').trim();
+        let explicitJid = (parsed.groupJid || '').trim();
 
-        // Extrai código do convite (ex: chat.whatsapp.com/L7abc123)
-        const match = inviteLink.match(/chat\.whatsapp\.com\/([A-Za-z0-9_-]+)/i);
-        if (match && sockInstance) {
-          const inviteCode = match[1];
-          try {
-            const inviteInfo = await sockInstance.groupGetInviteInfo(inviteCode);
-            if (inviteInfo) {
-              resolvedJid = inviteInfo.id;
-              targetName = inviteInfo.subject || targetName;
-              console.log(`🔗 [Grupo Identificado pelo Link]: "${targetName}" (${resolvedJid})`);
-            }
-          } catch (e) {
-            console.warn('[WhatsApp] Falha ao consultar inviteCode:', e.message);
-          }
+        // Caso 1: O usuário escolheu um grupo diretamente pela lista de grupos (groupJid explícito)
+        if (explicitJid && explicitJid.endsWith('@g.us')) {
+          const foundInList = participatingGroups.find(g => g.id === explicitJid);
+          const finalName = targetName || foundInList?.subject || 'Finanças Kyro';
+          saveMonitoredGroup({
+            inviteLink: inviteLink,
+            groupName: finalName,
+            groupJid: explicitJid,
+            lockedByUser: true
+          });
+          syncBotStatusToCloud();
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({
+            success: true,
+            monitoredGroup
+          }));
+        }
 
-          // Se o robô ainda não estiver no grupo, aceita o convite automaticamente
-          try {
-            await sockInstance.groupAcceptInvite(inviteCode);
-            console.log(`🎉 [WhatsApp] Robô ingressou com sucesso no grupo via link de convite!`);
-          } catch (e) {
-            // Já faz parte do grupo
+        // Caso 2: O usuário colou o Link do Grupo (https://chat.whatsapp.com/...)
+        if (inviteLink && inviteLink.includes('chat.whatsapp.com/')) {
+          const resolved = await resolveGroupFromInviteLink(inviteLink, targetName);
+          if (resolved) {
+            saveMonitoredGroup(resolved);
+            syncBotStatusToCloud();
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            return res.end(JSON.stringify({
+              success: true,
+              monitoredGroup
+            }));
           }
         }
 
+        // Caso 3: O usuário digitou o nome de um grupo que o número já faz parte
+        if (targetName) {
+          await fetchParticipatingGroups();
+          const normTarget = targetName.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+          const matchedGroup = participatingGroups.find(g => {
+            const normSubj = (g.subject || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+            return normSubj === normTarget || normSubj.includes(normTarget) || normTarget.includes(normSubj);
+          });
+          if (matchedGroup) {
+            saveMonitoredGroup({
+              inviteLink: inviteLink || monitoredGroup.inviteLink,
+              groupName: matchedGroup.subject,
+              groupJid: matchedGroup.id,
+              lockedByUser: true
+            });
+            syncBotStatusToCloud();
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            return res.end(JSON.stringify({
+              success: true,
+              monitoredGroup
+            }));
+          }
+        }
+
+        // Fallback caso o socket ainda esteja reconectando: salva o novo link e zera o JID antigo de outro grupo!
         saveMonitoredGroup({
-          inviteLink: inviteLink || monitoredGroup.inviteLink,
+          inviteLink: inviteLink,
           groupName: targetName || 'Finanças Kyro',
-          groupJid: resolvedJid || monitoredGroup.groupJid
+          groupJid: '',
+          lockedByUser: true
         });
+        syncBotStatusToCloud();
 
         res.writeHead(200, { 'Content-Type': 'application/json' });
         return res.end(JSON.stringify({

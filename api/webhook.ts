@@ -906,19 +906,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const payload = req.body || {};
 
-    // Suporte a sincronização de QR Code e Status Oficial do WhatsApp Web (Baileys -> Nuvem)
+    // Suporte a sincronização de QR Code, Grupos e Status Oficial do WhatsApp Web (Baileys -> Nuvem)
     if (payload?.action === 'sync_bot_status' && payload?.botStatus) {
       globalAny.__KYRO_BOT_STATUS__ = {
         ...payload.botStatus,
         updatedAt: Date.now()
       };
+      if (payload.botStatus.monitoredGroup && !globalAny.__KYRO_PENDING_GROUP_UPDATE__) {
+        globalAny.__KYRO_MONITORED_GROUP__ = payload.botStatus.monitoredGroup;
+      }
       const shouldResetQr = !!globalAny.__KYRO_PENDING_RESET_QR__;
       if (shouldResetQr) {
         globalAny.__KYRO_PENDING_RESET_QR__ = false;
       }
+      const pendingGroupUpdate = globalAny.__KYRO_PENDING_GROUP_UPDATE__ || null;
+      if (pendingGroupUpdate) {
+        globalAny.__KYRO_PENDING_GROUP_UPDATE__ = null;
+      }
       return res.status(200).json({
         status: 'ok',
-        shouldResetQr
+        shouldResetQr,
+        pendingGroupUpdate
       });
     }
 
@@ -968,9 +976,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const g = payload.monitoredGroup || { 
         inviteLink: payload.inviteLink, 
         groupName: payload.groupName || 'Finanças Kyro',
-        groupJid: payload.groupJid
+        groupJid: payload.groupJid,
+        lockedByUser: true
       };
       globalAny.__KYRO_MONITORED_GROUP__ = g;
+      // Se foi enviado pela interface web (não pelo sync do bot), agenda atualização no robô local
+      if (!payload.monitoredGroup) {
+        globalAny.__KYRO_PENDING_GROUP_UPDATE__ = g;
+      }
       return res.status(200).json({ status: 'saved', monitoredGroup: g });
     }
 

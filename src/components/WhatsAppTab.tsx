@@ -72,8 +72,14 @@ export const WhatsAppTab: React.FC<WhatsAppTabProps> = ({
   const [groupInviteLink, setGroupInviteLink] = useState(() => {
     return localStorage.getItem('kyro_group_invite_link') || '';
   });
+  const [selectedGroupJid, setSelectedGroupJid] = useState(() => {
+    return localStorage.getItem('kyro_group_jid') || '';
+  });
+  const [participatingGroups, setParticipatingGroups] = useState<Array<{ id: string; subject: string; size?: number }>>([]);
+  const [isLoadingGroups, setIsLoadingGroups] = useState(false);
   const [isSavingGroupLink, setIsSavingGroupLink] = useState(false);
   const [groupLinkSaveSuccess, setGroupLinkSaveSuccess] = useState(false);
+  const hasLoadedInitialGroup = React.useRef(false);
 
   // Número do segundo celular configurável
   const [secondPhone, setSecondPhone] = useState(() => {
@@ -90,6 +96,7 @@ export const WhatsAppTab: React.FC<WhatsAppTabProps> = ({
   const [serverQrCode, setServerQrCode] = useState<string>('');
 
   // Verificar status real do robô local e da nuvem a cada 2.5 segundos
+  // IMPORTANTE: Nunca sobrescreve os campos groupInviteLink e groupName enquanto o usuário edita!
   useEffect(() => {
     const checkBotStatus = async () => {
       let foundStatus = false;
@@ -107,6 +114,9 @@ export const WhatsAppTab: React.FC<WhatsAppTabProps> = ({
               if (data.qr) {
                 setServerQrCode(data.qr);
               }
+              if (Array.isArray(data.groups) && data.groups.length > 0) {
+                setParticipatingGroups(data.groups);
+              }
               if (data.connected) {
                 setIsConnected(true);
                 localStorage.setItem('kyro_second_phone_connected', 'true');
@@ -117,6 +127,16 @@ export const WhatsAppTab: React.FC<WhatsAppTabProps> = ({
               }
               if (data.pairingCode && data.pairingCode !== pairingCode) {
                 setPairingCode(data.pairingCode);
+              }
+              if (!hasLoadedInitialGroup.current && data.monitoredGroup) {
+                hasLoadedInitialGroup.current = true;
+                if (data.monitoredGroup.groupName) setGroupName(data.monitoredGroup.groupName);
+                if (data.monitoredGroup.inviteLink) setGroupInviteLink(data.monitoredGroup.inviteLink);
+                if (data.monitoredGroup.groupJid) {
+                  setSelectedGroupJid(data.monitoredGroup.groupJid);
+                  localStorage.setItem('kyro_group_jid', data.monitoredGroup.groupJid);
+                }
+                setGroupConfirmed(true);
               }
               break;
             }
@@ -134,6 +154,9 @@ export const WhatsAppTab: React.FC<WhatsAppTabProps> = ({
             if (dataW.botStatus.qr) {
               setServerQrCode(dataW.botStatus.qr);
             }
+            if (Array.isArray(dataW.botStatus.groups) && dataW.botStatus.groups.length > 0) {
+              setParticipatingGroups(dataW.botStatus.groups);
+            }
             if (dataW.botStatus.connected) {
               setIsConnected(true);
               localStorage.setItem('kyro_second_phone_connected', 'true');
@@ -141,38 +164,47 @@ export const WhatsAppTab: React.FC<WhatsAppTabProps> = ({
               setIsConnected(false);
             }
           }
-          if (dataW?.monitoredGroup) {
+          if (!hasLoadedInitialGroup.current && dataW?.monitoredGroup) {
+            hasLoadedInitialGroup.current = true;
             if (dataW.monitoredGroup.groupName) setGroupName(dataW.monitoredGroup.groupName);
             if (dataW.monitoredGroup.inviteLink) setGroupInviteLink(dataW.monitoredGroup.inviteLink);
             if (dataW.monitoredGroup.groupJid) {
+              setSelectedGroupJid(dataW.monitoredGroup.groupJid);
               localStorage.setItem('kyro_group_jid', dataW.monitoredGroup.groupJid);
             }
             setGroupConfirmed(true);
           }
         }
       } catch (ew) {}
-
-      // 3. Busca o grupo monitorado atual do servidor local
-      try {
-        const resGroup = await fetch('http://localhost:3001/api/monitored-group');
-        if (resGroup.ok) {
-          const dataG = await resGroup.json();
-          if (dataG?.monitoredGroup) {
-            if (dataG.monitoredGroup.groupName) setGroupName(dataG.monitoredGroup.groupName);
-            if (dataG.monitoredGroup.inviteLink) setGroupInviteLink(dataG.monitoredGroup.inviteLink);
-            if (dataG.monitoredGroup.groupJid) {
-              localStorage.setItem('kyro_group_jid', dataG.monitoredGroup.groupJid);
-            }
-            setGroupConfirmed(true);
-          }
-        }
-      } catch (eg) {}
     };
 
     checkBotStatus();
     const interval = setInterval(checkBotStatus, 2500);
     return () => clearInterval(interval);
   }, [pairingCode]);
+
+  // Função para buscar manualmente a lista de grupos onde o número conectado é membro
+  const handleRefreshParticipatingGroups = async () => {
+    setIsLoadingGroups(true);
+    try {
+      const eps = ['/api/groups', 'http://localhost:3001/api/groups', '/api/webhook'];
+      for (const ep of eps) {
+        try {
+          const res = await fetch(ep);
+          if (res.ok) {
+            const data = await res.json();
+            const list = data.groups || data.botStatus?.groups;
+            if (Array.isArray(list) && list.length > 0) {
+              setParticipatingGroups(list);
+              break;
+            }
+          }
+        } catch (e) {}
+      }
+    } finally {
+      setIsLoadingGroups(false);
+    }
+  };
 
   // Função para forçar a geração de um novo QR Code Oficial do WhatsApp Web
   const handleGenerateNewOfficialQr = async () => {
@@ -276,31 +308,64 @@ export const WhatsAppTab: React.FC<WhatsAppTabProps> = ({
     handleSaveGroupLink();
   };
 
-  const handleSaveGroupLink = async () => {
+  const handleSaveGroupLink = async (overrideGroup?: { groupJid?: string; groupName?: string; inviteLink?: string }) => {
     setIsSavingGroupLink(true);
     setGroupLinkSaveSuccess(false);
 
-    const cleanLink = groupInviteLink.trim();
-    const cleanName = groupName.trim() || 'Finanças Kyro';
+    const cleanLink = (overrideGroup?.inviteLink !== undefined ? overrideGroup.inviteLink : groupInviteLink).trim();
+    const cleanName = (overrideGroup?.groupName !== undefined ? overrideGroup.groupName : groupName).trim() || 'Finanças Kyro';
+    const cleanJid = (overrideGroup?.groupJid !== undefined ? overrideGroup.groupJid : selectedGroupJid).trim();
 
+    hasLoadedInitialGroup.current = true;
     localStorage.setItem('kyro_group_invite_link', cleanLink);
     localStorage.setItem('kyro_group_name', cleanName);
+    if (cleanJid) localStorage.setItem('kyro_group_jid', cleanJid);
     localStorage.setItem('kyro_group_confirmed', 'true');
     setGroupConfirmed(true);
 
     try {
-      // 1. Notifica o robô local na porta 3001
-      await fetch('http://localhost:3001/api/set-group', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ inviteLink: cleanLink, groupName: cleanName })
-      }).catch(() => {});
+      // 1. Notifica o robô local via proxy Vite e direto na porta 3001
+      const setGroupEndpoints = ['/api/set-group', 'http://localhost:3001/api/set-group'];
+      let updatedFromBot = false;
+      for (const ep of setGroupEndpoints) {
+        try {
+          const res = await fetch(ep, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ inviteLink: cleanLink, groupName: cleanName, groupJid: cleanJid })
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data?.monitoredGroup) {
+              updatedFromBot = true;
+              if (data.monitoredGroup.groupName) {
+                setGroupName(data.monitoredGroup.groupName);
+                localStorage.setItem('kyro_group_name', data.monitoredGroup.groupName);
+              }
+              if (data.monitoredGroup.inviteLink !== undefined) {
+                setGroupInviteLink(data.monitoredGroup.inviteLink);
+                localStorage.setItem('kyro_group_invite_link', data.monitoredGroup.inviteLink);
+              }
+              if (data.monitoredGroup.groupJid) {
+                setSelectedGroupJid(data.monitoredGroup.groupJid);
+                localStorage.setItem('kyro_group_jid', data.monitoredGroup.groupJid);
+              }
+              break;
+            }
+          }
+        } catch (e) {}
+      }
 
-      // 2. Notifica o webhook remoto da Vercel
+      // 2. Notifica também o webhook remoto da Vercel
       await fetch('/api/webhook', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'set_monitored_group', inviteLink: cleanLink, groupName: cleanName })
+        body: JSON.stringify({
+          action: 'set_monitored_group',
+          inviteLink: cleanLink,
+          groupName: cleanName,
+          groupJid: cleanJid
+        })
       }).catch(() => {});
 
       setGroupLinkSaveSuccess(true);
@@ -627,56 +692,153 @@ export const WhatsAppTab: React.FC<WhatsAppTabProps> = ({
                 </div>
               </div>
 
-              {/* Input: Link de Convite do Grupo */}
+              {/* Opção A: Input Link de Convite do Grupo */}
               <div className="space-y-1.5 pt-1">
-                <label className="text-[11px] font-bold text-teal-300 flex items-center gap-1.5">
-                  <ExternalLink size={13} /> Link de Compartilhamento do Grupo:
+                <label className="text-[11px] font-bold text-teal-300 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <ExternalLink size={13} /> Opção A: Cole o Link de Convite do Grupo:
+                  </span>
+                  {groupInviteLink && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setGroupInviteLink('');
+                        setSelectedGroupJid('');
+                      }}
+                      className="text-[10px] text-slate-400 hover:text-rose-400 underline"
+                    >
+                      Limpar link
+                    </button>
+                  )}
                 </label>
-                <input
-                  type="url"
-                  value={groupInviteLink}
-                  onChange={(e) => setGroupInviteLink(e.target.value)}
-                  placeholder="https://chat.whatsapp.com/GzB9xabc123..."
-                  className="w-full bg-[#0A0D18] border border-[#202940] rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-teal-500 font-mono"
-                />
+                <div className="flex gap-2">
+                  <input
+                    type="url"
+                    value={groupInviteLink}
+                    onChange={(e) => {
+                      hasLoadedInitialGroup.current = true;
+                      setGroupInviteLink(e.target.value);
+                      setSelectedGroupJid('');
+                    }}
+                    placeholder="https://chat.whatsapp.com/KLV2NXnwQjc66NV6Lf8J4Y..."
+                    className="flex-1 bg-[#0A0D18] border border-[#202940] rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-teal-500 font-mono"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleSaveGroupLink({ groupJid: '', inviteLink: groupInviteLink })}
+                    disabled={isSavingGroupLink}
+                    className="px-4 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs flex items-center gap-1.5 transition-all shadow-md disabled:opacity-50 whitespace-nowrap"
+                  >
+                    {isSavingGroupLink ? <RefreshCw size={14} className="animate-spin" /> : <CheckCheck size={14} />}
+                    <span>{isSavingGroupLink ? 'Vinculando...' : 'Vincular Link'}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Opção B: Escolher Diretamente da Lista de Grupos que este Número já é Membro */}
+              <div className="space-y-1.5 pt-1 border-t border-[#1E263E]">
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-bold text-emerald-300 flex items-center gap-1.5">
+                    <Users size={13} /> Opção B: Escolher Grupo que este Número faz parte:
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleRefreshParticipatingGroups}
+                    disabled={isLoadingGroups}
+                    className="text-[10px] px-2 py-0.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-teal-300 font-semibold flex items-center gap-1"
+                  >
+                    <RefreshCw size={10} className={isLoadingGroups ? 'animate-spin' : ''} />
+                    <span>Atualizar Lista</span>
+                  </button>
+                </div>
+
+                {participatingGroups.length > 0 ? (
+                  <div className="max-h-36 overflow-y-auto space-y-1.5 pr-1 bg-[#080B14] p-2 rounded-xl border border-[#1E263E]">
+                    {participatingGroups.map((grp) => {
+                      const isSelected = selectedGroupJid === grp.id || groupName === grp.subject;
+                      return (
+                        <button
+                          key={grp.id}
+                          type="button"
+                          onClick={() => {
+                            setGroupName(grp.subject);
+                            setSelectedGroupJid(grp.id);
+                            handleSaveGroupLink({ groupJid: grp.id, groupName: grp.subject, inviteLink: groupInviteLink });
+                          }}
+                          className={`w-full text-left px-3 py-2 rounded-lg text-xs flex items-center justify-between transition-all ${
+                            isSelected
+                              ? 'bg-teal-500/25 border border-teal-500/50 text-white font-bold'
+                              : 'bg-[#111628] hover:bg-[#19223B] text-slate-300 border border-transparent'
+                          }`}
+                        >
+                          <span className="truncate pr-2">👥 {grp.subject}</span>
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 ${
+                            isSelected ? 'bg-teal-500 text-slate-950 font-bold' : 'bg-slate-800 text-slate-400'
+                          }`}>
+                            {isSelected ? '✓ Vinculado' : 'Selecionar'}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-slate-500 italic bg-[#080B14] px-3 py-2 rounded-xl border border-[#1E263E]">
+                    Clique em "Atualizar Lista" acima ou cole o link do grupo na Opção A.
+                  </p>
+                )}
               </div>
 
               {/* Input: Nome de Referência do Grupo */}
               <div className="space-y-1.5">
-                <label className="text-[11px] font-bold text-slate-400 block">Nome do Grupo no WhatsApp:</label>
+                <label className="text-[11px] font-bold text-slate-400 block">Nome do Grupo Vinculado:</label>
                 <div className="flex gap-2">
                   <input
                     type="text"
                     value={groupName}
-                    onChange={(e) => setGroupName(e.target.value)}
+                    onChange={(e) => {
+                      hasLoadedInitialGroup.current = true;
+                      setGroupName(e.target.value);
+                    }}
                     placeholder="Ex: Finanças Kyro"
                     className="flex-1 bg-[#0A0D18] border border-[#202940] rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-teal-500"
                   />
                   <button
                     type="button"
-                    onClick={handleSaveGroupLink}
+                    onClick={() => handleSaveGroupLink()}
                     disabled={isSavingGroupLink}
-                    className="px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs flex items-center gap-1.5 transition-all shadow-md disabled:opacity-50"
+                    className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 transition-all shadow-md disabled:opacity-50"
                   >
                     {isSavingGroupLink ? <RefreshCw size={14} className="animate-spin" /> : <CheckCheck size={14} />}
-                    <span>{isSavingGroupLink ? 'Salvando...' : 'Vincular'}</span>
+                    <span>Salvar</span>
                   </button>
                 </div>
               </div>
+
+              {groupLinkSaveSuccess && (
+                <div className="p-2.5 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-200 text-xs font-bold flex items-center gap-2">
+                  <CheckCircle2 size={15} className="text-emerald-400 flex-shrink-0" />
+                  <span>Novo grupo vinculado e travado com sucesso! Outros grupos jamais alterarão esta escolha.</span>
+                </div>
+              )}
 
               {groupConfirmed && (
                 <div className="p-3.5 rounded-xl bg-teal-500/15 border border-teal-500/30 text-teal-300 text-xs space-y-1.5 animate-in fade-in">
                   <div className="flex items-center gap-2 font-bold text-teal-200">
                     <CheckCheck size={16} className="text-teal-400 flex-shrink-0" />
-                    <span>Grupo Vinculado com Sucesso: "{groupName}"</span>
+                    <span>Grupo Monitorado Oficial: "{groupName}"</span>
                   </div>
                   {groupInviteLink && (
                     <p className="text-[10px] text-teal-400/80 font-mono truncate">
-                      Link: {groupInviteLink}
+                      Link Ativo: {groupInviteLink}
+                    </p>
+                  )}
+                  {selectedGroupJid && (
+                    <p className="text-[10px] text-slate-400 font-mono truncate">
+                      ID Oficial: {selectedGroupJid}
                     </p>
                   )}
                   <p className="text-[10px] text-emerald-300 font-semibold pt-1">
-                    🛡️ Proteção Ativa: Apenas este grupo é monitorado. Conversas no privado, status e outros grupos são 100% ignorados sem resposta automática!
+                    🛡️ Trava Exclusiva Ativa: Apenas este grupo é monitorado. Áudios, textos e fotos enviados nele são filtrados por IA e lançados no sistema na hora!
                   </p>
                 </div>
               )}
