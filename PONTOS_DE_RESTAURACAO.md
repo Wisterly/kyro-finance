@@ -561,13 +561,46 @@ A numeração segue rigorosamente a hierarquia de escopo:
 
 ---
 
+### [PR.021] — Blindagem Absoluta de Dados Financeiros (Anti-Reset) & Auto-Update Dinâmico em Tempo Real com Pop-up Durante o Uso
+- **Data/Hora:** 2026-10-30 02:40 (UTC-3)
+- **Tags Git:** `PR.021`, `PR.021.1`, `PR.021.2`
+
+#### `PR.021` — Escopo Geral do Projeto (Universal)
+- **Blindagem Definitiva Contra Perda de Dados Financeiros (Anti-Reset):**
+  - Remoção de qualquer condição que pudesse zerar o `localStorage` ou o estado de transações quando o servidor ou banco na nuvem responder vazio (por cold-start ou primeiro acesso).
+  - **Mecanismo de Re-hidratação Inteligente:** Se o servidor estiver vazio e o dispositivo local possuir transações válidas, o cliente preserva 100% dos registros e dispara automaticamente o envio dos dados locais para o banco central (`/api/database`), repovoando a nuvem.
+  - Sincronização mútua e merge sem perda: transações locais e da nuvem são unificadas sem duplicatas. Apenas exclusões manuais explícitas do usuário (`deletedIds`) removem lançamentos.
+  - Sincronização completa de novos lançamentos de Entrada (`newEntry`) imediatamente no banco central da nuvem e no Firestore (`kyroCloud.syncSaveTransaction` + `syncSaveToCentralDb`).
+- **Sistema de Auto-Update Dinâmico com Detecção Precisa:**
+  - Criação do manifesto de versão centralizado `version.json` e `src/version.ts` (Build 21 / v0.1.21).
+  - Consulta da versão nativa real instalada no sistema operacional Android através do `PackageManager` (`AppUpdateManager.getAppVersion()`).
+  - Comparação dinâmica do build da nuvem com o build do aparelho, eliminando o falso positivo de "Você já está na versão mais recente".
+
+#### `PR.021.1` — Versão Computador (Desktop)
+- Sincronização bidirecional ininterrupta entre a nuvem e o navegador, preservando todo o histórico financeiro mesmo em limpezas de cache de sessão.
+- Verificação dinâmica de versão no painel de Configurações com indicação clara do número de versão e compilação oficiais.
+
+#### `PR.021.2` — Versão Celular (Aplicativo Android `.apk` & Mobile)
+- **Pop-up Automático em Tempo Real Durante o Uso:**
+  - O aplicativo monitora atualizações na nuvem automaticamente a cada 45 segundos em segundo plano, ao abrir o app e sempre que o usuário retornar para o aplicativo (evento `appStateChange` do Capacitor e `visibilitychange`).
+  - Ao detectar nova versão, exibe um pop-up moderno com o changelog completo, tamanho do arquivo e botão de atualização em 1 toque.
+- **Download e Instalação Nativa In-App:**
+  - Download nativo em segundo plano via `DownloadManager` e disparo automático do instalador do Android via `FileProvider`.
+- **Blindagem do Histórico Offline:**
+  - Garantia de que nenhuma nova atualização, reinicialização de celular ou queda de sinal apague qualquer lançamento financeiro cadastrado no smartphone.
+
+---
+
 ## TABELA DE CÓDIGOS DE PONTOS DE RESTAURAÇÃO
 
 Se você desejar restaurar qualquer versão anterior ou atual do Kyro Finance, basta colar o código do ponto de restauração na conversa:
 
 | Código do Ponto | Escopo | Descrição Resumida |
 | :--- | :--- | :--- |
-| **`PR.020`** | **Geral (Universal)** | **Versão Atual: Correção Definitiva de Áudio no Celular (Fim da Repetição de Palavras + MediaRecorder Real Unificado + Gemini 1.5 Flash Multimodal)** |
+| **`PR.021`** | **Geral (Universal)** | **Versão Atual: Blindagem Absoluta de Dados Financeiros (Anti-Reset) & Auto-Update Dinâmico em Tempo Real com Pop-up Durante o Uso** |
+| `PR.021.1` | Desktop | Interface Web/Desktop com persistência blindada, re-hidratação de nuvem e sincronização contínua 24h |
+| `PR.021.2` | Mobile / APK | Aplicativo Android com pop-up automático durante o uso (45s/retorno), checagem nativa via PackageManager e zero perda de lançamentos |
+| **`PR.020`** | **Geral (Universal)** | Correção Definitiva de Áudio no Celular (Fim da Repetição de Palavras + MediaRecorder Real Unificado + Gemini 1.5 Flash Multimodal) |
 | `PR.020.1` | Desktop | Interface Web/Desktop com gravação de áudio de alta fidelidade e desduplicação |
 | `PR.020.2` | Mobile / APK | Aplicativo Android com áudio 100% nítido, sem repetição de palavras e permissões nativas de microfone |
 | **`PR.019`** | **Geral (Universal)** | Sistema Autossuficiente de Atualizações In-App (Pop-up de Nova Versão + Download e Instalação Automática com 1 Toque no App) |

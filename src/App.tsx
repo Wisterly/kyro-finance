@@ -83,7 +83,7 @@ import {
   searchTransactionsByTerm
 } from './utils/aiCopilot';
 import { UpdateModal, UpdateInfo } from './components/UpdateModal';
-import { checkForAppUpdate, CURRENT_APP_BUILD, CURRENT_APP_VERSION } from './utils/appUpdater';
+import { checkForAppUpdate, getInstalledAppInfo, CURRENT_APP_BUILD, CURRENT_APP_VERSION } from './utils/appUpdater';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'transacoes' | 'orcamentos' | 'mapa' | 'relatorios' | 'whatsapp' | 'configuracoes' | 'cartoes'>('dashboard');
@@ -473,24 +473,33 @@ export default function App() {
           const cleanIncoming = incomingTxs.filter((t: any) => t && t.id && !localDeletedSet.has(String(t.id)));
 
           setTransactions(prev => {
-            // Preserva transações recém-criadas nos últimos 15s (via SSE/Webhook instantâneo) que ainda estão propagando
-            const recentLocal = prev.filter((t: any) => {
-              if (!t || !t.id || localDeletedSet.has(String(t.id))) return false;
-              const age = t.createdAt ? (Date.now() - new Date(t.createdAt).getTime()) : 999999;
-              return age >= 0 && age < 15000;
-            });
+            const validPrev = prev.filter((t: any) => t && t.id && !localDeletedSet.has(String(t.id)));
 
-            // Se o servidor estiver vazio (banco zerado) e não houver transação recém-chegada nos últimos 15s, limpa a tela
-            if (cleanIncoming.length === 0 && recentLocal.length === 0) {
-              if (prev.length > 0) {
-                localStorage.setItem('kyro_transactions', '[]');
-                return [];
+            // Se o servidor estiver vazio (banco zerado ou cold start) mas o cliente tiver dados locais:
+            // NUNCA APAGA OS DADOS DO USUÁRIO! Pelo contrário: re-hidrata a nuvem enviando o acervo local!
+            if (cleanIncoming.length === 0) {
+              if (validPrev.length > 0) {
+                console.log('[Central DB Sync] Re-hidratando banco central da nuvem com lançamentos locais...');
+                fetch('/api/database', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ action: 'sync_all', transactions: validPrev })
+                }).catch(() => {});
+                return validPrev;
               }
-              return prev;
+              return [];
             }
 
+            // Se a nuvem tem transações, faz merge preservando lançamentos locais que ainda não subiram
             const incomingIds = new Set(cleanIncoming.map((t: any) => String(t.id)));
-            const merged = [...recentLocal.filter(r => !incomingIds.has(String(r.id))), ...cleanIncoming];
+            const pendingLocal = validPrev.filter(t => !incomingIds.has(String(t.id)));
+
+            // Se há transações locais que ainda não estão na nuvem, dispara salvamento na nuvem
+            if (pendingLocal.length > 0) {
+              pendingLocal.forEach(tx => syncSaveToCentralDb(tx));
+            }
+
+            const merged = [...pendingLocal, ...cleanIncoming];
 
             const currentSig = prev.map(t => `${t.id}_${t.amount}_${t.description}`).join('|');
             const incomingSig = merged.map((t: any) => `${t.id}_${t.amount}_${t.description}`).join('|');
@@ -1040,27 +1049,71 @@ export default function App() {
   const availableUpdateRef = useRef(availableUpdate);
   availableUpdateRef.current = availableUpdate;
 
-  // Verificação automática de atualizações ao inicializar o app
+  // Verificação contínua e automática de novas versões (Auto-Update em Tempo Real)
   useEffect(() => {
-    const updateTimer = setTimeout(() => {
-      checkForAppUpdate().then(info => {
-        if (info) {
+    let isSubscribed = true;
+
+    const performUpdateCheck = async () => {
+      if (!isSubscribed) return;
+      try {
+        const info = await checkForAppUpdate();
+        if (info && isSubscribed) {
           console.log('[AutoUpdate] Nova versão detectada na nuvem:', info);
-          setAvailableUpdate(info);
+          setAvailableUpdate(prev => prev ? prev : info);
         }
+      } catch (err) {
+        console.warn('[AutoUpdate] Erro na verificação de atualização:', err);
+      }
+    };
+
+    // 1. Checagem inicial após 2.5s do app aberto
+    const initialTimer = setTimeout(performUpdateCheck, 2500);
+
+    // 2. Polling contínuo a cada 45 segundos enquanto o usuário mexe no app
+    const intervalTimer = setInterval(performUpdateCheck, 45000);
+
+    // 3. Listener ao focar ou retornar para a aba/tela
+    const handleFocusOrVisible = () => {
+      if (document.visibilityState === 'visible') {
+        performUpdateCheck();
+      }
+    };
+    window.addEventListener('focus', handleFocusOrVisible);
+    document.addEventListener('visibilitychange', handleFocusOrVisible);
+
+    // 4. Listener nativo do Capacitor ao retornar para o primeiro plano (resume)
+    let capListenerHandle: any = null;
+    try {
+      CapApp.addListener('appStateChange', (state) => {
+        if (state.isActive) {
+          performUpdateCheck();
+        }
+      }).then(handle => {
+        capListenerHandle = handle;
       }).catch(() => {});
-    }, 2000);
-    return () => clearTimeout(updateTimer);
+    } catch {}
+
+    return () => {
+      isSubscribed = false;
+      clearTimeout(initialTimer);
+      clearInterval(intervalTimer);
+      window.removeEventListener('focus', handleFocusOrVisible);
+      document.removeEventListener('visibilitychange', handleFocusOrVisible);
+      if (capListenerHandle && typeof capListenerHandle.remove === 'function') {
+        capListenerHandle.remove();
+      }
+    };
   }, []);
 
   const handleManualCheckUpdate = async () => {
     setIsCheckingUpdateManual(true);
     try {
+      const installed = await getInstalledAppInfo();
       const info = await checkForAppUpdate();
       if (info) {
         setAvailableUpdate(info);
       } else {
-        alert('Você já está usando a versão mais recente do KYRO Finance (v' + CURRENT_APP_VERSION + ')!');
+        alert(`✅ Você já está usando a versão mais recente do KYRO Finance (v${installed.versionName} • Build ${installed.buildNumber})!`);
       }
     } catch {
       alert('Não foi possível verificar atualizações no momento.');
@@ -4820,6 +4873,8 @@ export default function App() {
                 status: 'Concluído'
               };
               setTransactions(prev => [newEntry, ...prev]);
+              kyroCloud.syncSaveTransaction(newEntry);
+              syncSaveToCentralDb(newEntry);
               f.reset();
             }} className="p-4 rounded-xl bg-[#0E1322] border border-[#1E2740] space-y-3 mb-4">
               <h4 className="text-xs font-bold text-amber-400 uppercase tracking-wider">+ Registrar Nova Entrada</h4>
