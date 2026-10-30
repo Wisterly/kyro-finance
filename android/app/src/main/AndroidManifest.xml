@@ -38,7 +38,7 @@
         </provider>
     </application>
 
-    <!-- Permissões de Rede, Áudio (IA por Voz), Câmera (Leitor de Comprovantes/OCR) e Armazenamento -->
+    <!-- Permissões de Rede, Áudio (IA por Voz), Câmera (Leitor de Comprovantes/OCR), Armazenamento e Atualização Automática de APK -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
@@ -47,6 +47,8 @@
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <uses-permission android:name="android.permission.DOWNLOAD_WITHOUT_NOTIFICATION" />
 
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />

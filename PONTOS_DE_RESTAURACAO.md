@@ -519,13 +519,38 @@ A numeração segue rigorosamente a hierarquia de escopo:
 
 ---
 
+### [PR.019] — Sistema Autossuficiente de Atualização Automática In-App (Pop-up + 1 Toque Download e Instalação de APK)
+- **Data/Hora:** 2026-10-30 02:02 (UTC-3)
+- **Tags Git:** `PR.019`, `PR.019.1`, `PR.019.2`
+
+#### `PR.019` — Escopo Geral do Projeto (Universal)
+- **Endpoint Inteligente de Versões em Nuvem (`/api/app-version`):**
+  - Monitora em tempo real a versão mais recente publicada na Release do GitHub (`apk-latest`) e informa número de build, versão semântica, tamanho do APK e lista de melhorias (changelog).
+- **Módulo Cliente de Atualização (`src/utils/appUpdater.ts` e `src/components/UpdateModal.tsx`):**
+  - Checa silenciosamente ao abrir o app e disponibiliza verificação manual nas Configurações.
+  - Exibe pop-up moderno com glow temático, versão disponível, tamanho e lista de novidades.
+
+#### `PR.019.1` — Versão Computador (Desktop)
+- Mantém o sistema atualizado instantaneamente via Vercel e fornece atalho para baixar o APK atualizado para instalação manual se desejar.
+
+#### `PR.019.2` — Versão Celular (Aplicativo Android `.apk` & Mobile)
+- **Plugin Nativo Android (`AppUpdateManagerPlugin.java`):**
+  - Gerencia download em segundo plano com `DownloadManager` oficial do Android e barra de progresso nativa.
+  - Solicitação de permissão de instalação de pacotes (`REQUEST_INSTALL_PACKAGES`) com `FileProvider` seguro (`file_paths.xml`).
+  - Ao concluir o download, abre diretamente a tela do instalador do Android para atualizar o aplicativo sem sair do app e sem precisar de Play Store.
+
+---
+
 ## TABELA DE CÓDIGOS DE PONTOS DE RESTAURAÇÃO
 
 Se você desejar restaurar qualquer versão anterior ou atual do Kyro Finance, basta colar o código do ponto de restauração na conversa:
 
 | Código do Ponto | Escopo | Descrição Resumida |
 | :--- | :--- | :--- |
-| **`PR.018`** | **Geral (Universal)** | **Versão Atual: Navegação Sequencial de Abas + Proteção Contra Fechamento com Duplo Toque de Voltar no App Android (`@capacitor/app`)** |
+| **`PR.019`** | **Geral (Universal)** | **Versão Atual: Sistema Autossuficiente de Atualizações In-App (Pop-up de Nova Versão + Download e Instalação Automática com 1 Toque no App)** |
+| `PR.019.1` | Desktop | Interface Web/Desktop integrada ao gerenciador de versões e changelog |
+| `PR.019.2` | Mobile / APK | Aplicativo Android com pop-up automático de atualização, download nativo e instalação direta com 1 toque |
+| **`PR.018`** | **Geral (Universal)** | Navegação Sequencial de Abas + Proteção Contra Fechamento com Duplo Toque de Voltar no App Android (`@capacitor/app`) |
 | `PR.018.1` | Desktop | Interface Web/Desktop com estabilidade operacional inalterada |
 | `PR.018.2` | Mobile / APK | Aplicativo Android com botão voltar voltando abas e chat progressivamente até o Dashboard e saída protegida por 2 cliques |
 | **`PR.017`** | **Geral (Universal)** | Aplicativo Nativo Android (`KYRO-Finance.apk`) via CapacitorJS + GitHub Actions Cloud Builder + Sincronia Total com a Vercel 24h |

@@ -82,6 +82,8 @@ import {
   generateThinkingFinancialReply,
   searchTransactionsByTerm
 } from './utils/aiCopilot';
+import { UpdateModal, UpdateInfo } from './components/UpdateModal';
+import { checkForAppUpdate, CURRENT_APP_BUILD, CURRENT_APP_VERSION } from './utils/appUpdater';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'transacoes' | 'orcamentos' | 'mapa' | 'relatorios' | 'whatsapp' | 'configuracoes' | 'cartoes'>('dashboard');
@@ -1032,6 +1034,41 @@ export default function App() {
   const exitToastTimerRef = useRef<any>(null);
   const [exitToastVisible, setExitToastVisible] = useState(false);
 
+  // Pop-up e Gerenciador de Auto-Update no Aplicativo
+  const [availableUpdate, setAvailableUpdate] = useState<UpdateInfo | null>(null);
+  const [isCheckingUpdateManual, setIsCheckingUpdateManual] = useState(false);
+  const availableUpdateRef = useRef(availableUpdate);
+  availableUpdateRef.current = availableUpdate;
+
+  // Verificação automática de atualizações ao inicializar o app
+  useEffect(() => {
+    const updateTimer = setTimeout(() => {
+      checkForAppUpdate().then(info => {
+        if (info) {
+          console.log('[AutoUpdate] Nova versão detectada na nuvem:', info);
+          setAvailableUpdate(info);
+        }
+      }).catch(() => {});
+    }, 2000);
+    return () => clearTimeout(updateTimer);
+  }, []);
+
+  const handleManualCheckUpdate = async () => {
+    setIsCheckingUpdateManual(true);
+    try {
+      const info = await checkForAppUpdate();
+      if (info) {
+        setAvailableUpdate(info);
+      } else {
+        alert('Você já está usando a versão mais recente do KYRO Finance (v' + CURRENT_APP_VERSION + ')!');
+      }
+    } catch {
+      alert('Não foi possível verificar atualizações no momento.');
+    } finally {
+      setIsCheckingUpdateManual(false);
+    }
+  };
+
   // Sincronização em tempo real das refs para evitar stale-closure no listener nativo
   const activeTabRef = useRef(activeTab);
   activeTabRef.current = activeTab;
@@ -1091,6 +1128,12 @@ export default function App() {
 
   // Manipulador hierárquico do botão voltar do celular Android
   const handleAndroidBack = useCallback(() => {
+    // 0. Se o pop-up de atualização estiver aberto, fecha o pop-up
+    if (availableUpdateRef.current) {
+      setAvailableUpdate(null);
+      return;
+    }
+
     // 1. Camada 1: Fecha modais, gaveta do chat ou menu hambúrguer abertos
     if (chatOpenMobileRef.current) {
       setChatOpenMobile(false);
@@ -4364,6 +4407,38 @@ export default function App() {
                   </div>
                 </div>
 
+                {/* 3. Atualização e Versão do Aplicativo (In-App Auto-Update) */}
+                <div className="p-5 rounded-xl bg-[#141A2E] border border-amber-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="flex items-center gap-3.5">
+                    <div className="h-11 w-11 rounded-xl bg-amber-500/15 text-amber-400 flex items-center justify-center font-bold">
+                      <Smartphone size={24} />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-semibold text-slate-200">Aplicativo Android (KYRO Finance)</h4>
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                          v{CURRENT_APP_VERSION} (Build {CURRENT_APP_BUILD})
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        Atualizações automáticas diretas pelo aplicativo com 1 toque, sem precisar de Play Store
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <button 
+                      type="button"
+                      onClick={handleManualCheckUpdate}
+                      disabled={isCheckingUpdateManual}
+                      className="px-4 py-2 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 hover:brightness-110 text-slate-950 text-xs font-bold transition-all shadow-md flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                    >
+                      <RefreshCw size={14} className={isCheckingUpdateManual ? 'animate-spin' : ''} />
+                      <span>{isCheckingUpdateManual ? 'Verificando...' : 'Verificar Atualização'}</span>
+                    </button>
+                  </div>
+                </div>
+
                 {/* 3. Limpeza Geral e Reset de Lançamentos */}
                 <div className="p-5 rounded-xl bg-[#141A2E] border border-rose-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div className="flex items-center gap-3.5">
@@ -6465,6 +6540,16 @@ export default function App() {
           <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping shrink-0" />
           <span>Pressione voltar novamente para sair</span>
         </div>
+      )}
+
+      {/* Pop-up inteligente de Atualização do Aplicativo (In-App Auto-Update) */}
+      {availableUpdate && (
+        <UpdateModal
+          updateInfo={availableUpdate}
+          currentBuild={CURRENT_APP_BUILD}
+          currentVersion={CURRENT_APP_VERSION}
+          onClose={() => setAvailableUpdate(null)}
+        />
       )}
 
     </div>

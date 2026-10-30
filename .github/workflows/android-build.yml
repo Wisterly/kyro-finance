@@ -54,7 +54,7 @@ jobs:
       - name: Compilar APK Otimizado (Debug e Release Assinados)
         working-directory: ./android
         run: |
-          ./gradlew assembleDebug assembleRelease
+          ./gradlew assembleDebug assembleRelease -PversionCode=${{ github.run_number }} -PversionName="0.1.${{ github.run_number }}"
           cp app/build/outputs/apk/release/app-release.apk ../KYRO-Finance.apk
           cp app/build/outputs/apk/debug/app-debug.apk ../KYRO-Finance-debug.apk
 
