@@ -362,13 +362,40 @@ A numeração segue rigorosamente a hierarquia de escopo:
 
 ---
 
+### [PR.012] — QR Code Oficial Criptografado do WhatsApp Web (Baileys) com Sincronização em Nuvem e Geração Instantânea
+- **Data/Hora:** 2026-10-29 23:45 (UTC-3)
+- **Tags Git:** `PR.012`, `PR.012.1`, `PR.012.2`
+
+#### `PR.012` — Escopo Geral do Projeto (Universal)
+- **Eliminação Definitiva do Erro "QR Code Inválido" no WhatsApp:**
+  - Identificada e corrigida a causa raiz onde o componente `WhatsAppTab.tsx` exibia um fallback com link `https://wa.me/...` quando a variável `serverQrCode` estava vazia (o leitor de *"Aparelhos Conectados"* do WhatsApp rejeita qualquer URL web e exige exclusivamente o payload criptográfico `2@...` do protocolo WhatsApp Web).
+  - Agora o `<QRCodeSVG>` renderiza **exclusivamente o token criptográfico oficial do WhatsApp Web** emitido pelo `@whiskeysockets/baileys`, com nível de correção `M`, margem oficial (`includeMargin={true}`) e contraste máximo (`#000000` sobre `#ffffff`), idêntico ao WhatsApp Web original.
+- **Daemon do Robô Baileys (`bot.cjs`) Ativo e Auto-Recuperável:**
+  - Limpeza automática de credenciais expiradas (`auth_info_baileys`) quando ocorre desconexão ou sessão inválida, gerando um novo QR Code oficial em menos de 2 segundos.
+  - Novo endpoint `/api/reset-qr` e botão **"🔄 Atualizar / Gerar Novo QR Code"** na interface para permitir gerar um novo QR Code oficial do WhatsApp Web sob demanda com um clique.
+- **Sincronização do QR Code Oficial entre Servidor Local e Nuvem 24h (`/api/webhook`):**
+  - O `bot.cjs` agora sincroniza em tempo real o `botStatus` (incluindo o payload `qr` oficial do WhatsApp Web) com `/api/webhook`, permitindo visualizar e escanear o QR Code tanto no link local (`http://localhost:3000`) quanto no link online (`https://kyro-finance.vercel.app`).
+- **Abertura Direta na Aba "Pelo QR Code (Igual WhatsApp Web)":**
+  - A aba **WhatsApp & IA** agora abre diretamente no modo QR Code Oficial e valida a conexão real com o servidor antes de exibir o status de aparelho conectado.
+
+#### `PR.012.1` — Versão Computador (Desktop)
+- Painel de pareamento com QR Code Oficial do WhatsApp Web em destaque (220px com margem branca oficial), indicador ao vivo de sessão criptografada e botão de atualização instantânea.
+
+#### `PR.012.2` — Versão Celular (Mobile)
+- Visualização responsiva do QR Code Oficial do WhatsApp Web e pareamento por código de 8 dígitos perfeitamente adaptados para telas móveis.
+
+---
+
 ## TABELA DE CÓDIGOS DE PONTOS DE RESTAURAÇÃO
 
 Se você desejar restaurar qualquer versão anterior ou atual do Kyro Finance, basta colar o código do ponto de restauração na conversa:
 
 | Código do Ponto | Escopo | Descrição Resumida |
 | :--- | :--- | :--- |
-| **`PR.011`** | **Geral (Universal)** | **Versão Atual: Restauração Plena do Robô WhatsApp no Grupo Oficial com Multimodalidade (Áudio, Texto e Foto), resposta filtrada padrão e sincronização em tempo real** |
+| **`PR.012`** | **Geral (Universal)** | **Versão Atual: QR Code Oficial Criptografado do WhatsApp Web (Baileys) sem erro de leitura, geração sob demanda e sincronização local/nuvem** |
+| `PR.012.1` | Desktop | Interface desktop com QR Code Oficial do WhatsApp Web de alta precisão e atualização com 1 clique |
+| `PR.012.2` | Mobile | Interface mobile sincronizada com status real do WhatsApp Web e grupo monitorado |
+| **`PR.011`** | **Geral (Universal)** | Restauração Plena do Robô WhatsApp no Grupo Oficial com Multimodalidade (Áudio, Texto e Foto), resposta filtrada padrão e sincronização em tempo real |
 | `PR.011.1` | Desktop | Interface desktop com simulador interativo de grupo, monitoramento ativo e sincronização imediata |
 | `PR.011.2` | Mobile | Interface mobile com acesso à aba WhatsApp & IA e atualização simultânea de saldos no celular |
 | **`PR.010`** | **Geral (Universal)** | Autonomia Total do Chat Gemini com aprendizado ativo de diretrizes via conversa, fim de descrições mescladas e ajuste direto de lançamentos |

@@ -55,10 +55,8 @@ export const WhatsAppTab: React.FC<WhatsAppTabProps> = ({
   userPhone: propUserPhone = '+55 (86) 99999-9999',
   transactions = []
 }) => {
-  // Estado de conexão do segundo celular (KYRO Celular)
-  const [isConnected, setIsConnected] = useState<boolean>(() => {
-    return localStorage.getItem('kyro_second_phone_connected') === 'true' || initialConnected;
-  });
+  // Estado de conexão real do segundo celular (validado em tempo real com o Baileys)
+  const [isConnected, setIsConnected] = useState<boolean>(false);
 
   const [pairingCode, setPairingCode] = useState<string>(() => {
     return localStorage.getItem('kyro_pairing_code') || 'KYRO-8429';
@@ -82,62 +80,137 @@ export const WhatsAppTab: React.FC<WhatsAppTabProps> = ({
     return localStorage.getItem('kyro_second_phone_number') || '5586994002892';
   });
 
-  const [pairMode, setPairMode] = useState<'code' | 'qr'>('code');
+  // Abre diretamente no modo QR Code Oficial do WhatsApp Web
+  const [pairMode, setPairMode] = useState<'code' | 'qr'>('qr');
   const [isRequestingCode, setIsRequestingCode] = useState(false);
+  const [isGeneratingQr, setIsGeneratingQr] = useState(false);
   const [codeErrorMessage, setCodeErrorMessage] = useState('');
   const [botServerRunning, setBotServerRunning] = useState(false);
 
   const [serverQrCode, setServerQrCode] = useState<string>('');
 
-  // Valor do QR Code escaneável
-  const qrCodeData = serverQrCode || `https://wa.me/${secondPhone.replace(/\D/g, '')}?text=${encodeURIComponent('KYRO_CONNECT_DEVICE_' + pairingCode)}`;
-
-  // Verificar status real do robô local a cada 3 segundos
+  // Verificar status real do robô local e da nuvem a cada 2.5 segundos
   useEffect(() => {
     const checkBotStatus = async () => {
-      try {
-        const res = await fetch('http://localhost:3001/api/status');
-        if (res.ok) {
-          const data = await res.json();
-          setBotServerRunning(true);
-          if (data.qr) {
-            setServerQrCode(data.qr);
-          }
-          if (data.connected) {
-            setIsConnected(true);
-            localStorage.setItem('kyro_second_phone_connected', 'true');
-          }
-          if (data.pairingCode && data.pairingCode !== pairingCode) {
-            setPairingCode(data.pairingCode);
-          }
-        } else {
-          setBotServerRunning(false);
-        }
+      let foundStatus = false;
 
-        // Busca o grupo monitorado atual do servidor
+      // 1. Tenta buscar direto da porta 3001 ou via proxy local /api/status
+      const statusEndpoints = ['/api/status', 'http://localhost:3001/api/status'];
+      for (const ep of statusEndpoints) {
         try {
-          const resGroup = await fetch('http://localhost:3001/api/monitored-group');
-          if (resGroup.ok) {
-            const dataG = await resGroup.json();
-            if (dataG?.monitoredGroup) {
-              if (dataG.monitoredGroup.groupName) setGroupName(dataG.monitoredGroup.groupName);
-              if (dataG.monitoredGroup.inviteLink) setGroupInviteLink(dataG.monitoredGroup.inviteLink);
-              if (dataG.monitoredGroup.groupJid) {
-                localStorage.setItem('kyro_group_jid', dataG.monitoredGroup.groupJid);
+          const res = await fetch(ep);
+          if (res.ok) {
+            const data = await res.json();
+            if (data && (typeof data.connected === 'boolean' || data.qr)) {
+              foundStatus = true;
+              setBotServerRunning(true);
+              if (data.qr) {
+                setServerQrCode(data.qr);
               }
-              setGroupConfirmed(true);
+              if (data.connected) {
+                setIsConnected(true);
+                localStorage.setItem('kyro_second_phone_connected', 'true');
+                if (data.phoneNumber) setSecondPhone(data.phoneNumber);
+              } else {
+                setIsConnected(false);
+                localStorage.removeItem('kyro_second_phone_connected');
+              }
+              if (data.pairingCode && data.pairingCode !== pairingCode) {
+                setPairingCode(data.pairingCode);
+              }
+              break;
             }
           }
-        } catch (eg) {}
-      } catch (e) {
-        setBotServerRunning(false);
+        } catch (err) {}
       }
+
+      // 2. Também consulta /api/webhook (funciona tanto local quanto na Vercel Online 24h)
+      try {
+        const resWebhook = await fetch('/api/webhook');
+        if (resWebhook.ok) {
+          const dataW = await resWebhook.json();
+          if (dataW?.botStatus) {
+            setBotServerRunning(true);
+            if (dataW.botStatus.qr) {
+              setServerQrCode(dataW.botStatus.qr);
+            }
+            if (dataW.botStatus.connected) {
+              setIsConnected(true);
+              localStorage.setItem('kyro_second_phone_connected', 'true');
+            } else if (!foundStatus) {
+              setIsConnected(false);
+            }
+          }
+          if (dataW?.monitoredGroup) {
+            if (dataW.monitoredGroup.groupName) setGroupName(dataW.monitoredGroup.groupName);
+            if (dataW.monitoredGroup.inviteLink) setGroupInviteLink(dataW.monitoredGroup.inviteLink);
+            if (dataW.monitoredGroup.groupJid) {
+              localStorage.setItem('kyro_group_jid', dataW.monitoredGroup.groupJid);
+            }
+            setGroupConfirmed(true);
+          }
+        }
+      } catch (ew) {}
+
+      // 3. Busca o grupo monitorado atual do servidor local
+      try {
+        const resGroup = await fetch('http://localhost:3001/api/monitored-group');
+        if (resGroup.ok) {
+          const dataG = await resGroup.json();
+          if (dataG?.monitoredGroup) {
+            if (dataG.monitoredGroup.groupName) setGroupName(dataG.monitoredGroup.groupName);
+            if (dataG.monitoredGroup.inviteLink) setGroupInviteLink(dataG.monitoredGroup.inviteLink);
+            if (dataG.monitoredGroup.groupJid) {
+              localStorage.setItem('kyro_group_jid', dataG.monitoredGroup.groupJid);
+            }
+            setGroupConfirmed(true);
+          }
+        }
+      } catch (eg) {}
     };
 
     checkBotStatus();
-    const interval = setInterval(checkBotStatus, 3000);
+    const interval = setInterval(checkBotStatus, 2500);
     return () => clearInterval(interval);
   }, [pairingCode]);
+
+  // Função para forçar a geração de um novo QR Code Oficial do WhatsApp Web
+  const handleGenerateNewOfficialQr = async () => {
+    setIsGeneratingQr(true);
+    setIsConnected(false);
+    setServerQrCode('');
+    localStorage.removeItem('kyro_second_phone_connected');
+
+    try {
+      // Tenta via rota local ou proxy Vite
+      const endpoints = ['/api/reset-qr', 'http://localhost:3001/api/reset-qr'];
+      for (const ep of endpoints) {
+        try {
+          const res = await fetch(ep, { method: 'POST' });
+          if (res.ok) {
+            const data = await res.json();
+            if (data?.qr) {
+              setServerQrCode(data.qr);
+              setBotServerRunning(true);
+              setIsGeneratingQr(false);
+              return;
+            }
+          }
+        } catch (e) {}
+      }
+
+      // Notifica também o webhook na nuvem caso esteja acessando pelo link online
+      await fetch('/api/webhook', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'request_reset_qr' })
+      }).catch(() => {});
+    } catch (e) {
+      console.warn('Erro ao gerar novo QR:', e);
+    } finally {
+      setTimeout(() => setIsGeneratingQr(false), 1500);
+    }
+  };
 
   // Função REAL para solicitar o Código de 8 Dígitos ao WhatsApp
   const handleRequestPairingCode = async () => {
@@ -306,17 +379,6 @@ export const WhatsAppTab: React.FC<WhatsAppTabProps> = ({
           <div className="grid grid-cols-2 gap-2 bg-[#0B0E18] p-1.5 rounded-xl border border-[#1E263E]">
             <button
               type="button"
-              onClick={() => setPairMode('code')}
-              className={`py-2 px-3 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
-                pairMode === 'code'
-                  ? 'bg-emerald-600 text-white shadow-md'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              <span>🔑 Por Código de 8 Dígitos (Recomendado)</span>
-            </button>
-            <button
-              type="button"
               onClick={() => setPairMode('qr')}
               className={`py-2 px-3 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
                 pairMode === 'qr'
@@ -325,7 +387,18 @@ export const WhatsAppTab: React.FC<WhatsAppTabProps> = ({
               }`}
             >
               <QrCode size={14} />
-              <span>Pelo QR Code</span>
+              <span>📱 Pelo QR Code (Igual WhatsApp Web)</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setPairMode('code')}
+              className={`py-2 px-3 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
+                pairMode === 'code'
+                  ? 'bg-emerald-600 text-white shadow-md'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <span>🔑 Por Código de 8 Dígitos</span>
             </button>
           </div>
 
@@ -443,56 +516,88 @@ export const WhatsAppTab: React.FC<WhatsAppTabProps> = ({
             </div>
           )}
 
-          {/* MODO B: PELO QR CODE */}
+          {/* MODO B: PELO QR CODE OFICIAL DO WHATSAPP WEB */}
           {pairMode === 'qr' && (
             <div className="grid grid-cols-1 sm:grid-cols-12 gap-6 items-center">
               <div className="sm:col-span-6 flex flex-col items-center">
-                <div className="p-4 bg-white rounded-2xl shadow-2xl relative group">
-                  <QRCodeSVG 
-                    value={qrCodeData} 
-                    size={180} 
-                    level="Q"
-                    bgColor="#ffffff"
-                    fgColor="#0a0d18"
-                  />
+                <div className="p-3 bg-white rounded-2xl shadow-[0_0_30px_rgba(16,185,129,0.25)] border-4 border-emerald-500/40 relative group flex items-center justify-center min-h-[244px] min-w-[244px]">
+                  {serverQrCode ? (
+                    <QRCodeSVG 
+                      value={serverQrCode} 
+                      size={220} 
+                      level="M"
+                      includeMargin={true}
+                      bgColor="#ffffff"
+                      fgColor="#000000"
+                    />
+                  ) : (
+                    <div className="flex flex-col items-center justify-center text-center p-4 space-y-3 max-w-[210px]">
+                      <RefreshCw size={32} className="text-emerald-600 animate-spin" />
+                      <strong className="text-xs text-slate-900 font-bold">
+                        {isGeneratingQr ? 'Gerando Novo QR Code Oficial...' : 'Carregando QR Code do WhatsApp Web...'}
+                      </strong>
+                      <p className="text-[10px] text-slate-600 leading-tight">
+                        Conectando aos servidores criptografados do WhatsApp Web...
+                      </p>
+                      <button
+                        type="button"
+                        onClick={handleGenerateNewOfficialQr}
+                        className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold shadow"
+                      >
+                        Forçar Geração Agora
+                      </button>
+                    </div>
+                  )}
+
                   {isConnected && (
-                    <div className="absolute inset-0 bg-slate-950/85 backdrop-blur-sm rounded-2xl flex flex-col items-center justify-center text-center p-3 animate-fade-in">
-                      <CheckCheck size={36} className="text-emerald-400 mb-1" />
-                      <strong className="text-xs text-white">Segundo Celular Conectado!</strong>
-                      <span className="text-[10px] text-emerald-400 font-mono mt-0.5">{secondPhone}</span>
+                    <div className="absolute inset-0 bg-slate-950/90 backdrop-blur-sm rounded-xl flex flex-col items-center justify-center text-center p-4 animate-fade-in">
+                      <CheckCheck size={42} className="text-emerald-400 mb-2" />
+                      <strong className="text-sm text-white">WhatsApp Web Conectado!</strong>
+                      <span className="text-xs text-emerald-400 font-mono mt-1">{secondPhone}</span>
+                      <button
+                        type="button"
+                        onClick={handleGenerateNewOfficialQr}
+                        className="mt-3 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-[10px] font-bold border border-slate-700"
+                      >
+                        Trocar Aparelho / Gerar Novo QR
+                      </button>
                     </div>
                   )}
                 </div>
-                <span className="text-[10px] text-slate-500 mt-2 block">
-                  Dica: Se a câmera do WhatsApp der erro, use a aba "Por Código de 8 Dígitos" acima!
-                </span>
+
+                <div className="mt-2.5 flex items-center gap-1.5">
+                  <span className={`h-2 w-2 rounded-full ${serverQrCode ? 'bg-emerald-400 animate-ping' : 'bg-amber-400'}`}></span>
+                  <span className="text-[11px] font-semibold text-emerald-400">
+                    {serverQrCode ? 'QR Code Oficial WhatsApp Web Ativo' : 'Sincronizando Sessão WhatsApp Web...'}
+                  </span>
+                </div>
               </div>
 
               <div className="sm:col-span-6 space-y-3 text-xs text-slate-300">
                 <div className="p-3 rounded-xl bg-[#141A2E] border border-[#222C46] space-y-1">
-                  <strong className="text-white block font-bold">1. Segundo Celular</strong>
-                  <p className="text-[11px] text-slate-400">Abra o WhatsApp no aparelho que será o KYRO Finance.</p>
+                  <strong className="text-white block font-bold">1. Abra o WhatsApp no Celular</strong>
+                  <p className="text-[11px] text-slate-400">No celular que ficará no grupo, abra o aplicativo do WhatsApp.</p>
                 </div>
                 <div className="p-3 rounded-xl bg-[#141A2E] border border-[#222C46] space-y-1">
                   <strong className="text-white block font-bold">2. Aparelhos Conectados</strong>
-                  <p className="text-[11px] text-slate-400">Toque em Configurações &rarr; Aparelhos Conectados &rarr; Conectar um Aparelho.</p>
+                  <p className="text-[11px] text-slate-400">Toque em Menu (⋮) ou Configurações &rarr; <strong>Aparelhos Conectados</strong> &rarr; <strong>Conectar um Aparelho</strong>.</p>
                 </div>
                 <div className="p-3 rounded-xl bg-[#141A2E] border border-[#222C46] space-y-1">
-                  <strong className="text-white block font-bold">3. Escanear</strong>
-                  <p className="text-[11px] text-slate-400">Aponte para o QR Code ao lado para sincronizar.</p>
+                  <strong className="text-white block font-bold">3. Aponte a Câmera para o QR Code</strong>
+                  <p className="text-[11px] text-slate-400">Este QR Code usa o protocolo oficial do WhatsApp Web e vincula o número na hora!</p>
                 </div>
 
-                {!isConnected && (
+                <div className="flex flex-col gap-2 pt-1">
                   <button
                     type="button"
-                    onClick={handleSimulateScan}
-                    disabled={isConnecting}
-                    className="w-full py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:brightness-110 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg disabled:opacity-50"
+                    onClick={handleGenerateNewOfficialQr}
+                    disabled={isGeneratingQr}
+                    className="w-full py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:brightness-110 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg disabled:opacity-50 transition-all"
                   >
-                    <CheckCircle2 size={14} />
-                    <span>Confirmar Escaneamento</span>
+                    <RefreshCw size={14} className={isGeneratingQr ? 'animate-spin' : ''} />
+                    <span>{isGeneratingQr ? 'Gerando Novo QR Code...' : '🔄 Atualizar / Gerar Novo QR Code'}</span>
                   </button>
-                )}
+                </div>
               </div>
             </div>
           )}

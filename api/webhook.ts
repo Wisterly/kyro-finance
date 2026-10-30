@@ -893,6 +893,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       transactions: allTxs,
       count: allTxs.length,
       monitoredGroup: globalAny.__KYRO_MONITORED_GROUP__ || { groupName: 'Finanças Kyro' },
+      botStatus: globalAny.__KYRO_BOT_STATUS__ || null,
       message: 'KYRO WhatsApp Financial Webhook ativo (Texto & Áudio Whisper).',
       endpoint: '/api/webhook'
     });
@@ -904,6 +905,35 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const payload = req.body || {};
+
+    // Suporte a sincronização de QR Code e Status Oficial do WhatsApp Web (Baileys -> Nuvem)
+    if (payload?.action === 'sync_bot_status' && payload?.botStatus) {
+      globalAny.__KYRO_BOT_STATUS__ = {
+        ...payload.botStatus,
+        updatedAt: Date.now()
+      };
+      const shouldResetQr = !!globalAny.__KYRO_PENDING_RESET_QR__;
+      if (shouldResetQr) {
+        globalAny.__KYRO_PENDING_RESET_QR__ = false;
+      }
+      return res.status(200).json({
+        status: 'ok',
+        shouldResetQr
+      });
+    }
+
+    // Suporte a solicitação de novo QR Code via interface Online
+    if (payload?.action === 'request_reset_qr') {
+      globalAny.__KYRO_PENDING_RESET_QR__ = true;
+      if (globalAny.__KYRO_BOT_STATUS__) {
+        globalAny.__KYRO_BOT_STATUS__.qr = '';
+        globalAny.__KYRO_BOT_STATUS__.connected = false;
+      }
+      return res.status(200).json({
+        status: 'reset_requested',
+        message: 'Solicitação de novo QR Code oficial enviada ao servidor WhatsApp.'
+      });
+    }
 
     // Suporte a ping de diagnóstico e teste de conectividade
     if (payload?.action === 'ping' || payload?.testPing === true) {

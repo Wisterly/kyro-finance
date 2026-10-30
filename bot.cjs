@@ -872,6 +872,51 @@ function parseDynamicFinancialMessage(text, isAudio = false) {
 // ==============================================================
 // 1. INICIALIZAÇÃO DO SOCKET BAILEYS (WHATSAPP WEB OFICIAL)
 // ==============================================================
+// Sincroniza o Status e o QR Code Oficial do WhatsApp Web com a Nuvem Vercel
+function syncBotStatusToCloud() {
+  axios.post(REMOTE_WEBHOOK_URL, {
+    action: 'sync_bot_status',
+    botStatus: {
+      connected: botStatus.connected,
+      phoneNumber: botStatus.phoneNumber,
+      pairingCode: botStatus.pairingCode,
+      hasQr: !!botStatus.lastQr,
+      qr: botStatus.lastQr,
+      updatedAt: new Date().toISOString()
+    }
+  }, { timeout: 5000 }).then((resp) => {
+    if (resp?.data?.shouldResetQr) {
+      console.log('🔄 [Nuvem] Solicitação de novo QR Code Oficial recebida da Vercel!');
+      forceResetAndGenerateNewQr();
+    }
+  }).catch(() => {});
+}
+
+// Mantém a nuvem sempre sincronizada com o QR Code real a cada 5 segundos
+setInterval(syncBotStatusToCloud, 5000);
+
+async function forceResetAndGenerateNewQr() {
+  try {
+    if (sockInstance) {
+      await sockInstance.logout().catch(() => {});
+      sockInstance.end(undefined);
+    }
+  } catch (e) {}
+
+  const authFolder = path.join(__dirname, 'auth_info_baileys');
+  try {
+    fs.rmSync(authFolder, { recursive: true, force: true });
+  } catch (e) {}
+
+  botStatus.connected = false;
+  botStatus.phoneNumber = '';
+  botStatus.pairingCode = '';
+  botStatus.lastQr = '';
+  syncBotStatusToCloud();
+
+  await startSocket();
+}
+
 async function startSocket() {
   const authFolder = path.join(__dirname, 'auth_info_baileys');
   if (!fs.existsSync(authFolder)) {
@@ -903,7 +948,9 @@ async function startSocket() {
 
     if (qr) {
       botStatus.lastQr = qr;
-      console.log('[WhatsApp] Novo QR Code gerado.');
+      botStatus.connected = false;
+      console.log('📱 [WhatsApp Web] Novo QR Code Oficial gerado e disponível para leitura!');
+      syncBotStatusToCloud();
     }
 
     if (connection === 'open') {
@@ -912,19 +959,27 @@ async function startSocket() {
       botStatus.error = null;
       botStatus.phoneNumber = sock.user?.id?.split(':')[0] || 'Conectado';
       console.log(`🎉 [WhatsApp] CONECTADO COM SUCESSO! Número: ${botStatus.phoneNumber}`);
+      syncBotStatusToCloud();
     } else if (connection === 'close') {
       botStatus.connected = false;
       const statusCode = (lastDisconnect?.error)?.output?.statusCode;
-      const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
-      console.log(`⚠️ [WhatsApp] Conexão encerrada (Status: ${statusCode}). Reconectando: ${shouldReconnect}`);
-      if (shouldReconnect) {
+      const isInvalidSession = 
+        statusCode === DisconnectReason.loggedOut || 
+        statusCode === 401 || 
+        statusCode === 403 || 
+        statusCode === 405;
+
+      console.log(`⚠️ [WhatsApp] Conexão encerrada (Status: ${statusCode}). Sessão inválida: ${isInvalidSession}`);
+      if (!isInvalidSession) {
         setTimeout(startSocket, 3000);
       } else {
-        console.log('❌ Sessão expirada. Apagando credenciais para novo pareamento...');
+        console.log('🔄 Limpando credenciais antigas para gerar novo QR Code Oficial do WhatsApp Web...');
         try {
           fs.rmSync(authFolder, { recursive: true, force: true });
         } catch (e) {}
-        setTimeout(startSocket, 2000);
+        botStatus.lastQr = '';
+        syncBotStatusToCloud();
+        setTimeout(startSocket, 1500);
       }
     }
   });
@@ -1168,7 +1223,14 @@ const server = http.createServer(async (req, res) => {
       status: 'active',
       transactions: localStoredTransactions,
       count: localStoredTransactions.length,
-      monitoredGroup
+      monitoredGroup,
+      botStatus: {
+        connected: botStatus.connected,
+        phoneNumber: botStatus.phoneNumber,
+        pairingCode: botStatus.pairingCode,
+        hasQr: !!botStatus.lastQr,
+        qr: botStatus.lastQr
+      }
     }));
   }
 
@@ -1277,21 +1339,24 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // Endpoint 3: Desconectar Sessão
-  if (url.pathname === '/api/disconnect' && req.method === 'POST') {
+  // Endpoint 3: Desconectar Sessão ou Gerar Novo QR Code Oficial
+  if ((url.pathname === '/api/disconnect' || url.pathname === '/api/reset-qr') && (req.method === 'POST' || req.method === 'GET')) {
     try {
-      if (sockInstance) {
-        await sockInstance.logout().catch(() => {});
+      await forceResetAndGenerateNewQr();
+      // Aguarda até 6 segundos para o Baileys emitir o novo QR Code oficial
+      for (let i = 0; i < 12; i++) {
+        if (botStatus.lastQr) break;
+        await new Promise(r => setTimeout(r, 500));
       }
-      const authFolder = path.join(__dirname, 'auth_info_baileys');
-      try { fs.rmSync(authFolder, { recursive: true, force: true }); } catch (e) {}
-      botStatus.connected = false;
-      botStatus.phoneNumber = '';
-      botStatus.pairingCode = '';
-      setTimeout(startSocket, 1500);
 
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      return res.end(JSON.stringify({ success: true, message: 'Sessão desconectada.' }));
+      return res.end(JSON.stringify({
+        success: true,
+        message: 'Novo QR Code oficial do WhatsApp Web gerado com sucesso!',
+        qr: botStatus.lastQr,
+        hasQr: !!botStatus.lastQr,
+        connected: botStatus.connected
+      }));
     } catch (e) {
       res.writeHead(500, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify({ error: e.message }));
