@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import OpenAI, { toFile } from 'openai';
 import axios from 'axios';
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getFirestore, collection, addDoc, getDocs, query, orderBy, limit } from 'firebase/firestore';
+import { getFirestore, collection, doc, setDoc, getDocs, query, orderBy, limit } from 'firebase/firestore';
 
 // 1. Firebase Firestore Setup
 const firebaseConfig = {
@@ -611,8 +611,6 @@ function parseDynamicFinancialMessage(text: string, isAudio: boolean = false) {
     location: establishment,
     city: finalCity
   };
-    city
-  };
 }
 
 // 4. Salvar Transação no Firestore / Memória Global
@@ -652,9 +650,20 @@ async function saveTransaction(tx: any) {
 
   if (db) {
     try {
-      await addDoc(collection(db, 'kyro_transactions'), payload);
+      await setDoc(doc(db, 'kyro_transactions', txId), payload, { merge: true });
     } catch (err) {
       console.warn('[Firestore] Erro ao salvar transação:', err);
+    }
+  }
+
+  // Sincroniza também no banco central global em memória (se disponível)
+  if (globalAny.__KYRO_CENTRAL_DB__) {
+    const centralList = globalAny.__KYRO_CENTRAL_DB__.transactions || [];
+    const existsInCentral = centralList.some((t: any) => String(t.id) === txId);
+    if (!existsInCentral) {
+      centralList.unshift(payload);
+      globalAny.__KYRO_CENTRAL_DB__.transactions = centralList;
+      globalAny.__KYRO_CENTRAL_DB__.lastUpdated = new Date().toISOString();
     }
   }
 

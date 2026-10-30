@@ -15,7 +15,8 @@ import {
   TrendingUp,
   MessageSquare,
   ShieldCheck,
-  ExternalLink
+  ExternalLink,
+  Camera
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { Transaction } from '../types';
@@ -112,6 +113,22 @@ export const WhatsAppTab: React.FC<WhatsAppTabProps> = ({
         } else {
           setBotServerRunning(false);
         }
+
+        // Busca o grupo monitorado atual do servidor
+        try {
+          const resGroup = await fetch('http://localhost:3001/api/monitored-group');
+          if (resGroup.ok) {
+            const dataG = await resGroup.json();
+            if (dataG?.monitoredGroup) {
+              if (dataG.monitoredGroup.groupName) setGroupName(dataG.monitoredGroup.groupName);
+              if (dataG.monitoredGroup.inviteLink) setGroupInviteLink(dataG.monitoredGroup.inviteLink);
+              if (dataG.monitoredGroup.groupJid) {
+                localStorage.setItem('kyro_group_jid', dataG.monitoredGroup.groupJid);
+              }
+              setGroupConfirmed(true);
+            }
+          }
+        } catch (eg) {}
       } catch (e) {
         setBotServerRunning(false);
       }
@@ -588,7 +605,7 @@ export const WhatsAppTab: React.FC<WhatsAppTabProps> = ({
         </div>
 
         {/* Cards de Exemplos Reais */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
           <div className="p-4 rounded-xl bg-[#141A2E] border border-rose-500/30 space-y-2">
             <div className="flex items-center justify-between">
               <span className="font-bold text-rose-400 flex items-center gap-1.5">
@@ -624,16 +641,32 @@ export const WhatsAppTab: React.FC<WhatsAppTabProps> = ({
           <div className="p-4 rounded-xl bg-[#141A2E] border border-teal-500/30 space-y-2">
             <div className="flex items-center justify-between">
               <span className="font-bold text-teal-400 flex items-center gap-1.5">
-                <Mic size={14} /> Áudio de Voz pelo WhatsApp
+                <Mic size={14} /> Áudio de Voz no Grupo
               </span>
-              <span className="text-[10px] bg-teal-500/20 text-teal-300 px-2 py-0.5 rounded">Whisper</span>
+              <span className="text-[10px] bg-teal-500/20 text-teal-300 px-2 py-0.5 rounded">Gemini / Whisper</span>
             </div>
             <p className="text-slate-300 text-[11px]">Você grava um áudio falando:</p>
             <p className="text-white font-mono text-[11px] p-2 bg-[#0A0D18] rounded-lg border border-[#202940]">
               🎙️ "Gastei 42 reais na farmácia hoje"
             </p>
             <p className="text-[10px] text-slate-400">
-              &rarr; O Whisper transcreve o áudio fonético e registra o gasto automaticamente!
+              &rarr; A IA escuta, extrai os valores e lança no extrato automaticamente!
+            </p>
+          </div>
+
+          <div className="p-4 rounded-xl bg-[#141A2E] border border-cyan-500/30 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-cyan-400 flex items-center gap-1.5">
+                <Camera size={14} /> Foto de Comprovante
+              </span>
+              <span className="text-[10px] bg-cyan-500/20 text-cyan-300 px-2 py-0.5 rounded">Visão Gemini</span>
+            </div>
+            <p className="text-slate-300 text-[11px]">Você envia no grupo:</p>
+            <p className="text-white font-mono text-[11px] p-2 bg-[#0A0D18] rounded-lg border border-[#202940]">
+              📸 [Foto de Nota Fiscal ou Cupom PIX]
+            </p>
+            <p className="text-[10px] text-slate-400">
+              &rarr; A visão computacional extrai estabelecimento, valor e data sem você digitar nada!
             </p>
           </div>
         </div>

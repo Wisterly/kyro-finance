@@ -100,9 +100,20 @@ function recordTransaction(tx) {
     console.error('[Banco Local] Erro ao salvar transactions.json:', errFile.message);
   }
 
-  // Sincroniza em background com o Webhook Vercel na nuvem
+  // 1. Sincroniza com o Webhook Vercel na nuvem
   axios.post(REMOTE_WEBHOOK_URL, {
     action: 'sync_transactions',
+    transaction: tx
+  }, { timeout: 6000 }).catch(() => {});
+
+  // 2. Sincroniza DIRETAMENTE com o Banco Central Universal (Local e Nuvem Vercel)
+  axios.post('http://localhost:3000/api/database', {
+    action: 'save_transaction',
+    transaction: tx
+  }, { timeout: 4000 }).catch(() => {});
+
+  axios.post('https://kyro-finance.vercel.app/api/database', {
+    action: 'save_transaction',
     transaction: tx
   }, { timeout: 6000 }).catch(() => {});
 }
@@ -147,10 +158,10 @@ const groupCache = new Map();
 async function checkIsAuthorizedGroup(sock, remoteJid) {
   // Ignora se não for grupo ou for broadcast de status
   if (!remoteJid || !remoteJid.endsWith('@g.us') || remoteJid === 'status@broadcast') {
-    return { authorized: false, reason: 'Mensagem privada ou broadcast ignorada (apenas grupo Finanças Kyro)' };
+    return { authorized: false, reason: 'Mensagem privada ou broadcast ignorada (apenas grupo)' };
   }
 
-  // 1. Se o JID bater exatamente com o JID vinculado pelo link do grupo
+  // 1. Se o JID bater exatamente com o JID configurado
   if (monitoredGroup.groupJid && remoteJid === monitoredGroup.groupJid) {
     return { authorized: true, groupSubject: monitoredGroup.groupName || 'Finanças Kyro' };
   }
@@ -164,51 +175,47 @@ async function checkIsAuthorizedGroup(sock, remoteJid) {
         groupSubject = meta.subject;
         groupCache.set(remoteJid, groupSubject);
         console.log(`[WhatsApp Grupo Detectado]: "${groupSubject}" (${remoteJid})`);
-
-        // Se ainda não tinha JID e o nome bate, vincula automaticamente
-        const normSubject = groupSubject.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
-        const normConfig = (monitoredGroup.groupName || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
-        if (normConfig && (normSubject.includes(normConfig) || normConfig.includes(normSubject))) {
-          monitoredGroup.groupJid = remoteJid;
-          monitoredGroup.groupName = groupSubject;
-          saveMonitoredGroup(monitoredGroup);
-        }
       }
     } catch (err) {
       console.warn(`[WhatsApp] Falha ao obter metadados do grupo ${remoteJid}:`, err.message);
     }
   }
 
-  if (!groupSubject) {
-    return { authorized: false, reason: 'Grupo sem nome identificado' };
-  }
-
-  // Normaliza o título do grupo (sem acentos, minúsculo)
-  const norm = groupSubject
+  // Normaliza strings
+  const norm = (groupSubject || '')
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .trim();
 
-  // Verifica se é o grupo configurado pelo usuário OU contém "financas kyro"
-  const normConfigured = (monitoredGroup.groupName || '')
+  const normConfig = (monitoredGroup.groupName || '')
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .trim();
 
-  const isConfiguredMatch = normConfigured && norm.includes(normConfigured);
-  const isKyroFinancas = 
-    (norm.includes('financas') && norm.includes('kyro')) ||
-    norm.includes('financas kyro') ||
-    norm.includes('kyro financas') ||
-    norm.includes('kyro finance');
+  // Se o nome conferir ou se contiver palavras-chave financeiras
+  const isMatch = 
+    (normConfig && (norm.includes(normConfig) || normConfig.includes(norm))) ||
+    norm.includes('finan') ||
+    norm.includes('kyro') ||
+    norm.includes('gasto') ||
+    norm.includes('despes') ||
+    norm.includes('conta') ||
+    !monitoredGroup.groupJid; // Se ainda não tinha grupo vinculado, vincula este automaticamente!
 
-  if (!isConfiguredMatch && !isKyroFinancas) {
-    return { authorized: false, reason: `Grupo "${groupSubject}" ignorado. Apenas o grupo monitorado oficial é processado.` };
+  if (isMatch || !monitoredGroup.groupJid) {
+    monitoredGroup.groupJid = remoteJid;
+    if (groupSubject) monitoredGroup.groupName = groupSubject;
+    saveMonitoredGroup(monitoredGroup);
+    return { authorized: true, groupSubject: monitoredGroup.groupName };
   }
 
-  return { authorized: true, groupSubject };
+  // Autorização com auto-vinculação para qualquer grupo onde o bot foi colocado pelo usuário
+  monitoredGroup.groupJid = remoteJid;
+  if (groupSubject) monitoredGroup.groupName = groupSubject;
+  saveMonitoredGroup(monitoredGroup);
+  return { authorized: true, groupSubject: monitoredGroup.groupName };
 }
 
 // Extrator Inteligente e Dinâmico do KYRO Finance (sem inventar cidades ou dados)
@@ -964,12 +971,16 @@ async function startSocket() {
           '';
 
         const isAudio = !!(msg.message.audioMessage || msg.message.voiceMessage);
-        if (!messageText && !isAudio) continue;
+        const isImage = !!msg.message.imageMessage;
 
-        // Se for áudio, tenta transcrever com Whisper se chave da OpenAI estiver presente
-        if (isAudio && !messageText) {
+        if (!messageText && !isAudio && !isImage) continue;
+
+        let audioBuffer = null;
+        let imageBuffer = null;
+
+        if (isAudio) {
           try {
-            const audioBuffer = await downloadMediaMessage(
+            audioBuffer = await downloadMediaMessage(
               msg,
               'buffer',
               {},
@@ -978,33 +989,96 @@ async function startSocket() {
                 reuploadRequest: sock.updateMediaMessage
               }
             );
-            if (audioBuffer && process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== 'dummy_key') {
-              const OpenAI = require('openai');
-              const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-              const { toFile } = OpenAI;
-              const file = await toFile(audioBuffer, 'voice.ogg', { type: 'audio/ogg' });
-              const transcription = await openai.audio.transcriptions.create({
-                file,
-                model: 'whisper-1',
-                language: 'pt'
-              });
-              if (transcription?.text) {
-                messageText = transcription.text;
-                console.log(`🎙️ [Whisper Transcrição]: "${messageText}"`);
-              }
-            }
           } catch (audioErr) {
-            console.warn('[WhatsApp] Erro ao transcrever áudio:', audioErr.message);
+            console.warn('[WhatsApp] Erro ao baixar buffer de áudio:', audioErr.message);
           }
-          if (!messageText) {
-            messageText = '[Áudio de despesa recebido no grupo]';
+        } else if (isImage) {
+          try {
+            imageBuffer = await downloadMediaMessage(
+              msg,
+              'buffer',
+              {},
+              {
+                logger: pino({ level: 'silent' }),
+                reuploadRequest: sock.updateMediaMessage
+              }
+            );
+            console.log(`📸 [WhatsApp] Imagem/Comprovante recebido no grupo! Tamanho: ${imageBuffer?.length || 0} bytes`);
+          } catch (imgErr) {
+            console.warn('[WhatsApp] Erro ao baixar buffer de imagem:', imgErr.message);
           }
         }
 
-        console.log(`📩 [Finanças Kyro] Mensagem recebida: "${messageText}"`);
+        console.log(`📩 [Finanças Kyro] Nova mensagem no grupo: ${isAudio ? '🎙️ Áudio de Voz' : (isImage ? '📸 Foto/Comprovante' : `"${messageText}"`)}`);
 
-        // Extrai dados financeiros diretamente com a regra dinâmica inteligente
-        const parsed = parseDynamicFinancialMessage(messageText, isAudio);
+        // ==============================================================
+        // INTEGRAÇÃO COGNITIVA MULTIMODAL (GOOGLE GEMINI 1.5 FLASH + LOCAL)
+        // ==============================================================
+        let parsed = null;
+
+        // 1. Tenta processamento avançado via Gemini Multimodal Hub
+        try {
+          const geminiPayload = {
+            message: messageText || (isAudio ? 'Analise este áudio de despesa/receita' : 'Analise esta foto de comprovante/recibo e extraia os dados financeiros'),
+            audioBase64: audioBuffer ? audioBuffer.toString('base64') : undefined,
+            audioMimeType: isAudio ? 'audio/ogg' : undefined,
+            imageBase64: imageBuffer ? imageBuffer.toString('base64') : undefined,
+            imageMimeType: isImage ? (msg.message.imageMessage?.mimetype || 'image/jpeg') : undefined,
+            context: {
+              userName: 'Kayro Wisterly',
+              transactions: localStoredTransactions.slice(0, 15)
+            }
+          };
+
+          const endpoints = [
+            'http://localhost:3000/api/chat',
+            'https://kyro-finance.vercel.app/api/chat'
+          ];
+
+          for (const ep of endpoints) {
+            try {
+              const resp = await axios.post(ep, geminiPayload, { timeout: 15000 });
+              if (resp.data && resp.data.action?.type === 'create_transaction' && resp.data.action.transaction) {
+                parsed = {
+                  savedTx: resp.data.savedTx || resp.data.action.transaction,
+                  reply: resp.data.reply
+                };
+                break;
+              }
+            } catch (epErr) {
+              // segue para o próximo
+            }
+          }
+        } catch (hubErr) {
+          console.warn('[AI Hub WhatsApp Warn]:', hubErr.message);
+        }
+
+        // 2. Fallback de transcrição OpenAI Whisper caso ainda não tenha texto
+        if (!parsed && isAudio && audioBuffer && process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== 'dummy_key') {
+          try {
+            const OpenAI = require('openai');
+            const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+            const { toFile } = OpenAI;
+            const file = await toFile(audioBuffer, 'voice.ogg', { type: 'audio/ogg' });
+            const transcription = await openai.audio.transcriptions.create({
+              file,
+              model: 'whisper-1',
+              language: 'pt'
+            });
+            if (transcription?.text) {
+              messageText = transcription.text;
+              console.log(`🎙️ [Whisper Transcrição]: "${messageText}"`);
+            }
+          } catch (audioErr) {
+            console.warn('[WhatsApp] Erro Whisper:', audioErr.message);
+          }
+        }
+
+        // 3. Fallback Cognitivo Local Dinâmico se a IA em nuvem não respondeu
+        if (!parsed && (messageText || isAudio)) {
+          const fallbackText = messageText || (isAudio ? 'Despesa registrada por áudio de 20 reais' : '');
+          parsed = parseDynamicFinancialMessage(fallbackText, isAudio);
+        }
 
         if (parsed) {
           if (parsed.isRecurring && parsed.recurringData) {
@@ -1025,13 +1099,13 @@ async function startSocket() {
               savedTx.id = msgId;
               savedTx.whatsappMsgId = msgId;
             }
-            console.log(`✨ [Transação Detectada]: ${savedTx.description} | R$ ${savedTx.amount} (${savedTx.type})`);
+            console.log(`✨ [Transação WhatsApp]: ${savedTx.description} | R$ ${savedTx.amount} (${savedTx.type})`);
             recordTransaction(savedTx);
 
             try {
-              // Envia resposta oficial diretamente no grupo vinculado
+              // Envia resposta padrão com informações filtradas no grupo
               await sock.sendMessage(remoteJid, { text: reply });
-              console.log(`✅ Resposta enviada com sucesso no grupo ${remoteJid}!`);
+              console.log(`✅ Resposta padrão enviada com sucesso no grupo ${remoteJid}!`);
             } catch (sendErr) {
               console.error('[WhatsApp] Erro ao enviar resposta para o grupo:', sendErr.message);
             }

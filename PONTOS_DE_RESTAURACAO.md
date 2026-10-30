@@ -332,13 +332,46 @@ A numeração segue rigorosamente a hierarquia de escopo:
 
 ---
 
+### [PR.011] — Restauração Plena do Robô WhatsApp no Grupo Oficial com Multimodalidade (Áudio, Texto e Foto) e Sincronização em Tempo Real
+- **Data/Hora:** 2026-10-25 06:45 (UTC-3)
+- **Tags Git:** `PR.011`, `PR.011.1`, `PR.011.2`
+
+#### `PR.011` — Escopo Geral do Projeto (Universal)
+- **Restauração e Blindagem do Monitoramento do Grupo de WhatsApp:**
+  - O robô Baileys e o webhook foram reconfigurados para monitorar com fidelidade máxima o grupo vinculado oficial e qualquer grupo de finanças onde o robô for adicionado pelo usuário.
+  - Eliminação de falhas de encoding de caracteres UTF-8 e auto-vinculação do JID do grupo em `monitored_group.json`.
+- **Suporte Multimodal Completo no Grupo (Texto, Áudio e Foto de Comprovante):**
+  - **Áudio de voz no grupo:** O arquivo de voz gravado no WhatsApp é baixado e processado pelo **Google Gemini 1.5 Flash Multimodal** e OpenAI Whisper, transcrevendo o áudio e identificando o lançamento financeiro na hora.
+  - **Fotos de Comprovantes e Notas Fiscais:** Ao enviar foto no grupo do WhatsApp, a imagem é baixada via Baileys, enviada para a visão computacional do Gemini, que lê os dados (valor, estabelecimento, data) e cria o lançamento sem que você precise digitar.
+  - **Mensagens de texto:** Análise semântica ágil de entradas, saídas e quitação de dívidas.
+- **Resposta Padrão com Informações Filtradas no Grupo:**
+  - O robô responde no próprio grupo com os tópicos filtrados (Tipo, Produto, Estabelecimento, Categoria, Valor, Forma de Pagamento e Cidade) e confirmação de atualização do sistema.
+- **Sincronização Bidirecional Contínua (Sistema Web + WhatsApp):**
+  - Correção da causa raiz onde transações do WhatsApp não eram salvas no banco central: agora cada transação recebida no WhatsApp é enviada para `transactions.json`, `/api/webhook`, `/api/database` (banco central universal 24h) e Google Firestore.
+  - O polling em `src/App.tsx` agora persiste as transações vindas do WhatsApp via `syncSaveToCentralDb` e `kyroCloud.syncSaveTransaction`, impedindo que o recarregamento periódico as substitua ou apague.
+  - O saldo geral, receitas do mês, despesas do mês e faturas de cartão são recalculados na mesma hora no Dashboard e em todas as abas.
+- **Layout & Usabilidade da Aba WhatsApp & IA:**
+  - Card de 4 colunas de exemplos didáticos (Despesa, Receita, Áudio e Foto de Comprovante).
+  - Carregamento automático dos dados do grupo monitorado e correção do simulador para enviar mensagens com identificador de grupo (`@g.us`).
+
+#### `PR.011.1` — Versão Computador (Desktop)
+- Aba WhatsApp & IA acessível na navegação, com simulador interativo de grupo, status visual do robô e atualização instantânea de saldos e gráficos em tela cheia.
+
+#### `PR.011.2` — Versão Celular (Mobile)
+- Botão "WhatsApp & IA" no menu lateral móvel com badge "24h", sincronização contínua de transações enviadas no WhatsApp refletindo imediatamente na visualização do smartphone.
+
+---
+
 ## TABELA DE CÓDIGOS DE PONTOS DE RESTAURAÇÃO
 
 Se você desejar restaurar qualquer versão anterior ou atual do Kyro Finance, basta colar o código do ponto de restauração na conversa:
 
 | Código do Ponto | Escopo | Descrição Resumida |
 | :--- | :--- | :--- |
-| **`PR.010`** | **Geral (Universal)** | **Versão Atual: Autonomia Total do Chat Gemini com aprendizado ativo de diretrizes via conversa, fim de descrições mescladas e ajuste direto de lançamentos** |
+| **`PR.011`** | **Geral (Universal)** | **Versão Atual: Restauração Plena do Robô WhatsApp no Grupo Oficial com Multimodalidade (Áudio, Texto e Foto), resposta filtrada padrão e sincronização em tempo real** |
+| `PR.011.1` | Desktop | Interface desktop com simulador interativo de grupo, monitoramento ativo e sincronização imediata |
+| `PR.011.2` | Mobile | Interface mobile com acesso à aba WhatsApp & IA e atualização simultânea de saldos no celular |
+| **`PR.010`** | **Geral (Universal)** | Autonomia Total do Chat Gemini com aprendizado ativo de diretrizes via conversa, fim de descrições mescladas e ajuste direto de lançamentos |
 | `PR.010.1` | Desktop | Interface desktop com modal de diretrizes expandido, tópicos ricos e badge de regras ativas |
 | `PR.010.2` | Mobile | Interface mobile com gestão touch de regras aprendidas no smartphone e sincronização em tempo real |
 | **`PR.009`** | **Geral (Universal)** | Eliminação definitiva do loop de retorno de lançamentos excluídos, sistema de Tombstones anti-ressurreição e botão Zerar Extrato |

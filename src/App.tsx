@@ -547,21 +547,19 @@ export default function App() {
           }
         } catch (e) {}
 
-        // 2. Busca da Vercel /api/webhook APENAS se o robô local estiver offline
-        if (!fetchedFromLocal) {
-          try {
-            const ctrl = new AbortController();
-            const tId = setTimeout(() => ctrl.abort(), 2000);
-            const res = await fetch('/api/webhook', { signal: ctrl.signal });
-            clearTimeout(tId);
-            if (res.ok) {
-              const data = await res.json();
-              if (data?.transactions && Array.isArray(data.transactions)) {
-                incoming.push(...data.transactions);
-              }
+        // 2. Busca também do endpoint /api/webhook na nuvem Vercel para sincronia multi-dispositivo
+        try {
+          const ctrl = new AbortController();
+          const tId = setTimeout(() => ctrl.abort(), 2000);
+          const res = await fetch('/api/webhook', { signal: ctrl.signal });
+          clearTimeout(tId);
+          if (res.ok) {
+            const data = await res.json();
+            if (data?.transactions && Array.isArray(data.transactions)) {
+              incoming.push(...data.transactions);
             }
-          } catch (e) {}
-        }
+          }
+        } catch (e) {}
 
         if (incoming.length > 0) {
           setTransactions(prev => {
@@ -575,10 +573,10 @@ export default function App() {
               // SE JÁ EXISTE NA TELA OU FOI EXCLUÍDO PELO USUÁRIO, IGNORA SUMARIAMENTE!
               if (existingIds.has(tid) || localDeletedSet.has(tid)) return false;
 
-              // Apenas aceita se for mensagem recebida recentemente (últimos 3 minutos)
+              // Apenas aceita se for mensagem recebida recentemente (últimos 10 minutos)
               if (t.createdAt) {
                 const diff = Date.now() - new Date(t.createdAt).getTime();
-                if (diff > 3 * 60 * 1000) return false;
+                if (diff > 10 * 60 * 1000) return false;
               }
 
               // Antiduplicação por assinatura idêntica recente
@@ -600,9 +598,16 @@ export default function App() {
               const symbol = latest.type === 'Entrada' ? '+' : '-';
               setWhatsappSyncToast({
                 show: true,
-                text: `Lançamento: ${latest.description} (${symbol} R$ ${latest.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}) atualizado no Dashboard e nas abas!`
+                text: `📱 WhatsApp: ${latest.description} (${symbol} R$ ${latest.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}) sincronizado no Dashboard e nas abas!`
               });
               setTimeout(() => setWhatsappSyncToast(null), 5000);
+
+              // PERSISTE NO FIRESTORE E NO BANCO CENTRAL UNIVERSAL
+              newOnes.forEach(ntx => {
+                kyroCloud.syncSaveTransaction(ntx);
+                syncSaveToCentralDb(ntx);
+              });
+
               const updated = [...newOnes, ...prev];
               localStorage.setItem('kyro_transactions', JSON.stringify(updated));
               return updated;
@@ -1260,6 +1265,7 @@ export default function App() {
     setTestWebhookResponse(null);
 
     try {
+      const groupJid = localStorage.getItem('kyro_group_jid') || '120363411839303797@g.us';
       const response = await fetch('/api/webhook', {
         method: 'POST',
         headers: {
@@ -1275,7 +1281,7 @@ export default function App() {
           evolutionInstance,
           data: {
             key: {
-              remoteJid: `${userPhone.replace(/\D/g, '') || '558699999999'}@s.whatsapp.net`,
+              remoteJid: groupJid,
               fromMe: false
             },
             message: {
@@ -1293,6 +1299,7 @@ export default function App() {
         if (data.savedTx) {
           setTransactions(prev => [data.savedTx, ...prev]);
           kyroCloud.syncSaveTransaction(data.savedTx);
+          syncSaveToCentralDb(data.savedTx);
         }
 
         // Adiciona à conversa do chat lateral
