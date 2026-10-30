@@ -1,0 +1,86 @@
+// ============================================================================
+// PONTE NATIVA ANDROID (CAPACITOR) <-> VERCEL CLOUD (KYRO FINANCE)
+// Garante que o APK instalado no Android carregue a interface instantaneamente
+// da memória do celular (0ms) enquanto sincroniza 100% das rotas /api/* com a Vercel.
+// ============================================================================
+
+const DEFAULT_VERCEL_CLOUD_URL = 'https://kyro-finance.vercel.app';
+
+export function isRunningInNativeApk(): boolean {
+  if (typeof window === 'undefined') return false;
+  const cap = (window as any).Capacitor;
+  if (cap && typeof cap.isNativePlatform === 'function' && cap.isNativePlatform()) {
+    return true;
+  }
+  if (window.location.protocol === 'capacitor:' || window.location.protocol === 'file:') {
+    return true;
+  }
+  // No Capacitor Android com androidScheme: 'https', a origem é https://localhost (sem porta)
+  if (window.location.hostname === 'localhost' && !window.location.port) {
+    return true;
+  }
+  return false;
+}
+
+export function getCloudBaseUrl(): string {
+  try {
+    const customUrl = localStorage.getItem('kyro_vercel_cloud_url');
+    if (customUrl && customUrl.startsWith('http')) {
+      return customUrl.replace(/\/$/, '');
+    }
+  } catch {
+    // Ignora erro de storage
+  }
+  return DEFAULT_VERCEL_CLOUD_URL;
+}
+
+export function initNativeBridge(): void {
+  if (typeof window === 'undefined') return;
+  if (!isRunningInNativeApk()) return;
+
+  const cloudBase = getCloudBaseUrl();
+  console.log(`[KYRO Native APK] Modo Aplicativo Android Ativo. Conectado à nuvem: ${cloudBase}`);
+
+  // 1. Interceptador transparente de window.fetch para rotas relativas "/api/*"
+  const originalFetch = window.fetch.bind(window);
+  window.fetch = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    try {
+      if (typeof input === 'string') {
+        if (input.startsWith('/api/') || input === '/api') {
+          return originalFetch(`${cloudBase}${input}`, init);
+        }
+      } else if (input instanceof URL) {
+        if (input.origin === window.location.origin && input.pathname.startsWith('/api/')) {
+          return originalFetch(`${cloudBase}${input.pathname}${input.search}`, init);
+        }
+      } else if (input instanceof Request) {
+        const reqUrl = new URL(input.url, window.location.origin);
+        if (reqUrl.origin === window.location.origin && reqUrl.pathname.startsWith('/api/')) {
+          const targetUrl = `${cloudBase}${reqUrl.pathname}${reqUrl.search}`;
+          const newReq = new Request(targetUrl, input);
+          return originalFetch(newReq, init);
+        }
+      }
+    } catch (err) {
+      console.warn('[KYRO Native APK] Aviso ao redirecionar rota para nuvem:', err);
+    }
+    return originalFetch(input, init);
+  };
+
+  // 2. Interceptador transparente de EventSource (SSE) para rotas "/api/*"
+  if (typeof window.EventSource !== 'undefined') {
+    const OriginalEventSource = window.EventSource;
+    const PatchedEventSource = function (url: string | URL, eventSourceInitDict?: EventSourceInit) {
+      let finalUrl = url;
+      if (typeof url === 'string' && url.startsWith('/api/')) {
+        finalUrl = `${cloudBase}${url}`;
+      }
+      return new OriginalEventSource(finalUrl, eventSourceInitDict);
+    } as unknown as typeof EventSource;
+    PatchedEventSource.prototype = OriginalEventSource.prototype;
+    (PatchedEventSource as any).CONNECTING = OriginalEventSource.CONNECTING;
+    (PatchedEventSource as any).OPEN = OriginalEventSource.OPEN;
+    (PatchedEventSource as any).CLOSED = OriginalEventSource.CLOSED;
+    window.EventSource = PatchedEventSource;
+  }
+}

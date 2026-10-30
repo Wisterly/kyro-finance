@@ -1,0 +1,87 @@
+name: Gerar Aplicativo Android (KYRO Finance APK)
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-apk:
+    name: Compilar KYRO Finance APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Baixar código do repositório
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Instalar dependências Web e Capacitor
+        run: npm install --legacy-peer-deps || npm install
+
+      - name: Compilar Projeto Web (Vite + TypeScript)
+        run: npm run build
+        env:
+          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+          VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
+          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+
+      - name: Sincronizar arquivos Web com o pacote Android (Capacitor)
+        run: npx cap sync android
+
+      - name: Configurar Java JDK 21 para Android Gradle
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'gradle'
+
+      - name: Dar permissão de execução ao Gradle Wrapper
+        run: chmod +x android/gradlew
+
+      - name: Compilar APK Otimizado (Debug e Release Assinados)
+        working-directory: ./android
+        run: |
+          ./gradlew assembleDebug assembleRelease
+          cp app/build/outputs/apk/release/app-release.apk ../KYRO-Finance.apk
+          cp app/build/outputs/apk/debug/app-debug.apk ../KYRO-Finance-debug.apk
+
+      - name: Disponibilizar KYRO-Finance.apk na aba Actions
+        uses: actions/upload-artifact@v4
+        with:
+          name: KYRO-Finance-APK
+          path: |
+            KYRO-Finance.apk
+            KYRO-Finance-debug.apk
+          if-no-files-found: error
+
+      - name: Publicar APK pronto para download direto em Releases
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: apk-latest
+          name: "📱 KYRO Finance - Aplicativo Android (Última Versão)"
+          body: |
+            ### 🚀 Aplicativo Oficial Android — KYRO | Private Finance
+            - **Download Direto no Celular:** Clique em **`KYRO-Finance.apk`** abaixo para baixar e instalar diretamente no seu celular Android (sem precisar descompactar `.zip`).
+            - **Sincronização 24h:** Conectado automaticamente ao banco central e WhatsApp na Vercel (`https://kyro-finance.vercel.app`).
+            - **Carregamento Instantâneo:** Interface empacotada nativamente na memória do aparelho.
+          files: |
+            KYRO-Finance.apk
+            KYRO-Finance-debug.apk
+          prerelease: false
+          make_latest: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

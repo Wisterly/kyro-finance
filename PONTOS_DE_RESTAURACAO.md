@@ -475,13 +475,35 @@ A numeração segue rigorosamente a hierarquia de escopo:
 
 ---
 
+### [PR.017] — Transformação Híbrida em Aplicativo Nativo Android (`.apk`) com CapacitorJS + GitHub Actions Cloud Builder + Sincronia Vercel 24h
+- **Data/Hora:** 2026-10-30 01:24 (UTC-3)
+- **Tags Git:** `PR.017`, `PR.017.1`, `PR.017.2`
+
+#### `PR.017` — Escopo Geral do Projeto (Universal)
+- **Arquitetura Híbrida Dupla (Web Vercel Online + Aplicativo Nativo Android `.apk`):**
+  - Integração completa do **CapacitorJS 8 (`@capacitor/core`, `@capacitor/android`, `@capacitor/cli`)** empacotando a interface compilada (`dist/`) diretamente na memória do smartphone Android (`com.kyro.finance` / `KYRO Finance`) para abertura instantânea (`0ms`) e máxima fluidez com aceleração de hardware.
+  - Criação da **Ponte Nativa Cloud (`src/nativeBridge.ts`)** que detecta automaticamente quando o sistema está rodando dentro do aplicativo Android instalado e roteia de forma transparente todas as chamadas `/api/*` (`fetch` e `EventSource`) para a nuvem da Vercel (`https://kyro-finance.vercel.app`), mantendo 100% das funções, banco centralizado 24h, WhatsApp e IA Gemini/Whisper sem alterar o funcionamento Web na Vercel.
+  - Configuração de permissões nativas Android (`AndroidManifest.xml` e `MainActivity.java`) para Microfone (`RECORD_AUDIO`, `MODIFY_AUDIO_SETTINGS`), Câmera (`CAMERA`), Armazenamento e tema escuro nativo (`#0B0F19`), além de ícones oficiais do KYRO Finance em todas as densidades (`mipmap-mdpi` a `mipmap-xxxhdpi`).
+  - Criação do pipeline automatizado **GitHub Actions (`.github/workflows/android-build.yml`)** que compila o projeto Web + Android na nuvem do GitHub (sem exigir Android Studio no PC) e disponibiliza o `KYRO-Finance.apk` assinado tanto na aba *Actions* quanto em *Releases* para download direto no celular.
+
+#### `PR.017.1` — Versão Computador (Desktop / Web Vercel)
+- Continua operando 100% online na Vercel (`https://kyro-finance.vercel.app`) e localmente sem nenhuma perda de layout, função ou performance.
+
+#### `PR.017.2` — Versão Celular (Aplicativo Android `.apk` & Mobile Web)
+- Aplicativo instalável `KYRO-Finance.apk` com abertura instantânea, tela cheia nativa (`#0B0F19`), suporte nativo a microfone/câmera e sincronização em tempo real com o Desktop e a Vercel.
+
+---
+
 ## TABELA DE CÓDIGOS DE PONTOS DE RESTAURAÇÃO
 
 Se você desejar restaurar qualquer versão anterior ou atual do Kyro Finance, basta colar o código do ponto de restauração na conversa:
 
 | Código do Ponto | Escopo | Descrição Resumida |
 | :--- | :--- | :--- |
-| **`PR.016`** | **Geral (Universal)** | **Versão Atual: Listagem e Monitoramento Exclusivo do Grupo `"Finanças KYRO"` (Outros Grupos Excluídos e Ignorados) + Design Responsivo + Sincronia `< 10ms`** |
+| **`PR.017`** | **Geral (Universal)** | **Versão Atual: Aplicativo Nativo Android (`KYRO-Finance.apk`) via CapacitorJS + GitHub Actions Cloud Builder + Sincronia Total com a Vercel 24h** |
+| `PR.017.1` | Desktop | Interface Web/Desktop operando 100% online na Vercel em sincronia em tempo real com o aplicativo Android |
+| `PR.017.2` | Mobile / APK | Aplicativo Android nativo (`KYRO-Finance.apk`) com abertura instantânea, microfone/câmera nativos e conexão automática com a nuvem Vercel |
+| **`PR.016`** | **Geral (Universal)** | Listagem e Monitoramento Exclusivo do Grupo `"Finanças KYRO"` (Outros Grupos Excluídos e Ignorados) + Design Responsivo + Sincronia `< 10ms` |
 | `PR.016.1` | Desktop | Interface desktop exibindo exclusivamente o grupo oficial `"Finanças KYRO"` |
 | `PR.016.2` | Mobile | Interface mobile responsiva exibindo exclusivamente o grupo oficial `"Finanças KYRO"` |
 | **`PR.015`** | **Geral (Universal)** | Design 100% Responsivo no WhatsApp (Desktop & Mobile) + Configurações de WhatsApp e Chat Salvas e Espelhadas Automaticamente |
