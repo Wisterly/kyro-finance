@@ -34,6 +34,12 @@ A numeração segue rigorosamente a hierarquia de escopo:
 - **O que entra na restauração:** Toda a estrutura de código (HTML, CSS, TypeScript, layout, componentes).
 - **O que NUNCA é apagado ou alterado:** Dados reais cadastrados pelo usuário, arquivos de upload, comprovantes, fotos, planilhas salvas, `localStorage` e banco Firestore.
 
+### 4. Regra Obrigatória de Entrega Final (Links + Pontos de Restauração + Download do APK Atualizado)
+- Sempre que qualquer nova configuração, ajuste ou implementação for concluída no projeto, além de atualizar a Vercel (`git push`), sincronizar o pacote Android (`npm run apk:sync`) e exibir os códigos dos Pontos de Restauração (`PR.0XX`, `PR.0XX.1`, `PR.0XX.2`) e links habituais, **é obrigatório incluir no final da resposta o link direto para baixar o arquivo `.apk` novo atualizado**:
+  - **Link Direto de Download do APK (Celular):** `https://github.com/Wisterly/kyro-finance/releases/download/apk-latest/KYRO-Finance.apk`
+  - **Página de Releases no GitHub:** `https://github.com/Wisterly/kyro-finance/releases`
+  - **Arquivo Local Atualizado no PC:** `C:\Users\Lenovo\Documents\antigravity\Finanças\KYRO-Finance.apk`
+
 ---
 
 ## HISTÓRICO DE PONTOS DE RESTAURAÇÃO

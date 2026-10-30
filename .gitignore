@@ -29,3 +29,4 @@ dist-ssr
 auth_info_baileys/
 transactions.json
 monitored_group.json
+*.apk
