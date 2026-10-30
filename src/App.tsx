@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { App as CapApp } from '@capacitor/app';
 import { 
   LayoutDashboard, 
   ArrowLeftRight, 
@@ -1021,6 +1022,202 @@ export default function App() {
   const [isGeminiModalOpen, setIsGeminiModalOpen] = useState(false);
   const [isTestingGemini, setIsTestingGemini] = useState(false);
   const [geminiTestFeedback, setGeminiTestFeedback] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+
+  // ==========================================================================
+  // NAVEGAÇÃO SEQUENCIAL DE ABAS E BOTÃO VOLTAR ANDROID (DUPLO TOQUE PARA SAIR)
+  // ==========================================================================
+  const [tabHistory, setTabHistory] = useState<Array<'dashboard' | 'transacoes' | 'orcamentos' | 'mapa' | 'relatorios' | 'whatsapp' | 'configuracoes' | 'cartoes'>>(['dashboard']);
+  const isBackNavigatingRef = useRef(false);
+  const lastBackPressRef = useRef<number>(0);
+  const exitToastTimerRef = useRef<any>(null);
+  const [exitToastVisible, setExitToastVisible] = useState(false);
+
+  // Sincronização em tempo real das refs para evitar stale-closure no listener nativo
+  const activeTabRef = useRef(activeTab);
+  activeTabRef.current = activeTab;
+
+  const tabHistoryRef = useRef(tabHistory);
+  tabHistoryRef.current = tabHistory;
+
+  const chatOpenMobileRef = useRef(chatOpenMobile);
+  chatOpenMobileRef.current = chatOpenMobile;
+
+  const mobileMenuOpenRef = useRef(mobileMenuOpen);
+  mobileMenuOpenRef.current = mobileMenuOpen;
+
+  const selectedTxRef = useRef(selectedTx);
+  selectedTxRef.current = selectedTx;
+
+  const activeKpiModalRef = useRef(activeKpiModal);
+  activeKpiModalRef.current = activeKpiModal;
+
+  const profileModalOpenRef = useRef(profileModalOpen);
+  profileModalOpenRef.current = profileModalOpen;
+
+  const notificationsOpenRef = useRef(notificationsOpen);
+  notificationsOpenRef.current = notificationsOpen;
+
+  const newTxModalOpenRef = useRef(newTxModalOpen);
+  newTxModalOpenRef.current = newTxModalOpen;
+
+  const newRecModalOpenRef = useRef(newRecModalOpen);
+  newRecModalOpenRef.current = newRecModalOpen;
+
+  const newCardModalOpenRef = useRef(newCardModalOpen);
+  newCardModalOpenRef.current = newCardModalOpen;
+
+  const whatsAppModalOpenRef = useRef(whatsAppModalOpen);
+  whatsAppModalOpenRef.current = whatsAppModalOpen;
+
+  const cloudConfigModalOpenRef = useRef(cloudConfigModalOpen);
+  cloudConfigModalOpenRef.current = cloudConfigModalOpen;
+
+  const isGeminiModalOpenRef = useRef(isGeminiModalOpen);
+  isGeminiModalOpenRef.current = isGeminiModalOpen;
+
+  // Rastreia navegação voluntária entre abas para empilhar no histórico
+  useEffect(() => {
+    if (isBackNavigatingRef.current) {
+      isBackNavigatingRef.current = false;
+      return;
+    }
+    setTabHistory(prev => {
+      if (prev.length > 0 && prev[prev.length - 1] === activeTab) {
+        return prev;
+      }
+      return [...prev, activeTab];
+    });
+  }, [activeTab]);
+
+  // Manipulador hierárquico do botão voltar do celular Android
+  const handleAndroidBack = useCallback(() => {
+    // 1. Camada 1: Fecha modais, gaveta do chat ou menu hambúrguer abertos
+    if (chatOpenMobileRef.current) {
+      setChatOpenMobile(false);
+      return;
+    }
+    if (mobileMenuOpenRef.current) {
+      setMobileMenuOpen(false);
+      return;
+    }
+    if (selectedTxRef.current) {
+      setSelectedTx(null);
+      return;
+    }
+    if (activeKpiModalRef.current) {
+      setActiveKpiModal(null);
+      return;
+    }
+    if (newTxModalOpenRef.current) {
+      setNewTxModalOpen(false);
+      return;
+    }
+    if (newRecModalOpenRef.current) {
+      setNewRecModalOpen(false);
+      return;
+    }
+    if (newCardModalOpenRef.current) {
+      setNewCardModalOpen(false);
+      return;
+    }
+    if (profileModalOpenRef.current) {
+      setProfileModalOpen(false);
+      return;
+    }
+    if (notificationsOpenRef.current) {
+      setNotificationsOpen(false);
+      return;
+    }
+    if (whatsAppModalOpenRef.current) {
+      setWhatsAppModalOpen(false);
+      return;
+    }
+    if (cloudConfigModalOpenRef.current) {
+      setCloudConfigModalOpen(false);
+      return;
+    }
+    if (isGeminiModalOpenRef.current) {
+      setIsGeminiModalOpen(false);
+      return;
+    }
+
+    // 2. Camada 2: Histórico sequencial de abas (volta uma a uma na ordem navegada)
+    const history = tabHistoryRef.current;
+    if (history.length > 1) {
+      const nextHistory = [...history];
+      nextHistory.pop(); // Remove a aba atual
+      const previousTab = nextHistory[nextHistory.length - 1];
+      isBackNavigatingRef.current = true;
+      setTabHistory(nextHistory);
+      setActiveTab(previousTab);
+      return;
+    }
+
+    // Se estiver em outra aba e o histórico só tiver 1 elemento, volta para a principal (dashboard)
+    if (activeTabRef.current !== 'dashboard') {
+      isBackNavigatingRef.current = true;
+      setTabHistory(['dashboard']);
+      setActiveTab('dashboard');
+      return;
+    }
+
+    // 3. Camada 3: Já está na aba principal ('dashboard') sem nenhum modal aberto
+    // Requer dois toques rápidos (em menos de 2s) para sair do aplicativo
+    const now = Date.now();
+    if (now - lastBackPressRef.current < 2000) {
+      try {
+        CapApp.exitApp();
+      } catch (err) {
+        console.warn('Erro ao finalizar app:', err);
+      }
+      return;
+    }
+
+    // Primeiro toque na aba principal: registra timestamp e exibe aviso flutuante
+    lastBackPressRef.current = now;
+    setExitToastVisible(true);
+    if (exitToastTimerRef.current) {
+      clearTimeout(exitToastTimerRef.current);
+    }
+    exitToastTimerRef.current = setTimeout(() => {
+      setExitToastVisible(false);
+    }, 2000);
+  }, []);
+
+  // Registra listener no Capacitor App Plugin e no DOM
+  useEffect(() => {
+    let capListenerHandle: any = null;
+
+    try {
+      CapApp.addListener('backButton', () => {
+        handleAndroidBack();
+      }).then(handle => {
+        capListenerHandle = handle;
+      }).catch(() => {});
+    } catch {
+      // Ignora se não estiver em ambiente nativo Capacitor
+    }
+
+    const onDocBack = (e: Event) => {
+      e.preventDefault();
+      handleAndroidBack();
+    };
+    document.addEventListener('backbutton', onDocBack);
+
+    // Gancho global para chamada direta nativa (Android WebView)
+    (window as any).__handleAndroidBackButton = handleAndroidBack;
+
+    return () => {
+      if (capListenerHandle && typeof capListenerHandle.remove === 'function') {
+        capListenerHandle.remove();
+      }
+      document.removeEventListener('backbutton', onDocBack);
+      delete (window as any).__handleAndroidBackButton;
+      if (exitToastTimerRef.current) {
+        clearTimeout(exitToastTimerRef.current);
+      }
+    };
+  }, [handleAndroidBack]);
 
   const handleAddAiRule = (ruleText: string) => {
     const clean = ruleText.trim();
@@ -6259,6 +6456,14 @@ export default function App() {
             <p className="text-xs font-bold leading-tight">Lançamento WhatsApp Registrado!</p>
             <p className="text-[11px] text-emerald-100">{whatsappSyncToast.text}</p>
           </div>
+        </div>
+      )}
+
+      {/* Toast flutuante de confirmação de saída do aplicativo Android */}
+      {exitToastVisible && (
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-[9999] px-5 py-2.5 rounded-full bg-[#0F172A]/95 border border-amber-500/60 text-amber-300 text-xs font-bold shadow-[0_10px_30px_rgba(0,0,0,0.85)] backdrop-blur-md flex items-center gap-2.5 pointer-events-none transition-all duration-300 animate-in fade-in slide-in-from-bottom-3">
+          <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping shrink-0" />
+          <span>Pressione voltar novamente para sair</span>
         </div>
       )}
 

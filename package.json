@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@capacitor/android": "^8.6.0",
+    "@capacitor/app": "^8.1.2",
     "@capacitor/core": "^8.6.0",
     "@whiskeysockets/baileys": "^7.0.0-rc14",
     "axios": "^1.20.0",

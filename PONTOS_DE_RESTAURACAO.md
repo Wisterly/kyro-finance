@@ -500,13 +500,35 @@ A numeração segue rigorosamente a hierarquia de escopo:
 
 ---
 
+### [PR.018] — Navegação Sequencial de Abas e Proteção de Saída com Duplo Toque no Botão Voltar do Android
+- **Data/Hora:** 2026-10-30 01:52 (UTC-3)
+- **Tags Git:** `PR.018`, `PR.018.1`, `PR.018.2`
+
+#### `PR.018` — Escopo Geral do Projeto (Universal)
+- **Integração do Plugin Nativo `@capacitor/app`:**
+  - Adicionado `@capacitor/app` com sincronização completa no Gradle Android para controle cirúrgico de ciclo de vida e eventos de botão físico/gestual de voltar (`backButton`).
+  - Implementação de pilha de histórico de navegação reativa (`tabHistory`) com proteção contra stale-closure e detecção automática de navegação voluntária vs volta.
+
+#### `PR.018.1` — Versão Computador (Desktop)
+- Mantém o comportamento inalterado no navegador web e desktop, com histórico preservado.
+
+#### `PR.018.2` — Versão Celular (Aplicativo Android `.apk` & Mobile)
+- **Fechamento Hierárquico de Modais e Gavetas:** Se o chat de IA no celular (`chatOpenMobile`), o menu hambúrguer ou qualquer modal estiver aberto, o botão de voltar fecha a gaveta/modal e mantém o usuário na aba atual.
+- **Navegação Regressiva Entre Abas:** Se o usuário estiver em abas secundárias (ex: WhatsApp, Cartões, Transações, Configurações, etc.), cada toque no botão de voltar retorna para a aba imediatamente anterior até atingir o Dashboard principal.
+- **Proteção Contra Fechamento Acidental (Duplo Toque):** Na aba principal (Dashboard), um toque único no botão de voltar não fecha o app e exibe o aviso flutuante elegante *"Pressione voltar novamente para sair"*. O aplicativo só é encerrado se o usuário apertar voltar duas vezes rapidamente (em menos de 2 segundos).
+
+---
+
 ## TABELA DE CÓDIGOS DE PONTOS DE RESTAURAÇÃO
 
 Se você desejar restaurar qualquer versão anterior ou atual do Kyro Finance, basta colar o código do ponto de restauração na conversa:
 
 | Código do Ponto | Escopo | Descrição Resumida |
 | :--- | :--- | :--- |
-| **`PR.017`** | **Geral (Universal)** | **Versão Atual: Aplicativo Nativo Android (`KYRO-Finance.apk`) via CapacitorJS + GitHub Actions Cloud Builder + Sincronia Total com a Vercel 24h** |
+| **`PR.018`** | **Geral (Universal)** | **Versão Atual: Navegação Sequencial de Abas + Proteção Contra Fechamento com Duplo Toque de Voltar no App Android (`@capacitor/app`)** |
+| `PR.018.1` | Desktop | Interface Web/Desktop com estabilidade operacional inalterada |
+| `PR.018.2` | Mobile / APK | Aplicativo Android com botão voltar voltando abas e chat progressivamente até o Dashboard e saída protegida por 2 cliques |
+| **`PR.017`** | **Geral (Universal)** | Aplicativo Nativo Android (`KYRO-Finance.apk`) via CapacitorJS + GitHub Actions Cloud Builder + Sincronia Total com a Vercel 24h |
 | `PR.017.1` | Desktop | Interface Web/Desktop operando 100% online na Vercel em sincronia em tempo real com o aplicativo Android |
 | `PR.017.2` | Mobile / APK | Aplicativo Android nativo (`KYRO-Finance.apk`) com abertura instantânea, microfone/câmera nativos e conexão automática com a nuvem Vercel |
 | **`PR.016`** | **Geral (Universal)** | Listagem e Monitoramento Exclusivo do Grupo `"Finanças KYRO"` (Outros Grupos Excluídos e Ignorados) + Design Responsivo + Sincronia `< 10ms` |
