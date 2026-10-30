@@ -69,8 +69,39 @@ let botStatus = {
 // ==============================================================
 const TRANSACTIONS_FILE = path.join(__dirname, 'transactions.json');
 const DELETED_IDS_FILE = path.join(__dirname, 'deleted_tx_ids.json');
+const SETTINGS_FILE = path.join(__dirname, 'kyro_settings.json');
 let localStoredTransactions = [];
 let localDeletedIds = new Set();
+let localSettings = {
+  whatsappConfig: {
+    inviteLink: 'https://chat.whatsapp.com/DQNscf09vX5DljtvTnx6YK',
+    groupJid: '120363411839303797@g.us',
+    groupName: 'Finanças KYRO',
+    lockedByUser: true,
+    phoneNumber: '558695368780',
+    connected: true
+  },
+  chatConfig: {
+    formattingPreference: 'tabelas',
+    customPrompt: ''
+  },
+  userAiRules: [
+    'Na descrição de lançamentos, registrar apenas o item específico mencionado (ex: Lanche) e nunca mesclar com barras a categoria (ex: Alimentação / Lanche). A categoria fica no campo Categoria.'
+  ]
+};
+
+try {
+  if (fs.existsSync(SETTINGS_FILE)) {
+    const rawSet = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf-8'));
+    if (rawSet && typeof rawSet === 'object') {
+      localSettings = { ...localSettings, ...rawSet };
+    }
+  }
+} catch (e) {}
+
+function saveSettingsToDisk() {
+  fs.promises.writeFile(SETTINGS_FILE, JSON.stringify(localSettings, null, 2), 'utf-8').catch(() => {});
+}
 
 try {
   if (fs.existsSync(DELETED_IDS_FILE)) {
@@ -189,11 +220,25 @@ function saveMonitoredGroup(data) {
     console.error('Erro ao salvar monitored_group.json:', e.message);
   }
 
-  // Notifica o webhook remoto da Vercel
-  axios.post(REMOTE_WEBHOOK_URL, {
-    action: 'set_monitored_group',
-    monitoredGroup
-  }, { timeout: 6000 }).catch(() => {});
+  localSettings.whatsappConfig = {
+    ...localSettings.whatsappConfig,
+    ...monitoredGroup,
+    connected: botStatus.connected,
+    phoneNumber: botStatus.phoneNumber || localSettings.whatsappConfig?.phoneNumber || '558695368780'
+  };
+  saveSettingsToDisk();
+
+  // Notifica o webhook remoto e o banco central da Vercel em paralelo
+  Promise.allSettled([
+    fastAxios.post(REMOTE_WEBHOOK_URL, {
+      action: 'set_monitored_group',
+      monitoredGroup
+    }),
+    fastAxios.post('https://kyro-finance.vercel.app/api/database', {
+      action: 'save_whatsapp_config',
+      whatsappConfig: localSettings.whatsappConfig
+    })
+  ]).catch(() => {});
 }
 
 // Cache completo de metadados de grupos (participants, SenderKeys) e store de mensagens para zerar latência no Baileys
@@ -1826,6 +1871,14 @@ const server = http.createServer(async (req, res) => {
         source: 'local-bot-file',
         transactions: localStoredTransactions.filter(t => t && !localDeletedIds.has(String(t.id))),
         deletedIds: Array.from(localDeletedIds),
+        userAiRules: localSettings.userAiRules || [],
+        chatConfig: localSettings.chatConfig || { formattingPreference: 'tabelas', customPrompt: '' },
+        whatsappConfig: {
+          ...localSettings.whatsappConfig,
+          ...monitoredGroup,
+          connected: botStatus.connected,
+          phoneNumber: botStatus.phoneNumber || localSettings.whatsappConfig?.phoneNumber || '558695368780'
+        },
         count: localStoredTransactions.length
       }));
     }
@@ -1884,6 +1937,60 @@ const server = http.createServer(async (req, res) => {
             fs.promises.writeFile(TRANSACTIONS_FILE, JSON.stringify(localStoredTransactions, null, 2), 'utf-8').catch(() => {});
             res.writeHead(200, { 'Content-Type': 'application/json' });
             return res.end(JSON.stringify({ success: true, action: 'synced_all', count: localStoredTransactions.length }));
+          }
+
+          if (action === 'save_ai_rule' && payload.rule) {
+            const rule = String(payload.rule).trim();
+            if (rule && !localSettings.userAiRules.includes(rule)) {
+              localSettings.userAiRules.push(rule);
+              saveSettingsToDisk();
+            }
+            fastAxios.post('https://kyro-finance.vercel.app/api/database', { action: 'save_ai_rule', rule }).catch(() => {});
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            return res.end(JSON.stringify({ success: true, userAiRules: localSettings.userAiRules }));
+          }
+
+          if (action === 'delete_ai_rule' && payload.rule) {
+            const rule = String(payload.rule).trim();
+            localSettings.userAiRules = (localSettings.userAiRules || []).filter(r => r !== rule);
+            saveSettingsToDisk();
+            fastAxios.post('https://kyro-finance.vercel.app/api/database', { action: 'delete_ai_rule', rule }).catch(() => {});
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            return res.end(JSON.stringify({ success: true, userAiRules: localSettings.userAiRules }));
+          }
+
+          if (action === 'sync_ai_rules' && Array.isArray(payload.rules)) {
+            localSettings.userAiRules = payload.rules;
+            saveSettingsToDisk();
+            fastAxios.post('https://kyro-finance.vercel.app/api/database', { action: 'sync_ai_rules', rules: payload.rules }).catch(() => {});
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            return res.end(JSON.stringify({ success: true, userAiRules: localSettings.userAiRules }));
+          }
+
+          if (action === 'save_chat_config' && payload.chatConfig) {
+            localSettings.chatConfig = { ...localSettings.chatConfig, ...payload.chatConfig };
+            if (Array.isArray(payload.userAiRules)) {
+              localSettings.userAiRules = payload.userAiRules;
+            }
+            saveSettingsToDisk();
+            fastAxios.post('https://kyro-finance.vercel.app/api/database', {
+              action: 'save_chat_config',
+              chatConfig: localSettings.chatConfig,
+              userAiRules: localSettings.userAiRules
+            }).catch(() => {});
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            return res.end(JSON.stringify({ success: true, chatConfig: localSettings.chatConfig }));
+          }
+
+          if (action === 'save_whatsapp_config' && payload.whatsappConfig) {
+            localSettings.whatsappConfig = { ...localSettings.whatsappConfig, ...payload.whatsappConfig };
+            saveSettingsToDisk();
+            fastAxios.post('https://kyro-finance.vercel.app/api/database', {
+              action: 'save_whatsapp_config',
+              whatsappConfig: localSettings.whatsappConfig
+            }).catch(() => {});
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            return res.end(JSON.stringify({ success: true, whatsappConfig: localSettings.whatsappConfig }));
           }
 
           res.writeHead(200, { 'Content-Type': 'application/json' });

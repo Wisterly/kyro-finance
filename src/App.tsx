@@ -510,6 +510,45 @@ export default function App() {
               return prev;
             });
           }
+
+          // 4. Sincroniza Configurações de Formato e Instrução do Chat Gemini entre Desktop e Mobile
+          if (data.chatConfig && typeof data.chatConfig === 'object') {
+            if (data.chatConfig.formattingPreference) {
+              setGeminiFormatStyle(prev => {
+                if (prev !== data.chatConfig.formattingPreference) {
+                  localStorage.setItem('kyro_gemini_format', data.chatConfig.formattingPreference);
+                  return data.chatConfig.formattingPreference;
+                }
+                return prev;
+              });
+            }
+            if (typeof data.chatConfig.customPrompt === 'string') {
+              setGeminiCustomPrompt(prev => {
+                if (prev !== data.chatConfig.customPrompt) {
+                  localStorage.setItem('kyro_gemini_custom_prompt', data.chatConfig.customPrompt);
+                  return data.chatConfig.customPrompt;
+                }
+                return prev;
+              });
+            }
+          }
+
+          // 5. Sincroniza Configurações do WhatsApp (Grupo Vinculado & Número) entre Desktop e Mobile
+          if (data.whatsappConfig && typeof data.whatsappConfig === 'object') {
+            if (data.whatsappConfig.groupName) {
+              localStorage.setItem('kyro_group_name', data.whatsappConfig.groupName);
+            }
+            if (data.whatsappConfig.inviteLink) {
+              localStorage.setItem('kyro_group_invite_link', data.whatsappConfig.inviteLink);
+            }
+            if (data.whatsappConfig.groupJid) {
+              localStorage.setItem('kyro_group_jid', data.whatsappConfig.groupJid);
+            }
+            if (data.whatsappConfig.phoneNumber) {
+              localStorage.setItem('kyro_second_phone_number', data.whatsappConfig.phoneNumber);
+            }
+            localStorage.setItem('kyro_group_confirmed', 'true');
+          }
         }
       } catch (err) {}
     };
@@ -1045,9 +1084,18 @@ export default function App() {
     localStorage.setItem('kyro_gemini_api_key', key);
     localStorage.setItem('kyro_gemini_format', format);
     localStorage.setItem('kyro_gemini_custom_prompt', prompt);
+    fetch('/api/database', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'save_chat_config',
+        chatConfig: { formattingPreference: format, customPrompt: prompt },
+        userAiRules
+      })
+    }).catch(() => {});
     setWhatsappSyncToast({
       show: true,
-      text: '⚡ Configurações do Google Gemini 1.5 Flash salvas com sucesso!'
+      text: '⚡ Configurações do Google Gemini 1.5 Flash salvas e sincronizadas entre Desktop e Mobile!'
     });
     setTimeout(() => setWhatsappSyncToast(null), 4000);
     setIsGeminiModalOpen(false);

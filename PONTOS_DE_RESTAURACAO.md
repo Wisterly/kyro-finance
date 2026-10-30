@@ -432,13 +432,41 @@ A numeração segue rigorosamente a hierarquia de escopo:
 
 ---
 
+### [PR.015] — Design 100% Responsivo na Aba WhatsApp & Persistência Permanente de Configurações (WhatsApp + Chat Gemini) entre Desktop e Mobile
+- **Data/Hora:** 2026-10-30 00:48 (UTC-3)
+- **Tags Git:** `PR.015`, `PR.015.1`, `PR.015.2`
+
+#### `PR.015` — Escopo Geral do Projeto (Universal)
+- **Design 100% Responsivo na Aba WhatsApp (`WhatsAppTab.tsx`):**
+  - Toda a interface do Assistente WhatsApp & IA foi refinada para se adaptar perfeitamente a qualquer tamanho de tela (celulares de 320px/390px, tablets e monitores desktop).
+  - **Cabeçalho e Seletor de Modo:** Em telas móveis, as abas *"📱 Pelo QR Code (Igual WhatsApp Web)"* e *"🔑 Por Código de 8 Dígitos"* empilham verticalmente (`grid-cols-1 sm:grid-cols-2`) sem cortar texto, e o quadro do QR Code se ajusta proporcionalmente (`max-w-[244px] w-full`).
+  - **Campos e Botões do Passo 1, Passo 2 e Simulador:** Os campos de link do grupo, nome do grupo, telefone e mensagem de teste usam layout responsivo (`flex-col sm:flex-row`) com botões de largura total no celular, eliminando qualquer sobreposição de botões sobre o texto digitado.
+- **Espelhamento Automático de Ajustes entre Desktop e Mobile:**
+  - Qualquer ajuste feito na versão Desktop (como alterar o grupo monitorado, link de convite, estilo de resposta do Chat Gemini ou diretrizes aprendidas pela IA) é sincronizado automaticamente via `/api/database` e `/api/webhook`, refletindo na versão Mobile em até 1,5s a 2s (e vice-versa).
+- **Persistência Definitiva das Configurações Atuais (`kyro_settings.json` + `monitored_group.json` + `auth_info_baileys` + `/api/database.ts`):**
+  - Confirmadas e salvas permanentemente em disco, memória central e nuvem todas as configurações aprovadas pelo usuário:
+    - **Grupo Oficial Vinculado e Travado:** `"Finanças KYRO"` (`120363411839303797@g.us` | `https://chat.whatsapp.com/DQNscf09vX5DljtvTnx6YK` | `lockedByUser: true`).
+    - **Aparelho WhatsApp Conectado:** `558695368780` (sessão criptografada salva em `auth_info_baileys`).
+    - **Configuração e Diretrizes do Chat Gemini:** Formato estruturado e regra ativa de descrição limpa (registrando apenas o item específico falado sem mesclar categoria com barras).
+
+#### `PR.015.1` — Versão Computador (Desktop)
+- Layout expandido em 12 colunas (`lg:col-span-7` + `lg:col-span-5` e 4 cards de exemplos lado a lado) com sincronização imediata de ajustes para o celular.
+
+#### `PR.015.2` — Versão Celular (Mobile)
+- Layout empilhado ergonômico para toque, sem rolagem horizontal e sem botões sobrepostos aos campos de digitação, carregando automaticamente todas as configurações salvas no Desktop.
+
+---
+
 ## TABELA DE CÓDIGOS DE PONTOS DE RESTAURAÇÃO
 
 Se você desejar restaurar qualquer versão anterior ou atual do Kyro Finance, basta colar o código do ponto de restauração na conversa:
 
 | Código do Ponto | Escopo | Descrição Resumida |
 | :--- | :--- | :--- |
-| **`PR.014`** | **Geral (Universal)** | **Versão Atual: Resposta Quase Instantânea no Grupo do WhatsApp (`cachedGroupMetadata` + Fast-Path) e Sincronização em Tempo Real no Sistema (`< 10ms` via SSE + Polling Paralelo 1s)** |
+| **`PR.015`** | **Geral (Universal)** | **Versão Atual: Design 100% Responsivo no WhatsApp (Desktop & Mobile) + Configurações de WhatsApp e Chat Salvas e Espelhadas Automaticamente** |
+| `PR.015.1` | Desktop | Interface desktop com espelhamento em tempo real de todas as configurações de WhatsApp e Chat para o Mobile |
+| `PR.015.2` | Mobile | Interface mobile 100% responsiva (campos e botões touch sem sobreposição) sincronizada com os ajustes do Desktop |
+| **`PR.014`** | **Geral (Universal)** | Resposta Quase Instantânea no Grupo do WhatsApp (`cachedGroupMetadata` + Fast-Path) e Sincronização em Tempo Real no Sistema (`< 10ms` via SSE + Polling Paralelo 1s) |
 | `PR.014.1` | Desktop | Interface desktop conectada via Stream SSE em tempo real (`< 10ms`) com atualização imediata de saldos e abas |
 | `PR.014.2` | Mobile | Interface mobile com sincronização paralela turbo de 1s na nuvem 24h sem bloqueio de rede |
 | **`PR.013`** | **Geral (Universal)** | Trava Exclusiva do Grupo Escolhido (por Link ou Lista de Grupos Membros), sem mudar sozinho para outros grupos, e IA Multimodal (Áudio, Texto e Foto) |

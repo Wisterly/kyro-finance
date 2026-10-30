@@ -64,26 +64,26 @@ export const WhatsAppTab: React.FC<WhatsAppTabProps> = ({
 
   const [isConnecting, setIsConnecting] = useState(false);
   const [groupName, setGroupName] = useState(() => {
-    return localStorage.getItem('kyro_group_name') || 'Finanças Kyro';
+    return localStorage.getItem('kyro_group_name') || 'Finanças KYRO';
   });
   const [groupConfirmed, setGroupConfirmed] = useState(() => {
-    return localStorage.getItem('kyro_group_confirmed') === 'true';
+    return localStorage.getItem('kyro_group_confirmed') !== 'false';
   });
   const [groupInviteLink, setGroupInviteLink] = useState(() => {
-    return localStorage.getItem('kyro_group_invite_link') || '';
+    return localStorage.getItem('kyro_group_invite_link') || 'https://chat.whatsapp.com/DQNscf09vX5DljtvTnx6YK';
   });
   const [selectedGroupJid, setSelectedGroupJid] = useState(() => {
-    return localStorage.getItem('kyro_group_jid') || '';
+    return localStorage.getItem('kyro_group_jid') || '120363411839303797@g.us';
   });
   const [participatingGroups, setParticipatingGroups] = useState<Array<{ id: string; subject: string; size?: number }>>([]);
   const [isLoadingGroups, setIsLoadingGroups] = useState(false);
   const [isSavingGroupLink, setIsSavingGroupLink] = useState(false);
   const [groupLinkSaveSuccess, setGroupLinkSaveSuccess] = useState(false);
-  const hasLoadedInitialGroup = React.useRef(false);
+  const isEditingGroupRef = React.useRef(false);
 
-  // Número do segundo celular configurável
+  // Número do segundo celular configurável (salvo e sincronizado)
   const [secondPhone, setSecondPhone] = useState(() => {
-    return localStorage.getItem('kyro_second_phone_number') || '5586994002892';
+    return localStorage.getItem('kyro_second_phone_number') || '558695368780';
   });
 
   // Abre diretamente no modo QR Code Oficial do WhatsApp Web
@@ -95,9 +95,27 @@ export const WhatsAppTab: React.FC<WhatsAppTabProps> = ({
 
   const [serverQrCode, setServerQrCode] = useState<string>('');
 
-  // Verificar status real do robô local e da nuvem a cada 2.5 segundos
-  // IMPORTANTE: Nunca sobrescreve os campos groupInviteLink e groupName enquanto o usuário edita!
+  // Sincronização responsiva contínua entre Desktop e Mobile (a cada 2s)
+  // Só pausa a atualização dos campos de texto se o usuário estiver com o cursor digitando neles (isEditingGroupRef)
   useEffect(() => {
+    const applyRemoteGroupConfig = (mg: any) => {
+      if (!mg || isEditingGroupRef.current) return;
+      if (mg.groupName) {
+        setGroupName(mg.groupName);
+        localStorage.setItem('kyro_group_name', mg.groupName);
+      }
+      if (mg.inviteLink) {
+        setGroupInviteLink(mg.inviteLink);
+        localStorage.setItem('kyro_group_invite_link', mg.inviteLink);
+      }
+      if (mg.groupJid) {
+        setSelectedGroupJid(mg.groupJid);
+        localStorage.setItem('kyro_group_jid', mg.groupJid);
+      }
+      setGroupConfirmed(true);
+      localStorage.setItem('kyro_group_confirmed', 'true');
+    };
+
     const checkBotStatus = async () => {
       let foundStatus = false;
 
@@ -120,7 +138,10 @@ export const WhatsAppTab: React.FC<WhatsAppTabProps> = ({
               if (data.connected) {
                 setIsConnected(true);
                 localStorage.setItem('kyro_second_phone_connected', 'true');
-                if (data.phoneNumber) setSecondPhone(data.phoneNumber);
+                if (data.phoneNumber) {
+                  setSecondPhone(data.phoneNumber);
+                  localStorage.setItem('kyro_second_phone_number', data.phoneNumber);
+                }
               } else {
                 setIsConnected(false);
                 localStorage.removeItem('kyro_second_phone_connected');
@@ -128,15 +149,8 @@ export const WhatsAppTab: React.FC<WhatsAppTabProps> = ({
               if (data.pairingCode && data.pairingCode !== pairingCode) {
                 setPairingCode(data.pairingCode);
               }
-              if (!hasLoadedInitialGroup.current && data.monitoredGroup) {
-                hasLoadedInitialGroup.current = true;
-                if (data.monitoredGroup.groupName) setGroupName(data.monitoredGroup.groupName);
-                if (data.monitoredGroup.inviteLink) setGroupInviteLink(data.monitoredGroup.inviteLink);
-                if (data.monitoredGroup.groupJid) {
-                  setSelectedGroupJid(data.monitoredGroup.groupJid);
-                  localStorage.setItem('kyro_group_jid', data.monitoredGroup.groupJid);
-                }
-                setGroupConfirmed(true);
+              if (data.monitoredGroup) {
+                applyRemoteGroupConfig(data.monitoredGroup);
               }
               break;
             }
@@ -144,10 +158,14 @@ export const WhatsAppTab: React.FC<WhatsAppTabProps> = ({
         } catch (err) {}
       }
 
-      // 2. Também consulta /api/webhook (funciona tanto local quanto na Vercel Online 24h)
+      // 2. Também consulta /api/webhook e /api/database (funciona tanto no Desktop quanto no Celular 24h)
       try {
-        const resWebhook = await fetch('/api/webhook');
-        if (resWebhook.ok) {
+        const [resWebhook, resDb] = await Promise.all([
+          fetch('/api/webhook').catch(() => null),
+          fetch('/api/database').catch(() => null)
+        ]);
+
+        if (resWebhook && resWebhook.ok) {
           const dataW = await resWebhook.json();
           if (dataW?.botStatus) {
             setBotServerRunning(true);
@@ -160,26 +178,34 @@ export const WhatsAppTab: React.FC<WhatsAppTabProps> = ({
             if (dataW.botStatus.connected) {
               setIsConnected(true);
               localStorage.setItem('kyro_second_phone_connected', 'true');
+              if (dataW.botStatus.phoneNumber) {
+                setSecondPhone(dataW.botStatus.phoneNumber);
+                localStorage.setItem('kyro_second_phone_number', dataW.botStatus.phoneNumber);
+              }
             } else if (!foundStatus) {
               setIsConnected(false);
             }
           }
-          if (!hasLoadedInitialGroup.current && dataW?.monitoredGroup) {
-            hasLoadedInitialGroup.current = true;
-            if (dataW.monitoredGroup.groupName) setGroupName(dataW.monitoredGroup.groupName);
-            if (dataW.monitoredGroup.inviteLink) setGroupInviteLink(dataW.monitoredGroup.inviteLink);
-            if (dataW.monitoredGroup.groupJid) {
-              setSelectedGroupJid(dataW.monitoredGroup.groupJid);
-              localStorage.setItem('kyro_group_jid', dataW.monitoredGroup.groupJid);
+          if (dataW?.monitoredGroup) {
+            applyRemoteGroupConfig(dataW.monitoredGroup);
+          }
+        }
+
+        if (resDb && resDb.ok) {
+          const dataDb = await resDb.json();
+          if (dataDb?.whatsappConfig) {
+            applyRemoteGroupConfig(dataDb.whatsappConfig);
+            if (dataDb.whatsappConfig.phoneNumber) {
+              setSecondPhone(dataDb.whatsappConfig.phoneNumber);
+              localStorage.setItem('kyro_second_phone_number', dataDb.whatsappConfig.phoneNumber);
             }
-            setGroupConfirmed(true);
           }
         }
       } catch (ew) {}
     };
 
     checkBotStatus();
-    const interval = setInterval(checkBotStatus, 2500);
+    const interval = setInterval(checkBotStatus, 2000);
     return () => clearInterval(interval);
   }, [pairingCode]);
 
@@ -316,7 +342,7 @@ export const WhatsAppTab: React.FC<WhatsAppTabProps> = ({
     const cleanName = (overrideGroup?.groupName !== undefined ? overrideGroup.groupName : groupName).trim() || 'Finanças Kyro';
     const cleanJid = (overrideGroup?.groupJid !== undefined ? overrideGroup.groupJid : selectedGroupJid).trim();
 
-    hasLoadedInitialGroup.current = true;
+    isEditingGroupRef.current = false;
     localStorage.setItem('kyro_group_invite_link', cleanLink);
     localStorage.setItem('kyro_group_name', cleanName);
     if (cleanJid) localStorage.setItem('kyro_group_jid', cleanJid);
@@ -324,9 +350,15 @@ export const WhatsAppTab: React.FC<WhatsAppTabProps> = ({
     setGroupConfirmed(true);
 
     try {
+      let resolvedGroupObj = {
+        inviteLink: cleanLink,
+        groupName: cleanName,
+        groupJid: cleanJid,
+        lockedByUser: true
+      };
+
       // 1. Notifica o robô local via proxy Vite e direto na porta 3001
       const setGroupEndpoints = ['/api/set-group', 'http://localhost:3001/api/set-group'];
-      let updatedFromBot = false;
       for (const ep of setGroupEndpoints) {
         try {
           const res = await fetch(ep, {
@@ -337,7 +369,7 @@ export const WhatsAppTab: React.FC<WhatsAppTabProps> = ({
           if (res.ok) {
             const data = await res.json();
             if (data?.monitoredGroup) {
-              updatedFromBot = true;
+              resolvedGroupObj = { ...resolvedGroupObj, ...data.monitoredGroup };
               if (data.monitoredGroup.groupName) {
                 setGroupName(data.monitoredGroup.groupName);
                 localStorage.setItem('kyro_group_name', data.monitoredGroup.groupName);
@@ -356,17 +388,31 @@ export const WhatsAppTab: React.FC<WhatsAppTabProps> = ({
         } catch (e) {}
       }
 
-      // 2. Notifica também o webhook remoto da Vercel
-      await fetch('/api/webhook', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'set_monitored_group',
-          inviteLink: cleanLink,
-          groupName: cleanName,
-          groupJid: cleanJid
+      // 2. Sincroniza simultaneamente no Webhook e no Banco Central (/api/database) para espelhar entre Desktop e Mobile!
+      await Promise.allSettled([
+        fetch('/api/webhook', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'set_monitored_group',
+            inviteLink: resolvedGroupObj.inviteLink,
+            groupName: resolvedGroupObj.groupName,
+            groupJid: resolvedGroupObj.groupJid
+          })
+        }),
+        fetch('/api/database', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'save_whatsapp_config',
+            whatsappConfig: {
+              ...resolvedGroupObj,
+              phoneNumber: secondPhone,
+              connected: isConnected
+            }
+          })
         })
-      }).catch(() => {});
+      ]);
 
       setGroupLinkSaveSuccess(true);
       setTimeout(() => setGroupLinkSaveSuccess(false), 5000);
@@ -378,16 +424,16 @@ export const WhatsAppTab: React.FC<WhatsAppTabProps> = ({
   };
 
   return (
-    <div className="space-y-6 max-w-6xl mx-auto">
-      {/* ================= HEADER SIMPLES & DIDÁTICO ================= */}
-      <div className="bg-[#111628] p-6 rounded-2xl border border-[#202940] shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-5">
-        <div className="flex items-center gap-4">
-          <div className="h-14 w-14 rounded-2xl bg-gradient-to-tr from-emerald-600 via-teal-500 to-cyan-400 text-slate-950 flex items-center justify-center font-bold shadow-[0_0_25px_rgba(16,185,129,0.35)] flex-shrink-0">
-            <Smartphone size={28} />
+    <div className="space-y-4 sm:space-y-6 max-w-6xl mx-auto w-full px-1 sm:px-0">
+      {/* ================= HEADER SIMPLES, DIDÁTICO & 100% RESPONSIVO ================= */}
+      <div className="bg-[#111628] p-4 sm:p-6 rounded-2xl border border-[#202940] shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-5">
+        <div className="flex items-start sm:items-center gap-3 sm:gap-4">
+          <div className="h-12 w-12 sm:h-14 sm:w-14 rounded-2xl bg-gradient-to-tr from-emerald-600 via-teal-500 to-cyan-400 text-slate-950 flex items-center justify-center font-bold shadow-[0_0_25px_rgba(16,185,129,0.35)] flex-shrink-0">
+            <Smartphone size={24} className="sm:w-7 sm:h-7" />
           </div>
-          <div>
-            <div className="flex flex-wrap items-center gap-2.5">
-              <h2 className="text-xl font-bold text-white tracking-tight">
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-base sm:text-xl font-bold text-white tracking-tight leading-snug">
                 Assistente WhatsApp & IA Multi-Provedores
               </h2>
               <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border flex items-center gap-1.5 ${
@@ -399,11 +445,11 @@ export const WhatsAppTab: React.FC<WhatsAppTabProps> = ({
                 {isConnected ? 'WhatsApp Conectado' : 'Aguardando Pareamento'}
               </span>
               <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-purple-500/15 text-purple-300 border border-purple-500/30 flex items-center gap-1">
-                <Sparkles size={11} /> Motor IA Livre (tgpt) + OpenAI Ativos
+                <Sparkles size={11} /> Sincronizado Desktop & Mobile
               </span>
             </div>
-            <p className="text-xs text-slate-400 mt-1">
-              Conecte seu WhatsApp sem precisar pagar APIs caras: sistema com provedores livres integrados e leitura instantânea de áudio e texto.
+            <p className="text-[11px] sm:text-xs text-slate-400 mt-1 leading-relaxed">
+              Design 100% responsivo: todos os ajustes feitos no computador ou no celular são salvos e espelhados automaticamente.
             </p>
           </div>
         </div>
@@ -412,27 +458,26 @@ export const WhatsAppTab: React.FC<WhatsAppTabProps> = ({
           <button
             type="button"
             onClick={handleDisconnect}
-            className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold self-start md:self-center transition-all"
+            className="w-full md:w-auto px-3.5 py-2 sm:py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold text-center transition-all"
           >
             Desconectar Aparelho
           </button>
         )}
       </div>
 
-      {/* ================= FLUXO DIDÁTICO EM 3 PASSOS ================= */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      {/* ================= FLUXO DIDÁTICO EM 3 PASSOS (RESPONSIVO MOBILE & DESKTOP) ================= */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6">
         
-        {/* PASSO 1: QR CODE DE CONEXÃO DO SEGUNDO CELULAR (7 COLUNAS) */}
-        {/* PASSO 1: CONECTAR O SEGUNDO CELULAR (POR CÓDIGO DE 8 DÍGITOS OU QR CODE) */}
-        <div className="lg:col-span-7 bg-[#111628] p-6 rounded-2xl border border-emerald-500/30 shadow-lg space-y-5">
-          <div className="flex items-center justify-between border-b border-[#1E263E] pb-4">
-            <div className="flex items-center gap-3">
-              <div className="h-8 w-8 rounded-xl bg-emerald-500/15 text-emerald-400 flex items-center justify-center font-bold text-sm">
+        {/* PASSO 1: CONECTAR O SEGUNDO CELULAR (7 COLUNAS NO DESKTOP, 100% NO MOBILE) */}
+        <div className="lg:col-span-7 bg-[#111628] p-4 sm:p-6 rounded-2xl border border-emerald-500/30 shadow-lg space-y-4 sm:space-y-5">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#1E263E] pb-3.5 sm:pb-4">
+            <div className="flex items-center gap-2.5 sm:gap-3">
+              <div className="h-8 w-8 rounded-xl bg-emerald-500/15 text-emerald-400 flex items-center justify-center font-bold text-sm flex-shrink-0">
                 1
               </div>
               <div>
-                <h3 className="font-bold text-sm text-white">Passo 1: Conectar o Segundo Celular</h3>
-                <p className="text-[11px] text-slate-400">Escolha conectar pelo Código de 8 Dígitos (sem câmera) ou pelo QR Code</p>
+                <h3 className="font-bold text-xs sm:text-sm text-white">Passo 1: Conectar o Segundo Celular</h3>
+                <p className="text-[10px] sm:text-[11px] text-slate-400">Escolha conectar pelo QR Code ou pelo Código de 8 Dígitos</p>
               </div>
             </div>
             <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
@@ -440,53 +485,53 @@ export const WhatsAppTab: React.FC<WhatsAppTabProps> = ({
             </span>
           </div>
 
-          {/* Seletor de Modo de Pareamento */}
-          <div className="grid grid-cols-2 gap-2 bg-[#0B0E18] p-1.5 rounded-xl border border-[#1E263E]">
+          {/* Seletor de Modo de Pareamento (Empilha no Mobile, 2 Colunas no Desktop) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-[#0B0E18] p-1.5 rounded-xl border border-[#1E263E]">
             <button
               type="button"
               onClick={() => setPairMode('qr')}
-              className={`py-2 px-3 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
+              className={`py-2.5 sm:py-2 px-3 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
                 pairMode === 'qr'
                   ? 'bg-emerald-600 text-white shadow-md'
                   : 'text-slate-400 hover:text-white'
               }`}
             >
-              <QrCode size={14} />
-              <span>📱 Pelo QR Code (Igual WhatsApp Web)</span>
+              <QrCode size={14} className="flex-shrink-0" />
+              <span className="truncate">📱 Pelo QR Code (Igual WhatsApp Web)</span>
             </button>
             <button
               type="button"
               onClick={() => setPairMode('code')}
-              className={`py-2 px-3 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
+              className={`py-2.5 sm:py-2 px-3 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
                 pairMode === 'code'
                   ? 'bg-emerald-600 text-white shadow-md'
                   : 'text-slate-400 hover:text-white'
               }`}
             >
-              <span>🔑 Por Código de 8 Dígitos</span>
+              <span className="truncate">🔑 Por Código de 8 Dígitos</span>
             </button>
           </div>
 
-          {/* MODO A: CÓDIGO DE PAREAMENTO DE 8 DÍGITOS (NÃO USA CÂMERA, NUNCA DÁ ERRO) */}
+          {/* MODO A: CÓDIGO DE PAREAMENTO DE 8 DÍGITOS */}
           {pairMode === 'code' && (
             <div className="space-y-4">
-              <div className="p-4 rounded-xl bg-gradient-to-r from-emerald-950/40 via-[#131D31] to-[#141A2E] border border-emerald-500/40 space-y-3">
+              <div className="p-3.5 sm:p-4 rounded-xl bg-gradient-to-r from-emerald-950/40 via-[#131D31] to-[#141A2E] border border-emerald-500/40 space-y-3">
                 <span className="text-[11px] text-slate-300 font-bold block">
                   Digite o número do seu Segundo Celular (com DDD):
                 </span>
-                <div className="flex gap-2">
+                <div className="flex flex-col sm:flex-row gap-2">
                   <input
                     type="text"
                     value={secondPhone}
                     onChange={(e) => setSecondPhone(e.target.value)}
                     placeholder="Ex: 5586994002892 (DDI + DDD + Número)"
-                    className="flex-1 bg-[#0A0D18] border border-[#202940] rounded-xl px-4 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 font-mono"
+                    className="w-full sm:flex-1 bg-[#0A0D18] border border-[#202940] rounded-xl px-4 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 font-mono"
                   />
                   <button
                     type="button"
                     onClick={handleRequestPairingCode}
                     disabled={isRequestingCode}
-                    className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all shadow-md flex items-center gap-1.5 disabled:opacity-50"
+                    className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all shadow-md flex items-center justify-center gap-1.5 disabled:opacity-50"
                   >
                     {isRequestingCode ? (
                       <>
@@ -508,21 +553,21 @@ export const WhatsAppTab: React.FC<WhatsAppTabProps> = ({
                   </div>
                 )}
 
-                <div className="p-4 bg-[#080B14] rounded-xl border border-emerald-500/30 text-center space-y-1">
-                  <div className="flex items-center justify-between pb-1">
+                <div className="p-3.5 sm:p-4 bg-[#080B14] rounded-xl border border-emerald-500/30 text-center space-y-1">
+                  <div className="flex flex-wrap items-center justify-between gap-1.5 pb-1">
                     <span className="text-[11px] text-slate-400 font-semibold">
-                      Seu Código Oficial de Pareamento do WhatsApp:
+                      Seu Código Oficial de Pareamento:
                     </span>
                     <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
                       botServerRunning 
                         ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' 
                         : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
                     }`}>
-                      {botServerRunning ? '🟢 Robô Local Conectado' : '🟡 Robô Desligado (iniciar_robo.bat)'}
+                      {botServerRunning ? '🟢 Robô Conectado' : '🟡 Robô Desligado'}
                     </span>
                   </div>
                   <div className="flex items-center justify-center gap-3 pt-2">
-                    <span className="font-mono text-2xl sm:text-3xl font-black text-amber-400 tracking-widest select-all">
+                    <span className="font-mono text-xl sm:text-3xl font-black text-amber-400 tracking-widest select-all">
                       {pairingCode}
                     </span>
                     <button
@@ -545,8 +590,8 @@ export const WhatsAppTab: React.FC<WhatsAppTabProps> = ({
                 <ol className="list-decimal list-inside space-y-1.5 text-slate-400 text-[11px] leading-relaxed">
                   <li>No segundo celular, abra o WhatsApp &rarr; toque em <strong>Aparelhos Conectados</strong>.</li>
                   <li>Toque no botão verde <strong>"Conectar um Aparelho"</strong>.</li>
-                  <li>Na parte inferior da tela (embaixo do leitor de câmera), toque na frase: <strong className="text-emerald-400">"Conectar com número de telefone"</strong>.</li>
-                  <li>Digite o código de 8 dígitos <strong className="text-amber-400 font-mono">{pairingCode}</strong>. O WhatsApp conecta na hora sem precisar de câmera!</li>
+                  <li>Na parte inferior da tela, toque em: <strong className="text-emerald-400">"Conectar com número de telefone"</strong>.</li>
+                  <li>Digite o código de 8 dígitos <strong className="text-amber-400 font-mono">{pairingCode}</strong>.</li>
                 </ol>
               </div>
 
@@ -570,9 +615,9 @@ export const WhatsAppTab: React.FC<WhatsAppTabProps> = ({
                   )}
                 </button>
               ) : (
-                <div className="p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-semibold flex items-center justify-between">
+                <div className="p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-semibold flex flex-wrap items-center justify-between gap-2">
                   <span className="flex items-center gap-2">
-                    <CheckCheck size={18} className="text-emerald-400" />
+                    <CheckCheck size={18} className="text-emerald-400 flex-shrink-0" />
                     <span>Segundo Celular ({secondPhone}) Pareado com Sucesso!</span>
                   </span>
                   <span className="text-[10px] bg-emerald-500/20 px-2 py-0.5 rounded font-mono">Status: Ativo</span>
@@ -583,17 +628,18 @@ export const WhatsAppTab: React.FC<WhatsAppTabProps> = ({
 
           {/* MODO B: PELO QR CODE OFICIAL DO WHATSAPP WEB */}
           {pairMode === 'qr' && (
-            <div className="grid grid-cols-1 sm:grid-cols-12 gap-6 items-center">
+            <div className="grid grid-cols-1 sm:grid-cols-12 gap-5 sm:gap-6 items-center">
               <div className="sm:col-span-6 flex flex-col items-center">
-                <div className="p-3 bg-white rounded-2xl shadow-[0_0_30px_rgba(16,185,129,0.25)] border-4 border-emerald-500/40 relative group flex items-center justify-center min-h-[244px] min-w-[244px]">
+                <div className="p-3 bg-white rounded-2xl shadow-[0_0_30px_rgba(16,185,129,0.25)] border-4 border-emerald-500/40 relative group flex items-center justify-center w-full max-w-[244px] min-h-[230px] sm:min-h-[244px]">
                   {serverQrCode ? (
                     <QRCodeSVG 
                       value={serverQrCode} 
-                      size={220} 
+                      size={210} 
                       level="M"
                       includeMargin={true}
                       bgColor="#ffffff"
                       fgColor="#000000"
+                      className="w-full h-auto max-w-[216px]"
                     />
                   ) : (
                     <div className="flex flex-col items-center justify-center text-center p-4 space-y-3 max-w-[210px]">
@@ -630,15 +676,15 @@ export const WhatsAppTab: React.FC<WhatsAppTabProps> = ({
                   )}
                 </div>
 
-                <div className="mt-2.5 flex items-center gap-1.5">
-                  <span className={`h-2 w-2 rounded-full ${serverQrCode ? 'bg-emerald-400 animate-ping' : 'bg-amber-400'}`}></span>
+                <div className="mt-2.5 flex items-center gap-1.5 text-center">
+                  <span className={`h-2 w-2 rounded-full flex-shrink-0 ${isConnected || serverQrCode ? 'bg-emerald-400 animate-ping' : 'bg-amber-400'}`}></span>
                   <span className="text-[11px] font-semibold text-emerald-400">
-                    {serverQrCode ? 'QR Code Oficial WhatsApp Web Ativo' : 'Sincronizando Sessão WhatsApp Web...'}
+                    {isConnected ? `Sessão Ativa e Salva (${secondPhone})` : serverQrCode ? 'QR Code Oficial WhatsApp Web Ativo' : 'Sincronizando Sessão WhatsApp Web...'}
                   </span>
                 </div>
               </div>
 
-              <div className="sm:col-span-6 space-y-3 text-xs text-slate-300">
+              <div className="sm:col-span-6 space-y-2.5 sm:space-y-3 text-xs text-slate-300">
                 <div className="p-3 rounded-xl bg-[#141A2E] border border-[#222C46] space-y-1">
                   <strong className="text-white block font-bold">1. Abra o WhatsApp no Celular</strong>
                   <p className="text-[11px] text-slate-400">No celular que ficará no grupo, abra o aplicativo do WhatsApp.</p>
@@ -668,16 +714,16 @@ export const WhatsAppTab: React.FC<WhatsAppTabProps> = ({
           )}
         </div>
 
-        {/* PASSO 2: VINCULAR O LINK DO GRUPO MONITORADO (5 COLUNAS) */}
-        <div className="lg:col-span-5 bg-[#111628] p-6 rounded-2xl border border-teal-500/30 shadow-lg space-y-5 flex flex-col justify-between">
+        {/* PASSO 2: VINCULAR O LINK DO GRUPO MONITORADO (5 COLUNAS NO DESKTOP, 100% NO MOBILE) */}
+        <div className="lg:col-span-5 bg-[#111628] p-4 sm:p-6 rounded-2xl border border-teal-500/30 shadow-lg space-y-4 sm:space-y-5 flex flex-col justify-between">
           <div className="space-y-4">
-            <div className="flex items-center gap-3 border-b border-[#1E263E] pb-4">
-              <div className="h-8 w-8 rounded-xl bg-teal-500/15 text-teal-400 flex items-center justify-center font-bold text-sm">
+            <div className="flex items-center gap-2.5 sm:gap-3 border-b border-[#1E263E] pb-3.5 sm:pb-4">
+              <div className="h-8 w-8 rounded-xl bg-teal-500/15 text-teal-400 flex items-center justify-center font-bold text-sm flex-shrink-0">
                 2
               </div>
               <div>
-                <h3 className="font-bold text-sm text-white">Passo 2: Vincular o Grupo de Monitoramento</h3>
-                <p className="text-[11px] text-slate-400">Cole o link do grupo para que APENAS ele seja lido e monitorado</p>
+                <h3 className="font-bold text-xs sm:text-sm text-white">Passo 2: Vincular o Grupo de Monitoramento</h3>
+                <p className="text-[10px] sm:text-[11px] text-slate-400">Cole o link ou selecione o grupo (sincroniza entre PC e Celular)</p>
               </div>
             </div>
 
@@ -692,42 +738,45 @@ export const WhatsAppTab: React.FC<WhatsAppTabProps> = ({
                 </div>
               </div>
 
-              {/* Opção A: Input Link de Convite do Grupo */}
+              {/* Opção A: Input Link de Convite do Grupo (Empilha em telas menores para não esmagar o campo) */}
               <div className="space-y-1.5 pt-1">
-                <label className="text-[11px] font-bold text-teal-300 flex items-center justify-between">
+                <label className="text-[11px] font-bold text-teal-300 flex items-center justify-between gap-2">
                   <span className="flex items-center gap-1.5">
-                    <ExternalLink size={13} /> Opção A: Cole o Link de Convite do Grupo:
+                    <ExternalLink size={13} className="flex-shrink-0" /> Opção A: Cole o Link de Convite do Grupo:
                   </span>
                   {groupInviteLink && (
                     <button
                       type="button"
                       onClick={() => {
+                        isEditingGroupRef.current = true;
                         setGroupInviteLink('');
                         setSelectedGroupJid('');
                       }}
-                      className="text-[10px] text-slate-400 hover:text-rose-400 underline"
+                      className="text-[10px] text-slate-400 hover:text-rose-400 underline flex-shrink-0"
                     >
                       Limpar link
                     </button>
                   )}
                 </label>
-                <div className="flex gap-2">
+                <div className="flex flex-col sm:flex-row gap-2">
                   <input
                     type="url"
                     value={groupInviteLink}
+                    onFocus={() => { isEditingGroupRef.current = true; }}
+                    onBlur={() => { setTimeout(() => { isEditingGroupRef.current = false; }, 1500); }}
                     onChange={(e) => {
-                      hasLoadedInitialGroup.current = true;
+                      isEditingGroupRef.current = true;
                       setGroupInviteLink(e.target.value);
                       setSelectedGroupJid('');
                     }}
-                    placeholder="https://chat.whatsapp.com/KLV2NXnwQjc66NV6Lf8J4Y..."
-                    className="flex-1 bg-[#0A0D18] border border-[#202940] rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-teal-500 font-mono"
+                    placeholder="https://chat.whatsapp.com/DQNscf09vX5DljtvTnx6YK..."
+                    className="w-full sm:flex-1 bg-[#0A0D18] border border-[#202940] rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-teal-500 font-mono"
                   />
                   <button
                     type="button"
                     onClick={() => handleSaveGroupLink({ groupJid: '', inviteLink: groupInviteLink })}
                     disabled={isSavingGroupLink}
-                    className="px-4 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs flex items-center gap-1.5 transition-all shadow-md disabled:opacity-50 whitespace-nowrap"
+                    className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-md disabled:opacity-50 whitespace-nowrap"
                   >
                     {isSavingGroupLink ? <RefreshCw size={14} className="animate-spin" /> : <CheckCheck size={14} />}
                     <span>{isSavingGroupLink ? 'Vinculando...' : 'Vincular Link'}</span>
@@ -737,15 +786,15 @@ export const WhatsAppTab: React.FC<WhatsAppTabProps> = ({
 
               {/* Opção B: Escolher Diretamente da Lista de Grupos que este Número já é Membro */}
               <div className="space-y-1.5 pt-1 border-t border-[#1E263E]">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-1.5">
                   <label className="text-[11px] font-bold text-emerald-300 flex items-center gap-1.5">
-                    <Users size={13} /> Opção B: Escolher Grupo que este Número faz parte:
+                    <Users size={13} className="flex-shrink-0" /> Opção B: Escolher Grupo que este Número faz parte:
                   </label>
                   <button
                     type="button"
                     onClick={handleRefreshParticipatingGroups}
                     disabled={isLoadingGroups}
-                    className="text-[10px] px-2 py-0.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-teal-300 font-semibold flex items-center gap-1"
+                    className="text-[10px] px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-teal-300 font-semibold flex items-center gap-1"
                   >
                     <RefreshCw size={10} className={isLoadingGroups ? 'animate-spin' : ''} />
                     <span>Atualizar Lista</span>
@@ -765,13 +814,13 @@ export const WhatsAppTab: React.FC<WhatsAppTabProps> = ({
                             setSelectedGroupJid(grp.id);
                             handleSaveGroupLink({ groupJid: grp.id, groupName: grp.subject, inviteLink: groupInviteLink });
                           }}
-                          className={`w-full text-left px-3 py-2 rounded-lg text-xs flex items-center justify-between transition-all ${
+                          className={`w-full text-left px-3 py-2 rounded-lg text-xs flex items-center justify-between gap-2 transition-all ${
                             isSelected
                               ? 'bg-teal-500/25 border border-teal-500/50 text-white font-bold'
                               : 'bg-[#111628] hover:bg-[#19223B] text-slate-300 border border-transparent'
                           }`}
                         >
-                          <span className="truncate pr-2">👥 {grp.subject}</span>
+                          <span className="truncate">👥 {grp.subject}</span>
                           <span className={`text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 ${
                             isSelected ? 'bg-teal-500 text-slate-950 font-bold' : 'bg-slate-800 text-slate-400'
                           }`}>
@@ -791,22 +840,24 @@ export const WhatsAppTab: React.FC<WhatsAppTabProps> = ({
               {/* Input: Nome de Referência do Grupo */}
               <div className="space-y-1.5">
                 <label className="text-[11px] font-bold text-slate-400 block">Nome do Grupo Vinculado:</label>
-                <div className="flex gap-2">
+                <div className="flex flex-col sm:flex-row gap-2">
                   <input
                     type="text"
                     value={groupName}
+                    onFocus={() => { isEditingGroupRef.current = true; }}
+                    onBlur={() => { setTimeout(() => { isEditingGroupRef.current = false; }, 1500); }}
                     onChange={(e) => {
-                      hasLoadedInitialGroup.current = true;
+                      isEditingGroupRef.current = true;
                       setGroupName(e.target.value);
                     }}
-                    placeholder="Ex: Finanças Kyro"
-                    className="flex-1 bg-[#0A0D18] border border-[#202940] rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-teal-500"
+                    placeholder="Ex: Finanças KYRO"
+                    className="w-full sm:flex-1 bg-[#0A0D18] border border-[#202940] rounded-xl px-3.5 py-2.5 sm:py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-teal-500"
                   />
                   <button
                     type="button"
                     onClick={() => handleSaveGroupLink()}
                     disabled={isSavingGroupLink}
-                    className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 transition-all shadow-md disabled:opacity-50"
+                    className="w-full sm:w-auto px-4 py-2.5 sm:py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-md disabled:opacity-50"
                   >
                     {isSavingGroupLink ? <RefreshCw size={14} className="animate-spin" /> : <CheckCheck size={14} />}
                     <span>Salvar</span>
@@ -817,7 +868,7 @@ export const WhatsAppTab: React.FC<WhatsAppTabProps> = ({
               {groupLinkSaveSuccess && (
                 <div className="p-2.5 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-200 text-xs font-bold flex items-center gap-2">
                   <CheckCircle2 size={15} className="text-emerald-400 flex-shrink-0" />
-                  <span>Novo grupo vinculado e travado com sucesso! Outros grupos jamais alterarão esta escolha.</span>
+                  <span>Grupo salvo e sincronizado automaticamente nas versões Desktop e Mobile!</span>
                 </div>
               )}
 
@@ -825,55 +876,55 @@ export const WhatsAppTab: React.FC<WhatsAppTabProps> = ({
                 <div className="p-3.5 rounded-xl bg-teal-500/15 border border-teal-500/30 text-teal-300 text-xs space-y-1.5 animate-in fade-in">
                   <div className="flex items-center gap-2 font-bold text-teal-200">
                     <CheckCheck size={16} className="text-teal-400 flex-shrink-0" />
-                    <span>Grupo Monitorado Oficial: "{groupName}"</span>
+                    <span className="truncate">Grupo Monitorado Oficial: "{groupName}"</span>
                   </div>
                   {groupInviteLink && (
-                    <p className="text-[10px] text-teal-400/80 font-mono truncate">
+                    <p className="text-[10px] text-teal-400/80 font-mono break-all sm:truncate">
                       Link Ativo: {groupInviteLink}
                     </p>
                   )}
                   {selectedGroupJid && (
-                    <p className="text-[10px] text-slate-400 font-mono truncate">
+                    <p className="text-[10px] text-slate-400 font-mono break-all sm:truncate">
                       ID Oficial: {selectedGroupJid}
                     </p>
                   )}
-                  <p className="text-[10px] text-emerald-300 font-semibold pt-1">
-                    🛡️ Trava Exclusiva Ativa: Apenas este grupo é monitorado. Áudios, textos e fotos enviados nele são filtrados por IA e lançados no sistema na hora!
+                  <p className="text-[10px] text-emerald-300 font-semibold pt-1 leading-relaxed">
+                    🛡️ Configuração Salva & Trava Exclusiva Ativa: Áudios, textos e fotos enviados neste grupo são filtrados por IA e lançados no sistema instantaneamente!
                   </p>
                 </div>
               )}
             </div>
           </div>
 
-          <div className="p-4 rounded-xl bg-[#0C101D] border border-[#1E263E] text-xs space-y-1.5 mt-3">
-            <span className="text-[10px] uppercase font-bold text-emerald-400 tracking-wider">Como Funciona a Leitura 24/7:</span>
+          <div className="p-3.5 sm:p-4 rounded-xl bg-[#0C101D] border border-[#1E263E] text-xs space-y-1.5 mt-3">
+            <span className="text-[10px] uppercase font-bold text-emerald-400 tracking-wider">Sincronização Desktop & Mobile 24/7:</span>
             <p className="text-[11px] text-slate-300 leading-relaxed">
-              O Segundo Celular monitora exclusivamente este grupo. Sempre que você mandar um <strong>texto</strong> ou <strong>áudio de voz</strong> lá, ele lê a mensagem, a Inteligência Artificial processa e lança direto no Dashboard e nas abas de Entradas e Saídas do site!
+              Todas as configurações desta tela ficam salvas permanentemente no servidor central. Qualquer alteração feita no computador reflete automaticamente no celular e vice-versa!
             </p>
           </div>
         </div>
       </div>
 
-      {/* ================= PASSO 3: O QUE MANDAR NO GRUPO & SIMULADOR AO VIVO ================= */}
-      <div className="bg-[#111628] p-6 rounded-2xl border border-[#202940] shadow-lg space-y-6">
+      {/* ================= PASSO 3: O QUE MANDAR NO GRUPO & SIMULADOR AO VIVO (RESPONSIVO) ================= */}
+      <div className="bg-[#111628] p-4 sm:p-6 rounded-2xl border border-[#202940] shadow-lg space-y-5 sm:space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#1E263E] pb-4">
           <div className="flex items-center gap-3">
-            <div className="h-8 w-8 rounded-xl bg-purple-500/15 text-purple-400 flex items-center justify-center font-bold text-sm">
+            <div className="h-8 w-8 rounded-xl bg-purple-500/15 text-purple-400 flex items-center justify-center font-bold text-sm flex-shrink-0">
               3
             </div>
             <div>
-              <h3 className="font-bold text-sm text-white">Passo 3: Como Usar no Dia a Dia & Teste em Tempo Real</h3>
-              <p className="text-[11px] text-slate-400">Envie no grupo do WhatsApp ou faça um teste direto abaixo para ver o sistema atualizar</p>
+              <h3 className="font-bold text-xs sm:text-sm text-white">Passo 3: Como Usar no Dia a Dia & Teste em Tempo Real</h3>
+              <p className="text-[10px] sm:text-[11px] text-slate-400">Envie no grupo do WhatsApp ou faça um teste direto abaixo para ver o sistema atualizar</p>
             </div>
           </div>
-          <span className="text-[11px] font-mono text-purple-300 bg-purple-500/10 px-2.5 py-1 rounded-lg border border-purple-500/20">
+          <span className="text-[10px] sm:text-[11px] font-mono text-purple-300 bg-purple-500/10 px-2.5 py-1 rounded-lg border border-purple-500/20 self-start sm:self-auto">
             Inteligência Artificial Ativa
           </span>
         </div>
 
-        {/* Cards de Exemplos Reais */}
+        {/* Cards de Exemplos Reais (1 coluna no celular, 2 no tablet, 4 no desktop) */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
-          <div className="p-4 rounded-xl bg-[#141A2E] border border-rose-500/30 space-y-2">
+          <div className="p-3.5 sm:p-4 rounded-xl bg-[#141A2E] border border-rose-500/30 space-y-2">
             <div className="flex items-center justify-between">
               <span className="font-bold text-rose-400 flex items-center gap-1.5">
                 <TrendingDown size={14} /> Mensagem de Despesa
@@ -889,7 +940,7 @@ export const WhatsAppTab: React.FC<WhatsAppTabProps> = ({
             </p>
           </div>
 
-          <div className="p-4 rounded-xl bg-[#141A2E] border border-emerald-500/30 space-y-2">
+          <div className="p-3.5 sm:p-4 rounded-xl bg-[#141A2E] border border-emerald-500/30 space-y-2">
             <div className="flex items-center justify-between">
               <span className="font-bold text-emerald-400 flex items-center gap-1.5">
                 <TrendingUp size={14} /> Mensagem de Receita
@@ -905,7 +956,7 @@ export const WhatsAppTab: React.FC<WhatsAppTabProps> = ({
             </p>
           </div>
 
-          <div className="p-4 rounded-xl bg-[#141A2E] border border-teal-500/30 space-y-2">
+          <div className="p-3.5 sm:p-4 rounded-xl bg-[#141A2E] border border-teal-500/30 space-y-2">
             <div className="flex items-center justify-between">
               <span className="font-bold text-teal-400 flex items-center gap-1.5">
                 <Mic size={14} /> Áudio de Voz no Grupo
@@ -921,7 +972,7 @@ export const WhatsAppTab: React.FC<WhatsAppTabProps> = ({
             </p>
           </div>
 
-          <div className="p-4 rounded-xl bg-[#141A2E] border border-cyan-500/30 space-y-2">
+          <div className="p-3.5 sm:p-4 rounded-xl bg-[#141A2E] border border-cyan-500/30 space-y-2">
             <div className="flex items-center justify-between">
               <span className="font-bold text-cyan-400 flex items-center gap-1.5">
                 <Camera size={14} /> Foto de Comprovante
@@ -938,11 +989,11 @@ export const WhatsAppTab: React.FC<WhatsAppTabProps> = ({
           </div>
         </div>
 
-        {/* Simulador Interativo do Grupo */}
-        <div className="p-5 rounded-2xl bg-[#0E1322] border border-[#222C46] space-y-4">
-          <div className="flex items-center justify-between">
+        {/* Simulador Interativo do Grupo (Responsivo sem sobrepor texto no celular) */}
+        <div className="p-4 sm:p-5 rounded-2xl bg-[#0E1322] border border-[#222C46] space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <h4 className="text-xs font-bold text-white flex items-center gap-2">
-              <Sparkles size={15} className="text-amber-400" /> Teste Rápido: Simule uma mensagem enviada no Grupo agora
+              <Sparkles size={15} className="text-amber-400 flex-shrink-0" /> Teste Rápido: Simule uma mensagem enviada no Grupo agora
             </h4>
             <span className="text-[10px] text-slate-400">Atualiza o Dashboard instantaneamente</span>
           </div>
@@ -983,20 +1034,20 @@ export const WhatsAppTab: React.FC<WhatsAppTabProps> = ({
             </button>
           </div>
 
-          <div className="relative">
+          <div className="flex flex-col sm:flex-row gap-2">
             <input
               type="text"
               value={testWebhookMessage}
               onChange={(e) => setTestWebhookMessage(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleRunWebhookTest()}
               placeholder={`Digite o que você mandaria no grupo "${groupName}"...`}
-              className="w-full bg-[#070A12] border border-[#202940] rounded-xl px-4 py-3 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+              className="w-full sm:flex-1 bg-[#070A12] border border-[#202940] rounded-xl px-4 py-3 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
             />
             <button
               type="button"
               onClick={() => handleRunWebhookTest()}
               disabled={testWebhookStatus === 'loading' || !testWebhookMessage.trim()}
-              className="absolute right-2 top-2 px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 disabled:opacity-50 transition-all shadow-md"
+              className="w-full sm:w-auto px-4 py-3 sm:py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 disabled:opacity-50 transition-all shadow-md whitespace-nowrap"
             >
               {testWebhookStatus === 'loading' ? (
                 <RefreshCw size={14} className="animate-spin" />

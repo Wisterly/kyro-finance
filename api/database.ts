@@ -38,6 +38,24 @@ if (firebaseConfig.apiKey && firebaseConfig.projectId) {
 }
 
 // Memória Global em Nuvem compartilhada no Edge
+const DEFAULT_AI_RULES = [
+  'Na descrição de lançamentos, registrar apenas o item específico mencionado (ex: Lanche) e nunca mesclar com barras a categoria (ex: Alimentação / Lanche). A categoria fica no campo Categoria.'
+];
+
+const DEFAULT_WHATSAPP_CONFIG = {
+  inviteLink: 'https://chat.whatsapp.com/DQNscf09vX5DljtvTnx6YK',
+  groupJid: '120363411839303797@g.us',
+  groupName: 'Finanças KYRO',
+  lockedByUser: true,
+  phoneNumber: '558695368780',
+  connected: true
+};
+
+const DEFAULT_CHAT_CONFIG = {
+  formattingPreference: 'tabelas',
+  customPrompt: ''
+};
+
 const globalStore: any = global;
 if (!globalStore.__KYRO_CENTRAL_DB__) {
   globalStore.__KYRO_CENTRAL_DB__ = {
@@ -45,7 +63,9 @@ if (!globalStore.__KYRO_CENTRAL_DB__) {
     deletedIds: new Set<string>(),
     recurringExpenses: [],
     creditCards: [],
-    userAiRules: [],
+    userAiRules: [...DEFAULT_AI_RULES],
+    whatsappConfig: { ...DEFAULT_WHATSAPP_CONFIG },
+    chatConfig: { ...DEFAULT_CHAT_CONFIG },
     initialized: false,
     lastUpdated: new Date().toISOString()
   };
@@ -53,8 +73,14 @@ if (!globalStore.__KYRO_CENTRAL_DB__) {
   if (!globalStore.__KYRO_CENTRAL_DB__.deletedIds) {
     globalStore.__KYRO_CENTRAL_DB__.deletedIds = new Set<string>();
   }
-  if (!globalStore.__KYRO_CENTRAL_DB__.userAiRules) {
-    globalStore.__KYRO_CENTRAL_DB__.userAiRules = [];
+  if (!globalStore.__KYRO_CENTRAL_DB__.userAiRules || globalStore.__KYRO_CENTRAL_DB__.userAiRules.length === 0) {
+    globalStore.__KYRO_CENTRAL_DB__.userAiRules = [...DEFAULT_AI_RULES];
+  }
+  if (!globalStore.__KYRO_CENTRAL_DB__.whatsappConfig) {
+    globalStore.__KYRO_CENTRAL_DB__.whatsappConfig = { ...DEFAULT_WHATSAPP_CONFIG };
+  }
+  if (!globalStore.__KYRO_CENTRAL_DB__.chatConfig) {
+    globalStore.__KYRO_CENTRAL_DB__.chatConfig = { ...DEFAULT_CHAT_CONFIG };
   }
 }
 
@@ -110,7 +136,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         success: true,
         transactions,
         deletedIds: Array.from(deletedSet),
-        userAiRules: globalStore.__KYRO_CENTRAL_DB__.userAiRules || [],
+        userAiRules: globalStore.__KYRO_CENTRAL_DB__.userAiRules || DEFAULT_AI_RULES,
+        whatsappConfig: globalStore.__KYRO_CENTRAL_DB__.whatsappConfig || DEFAULT_WHATSAPP_CONFIG,
+        chatConfig: globalStore.__KYRO_CENTRAL_DB__.chatConfig || DEFAULT_CHAT_CONFIG,
         recurringExpenses: globalStore.__KYRO_CENTRAL_DB__.recurringExpenses || [],
         creditCards: globalStore.__KYRO_CENTRAL_DB__.creditCards || [],
         lastUpdated: globalStore.__KYRO_CENTRAL_DB__.lastUpdated,
@@ -368,6 +396,59 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           success: true,
           message: 'Regra removida do banco central.',
           userAiRules: currentRules
+        });
+      }
+
+      // 8. Salvar e Sincronizar Configuração do WhatsApp entre Desktop e Mobile (save_whatsapp_config)
+      if (action === 'save_whatsapp_config') {
+        const nextWa = {
+          ...(globalStore.__KYRO_CENTRAL_DB__.whatsappConfig || DEFAULT_WHATSAPP_CONFIG),
+          ...(payload.whatsappConfig || {}),
+          updatedAt: new Date().toISOString()
+        };
+        globalStore.__KYRO_CENTRAL_DB__.whatsappConfig = nextWa;
+        globalStore.__KYRO_CENTRAL_DB__.lastUpdated = new Date().toISOString();
+
+        if (db) {
+          try {
+            await setDoc(doc(db, 'kyro_settings', 'whatsapp_config'), nextWa, { merge: true });
+          } catch (e) {}
+        }
+
+        return res.status(200).json({
+          success: true,
+          message: 'Configuração do WhatsApp salva e sincronizada entre Desktop e Mobile.',
+          whatsappConfig: nextWa
+        });
+      }
+
+      // 9. Salvar e Sincronizar Configuração do Chat Gemini entre Desktop e Mobile (save_chat_config)
+      if (action === 'save_chat_config') {
+        const nextChat = {
+          ...(globalStore.__KYRO_CENTRAL_DB__.chatConfig || DEFAULT_CHAT_CONFIG),
+          ...(payload.chatConfig || {}),
+          updatedAt: new Date().toISOString()
+        };
+        globalStore.__KYRO_CENTRAL_DB__.chatConfig = nextChat;
+        if (Array.isArray(payload.userAiRules)) {
+          globalStore.__KYRO_CENTRAL_DB__.userAiRules = payload.userAiRules;
+        }
+        globalStore.__KYRO_CENTRAL_DB__.lastUpdated = new Date().toISOString();
+
+        if (db) {
+          try {
+            await setDoc(doc(db, 'kyro_settings', 'chat_config'), {
+              ...nextChat,
+              userAiRules: globalStore.__KYRO_CENTRAL_DB__.userAiRules
+            }, { merge: true });
+          } catch (e) {}
+        }
+
+        return res.status(200).json({
+          success: true,
+          message: 'Configuração do Chat Gemini salva e sincronizada entre Desktop e Mobile.',
+          chatConfig: nextChat,
+          userAiRules: globalStore.__KYRO_CENTRAL_DB__.userAiRules
         });
       }
 
