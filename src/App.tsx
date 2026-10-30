@@ -2392,7 +2392,44 @@ export default function App() {
     }
   };
 
-  // Gravação de Áudio ao Vivo no Chat Lateral (com suporte avançado a Web Speech e Paridade Mobile/Desktop)
+  // Higienizador e desduplicador cirúrgico contra repetições de palavras no reconhecimento de voz
+  const cleanAndDeduplicateTranscript = (rawText: string): string => {
+    if (!rawText) return '';
+    const clean = rawText.replace(/\s+/g, ' ').trim();
+    if (!clean) return '';
+    const words = clean.split(' ');
+    const out: string[] = [];
+
+    for (let i = 0; i < words.length; i++) {
+      const cur = words[i];
+      const prev = out.length > 0 ? out[out.length - 1] : '';
+
+      const curNorm = cur.toLowerCase().replace(/[,.!?;:]/g, '');
+      const prevNorm = prev.toLowerCase().replace(/[,.!?;:]/g, '');
+
+      // Se a palavra for repetida consecutiva (ex: "transferir transferir")
+      if (curNorm && curNorm === prevNorm) {
+        continue;
+      }
+
+      // Se for bloco duplo repetido (ex: "transferir 300 transferir 300")
+      if (out.length >= 2 && i + 1 < words.length) {
+        const p1 = out[out.length - 2].toLowerCase().replace(/[,.!?;:]/g, '');
+        const p2 = out[out.length - 1].toLowerCase().replace(/[,.!?;:]/g, '');
+        const c1 = curNorm;
+        const c2 = words[i + 1].toLowerCase().replace(/[,.!?;:]/g, '');
+        if (p1 === c1 && p2 === c2) {
+          i++; // Pula também o segundo termo do bloco duplicado
+          continue;
+        }
+      }
+
+      out.push(cur);
+    }
+    return out.join(' ');
+  };
+
+  // Gravação de Áudio ao Vivo no Chat Lateral (Unificado Mobile & Desktop com Áudio Real + Gemini)
   const [liveAudioTranscript, setLiveAudioTranscript] = useState('');
   const recordedTextRef = React.useRef<string>('');
   const isRecordingAudioRef = React.useRef<boolean>(false);
@@ -2403,72 +2440,7 @@ export default function App() {
       recordedTextRef.current = '';
       setLiveAudioTranscript('');
 
-      const isMobile = typeof navigator !== 'undefined' && 
-        /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-
-      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-
-      // =====================================================================
-      // MODO 1: CELULAR COM SPEECH RECOGNITION NATIVO (EX: ANDROID CHROME)
-      // Dedica o microfone com exclusividade ao motor do Google para evitar colisão e som mudo
-      // =====================================================================
-      if (isMobile && SpeechRecognition) {
-        try {
-          const recognitionInstance = new SpeechRecognition();
-          recognitionInstance.lang = 'pt-BR';
-          recognitionInstance.continuous = true;
-          recognitionInstance.interimResults = true;
-          recognitionInstance.maxAlternatives = 1;
-
-          recognitionInstance.onresult = (event: any) => {
-            let interim = '';
-            for (let i = event.resultIndex; i < event.results.length; i++) {
-              const transcriptPiece = event.results[i][0].transcript;
-              if (event.results[i].isFinal) {
-                recordedTextRef.current = (recordedTextRef.current + ' ' + transcriptPiece).trim();
-              } else {
-                interim += transcriptPiece;
-              }
-            }
-            const currentTotal = `${recordedTextRef.current} ${interim}`.trim();
-            setLiveAudioTranscript(currentTotal);
-            setInputMessage(currentTotal);
-          };
-
-          recognitionInstance.onerror = (e: any) => {
-            console.warn('[Mobile Speech Recognition]:', e.error || e);
-            if (isRecordingAudioRef.current && (e.error === 'no-speech' || e.error === 'network')) {
-              try { recognitionInstance.start(); } catch (err) {}
-            }
-          };
-
-          recognitionInstance.onend = () => {
-            if (isRecordingAudioRef.current) {
-              try { recognitionInstance.start(); } catch (err) {}
-            }
-          };
-
-          recognitionInstance.start();
-          speechRecognitionRef.current = recognitionInstance;
-          mediaRecorderRef.current = null;
-
-          setIsRecordingAudio(true);
-          setAudioRecordingTime(0);
-
-          if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
-          timerIntervalRef.current = setInterval(() => {
-            setAudioRecordingTime(prev => prev + 1);
-          }, 1000);
-
-          return;
-        } catch (mobileSpeechErr) {
-          console.warn('[Mobile Speech Fallback para MediaRecorder]:', mobileSpeechErr);
-        }
-      }
-
-      // =====================================================================
-      // MODO 2: DESKTOP OU SAFARI IOS (MEDIARECORDER COM CAPTURA COMPARTILHADA)
-      // =====================================================================
+      // Formato de áudio suportado pelo dispositivo
       let selectedMimeType = '';
       if (typeof MediaRecorder !== 'undefined') {
         if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
@@ -2484,6 +2456,8 @@ export default function App() {
         }
       }
 
+      // 1. Reconhecimento de fala auxiliar (apenas para prévia visual enquanto fala, sem duplicações)
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
       if (SpeechRecognition) {
         try {
           const recognitionInstance = new SpeechRecognition();
@@ -2491,41 +2465,43 @@ export default function App() {
           recognitionInstance.continuous = true;
           recognitionInstance.interimResults = true;
           recognitionInstance.maxAlternatives = 1;
-          
+
           recognitionInstance.onresult = (event: any) => {
-            let interim = '';
-            for (let i = event.resultIndex; i < event.results.length; i++) {
-              const transcriptPiece = event.results[i][0].transcript;
-              if (event.results[i].isFinal) {
-                recordedTextRef.current = (recordedTextRef.current + ' ' + transcriptPiece).trim();
-              } else {
-                interim += transcriptPiece;
-              }
+            let fullStr = '';
+            for (let i = 0; i < event.results.length; i++) {
+              const part = event.results[i][0]?.transcript || '';
+              fullStr += (fullStr ? ' ' : '') + part;
             }
-            const currentTotal = `${recordedTextRef.current} ${interim}`.trim();
-            setLiveAudioTranscript(currentTotal);
-            setInputMessage(currentTotal);
+            const cleaned = cleanAndDeduplicateTranscript(fullStr);
+            setLiveAudioTranscript(cleaned);
+            setInputMessage(cleaned);
+            recordedTextRef.current = cleaned;
           };
 
           recognitionInstance.onerror = (e: any) => {
-            if (isRecordingAudioRef.current && (e.error === 'no-speech' || e.error === 'network')) {
-              try { recognitionInstance.start(); } catch (err) {}
-            }
+            console.warn('[Speech Recognition Live Feedback]:', e.error || e);
           };
 
           recognitionInstance.onend = () => {
-            if (isRecordingAudioRef.current) {
-              try { recognitionInstance.start(); } catch (err) {}
-            }
+            // Não reinicia em loop para não sobrescrever nem duplicar áudio
           };
 
           recognitionInstance.start();
           speechRecognitionRef.current = recognitionInstance;
-        } catch (e) {}
+        } catch (e) {
+          console.warn('[Speech Recognition Init Info]:', e);
+        }
       }
 
+      // 2. Captura do microfone real com filtros de cancelamento de ruído e eco
       const stream = await navigator.mediaDevices.getUserMedia({ 
-        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } 
+        audio: { 
+          echoCancellation: true, 
+          noiseSuppression: true, 
+          autoGainControl: true,
+          channelCount: 1,
+          sampleRate: 48000
+        } 
       });
 
       const recorder = selectedMimeType 
@@ -2543,9 +2519,9 @@ export default function App() {
         const audioUrl = URL.createObjectURL(audioBlob);
         stream.getTracks().forEach(track => track.stop());
 
-        let finalText = recordedTextRef.current.trim() || liveAudioTranscript.trim() || inputMessage.trim();
+        let finalText = cleanAndDeduplicateTranscript(recordedTextRef.current || liveAudioTranscript || inputMessage);
 
-        // Extrai Base64 do áudio para envio multimodal ao Gemini
+        // Extrai Base64 do áudio para envio multimodal ao Gemini / Whisper
         let audioBase64 = '';
         if (audioBlob.size > 200) {
           try {
@@ -2559,12 +2535,14 @@ export default function App() {
           } catch (e) {}
         }
 
-        if (!finalText && audioBase64) {
+        // Se o texto estiver vazio ou muito curto (< 3 palavras), transcreve diretamente pela IA em nuvem
+        const wordsCount = finalText.split(' ').filter(Boolean).length;
+        if (audioBase64 && (wordsCount < 3 || !finalText)) {
           const tempMsgId = `temp_audio_${Date.now()}`;
           setMessages(prev => [...prev, {
             id: tempMsgId,
             sender: 'user',
-            text: '🎙️ [Áudio de Voz]: Interpretando diretamente com o Google Gemini 1.5 Flash...',
+            text: '🎙️ [Áudio de Voz]: Interpretando com máxima precisão via IA...',
             audioUrl,
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
           }]);
@@ -2581,7 +2559,7 @@ export default function App() {
             });
             const data = await res.json();
             if (data?.success && data?.text) {
-              finalText = data.text.trim();
+              finalText = cleanAndDeduplicateTranscript(data.text);
               setMessages(prev => prev.map(m => m.id === tempMsgId ? { ...m, text: `🎙️ "${finalText}"` } : m));
             }
           } catch (err) {
@@ -2642,7 +2620,7 @@ export default function App() {
       setMessages(prev => [...prev, {
         id: Date.now().toString(),
         sender: 'ia',
-        text: 'Não foi possível acessar o microfone do seu dispositivo. Por favor, autorize a permissão de áudio nas configurações do seu navegador ou digite diretamente na caixa de texto.',
+        text: 'Não foi possível acessar o microfone do seu dispositivo. Por favor, autorize a permissão de áudio nas configurações do aparelho ou digite diretamente na caixa de texto.',
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       }]);
     }
@@ -2668,7 +2646,7 @@ export default function App() {
         console.warn('[MediaRecorder Stop Erro]:', e);
       }
     } else {
-      const finalText = recordedTextRef.current.trim() || liveAudioTranscript.trim() || inputMessage.trim();
+      const finalText = cleanAndDeduplicateTranscript(recordedTextRef.current || liveAudioTranscript || inputMessage);
       if (finalText) {
         setMessages(prev => [...prev, {
           id: Date.now().toString(),

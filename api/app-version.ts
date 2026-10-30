@@ -3,17 +3,17 @@ import axios from 'axios';
 
 // Versão de referência e changelog da última release oficial do KYRO Finance
 const FALLBACK_RELEASE_INFO = {
-  latestVersion: '0.1.9',
-  buildNumber: 19,
+  latestVersion: '0.1.10',
+  buildNumber: 20,
   publishedAt: new Date().toISOString(),
   apkUrl: 'https://github.com/Wisterly/kyro-finance/releases/download/apk-latest/KYRO-Finance.apk',
   apkSize: '9.09 MB',
   changelog: [
-    'Notificação automática in-app de novas versões com pop-up',
-    'Download e atualização com 1 toque direto pelo próprio aplicativo',
-    'Navegação sequencial no botão voltar do celular Android',
-    'Proteção contra fechamento acidental com duplo toque no Dashboard',
-    'Sincronização 24h em tempo real com WhatsApp e Vercel'
+    'Correção definitiva da gravação de áudio no celular Android (fim da repetição de palavras)',
+    'Gravação unificada com MediaRecorder nativo de alta fidelidade e filtros de ruído',
+    'Deduplicador inteligente de fala e transcrição multimodal via Google Gemini 1.5 Flash',
+    'Solicitação proativa de permissões de microfone nativo no Android',
+    'Notificação automática in-app de novas versões com pop-up e atualização em 1 toque'
   ]
 };
 

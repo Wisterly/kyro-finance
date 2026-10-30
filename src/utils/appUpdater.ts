@@ -2,8 +2,8 @@ import { UpdateInfo } from '../components/UpdateModal';
 import { isRunningInNativeApk } from '../nativeBridge';
 
 // Versão do código empacotado neste cliente
-export const CURRENT_APP_VERSION = '0.1.8';
-export const CURRENT_APP_BUILD = 18;
+export const CURRENT_APP_VERSION = '0.1.10';
+export const CURRENT_APP_BUILD = 20;
 
 export async function checkForAppUpdate(): Promise<UpdateInfo | null> {
   try {

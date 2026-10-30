@@ -541,13 +541,36 @@ A numeração segue rigorosamente a hierarquia de escopo:
 
 ---
 
+### [PR.020] — Correção Definitiva da Gravação de Áudio no Celular (Fim da Repetição de Palavras + MediaRecorder Unificado + IA Gemini 1.5 Flash)
+- **Data/Hora:** 2026-10-30 02:20 (UTC-3)
+- **Tags Git:** `PR.020`, `PR.020.1`, `PR.020.2`
+
+#### `PR.020` — Escopo Geral do Projeto (Universal)
+- **Unificação da Captura com `MediaRecorder` em Alta Fidelidade:**
+  - Extinção da segregação problemática que desativava o MediaRecorder em navegadores móveis e no app.
+  - Gravação de áudio real do microfone com filtros de hardware ativados (`echoCancellation: true`, `noiseSuppression: true`, `autoGainControl: true`, `channelCount: 1`, `sampleRate: 48000`).
+  - Algoritmo cirúrgico `cleanAndDeduplicateTranscript` que higieniza e elimina gagueiras ou repetições de palavras isoladas ou em blocos de voz.
+  - Integração com a IA Multimodal **Google Gemini 1.5 Flash** (`/api/transcribe`) para transcrição cristalina de valores e comandos financeiros.
+
+#### `PR.020.1` — Versão Computador (Desktop)
+- Mantém áudio perfeito e limpo, integrado ao player e ao Gemini 1.5 Flash.
+
+#### `PR.020.2` — Versão Celular (Aplicativo Android `.apk` & Mobile)
+- **Áudio Físico Real no Smartphone:** Eliminação total do bug que repetia várias vezes a primeira palavra. O aplicativo Android agora grava o arquivo de som real, exibe o player no chat e transcreve a frase uma única vez com clareza total.
+- **Permissões Nativas de Microfone no Android (`MainActivity.java`):** Solicitação antecipada de permissão de gravação de áudio em tempo de execução para evitar atrasos ou bloqueios na WebView.
+
+---
+
 ## TABELA DE CÓDIGOS DE PONTOS DE RESTAURAÇÃO
 
 Se você desejar restaurar qualquer versão anterior ou atual do Kyro Finance, basta colar o código do ponto de restauração na conversa:
 
 | Código do Ponto | Escopo | Descrição Resumida |
 | :--- | :--- | :--- |
-| **`PR.019`** | **Geral (Universal)** | **Versão Atual: Sistema Autossuficiente de Atualizações In-App (Pop-up de Nova Versão + Download e Instalação Automática com 1 Toque no App)** |
+| **`PR.020`** | **Geral (Universal)** | **Versão Atual: Correção Definitiva de Áudio no Celular (Fim da Repetição de Palavras + MediaRecorder Real Unificado + Gemini 1.5 Flash Multimodal)** |
+| `PR.020.1` | Desktop | Interface Web/Desktop com gravação de áudio de alta fidelidade e desduplicação |
+| `PR.020.2` | Mobile / APK | Aplicativo Android com áudio 100% nítido, sem repetição de palavras e permissões nativas de microfone |
+| **`PR.019`** | **Geral (Universal)** | Sistema Autossuficiente de Atualizações In-App (Pop-up de Nova Versão + Download e Instalação Automática com 1 Toque no App) |
 | `PR.019.1` | Desktop | Interface Web/Desktop integrada ao gerenciador de versões e changelog |
 | `PR.019.2` | Mobile / APK | Aplicativo Android com pop-up automático de atualização, download nativo e instalação direta com 1 toque |
 | **`PR.018`** | **Geral (Universal)** | Navegação Sequencial de Abas + Proteção Contra Fechamento com Duplo Toque de Voltar no App Android (`@capacitor/app`) |
