@@ -1,11 +1,11 @@
 // Metadados Centrais de Versão e Auto-Update do KYRO Finance
-export const APP_VERSION = '1.38';
-export const APP_BUILD = 38;
+export const APP_VERSION = '1.39';
+export const APP_BUILD = 39;
 
 export const APP_CHANGELOG = [
-  'Correção definitiva do erro de servidor de atualizações no mobile (eliminação de bloqueio de preflight CORS)',
-  'Canal de consulta ultrarrápido com CDN Global Fastly (< 200ms) sem exigência de cabeçalhos restritivos',
-  'Sincronização em tempo real de lançamentos: novos registros via WhatsApp ou Desktop refletem imediatamente no mobile',
-  'Gesto nativo Pull-to-Refresh: arraste a tela para baixo para sincronizar todos os dados com efeito elástico e háptico',
-  'Widget visual flutuante no topo com indicador de progresso e rotação elástica durante a atualização'
+  'Reconhecimento de fala nativo ao vivo no Android com feedback em tempo real e visualização das palavras faladas',
+  'Fim da disputa de hardware do microfone: captura limpa e isolada sem interferência com o WebView',
+  'Suporte a escuta contínua no celular sem interrupções por pausas de respiração durante a fala',
+  'Solicitação de permissões nativas de microfone com diálogo oficial do sistema Android',
+  'Sincronização imediata de novos lançamentos por voz no Copiloto IA tanto no Desktop quanto no Mobile'
 ];

@@ -2646,6 +2646,7 @@ export default function App() {
   const recordedTextRef = React.useRef<string>('');
   const finalTranscriptRef = React.useRef<string>('');
   const isRecordingAudioRef = React.useRef<boolean>(false);
+  const isNativeSpeechActiveRef = React.useRef<boolean>(false);
   const audioStreamRef = React.useRef<MediaStream | null>(null);
 
   // Despachador de chamadas de API resiliente (aponta para a Vercel no Android nativo e relativo na Web)
@@ -2682,6 +2683,7 @@ export default function App() {
 
   const cancelRecordingAudio = () => {
     isRecordingAudioRef.current = false;
+    isNativeSpeechActiveRef.current = false;
     setIsRecordingAudio(false);
 
     if (timerIntervalRef.current) {
@@ -2718,29 +2720,14 @@ export default function App() {
       recordedTextRef.current = '';
       finalTranscriptRef.current = '';
       setLiveAudioTranscript('');
+      isNativeSpeechActiveRef.current = false;
 
-      // Formato de áudio suportado pelo dispositivo
-      let selectedMimeType = '';
-      if (typeof MediaRecorder !== 'undefined') {
-        if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
-          selectedMimeType = 'audio/webm;codecs=opus';
-        } else if (MediaRecorder.isTypeSupported('audio/webm')) {
-          selectedMimeType = 'audio/webm';
-        } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
-          selectedMimeType = 'audio/mp4';
-        } else if (MediaRecorder.isTypeSupported('audio/aac')) {
-          selectedMimeType = 'audio/aac';
-        } else if (MediaRecorder.isTypeSupported('audio/ogg')) {
-          selectedMimeType = 'audio/ogg';
-        }
-      }
-
-      // 1. Reconhecimento de fala com transcrição ao vivo universal (Nativo no Android e Web Speech no Desktop)
-      let nativeSpeechActive = false;
+      // 1. Reconhecimento de fala NATIVO no Android (Plugin Oficial Android SpeechRecognizer)
+      // No celular Android, este canal escuta o microfone diretamente pelo SO, evitando colisões com o WebView
       const nativeAvailable = await isNativeSpeechAvailable();
       if (nativeAvailable) {
         try {
-          nativeSpeechActive = await startNativeSpeech({
+          const nativeStarted = await startNativeSpeech({
             onPartial: (text) => {
               const cleaned = cleanAndDeduplicateTranscript(text);
               setLiveAudioTranscript(cleaned);
@@ -2757,63 +2744,88 @@ export default function App() {
               console.warn('[Native Speech Live Feedback Warning]:', err);
             }
           });
+
+          if (nativeStarted) {
+            isNativeSpeechActiveRef.current = true;
+            setIsRecordingAudio(true);
+            setAudioRecordingTime(0);
+
+            if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+            timerIntervalRef.current = setInterval(() => {
+              setAudioRecordingTime(prev => prev + 1);
+            }, 1000);
+            return;
+          }
         } catch (e) {
           console.warn('[Native Speech Init Error]:', e);
         }
       }
 
-      // Fallback Web Speech API (se o plugin nativo não estiver ativo, ex: Desktop Chrome)
-      if (!nativeSpeechActive) {
-        const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-        if (SpeechRecognition) {
-          try {
-            const recognitionInstance = new SpeechRecognition();
-            recognitionInstance.lang = 'pt-BR';
-            recognitionInstance.continuous = true;
-            recognitionInstance.interimResults = true;
-            recognitionInstance.maxAlternatives = 1;
-
-            recognitionInstance.onresult = (event: any) => {
-              let interimTranscript = '';
-              let finalCombinedText = '';
-              for (let i = 0; i < event.results.length; ++i) {
-                const res = event.results[i];
-                const part = res[0]?.transcript || '';
-                if (res.isFinal) {
-                  finalCombinedText += (finalCombinedText ? ' ' : '') + part;
-                } else {
-                  interimTranscript += (interimTranscript ? ' ' : '') + part;
-                }
-              }
-              const fullCombined = (finalCombinedText + ' ' + interimTranscript).trim();
-              const cleaned = cleanAndDeduplicateTranscript(fullCombined);
-              setLiveAudioTranscript(cleaned);
-              setInputMessage(cleaned);
-              recordedTextRef.current = cleaned;
-            };
-
-            recognitionInstance.onerror = (e: any) => {
-              console.warn('[Speech Recognition Live Feedback]:', e.error || e);
-            };
-
-            recognitionInstance.onend = () => {
-              // Se o usuário ainda estiver com o modo de gravação ativo (ex: respiração), mantém ouvindo
-              if (isRecordingAudioRef.current) {
-                try {
-                  recognitionInstance.start();
-                } catch (e) {}
-              }
-            };
-
-            recognitionInstance.start();
-            speechRecognitionRef.current = recognitionInstance;
-          } catch (e) {
-            console.warn('[Speech Recognition Init Info]:', e);
-          }
+      // 2. Fluxo Web Speech API + MediaRecorder (Desktop Google Chrome / Navegadores PWA)
+      // Formato de áudio suportado pelo dispositivo
+      let selectedMimeType = '';
+      if (typeof MediaRecorder !== 'undefined') {
+        if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+          selectedMimeType = 'audio/webm;codecs=opus';
+        } else if (MediaRecorder.isTypeSupported('audio/webm')) {
+          selectedMimeType = 'audio/webm';
+        } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
+          selectedMimeType = 'audio/mp4';
+        } else if (MediaRecorder.isTypeSupported('audio/aac')) {
+          selectedMimeType = 'audio/aac';
+        } else if (MediaRecorder.isTypeSupported('audio/ogg')) {
+          selectedMimeType = 'audio/ogg';
         }
       }
 
-      // 2. Captura do fluxo de áudio físico (estilo WhatsApp) com cancelamento de ruído
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      if (SpeechRecognition) {
+        try {
+          const recognitionInstance = new SpeechRecognition();
+          recognitionInstance.lang = 'pt-BR';
+          recognitionInstance.continuous = true;
+          recognitionInstance.interimResults = true;
+          recognitionInstance.maxAlternatives = 1;
+
+          recognitionInstance.onresult = (event: any) => {
+            let interimTranscript = '';
+            let finalCombinedText = '';
+            for (let i = 0; i < event.results.length; ++i) {
+              const res = event.results[i];
+              const part = res[0]?.transcript || '';
+              if (res.isFinal) {
+                finalCombinedText += (finalCombinedText ? ' ' : '') + part;
+              } else {
+                interimTranscript += (interimTranscript ? ' ' : '') + part;
+              }
+            }
+            const fullCombined = (finalCombinedText + ' ' + interimTranscript).trim();
+            const cleaned = cleanAndDeduplicateTranscript(fullCombined);
+            setLiveAudioTranscript(cleaned);
+            setInputMessage(cleaned);
+            recordedTextRef.current = cleaned;
+          };
+
+          recognitionInstance.onerror = (e: any) => {
+            console.warn('[Speech Recognition Live Feedback]:', e.error || e);
+          };
+
+          recognitionInstance.onend = () => {
+            if (isRecordingAudioRef.current) {
+              try {
+                recognitionInstance.start();
+              } catch (e) {}
+            }
+          };
+
+          recognitionInstance.start();
+          speechRecognitionRef.current = recognitionInstance;
+        } catch (e) {
+          console.warn('[Speech Recognition Init Info]:', e);
+        }
+      }
+
+      // Captura do fluxo de áudio físico no Desktop com cancelamento de ruído
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ 
           audio: { 
@@ -2844,7 +2856,6 @@ export default function App() {
 
           let finalText = cleanAndDeduplicateTranscript(recordedTextRef.current || liveAudioTranscript || inputMessage);
 
-          // Extrai Base64 do áudio para envio multimodal
           let audioBase64 = '';
           if (audioBlob.size > 200) {
             try {
@@ -2871,7 +2882,6 @@ export default function App() {
           setLiveAudioTranscript('');
           setIsAiLoading(true);
 
-          // Se ainda não tivermos o texto transcrito no cliente, transcrevemos via IA
           if (!finalText && audioBase64) {
             try {
               const res = await executeApiCall('/api/transcribe', {
@@ -2907,7 +2917,7 @@ export default function App() {
         mediaRecorderRef.current = recorder;
       } catch (streamErr) {
         console.warn('[MediaRecorder Capture Info]:', streamErr);
-        if (!nativeSpeechActive && !speechRecognitionRef.current) {
+        if (!speechRecognitionRef.current) {
           throw streamErr;
         }
       }
@@ -2941,8 +2951,37 @@ export default function App() {
       timerIntervalRef.current = null;
     }
 
-    stopNativeSpeech().catch(() => {});
+    // 1. Se estiver no modo nativo Android:
+    if (isNativeSpeechActiveRef.current) {
+      isNativeSpeechActiveRef.current = false;
+      await stopNativeSpeech().catch(() => {});
+      
+      // Pequeno respiro para consolidação do último frame de texto
+      await new Promise(r => setTimeout(r, 120));
 
+      const finalText = cleanAndDeduplicateTranscript(recordedTextRef.current || liveAudioTranscript || inputMessage);
+      if (finalText && finalText.trim().length > 0) {
+        setMessages(prev => [...prev, {
+          id: Date.now().toString(),
+          sender: 'user',
+          text: `🎙️ "${finalText}"`,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        }]);
+        setInputMessage('');
+        setLiveAudioTranscript('');
+        setIsAiLoading(true);
+
+        await handleProcessUserInteraction({
+          type: 'audio',
+          text: finalText
+        });
+      } else {
+        alert('⚠️ Nenhuma fala foi detectada com clareza. Fale próximo ao microfone e clique em Lançar.');
+      }
+      return;
+    }
+
+    // 2. Modo Desktop / Web Speech API
     if (speechRecognitionRef.current) {
       try { speechRecognitionRef.current.stop(); } catch (e) {}
     }

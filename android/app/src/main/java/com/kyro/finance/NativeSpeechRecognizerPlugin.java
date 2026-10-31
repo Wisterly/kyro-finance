@@ -16,6 +16,7 @@ import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import com.getcapacitor.annotation.Permission;
+import com.getcapacitor.annotation.PermissionCallback;
 import java.util.ArrayList;
 
 @CapacitorPlugin(
@@ -32,6 +33,7 @@ public class NativeSpeechRecognizerPlugin extends Plugin {
     private SpeechRecognizer speechRecognizer;
     private boolean isListening = false;
     private String lastPartialText = "";
+    private String accumulatedText = "";
 
     @PluginMethod
     public void isAvailable(PluginCall call) {
@@ -44,10 +46,37 @@ public class NativeSpeechRecognizerPlugin extends Plugin {
     @PluginMethod
     public void startListening(PluginCall call) {
         if (ContextCompat.checkSelfPermission(getContext(), Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            call.reject("Permissão de gravação de áudio não concedida.");
+            requestPermissionForAlias("recordAudio", call, "checkPermissionsCallback");
             return;
         }
+        executeStartListening(call);
+    }
 
+    @PermissionCallback
+    private void checkPermissionsCallback(PluginCall call) {
+        if (ContextCompat.checkSelfPermission(getContext(), Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+            executeStartListening(call);
+        } else {
+            call.reject("Permissão de microfone negada pelo usuário.");
+        }
+    }
+
+    private Intent createSpeechIntent() {
+        Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "pt-BR");
+        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "pt-BR");
+        intent.putExtra(RecognizerIntent.EXTRA_ONLY_RETURN_LANGUAGE_PREFERENCE, "pt-BR");
+        intent.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
+        intent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3);
+        intent.putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, getContext().getPackageName());
+        intent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 3000L);
+        intent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 2000L);
+        intent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 1500L);
+        return intent;
+    }
+
+    private void executeStartListening(PluginCall call) {
         getActivity().runOnUiThread(() -> {
             try {
                 if (speechRecognizer != null) {
@@ -66,6 +95,7 @@ public class NativeSpeechRecognizerPlugin extends Plugin {
                 }
 
                 lastPartialText = "";
+                accumulatedText = "";
                 isListening = true;
 
                 speechRecognizer.setRecognitionListener(new RecognitionListener() {
@@ -102,6 +132,16 @@ public class NativeSpeechRecognizerPlugin extends Plugin {
 
                     @Override
                     public void onError(int error) {
+                        // Se o erro for pausa na fala ou sem correspondência temporária, continua ouvindo se o usuário ainda estiver gravando
+                        if (isListening && (error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT)) {
+                            if (speechRecognizer != null) {
+                                try {
+                                    speechRecognizer.startListening(createSpeechIntent());
+                                    return;
+                                } catch (Exception ignored) {}
+                            }
+                        }
+
                         isListening = false;
                         JSObject data = new JSObject();
                         data.put("error", error);
@@ -111,23 +151,37 @@ public class NativeSpeechRecognizerPlugin extends Plugin {
 
                     @Override
                     public void onResults(Bundle results) {
-                        isListening = false;
                         ArrayList<String> matches = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
-                        String finalText = (matches != null && !matches.isEmpty()) ? matches.get(0) : lastPartialText;
-                        
-                        JSObject data = new JSObject();
-                        data.put("text", finalText);
-                        notifyListeners("finalResult", data);
+                        String currentSentence = (matches != null && !matches.isEmpty()) ? matches.get(0) : "";
+                        if (!currentSentence.isEmpty()) {
+                            if (accumulatedText.isEmpty()) {
+                                accumulatedText = currentSentence;
+                            } else {
+                                accumulatedText += " " + currentSentence;
+                            }
+                            lastPartialText = accumulatedText;
+                            JSObject data = new JSObject();
+                            data.put("text", accumulatedText);
+                            notifyListeners("partialResult", data);
+                        }
+
+                        // Escuta contínua: se o usuário ainda não apertou em Lançar, continua ouvindo
+                        if (isListening && speechRecognizer != null) {
+                            try {
+                                speechRecognizer.startListening(createSpeechIntent());
+                            } catch (Exception ignored) {}
+                        }
                     }
 
                     @Override
                     public void onPartialResults(Bundle partialResults) {
                         ArrayList<String> matches = partialResults.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
                         if (matches != null && !matches.isEmpty()) {
-                            String text = matches.get(0);
-                            lastPartialText = text;
+                            String partial = matches.get(0);
+                            String full = accumulatedText.isEmpty() ? partial : (accumulatedText + " " + partial);
+                            lastPartialText = full;
                             JSObject data = new JSObject();
-                            data.put("text", text);
+                            data.put("text", full);
                             notifyListeners("partialResult", data);
                         }
                     }
@@ -136,16 +190,7 @@ public class NativeSpeechRecognizerPlugin extends Plugin {
                     public void onEvent(int eventType, Bundle params) {}
                 });
 
-                Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
-                intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
-                intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "pt-BR");
-                intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "pt-BR");
-                intent.putExtra(RecognizerIntent.EXTRA_ONLY_RETURN_LANGUAGE_PREFERENCE, "pt-BR");
-                intent.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
-                intent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3);
-                intent.putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, getContext().getPackageName());
-
-                speechRecognizer.startListening(intent);
+                speechRecognizer.startListening(createSpeechIntent());
 
                 JSObject ret = new JSObject();
                 ret.put("status", "listening");
@@ -161,13 +206,24 @@ public class NativeSpeechRecognizerPlugin extends Plugin {
     @PluginMethod
     public void stopListening(PluginCall call) {
         getActivity().runOnUiThread(() -> {
+            isListening = false;
             try {
                 if (speechRecognizer != null) {
                     speechRecognizer.stopListening();
                 }
-                isListening = false;
+
+                String finalText = accumulatedText.trim();
+                if (finalText.isEmpty()) {
+                    finalText = lastPartialText.trim();
+                }
+
+                JSObject data = new JSObject();
+                data.put("text", finalText);
+                notifyListeners("finalResult", data);
+
                 JSObject ret = new JSObject();
                 ret.put("status", "stopped");
+                ret.put("text", finalText);
                 call.resolve(ret);
             } catch (Exception e) {
                 call.reject("Erro ao parar: " + e.getMessage());
@@ -179,12 +235,14 @@ public class NativeSpeechRecognizerPlugin extends Plugin {
     public void cancelListening(PluginCall call) {
         getActivity().runOnUiThread(() -> {
             try {
+                isListening = false;
+                accumulatedText = "";
+                lastPartialText = "";
                 if (speechRecognizer != null) {
                     speechRecognizer.cancel();
                     speechRecognizer.destroy();
                     speechRecognizer = null;
                 }
-                isListening = false;
                 JSObject ret = new JSObject();
                 ret.put("status", "cancelled");
                 call.resolve(ret);
