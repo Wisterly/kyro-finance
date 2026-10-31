@@ -110,6 +110,68 @@ function getEffectiveGeminiKey(explicitKey = '') {
   return '';
 }
 
+// ==============================================================
+// MOTOR MULTIMODAL DIRETO DO GEMINI 1.5 FLASH (ÁUDIO -> JSON PURO)
+// Escuta o áudio original em alta fidelidade e extrai o lançamento completo
+// ==============================================================
+async function interpretAudioDirectlyWithGemini(audioBuffer, explicitKey = '') {
+  if (!audioBuffer || audioBuffer.length < 50) return null;
+
+  const geminiKey = getEffectiveGeminiKey(explicitKey);
+  if (!geminiKey) return null;
+
+  const base64Audio = audioBuffer.toString('base64');
+  try {
+    const gUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`;
+    const prompt = `Você é o motor de inteligência financeira do KYRO Finance.
+Escute atentamente este áudio gravado em português brasileiro por um usuário informando despesas, pagamentos, transferências PIX, contas ou receitas.
+
+Sua tarefa:
+1. Transcrever exatamente as palavras faladas com fidelidade total (ex: "Fiz a transferência no PIX de R$ 300 para pagar o personal da academia em Teresina").
+2. Extrair com precisão cirúrgica os dados financeiros:
+   - "transcription": o texto literal falado pelo usuário.
+   - "amount": número decimal positivo com o valor monetário real informado (ex: 300.0). Se a pessoa disse 'um pix de 300 reais', o valor é 300 e NUNCA 1. Se não houver valor numérico identificável, retorne 0.
+   - "type": "Saída" (para pagamentos, transferências feitas, compras, despesas) ou "Entrada" (para salário, recebimentos, depósitos recebidos).
+   - "method": "PIX", "Crédito", "Débito", "Dinheiro" ou "Transferência".
+   - "cardName": nome do cartão se mencionado (ex: Nubank, Inter, Itaú, Bradesco), ou null.
+   - "product": o produto, serviço ou finalidade principal do gasto (ex: "Personal da academia", "Combustível", "Almoço", "Lanche").
+   - "description": descrição resumida do lançamento (ex: "Personal da academia").
+   - "category": uma das seguintes opções: "Saúde", "Alimentação", "Transporte", "Moradia", "Lazer", "Compras", "Educação", "Receita", "Outros". (Para serviços esportivos, academia, personal trainer, use "Saúde").
+   - "establishment": nome da empresa, loja, prestador ou beneficiário mencionado (ex: "Personal da academia", "Posto de Combustível"), ou "".
+   - "city": cidade brasileira mencionada no áudio (ex: "Teresina, PI", "Oeiras, PI", "Fortaleza, CE", etc. Se não mencionada, retorne "").
+   - "isRecurring": true se for mensalidade, dívida recorrente ou parcelamento, caso contrário false.
+   - "totalInstallments": número de parcelas (padrão 1).
+
+Responda OBRIGATORIAMENTE em JSON puro no formato especificado.`;
+
+    const gRes = await fastAxios.post(gUrl, {
+      contents: [{
+        parts: [
+          { inline_data: { mime_type: 'audio/ogg', data: base64Audio } },
+          { text: prompt }
+        ]
+      }],
+      generationConfig: {
+        temperature: 0.1,
+        responseMimeType: 'application/json'
+      }
+    }, { timeout: 15000 });
+
+    const gTxt = gRes.data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (gTxt && gTxt.trim().length > 0) {
+      const parsedJson = JSON.parse(gTxt.trim());
+      if (parsedJson && (parsedJson.amount > 0 || parsedJson.transcription)) {
+        console.log(`🎙️ [WhatsApp Gemini Multimodal Direto]: Transcrição: "${parsedJson.transcription}" | Valor: R$ ${parsedJson.amount} | Item: ${parsedJson.product} | Cidade: ${parsedJson.city || 'N/A'}`);
+        return parsedJson;
+      }
+    }
+  } catch (gErr) {
+    console.warn('[Gemini Multimodal Direct Audio Warn]:', gErr?.response?.data || gErr?.message || gErr);
+  }
+
+  return null;
+}
+
 // Transcritor unificado de áudio em múltiplas camadas com garantia de fidelidade
 async function transcribeAudioBuffer(audioBuffer, explicitKey = '') {
   if (!audioBuffer || audioBuffer.length < 50) return '';
@@ -307,6 +369,21 @@ try {
 
 function saveSettingsToDisk() {
   fs.promises.writeFile(SETTINGS_FILE, JSON.stringify(localSettings, null, 2), 'utf-8').catch(() => {});
+  if (localSettings.geminiApiKey) {
+    try {
+      const envPath = path.join(__dirname, '.env');
+      let envContent = '';
+      if (fs.existsSync(envPath)) {
+        envContent = fs.readFileSync(envPath, 'utf8');
+      }
+      if (/GEMINI_API_KEY=/i.test(envContent)) {
+        envContent = envContent.replace(/GEMINI_API_KEY=.*/i, `GEMINI_API_KEY=${localSettings.geminiApiKey}`);
+      } else {
+        envContent += `\nGEMINI_API_KEY=${localSettings.geminiApiKey}\n`;
+      }
+      fs.writeFileSync(envPath, envContent.trim() + '\n', 'utf8');
+    } catch (e) {}
+  }
 }
 
 try {
@@ -738,8 +815,18 @@ function extractMonetaryValue(text) {
       spokenTotal += mult * 1000;
       currentGroup = 0;
     } else if (wordMap[w] !== undefined) {
-      foundSpoken = true;
-      currentGroup += wordMap[w];
+      if (w === 'um' || w === 'uma') {
+        const nextWord = words[i + 1] || '';
+        const isFollowedByCurrencyOrScale = /^(mil|milhao|milhões|milhoes|real|reais|centavo|centavos)$/i.test(nextWord);
+        const hasPrecedingDecade = currentGroup >= 20;
+        if (isFollowedByCurrencyOrScale || hasPrecedingDecade) {
+          foundSpoken = true;
+          currentGroup += 1;
+        }
+      } else {
+        foundSpoken = true;
+        currentGroup += wordMap[w];
+      }
     }
   }
   spokenTotal += currentGroup;
@@ -1629,17 +1716,79 @@ async function startSocket() {
             }
           }
 
-          // 1. PROCESSAMENTO DE ÁUDIO REAL DE VOZ
+          // 1. PROCESSAMENTO DE ÁUDIO REAL DE VOZ COM GOOGLE GEMINI MULTIMODAL
           if (isAudio && audioBuffer && audioBuffer.length > 50) {
-            console.log(`🎙️ [WhatsApp] Áudio recebido no grupo (${audioBuffer.length} bytes). Transcrevendo com IA...`);
-            const transcribedText = await transcribeAudioBuffer(audioBuffer);
+            console.log(`🎙️ [WhatsApp] Áudio recebido no grupo (${audioBuffer.length} bytes). Processando com IA...`);
 
-            // Se o áudio foi transcrito para texto, processa com o motor financeiro estrito
-            if (transcribedText) {
-              parsed = parseDynamicFinancialMessage(transcribedText, true);
+            // ESTRATÉGIA A: Gemini 1.5 Flash Multimodal Direto (Áudio -> JSON Estruturado com fidelidade máxima)
+            const geminiExtracted = await interpretAudioDirectlyWithGemini(audioBuffer);
+            if (geminiExtracted && geminiExtracted.amount > 0) {
+              const amount = parseFloat(geminiExtracted.amount) || 0;
+              const type = geminiExtracted.type === 'Entrada' ? 'Entrada' : 'Saída';
+              const method = geminiExtracted.method || 'PIX';
+              const finalProduct = geminiExtracted.product || geminiExtracted.description || 'Despesa';
+              const establishment = geminiExtracted.establishment || '';
+              const finalCity = geminiExtracted.city || '';
+              const detectedCategory = geminiExtracted.category || 'Outros';
+              const finalCardName = geminiExtracted.cardName || (method === 'Crédito' ? 'Nubank' : undefined);
+              const symbol = type === 'Entrada' ? '+' : '-';
+              const cleanTranscription = geminiExtracted.transcription || '';
+
+              let methodDisplay = method === 'Crédito' && finalCardName ? `Crédito (${finalCardName})` : method;
+
+              let reply = `⚡ Lançamento adicionado ao KYRO Finance!\n\n🎙️ [Áudio de Voz]: "${cleanTranscription}"\n\n` +
+                `• *Tipo:* ${type === 'Entrada' ? '💰 Entrada (Receita)' : '💸 Saída (Despesa)'}\n` +
+                `• *Descrição / Item:* ${finalProduct}\n` +
+                `• *Categoria:* ${detectedCategory}\n` +
+                (establishment ? `• *Estabelecimento:* ${establishment}\n` : '') +
+                (finalCity ? `• *Local / Cidade:* ${finalCity}\n` : '') +
+                `• *Valor:* ${symbol} R$ ${amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n` +
+                `• *Forma de Pagamento:* ${methodDisplay}`;
+
+              if (method === 'Crédito' && finalCardName) {
+                reply += `\n• *Fatura:* Adicionado à fatura do cartão ${finalCardName}`;
+              }
+              reply += `\n\n✅ Sincronizado em tempo real no Dashboard, Entradas e Saídas!`;
+
+              const savedTx = {
+                id: `${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+                product: finalProduct,
+                establishment: establishment,
+                description: finalProduct,
+                amount,
+                type,
+                method,
+                cardName: finalCardName,
+                category: detectedCategory,
+                subcategory: finalProduct,
+                city: finalCity,
+                date: new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }),
+                status: 'Concluído',
+                currentInstallment: 1,
+                totalInstallments: geminiExtracted.totalInstallments || 1,
+                createdAt: new Date().toISOString()
+              };
+
+              parsed = {
+                reply,
+                savedTx,
+                product: finalProduct,
+                establishment,
+                object: finalProduct,
+                location: establishment,
+                city: finalCity
+              };
             }
 
-            // Se todas as tentativas falharam e o áudio é inaudível: NUNCA INVENTA R$ 20!
+            // ESTRATÉGIA B: Fallback de Transcrição + Parser Financeiro Estrito
+            if (!parsed) {
+              const transcribedText = await transcribeAudioBuffer(audioBuffer);
+              if (transcribedText) {
+                parsed = parseDynamicFinancialMessage(transcribedText, true);
+              }
+            }
+
+            // Se todas as tentativas falharam e o áudio é inaudível: NUNCA INVENTA R$ 20 NEM R$ 1!
             if (!parsed) {
               await sock.sendMessage(remoteJid, {
                 text: '🎙️ *Áudio recebido, mas não consegui identificar com nitidez o valor ou o item.*\n\nPor favor, envie o áudio novamente falando mais próximo ao microfone ou digite o lançamento no grupo (ex: *"Transferência de R$ 300"* ou *"Lanche 15 no débito"*).'
@@ -2445,5 +2594,6 @@ module.exports = {
   extractCreditCardName,
   extractInstallments,
   transcribeAudioBuffer,
+  interpretAudioDirectlyWithGemini,
   getEffectiveGeminiKey
 };

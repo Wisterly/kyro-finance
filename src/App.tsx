@@ -2550,15 +2550,17 @@ export default function App() {
 
           recognitionInstance.onresult = (event: any) => {
             let interimTranscript = '';
-            for (let i = event.resultIndex; i < event.results.length; ++i) {
-              const part = event.results[i][0]?.transcript || '';
-              if (event.results[i].isFinal) {
-                finalTranscriptRef.current += (finalTranscriptRef.current ? ' ' : '') + part;
+            let finalCombinedText = '';
+            for (let i = 0; i < event.results.length; ++i) {
+              const res = event.results[i];
+              const part = res[0]?.transcript || '';
+              if (res.isFinal) {
+                finalCombinedText += (finalCombinedText ? ' ' : '') + part;
               } else {
                 interimTranscript += (interimTranscript ? ' ' : '') + part;
               }
             }
-            const fullCombined = (finalTranscriptRef.current + ' ' + interimTranscript).trim();
+            const fullCombined = (finalCombinedText + ' ' + interimTranscript).trim();
             const cleaned = cleanAndDeduplicateTranscript(fullCombined);
             setLiveAudioTranscript(cleaned);
             setInputMessage(cleaned);

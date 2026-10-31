@@ -172,8 +172,18 @@ export function extractMonetaryValue(text: string): number {
       spokenTotal += mult * 1000;
       currentGroup = 0;
     } else if (wordMap[w] !== undefined) {
-      foundSpoken = true;
-      currentGroup += wordMap[w];
+      if (w === 'um' || w === 'uma') {
+        const nextWord = words[i + 1] || '';
+        const isFollowedByCurrencyOrScale = /^(mil|milhao|milhões|milhoes|real|reais|centavo|centavos)$/i.test(nextWord);
+        const hasPrecedingDecade = currentGroup >= 20;
+        if (isFollowedByCurrencyOrScale || hasPrecedingDecade) {
+          foundSpoken = true;
+          currentGroup += 1;
+        }
+      } else {
+        foundSpoken = true;
+        currentGroup += wordMap[w];
+      }
     }
   }
   spokenTotal += currentGroup;
