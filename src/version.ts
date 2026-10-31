@@ -1,11 +1,12 @@
 // Metadados Centrais de Versão e Auto-Update do KYRO Finance
-export const APP_VERSION = '1.31';
-export const APP_BUILD = 31;
+export const APP_VERSION = '1.32';
+export const APP_BUILD = 32;
 
 export const APP_CHANGELOG = [
-  'Assinatura criptográfica fixa e permanente (Keystore unificada) eliminando o erro "Aplicativo não instalado"',
-  'Encerramento automático do app antigo no momento da instalação para liberação total do processo sem concorrência',
-  'Concessão explícita de permissão transitória de leitura (FileProvider) para o PackageInstaller do Android',
-  'Priorização estrita de pacotes APK Release oficiais nas consultas de atualização do GitHub',
-  'Pipeline inteligente de áudio e IA multimodal no WhatsApp e chat interno 100% calibrados'
+  'Gravação de voz limpa estilo WhatsApp sem conflitos ou bipes sonoros repetitivos no celular',
+  'Barra de gravação com cronômetro em tempo real (00:03), ondas sonoras e botão de cancelar',
+  'Transcrição e interpretação neural com filtragem estrita de valor, método, produto e cidade',
+  'Preenchimento exclusivo do que foi falado (ex: apenas valor e Pix deixa cidade e local vazios)',
+  'Reconhecimento cirúrgico de itens como Personal da academia (Saúde) e Almoço em Teresina (Alimentação)',
+  'Conectividade de API resiliente garantindo resposta no app Android mesmo sem backend local'
 ];

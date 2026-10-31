@@ -84,6 +84,7 @@ import {
 } from './utils/aiCopilot';
 import { UpdateModal, UpdateInfo } from './components/UpdateModal';
 import { checkForAppUpdate, checkUpdateDetailed, getInstalledAppInfo, CURRENT_APP_BUILD, CURRENT_APP_VERSION } from './utils/appUpdater';
+import { isRunningInNativeApk } from './nativeBridge';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'transacoes' | 'orcamentos' | 'mapa' | 'relatorios' | 'whatsapp' | 'configuracoes' | 'cartoes'>('dashboard');
@@ -1983,36 +1984,37 @@ export default function App() {
     // INTEGRAÇÃO NATIVA COM GOOGLE GEMINI 1.5 FLASH (MULTIMODAL & FUNCTION CALLING)
     // =========================================================================
     try {
-      const apiResponse = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: text,
-          audioBase64,
-          audioMimeType,
-          imageBase64,
-          imageMimeType,
-          history: messages.slice(-6).map(m => ({ sender: m.sender, text: m.text })),
-          context: {
-            userName: userFullName,
-            totalBalance,
-            monthIncomes,
-            monthExpenses,
-            transactions: transactions.slice(0, 35),
-            creditCards,
-            recurringExpenses
-          },
-          geminiApiKey: geminiApiKey || undefined,
-          groqApiKey: groqApiKey || undefined,
-          formattingPreference: geminiFormatStyle,
-          customPrompt: geminiCustomPrompt,
-          userAiRules: userAiRules
-        })
+      const apiResponse = await executeApiCall('/api/chat', {
+        message: text,
+        audioBase64,
+        audioMimeType,
+        imageBase64,
+        imageMimeType,
+        history: messages.slice(-6).map(m => ({ sender: m.sender, text: m.text })),
+        context: {
+          userName: userFullName,
+          totalBalance,
+          monthIncomes,
+          monthExpenses,
+          transactions: transactions.slice(0, 35),
+          creditCards,
+          recurringExpenses
+        },
+        geminiApiKey: geminiApiKey || undefined,
+        groqApiKey: groqApiKey || undefined,
+        formattingPreference: geminiFormatStyle,
+        customPrompt: geminiCustomPrompt,
+        userAiRules: userAiRules
       });
 
-      if (apiResponse.ok) {
+      if (apiResponse && apiResponse.ok) {
         const data = await apiResponse.json();
         if (data && data.reply) {
+          // Atualiza a transcrição real na mensagem do usuário caso tenha sido extraída pelo backend
+          if (data.transcribedText && isAudio && replaceMessageId) {
+            setMessages(prev => prev.map(m => m.id === replaceMessageId ? { ...m, text: `🎙️ "${data.transcribedText}"` } : m));
+          }
+
           const action = data.action || { type: 'none' };
 
           // 1. Criação de transação pelo Gemini
@@ -2521,6 +2523,69 @@ export default function App() {
   const recordedTextRef = React.useRef<string>('');
   const finalTranscriptRef = React.useRef<string>('');
   const isRecordingAudioRef = React.useRef<boolean>(false);
+  const audioStreamRef = React.useRef<MediaStream | null>(null);
+
+  // Despachador de chamadas de API resiliente (aponta para a Vercel no Android nativo e relativo na Web)
+  const executeApiCall = async (endpoint: string, payload: any) => {
+    const isNative = isRunningInNativeApk() || (typeof window !== 'undefined' && window.location.protocol === 'capacitor:');
+    const urls = isNative 
+      ? [
+          `https://kyro-finance.vercel.app${endpoint}`,
+          endpoint,
+          `http://localhost:3001${endpoint}`
+        ]
+      : [
+          endpoint,
+          `https://kyro-finance.vercel.app${endpoint}`,
+          `http://localhost:3001${endpoint}`
+        ];
+
+    for (const url of urls) {
+      try {
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (res && res.ok) {
+          return res;
+        }
+      } catch (e) {
+        // Fallback para próxima URL
+      }
+    }
+    return null;
+  };
+
+  const cancelRecordingAudio = () => {
+    isRecordingAudioRef.current = false;
+    setIsRecordingAudio(false);
+
+    if (timerIntervalRef.current) {
+      clearInterval(timerIntervalRef.current);
+      timerIntervalRef.current = null;
+    }
+
+    if (speechRecognitionRef.current) {
+      try { speechRecognitionRef.current.stop(); } catch (e) {}
+    }
+
+    if (audioStreamRef.current) {
+      try { audioStreamRef.current.getTracks().forEach(t => t.stop()); } catch (e) {}
+      audioStreamRef.current = null;
+    }
+
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      try {
+        mediaRecorderRef.current.onstop = null;
+        mediaRecorderRef.current.stop();
+      } catch (e) {}
+    }
+
+    audioChunksRef.current = [];
+    setLiveAudioTranscript('');
+    recordedTextRef.current = '';
+  };
 
   const startRecordingAudio = async () => {
     try {
@@ -2545,9 +2610,14 @@ export default function App() {
         }
       }
 
-      // 1. Reconhecimento de fala auxiliar (apenas para prévia visual enquanto fala, sem duplicações)
+      // 1. Reconhecimento de fala auxiliar (apenas no Computador/Desktop onde não conflita com microfone)
+      const isMobileDevice = typeof navigator !== 'undefined' && (
+        /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+        isRunningInNativeApk()
+      );
+
       const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-      if (SpeechRecognition) {
+      if (!isMobileDevice && SpeechRecognition) {
         try {
           const recognitionInstance = new SpeechRecognition();
           recognitionInstance.lang = 'pt-BR';
@@ -2578,9 +2648,7 @@ export default function App() {
             console.warn('[Speech Recognition Live Feedback]:', e.error || e);
           };
 
-          recognitionInstance.onend = () => {
-            // Não reinicia em loop para não sobrescrever nem duplicar áudio
-          };
+          recognitionInstance.onend = () => {};
 
           recognitionInstance.start();
           speechRecognitionRef.current = recognitionInstance;
@@ -2589,7 +2657,7 @@ export default function App() {
         }
       }
 
-      // 2. Captura do microfone real com filtros de cancelamento de ruído e eco
+      // 2. Captura limpa do microfone físico (estilo WhatsApp)
       const stream = await navigator.mediaDevices.getUserMedia({ 
         audio: { 
           echoCancellation: true, 
@@ -2599,6 +2667,7 @@ export default function App() {
           sampleRate: 48000
         } 
       });
+      audioStreamRef.current = stream;
 
       const recorder = selectedMimeType 
         ? new MediaRecorder(stream, { mimeType: selectedMimeType })
@@ -2614,6 +2683,7 @@ export default function App() {
         const audioBlob = new Blob(audioChunksRef.current, { type: mime });
         const audioUrl = URL.createObjectURL(audioBlob);
         stream.getTracks().forEach(track => track.stop());
+        audioStreamRef.current = null;
 
         let finalText = cleanAndDeduplicateTranscript(recordedTextRef.current || liveAudioTranscript || inputMessage);
 
@@ -2631,46 +2701,28 @@ export default function App() {
           } catch (e) {}
         }
 
-        // Se o reconhecimento nativo não capturou nenhuma palavra, recorre à transcrição em nuvem
+        const tempMsgId = `temp_audio_${Date.now()}`;
+        setMessages(prev => [...prev, {
+          id: tempMsgId,
+          sender: 'user',
+          text: finalText ? `🎙️ "${finalText}"` : '🎙️ [Áudio de Voz]: Interpretando e filtrando com IA...',
+          audioUrl,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        }]);
+
+        setInputMessage('');
+        setLiveAudioTranscript('');
+        setIsAiLoading(true);
+
+        // Se ainda não tivermos o texto transcrito no cliente, transcrevemos via IA
         if (!finalText && audioBase64) {
-          const tempMsgId = `temp_audio_${Date.now()}`;
-          setMessages(prev => [...prev, {
-            id: tempMsgId,
-            sender: 'user',
-            text: '🎙️ [Áudio de Voz]: Interpretando sua voz com IA...',
-            audioUrl,
-            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-          }]);
-
-          setInputMessage('');
-          setLiveAudioTranscript('');
-          setIsAiLoading(true);
-
           try {
-            // Tenta 1: Endpoint relativo (Vite proxy para bot local ou Vercel)
-            let res = await fetch('/api/transcribe', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ audioBase64, mimeType: mime, geminiApiKey: geminiApiKey || undefined, groqApiKey: groqApiKey || undefined })
-            }).catch(() => null);
-
-            // Tenta 2: Bot local direto na porta 3001 (se no desktop ou rede local)
-            if (!res || !res.ok) {
-              res = await fetch('http://localhost:3001/api/transcribe', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ audioBase64, mimeType: mime, geminiApiKey: geminiApiKey || undefined, groqApiKey: groqApiKey || undefined })
-              }).catch(() => null);
-            }
-
-            // Tenta 3: Nuvem Vercel
-            if (!res || !res.ok) {
-              res = await fetch('https://kyro-finance.vercel.app/api/transcribe', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ audioBase64, mimeType: mime, geminiApiKey: geminiApiKey || undefined, groqApiKey: groqApiKey || undefined })
-              }).catch(() => null);
-            }
+            const res = await executeApiCall('/api/transcribe', {
+              audioBase64,
+              mimeType: mime,
+              geminiApiKey: geminiApiKey || undefined,
+              groqApiKey: groqApiKey || undefined
+            });
 
             if (res && res.ok) {
               const data = await res.json().catch(() => null);
@@ -2680,43 +2732,17 @@ export default function App() {
               }
             }
           } catch (err) {
-            console.warn('[Audio Transcribe Fallback]:', err);
-          } finally {
-            setIsAiLoading(false);
+            console.warn('[Audio Transcribe Error]:', err);
           }
         }
-
-        if (!finalText && !audioBase64) {
-          setMessages(prev => [...prev, {
-            id: Date.now().toString(),
-            sender: 'ia',
-            text: 'Não consegui captar a sua voz com nitidez neste momento. Por favor, fale mais próximo ao microfone ou digite na caixa de texto.',
-            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-          }]);
-          return;
-        }
-
-        setMessages(prev => {
-          const alreadyHas = prev.some(m => m.audioUrl === audioUrl);
-          if (alreadyHas) return prev;
-          return [...prev, {
-            id: Date.now().toString(),
-            sender: 'user',
-            text: finalText ? `🎙️ "${finalText}"` : '🎙️ [Áudio enviado ao Gemini 1.5 Flash]',
-            audioUrl,
-            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-          }];
-        });
-
-        setInputMessage('');
-        setLiveAudioTranscript('');
 
         await handleProcessUserInteraction({
           type: 'audio',
           text: finalText || 'Por favor analise este áudio e realize o lançamento ou comando financeiro.',
           audioUrl,
           audioBase64,
-          audioMimeType: mime
+          audioMimeType: mime,
+          replaceMessageId: tempMsgId
         });
       };
 
@@ -2754,6 +2780,11 @@ export default function App() {
 
     if (speechRecognitionRef.current) {
       try { speechRecognitionRef.current.stop(); } catch (e) {}
+    }
+
+    if (audioStreamRef.current) {
+      try { audioStreamRef.current.getTracks().forEach(t => t.stop()); } catch (e) {}
+      audioStreamRef.current = null;
     }
 
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
@@ -4782,52 +4813,14 @@ export default function App() {
         </div>
 
         <div className="p-4 border-t border-[#1B2338]/80 bg-[#0A0D18]/90">
-          {/* Indicador de Gravação de Áudio ao Vivo com Feedback Visual Imediato */}
-          {isRecordingAudio && (
-            <div className="mb-2.5 p-3 rounded-2xl bg-gradient-to-r from-red-950/60 via-[#181124] to-[#12172A] border border-red-500/40 text-xs text-slate-100 flex flex-col gap-2 animate-in fade-in shadow-xl">
-              <div className="flex items-center justify-between">
-                <span className="flex items-center gap-2 font-bold text-red-400 text-xs">
-                  <span className="relative flex h-3 w-3">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
-                  </span>
-                  Ouvindo sua voz ao vivo ({audioRecordingTime}s)...
-                </span>
-                <button 
-                  type="button"
-                  onClick={stopRecordingAudio}
-                  className="px-3 py-1 rounded-lg bg-red-500 hover:bg-red-600 text-white font-bold text-xs transition-all shadow-md flex items-center gap-1.5"
-                >
-                  <Check size={13} /> Concluir & Lançar
-                </button>
-              </div>
-
-              {liveAudioTranscript ? (
-                <div className="p-2.5 rounded-xl bg-black/50 border border-amber-500/40 text-amber-200 text-xs font-medium leading-relaxed max-h-28 overflow-y-auto shadow-inner">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-amber-400 font-bold text-[10px] uppercase tracking-wider flex items-center gap-1.5">
-                      <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                      Transcrição ao Vivo:
-                    </span>
-                    <span className="text-[10px] text-amber-300/80 bg-amber-500/10 px-1.5 py-0.5 rounded">Fidelidade Alta</span>
-                  </div>
-                  <p className="text-slate-100 font-sans text-xs">"{liveAudioTranscript}"</p>
-                </div>
-              ) : (
-                <div className="p-2.5 rounded-xl bg-[#0F1424] border border-[#1E2842] flex items-center gap-3">
-                  <div className="flex items-center gap-1 h-5 px-1 bg-amber-500/10 rounded-lg border border-amber-500/20">
-                    <span className="w-1 bg-amber-400 rounded-full animate-bounce [animation-delay:0ms] h-3"></span>
-                    <span className="w-1 bg-amber-400 rounded-full animate-bounce [animation-delay:150ms] h-4"></span>
-                    <span className="w-1 bg-amber-400 rounded-full animate-bounce [animation-delay:300ms] h-2"></span>
-                    <span className="w-1 bg-amber-400 rounded-full animate-bounce [animation-delay:450ms] h-5"></span>
-                    <span className="w-1 bg-amber-400 rounded-full animate-bounce [animation-delay:200ms] h-3"></span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-semibold text-slate-200">Captando sua voz com Google Gemini...</p>
-                    <p className="text-[10px] text-slate-400 truncate">Dite o valor, o item e a forma (ex: <em>"Transferência de 300 reais no Pix para o personal"</em>)</p>
-                  </div>
-                </div>
-              )}
+          {/* Indicador de Transcrição ao Vivo (se houver fala capturada) */}
+          {isRecordingAudio && liveAudioTranscript && (
+            <div className="mb-2.5 p-2.5 rounded-xl bg-black/60 border border-amber-500/40 text-amber-200 text-xs font-medium leading-relaxed max-h-24 overflow-y-auto shadow-inner animate-in fade-in">
+              <span className="text-amber-400 font-bold text-[10px] uppercase tracking-wider flex items-center gap-1.5 mb-1">
+                <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                Transcrição em Tempo Real:
+              </span>
+              <p className="text-slate-100 font-sans text-xs">"{liveAudioTranscript}"</p>
             </div>
           )}
 
@@ -4856,63 +4849,107 @@ export default function App() {
             className="hidden" 
           />
 
-          <div className="flex items-center gap-1.5 bg-[#12172A] border border-[#202940] rounded-xl px-2.5 py-2 focus-within:border-amber-500/50 transition-all">
-            {/* 1. Botão "+" (Mais): Selecionar Foto ou PDF do Computador / Celular */}
-            <button 
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isOcrProcessing}
-              title="Anexar Arquivo (Foto ou PDF)" 
-              className={`p-1.5 rounded-lg transition-all ${
-                isOcrProcessing 
-                  ? 'bg-amber-500/20 text-amber-400' 
-                  : 'text-slate-400 hover:text-amber-400 hover:bg-slate-800'
-              }`}
-            >
-              {isOcrProcessing ? <Loader2 size={16} className="animate-spin text-amber-400" /> : <Plus size={16} />}
-            </button>
+          {isRecordingAudio ? (
+            /* BARRA DE GRAVAÇÃO ATIVA ESTILO WHATSAPP */
+            <div className="flex items-center gap-2 bg-[#1A0E1A] border border-red-500/50 rounded-2xl px-3 py-2.5 shadow-lg shadow-red-950/40 animate-in fade-in">
+              {/* Botão Cancelar / Lixeira */}
+              <button
+                type="button"
+                onClick={cancelRecordingAudio}
+                title="Cancelar gravação"
+                className="p-2 rounded-xl text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors shrink-0"
+              >
+                <Trash2 size={18} />
+              </button>
 
-            {/* 2. Botão Câmera: Abre imediatamente a câmera do celular ou notebook */}
-            <button 
-              type="button"
-              onClick={() => cameraInputRef.current?.click()}
-              disabled={isOcrProcessing}
-              title="Tirar Foto com a Câmera" 
-              className="p-1.5 rounded-lg text-slate-400 hover:text-cyan-400 hover:bg-slate-800 transition-all"
-            >
-              <Camera size={16} />
-            </button>
+              {/* Ondas e Cronômetro */}
+              <div className="flex-1 flex items-center gap-2.5 min-w-0">
+                <span className="relative flex h-3 w-3 shrink-0">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+                </span>
+                <span className="text-xs font-mono font-bold text-red-300 shrink-0">
+                  00:{audioRecordingTime < 10 ? `0${audioRecordingTime}` : audioRecordingTime}
+                </span>
 
-            {/* 3. Botão Microfone: Gravação de Voz / Áudio */}
-            <button 
-              type="button"
-              onClick={isRecordingAudio ? stopRecordingAudio : startRecordingAudio}
-              title={isRecordingAudio ? "Parar gravação de voz" : "Gravar áudio com IA"} 
-              className={`p-1.5 rounded-lg transition-all ${
-                isRecordingAudio 
-                  ? 'bg-red-500 text-white animate-pulse shadow-[0_0_10px_rgba(239,68,68,0.5)]' 
-                  : 'text-slate-400 hover:text-amber-400 hover:bg-slate-800'
-              }`}
-            >
-              <Mic size={16} />
-            </button>
+                {/* Ondas sonoras animadas */}
+                <div className="flex items-center gap-0.5 h-4 flex-1 overflow-hidden px-1">
+                  <span className="w-1 bg-red-400/80 rounded-full animate-bounce [animation-delay:0ms] h-2"></span>
+                  <span className="w-1 bg-red-400 rounded-full animate-bounce [animation-delay:150ms] h-4"></span>
+                  <span className="w-1 bg-red-300 rounded-full animate-bounce [animation-delay:300ms] h-3"></span>
+                  <span className="w-1 bg-red-400 rounded-full animate-bounce [animation-delay:450ms] h-5"></span>
+                  <span className="w-1 bg-red-500 rounded-full animate-bounce [animation-delay:200ms] h-3"></span>
+                  <span className="w-1 bg-red-400 rounded-full animate-bounce [animation-delay:350ms] h-4"></span>
+                </div>
+              </div>
 
-            <input
-              type="text"
-              value={inputMessage}
-              onChange={(e) => setInputMessage(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
-              placeholder={isRecordingAudio ? "Fale agora... ouvindo sua voz em tempo real..." : "Digite, fale ou envie comprovante..."}
-              className="flex-1 bg-transparent text-xs text-slate-200 placeholder-slate-400 focus:outline-none min-w-0"
-            />
-            <button
-              onClick={handleSendMessage}
-              disabled={isAiLoading || !inputMessage.trim()}
-              className="p-1.5 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 hover:brightness-110 disabled:opacity-40 transition-colors shadow-sm font-bold shrink-0"
-            >
-              {isAiLoading ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
-            </button>
-          </div>
+              {/* Botão Concluir & Lançar */}
+              <button
+                type="button"
+                onClick={stopRecordingAudio}
+                title="Concluir e enviar para a IA"
+                className="p-2 rounded-xl bg-gradient-to-r from-red-500 to-amber-500 text-white font-bold hover:brightness-110 shadow-md transition-all shrink-0 flex items-center gap-1.5 text-xs"
+              >
+                <Check size={16} />
+                <span className="hidden sm:inline">Lançar</span>
+              </button>
+            </div>
+          ) : (
+            /* BARRA NORMAL DE DIGITAÇÃO / ENVIO */
+            <div className="flex items-center gap-1.5 bg-[#12172A] border border-[#202940] rounded-xl px-2.5 py-2 focus-within:border-amber-500/50 transition-all">
+              {/* 1. Botão "+" (Mais): Selecionar Foto ou PDF do Computador / Celular */}
+              <button 
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isOcrProcessing}
+                title="Anexar Arquivo (Foto ou PDF)" 
+                className={`p-1.5 rounded-lg transition-all ${
+                  isOcrProcessing 
+                    ? 'bg-amber-500/20 text-amber-400' 
+                    : 'text-slate-400 hover:text-amber-400 hover:bg-slate-800'
+                }`}
+              >
+                {isOcrProcessing ? <Loader2 size={16} className="animate-spin text-amber-400" /> : <Plus size={16} />}
+              </button>
+
+              {/* 2. Botão Câmera: Abre imediatamente a câmera do celular ou notebook */}
+              <button 
+                type="button"
+                onClick={() => cameraInputRef.current?.click()}
+                disabled={isOcrProcessing}
+                title="Tirar Foto com a Câmera" 
+                className="p-1.5 rounded-lg text-slate-400 hover:text-cyan-400 hover:bg-slate-800 transition-all"
+              >
+                <Camera size={16} />
+              </button>
+
+              {/* 3. Botão Microfone: Gravação de Voz / Áudio */}
+              <button 
+                type="button"
+                onClick={startRecordingAudio}
+                title="Gravar áudio com IA" 
+                className="p-1.5 rounded-lg transition-all text-slate-400 hover:text-amber-400 hover:bg-slate-800"
+              >
+                <Mic size={16} />
+              </button>
+
+              <input
+                type="text"
+                value={inputMessage}
+                onChange={(e) => setInputMessage(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
+                placeholder="Digite, fale ou envie comprovante..."
+                className="flex-1 bg-transparent text-xs text-slate-200 placeholder-slate-400 focus:outline-none min-w-0"
+              />
+              <button
+                onClick={handleSendMessage}
+                disabled={isAiLoading || !inputMessage.trim()}
+                className="p-1.5 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 hover:brightness-110 disabled:opacity-40 transition-colors shadow-sm font-bold shrink-0"
+              >
+                {isAiLoading ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+              </button>
+            </div>
+          )}
           <p className="text-[10px] text-center text-slate-500 mt-2">
             + (Foto/PDF) • Câmera • Áudio • Texto: extração e lançamento automático
           </p>

@@ -2831,13 +2831,35 @@ const server = http.createServer(async (req, res) => {
     req.on('end', async () => {
       try {
         const payload = JSON.parse(body || '{}');
-        const { message = '', context = {}, geminiApiKey, formattingPreference = 'tabelas', customPrompt = '', audioBase64, audioMimeType, imageBase64, imageMimeType } = payload;
+        let { message = '', context = {}, geminiApiKey, formattingPreference = 'tabelas', customPrompt = '', audioBase64, audioMimeType, imageBase64, imageMimeType } = payload;
         const effectiveKey = getEffectiveGeminiKey(geminiApiKey);
+
+        // Se veio áudio e a mensagem de texto está vazia ou genérica, transcreve o áudio primeiro
+        if (audioBase64 && (!message || message.startsWith('Por favor analise este áudio') || message.startsWith('Por favor, analise'))) {
+          try {
+            const cleanA = audioBase64.replace(/^data:[a-zA-Z0-9\/-]+;base64,/, '');
+            const audioBuffer = Buffer.from(cleanA, 'base64');
+            const transcribed = await transcribeAudioBuffer(audioBuffer, effectiveKey);
+            if (transcribed && transcribed.trim().length > 0) {
+              message = transcribed.trim();
+              console.log(`🎙️ [Chat Interno Áudio Transcrito]: "${message}"`);
+            }
+          } catch (trErr) {
+            console.warn('[Chat Interno Audio Transcribe Erro]:', trErr.message);
+          }
+        }
 
         if (effectiveKey && effectiveKey !== 'dummy_key') {
           try {
             const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${effectiveKey}`;
-            const sysPrompt = `Você é o Google Gemini integrado como Copiloto Financeiro Nativo do KYRO Finance. Contexto: ${JSON.stringify(context)}. Responda OBRIGATORIAMENTE em JSON: {"reply": "sua resposta em markdown com tabelas", "action": {"type": "none"|"create_transaction"|"delete_transactions", "transaction": {"description": "...", "product": "...", "amount": 0.00, "type": "Saída"|"Entrada", "category": "...", "method": "PIX"|"Crédito"|"Débito"|"Dinheiro"|"Transferência", "city": "..."}, "deleteTargetTerm": "...", "deleteTargetIds": [...]}}`;
+            const sysPrompt = `Você é o Google Gemini integrado como Copiloto Financeiro Nativo do KYRO Finance. Contexto: ${JSON.stringify(context)}.
+Regras cruciais:
+- Se o usuário disser apenas valor e método (ex: "300 no pix", "50 no débito"), preencha apenas valor e método, city="", establishment="".
+- Se disser "personal da academia", produto="Personal da academia", categoria="Saúde".
+- Se disser "almoço", produto="Almoço", categoria="Alimentação".
+- Se disser "Teresina", city="Teresina, PI". Se não disser cidade, deixe city="".
+- NUNCA transforme "um pix de 300" em 1 real. O valor é 300!
+- Responda OBRIGATORIAMENTE em JSON: {"reply": "sua resposta em tópicos", "action": {"type": "none"|"create_transaction"|"delete_transactions", "transaction": {"description": "...", "product": "...", "amount": 0.00, "type": "Saída"|"Entrada", "category": "...", "method": "PIX"|"Crédito"|"Débito"|"Dinheiro"|"Transferência", "city": "..."}, "deleteTargetTerm": "...", "deleteTargetIds": [...]}}`;
             
             const parts = [];
             if (audioBase64) {
@@ -2850,9 +2872,9 @@ const server = http.createServer(async (req, res) => {
             }
             parts.push({ text: `${sysPrompt}\n\nUsuário: "${message || 'Por favor analise a mídia em anexo e execute o lançamento financeiro.'}"` });
 
-            const geminiRes = await axios.post(geminiUrl, {
+            const geminiRes = await fastAxios.post(geminiUrl, {
               contents: [{ role: 'user', parts }],
-              generationConfig: { temperature: 0.2, responseMimeType: 'application/json' }
+              generationConfig: { temperature: 0.1, responseMimeType: 'application/json' }
             }, { timeout: 15000 });
 
             const geminiText = geminiRes.data?.candidates?.[0]?.content?.parts?.[0]?.text;
@@ -2865,11 +2887,44 @@ const server = http.createServer(async (req, res) => {
               return res.end(JSON.stringify({
                 reply: parsed.reply,
                 action: parsed.action,
-                engine: 'gemini-1.5-flash'
+                engine: 'gemini-1.5-flash',
+                transcribedText: message
               }));
             }
           } catch (gErr) {
             console.warn('[Local Bot Gemini Chat Fallback]:', gErr.message);
+          }
+        }
+
+        // Tenta estruturar com LLM (Groq / OpenAI / Gemini) se message existir
+        if (message && message.trim().length > 3) {
+          const llmData = await extractFinancialDataWithLLM(message, effectiveKey);
+          if (llmData && llmData.amount > 0) {
+            const recorded = recordTransaction({
+              description: llmData.description || llmData.product || 'Despesa registrada',
+              product: llmData.product || llmData.description || 'Despesa',
+              establishment: llmData.establishment || '',
+              amount: llmData.amount,
+              type: llmData.type || 'Saída',
+              category: llmData.category || 'Outros',
+              subcategory: llmData.product || llmData.category || 'Outros',
+              method: llmData.method || 'PIX',
+              cardName: llmData.cardName,
+              city: llmData.city || '',
+              date: new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }),
+              status: 'Concluído'
+            });
+
+            const cityLine = llmData.city ? `\n- 📍 **Cidade/Local:** ${llmData.city}` : '';
+            const reply = `✅ **Lançamento Registrado com Sucesso!**\n\n- 📝 **Descrição:** ${recorded.description}\n- 💰 **Valor:** R$ ${recorded.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n- 🏷️ **Categoria:** ${recorded.category}\n- 🛍️ **Produto:** ${recorded.product}\n- 💳 **Forma:** ${recorded.method}${cityLine}\n- 📊 **Tipo:** ${recorded.type === 'Entrada' ? 'Entrada (+)' : 'Saída (-)'}\n\n*Os valores foram atualizados no saldo geral e nos gráficos.*`;
+
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            return res.end(JSON.stringify({
+              reply,
+              action: { type: 'create_transaction', transaction: recorded },
+              engine: 'kyro-llm-engine',
+              transcribedText: message
+            }));
           }
         }
 
@@ -2882,15 +2937,17 @@ const server = http.createServer(async (req, res) => {
           return res.end(JSON.stringify({
             reply: matches.length > 1 ? `Encontrei ${matches.length} lançamentos referentes a "${term}".` : `Lançamento encontrado para "${term}".`,
             action: { type: 'delete_transactions', deleteTargetTerm: term, deleteTargetIds: matches.map(m => m.id) },
-            engine: 'kyro-local-engine'
+            engine: 'kyro-local-engine',
+            transcribedText: message
           }));
         }
 
         res.writeHead(200, { 'Content-Type': 'application/json' });
         return res.end(JSON.stringify({
-          reply: `Recebi sua mensagem! O motor KYRO Finance está pronto para lançar despesas e responder suas dúvidas financeiras.`,
+          reply: `👋 Olá! Sou o Copiloto Financeiro KYRO.\n\nPosso te ajudar a:\n- 📝 **Registrar despesas e receitas** por áudio, texto ou foto de comprovante (ex: *"fiz um pix de 300 reais para pagar o personal da academia em Teresina"*);\n- 🗑️ **Remover lançamentos**;\n- 📊 **Consultar seus gastos e saldos**.\n\nComo posso te ajudar agora?`,
           action: { type: 'none' },
-          engine: 'kyro-local-engine'
+          engine: 'kyro-local-engine',
+          transcribedText: message
         }));
       } catch (err) {
         res.writeHead(500, { 'Content-Type': 'application/json' });
