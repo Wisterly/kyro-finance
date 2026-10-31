@@ -2610,14 +2610,9 @@ export default function App() {
         }
       }
 
-      // 1. Reconhecimento de fala auxiliar (apenas no Computador/Desktop onde não conflita com microfone)
-      const isMobileDevice = typeof navigator !== 'undefined' && (
-        /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
-        isRunningInNativeApk()
-      );
-
+      // 1. Reconhecimento de fala com transcrição ao vivo universal (Desktop e Mobile)
       const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-      if (!isMobileDevice && SpeechRecognition) {
+      if (SpeechRecognition) {
         try {
           const recognitionInstance = new SpeechRecognition();
           recognitionInstance.lang = 'pt-BR';
@@ -2648,7 +2643,14 @@ export default function App() {
             console.warn('[Speech Recognition Live Feedback]:', e.error || e);
           };
 
-          recognitionInstance.onend = () => {};
+          recognitionInstance.onend = () => {
+            // Se o usuário ainda estiver com o modo de gravação ativo (ex: respiração), mantém ouvindo
+            if (isRecordingAudioRef.current) {
+              try {
+                recognitionInstance.start();
+              } catch (e) {}
+            }
+          };
 
           recognitionInstance.start();
           speechRecognitionRef.current = recognitionInstance;
@@ -4813,16 +4815,35 @@ export default function App() {
         </div>
 
         <div className="p-4 border-t border-[#1B2338]/80 bg-[#0A0D18]/90">
-          {/* Indicador de Transcrição ao Vivo (se houver fala capturada) */}
-          {isRecordingAudio && liveAudioTranscript && (
-            <div className="mb-2.5 p-2.5 rounded-xl bg-black/60 border border-amber-500/40 text-amber-200 text-xs font-medium leading-relaxed max-h-24 overflow-y-auto shadow-inner animate-in fade-in">
-              <span className="text-amber-400 font-bold text-[10px] uppercase tracking-wider flex items-center gap-1.5 mb-1">
-                <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                Transcrição em Tempo Real:
-              </span>
-              <p className="text-slate-100 font-sans text-xs">"{liveAudioTranscript}"</p>
+          {/* Indicador de Transcrição ao Vivo com Feedback Visual Imediato (Mobile & Desktop) */}
+          {liveAudioTranscript ? (
+            <div className="mb-2.5 p-3 rounded-2xl bg-[#090D1A]/95 border border-amber-500/50 text-amber-200 text-xs sm:text-sm font-medium leading-relaxed max-h-28 overflow-y-auto shadow-2xl animate-in fade-in">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-amber-400 font-extrabold text-[11px] uppercase tracking-wider flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                  Transcrição ao Vivo:
+                </span>
+                <span className="text-[10px] text-emerald-300 bg-emerald-500/20 border border-emerald-500/30 px-2 py-0.5 rounded-full font-mono font-bold">
+                  ● Ouvindo Voz
+                </span>
+              </div>
+              <p className="text-slate-100 font-sans text-xs sm:text-sm leading-relaxed font-semibold">"{liveAudioTranscript}"</p>
             </div>
-          )}
+          ) : isRecordingAudio ? (
+            <div className="mb-2.5 p-2.5 rounded-2xl bg-[#0F1424] border border-[#1E2842] flex items-center gap-3 animate-in fade-in">
+              <div className="flex items-center gap-1 h-5 px-1 bg-amber-500/10 rounded-lg border border-amber-500/20">
+                <span className="w-1 bg-amber-400 rounded-full animate-bounce [animation-delay:0ms] h-3"></span>
+                <span className="w-1 bg-amber-400 rounded-full animate-bounce [animation-delay:150ms] h-4"></span>
+                <span className="w-1 bg-amber-400 rounded-full animate-bounce [animation-delay:300ms] h-2"></span>
+                <span className="w-1 bg-amber-400 rounded-full animate-bounce [animation-delay:450ms] h-5"></span>
+                <span className="w-1 bg-amber-400 rounded-full animate-bounce [animation-delay:200ms] h-3"></span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold text-slate-200">Fale agora... Ouvindo sua voz em tempo real...</p>
+                <p className="text-[10px] text-slate-400 truncate">Dite o valor, item e local (ex: <em>"Transferência de 300 reais no Pix para o almoço em Teresina"</em>)</p>
+              </div>
+            </div>
+          ) : null}
 
           {/* Indicador de Processamento OCR da Imagem */}
           {isOcrProcessing && (
@@ -4850,20 +4871,20 @@ export default function App() {
           />
 
           {isRecordingAudio ? (
-            /* BARRA DE GRAVAÇÃO ATIVA ESTILO WHATSAPP */
+            /* BARRA DE GRAVAÇÃO ATIVA RESPONSIVA (MOBILE & DESKTOP) */
             <div className="flex items-center gap-2 bg-[#1A0E1A] border border-red-500/50 rounded-2xl px-3 py-2.5 shadow-lg shadow-red-950/40 animate-in fade-in">
               {/* Botão Cancelar / Lixeira */}
               <button
                 type="button"
                 onClick={cancelRecordingAudio}
                 title="Cancelar gravação"
-                className="p-2 rounded-xl text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors shrink-0"
+                className="p-2 rounded-xl text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors shrink-0 cursor-pointer active:scale-95"
               >
                 <Trash2 size={18} />
               </button>
 
               {/* Ondas e Cronômetro */}
-              <div className="flex-1 flex items-center gap-2.5 min-w-0">
+              <div className="flex-1 flex items-center gap-2 min-w-0">
                 <span className="relative flex h-3 w-3 shrink-0">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
@@ -4883,15 +4904,15 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Botão Concluir & Lançar */}
+              {/* Botão Concluir & Lançar (Visível com texto e ícone em qualquer tela) */}
               <button
                 type="button"
                 onClick={stopRecordingAudio}
-                title="Concluir e enviar para a IA"
-                className="p-2 rounded-xl bg-gradient-to-r from-red-500 to-amber-500 text-white font-bold hover:brightness-110 shadow-md transition-all shrink-0 flex items-center gap-1.5 text-xs"
+                title="Concluir e lançar transação com IA"
+                className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-red-500 via-orange-500 to-amber-500 text-white font-extrabold hover:brightness-110 shadow-lg shadow-amber-500/25 transition-all shrink-0 flex items-center gap-1.5 text-xs cursor-pointer active:scale-95"
               >
                 <Check size={16} />
-                <span className="hidden sm:inline">Lançar</span>
+                <span className="font-extrabold uppercase tracking-wide text-xs">Lançar</span>
               </button>
             </div>
           ) : (
@@ -4928,7 +4949,7 @@ export default function App() {
                 type="button"
                 onClick={startRecordingAudio}
                 title="Gravar áudio com IA" 
-                className="p-1.5 rounded-lg transition-all text-slate-400 hover:text-amber-400 hover:bg-slate-800"
+                className="p-1.5 rounded-lg transition-all text-slate-400 hover:text-amber-400 hover:bg-slate-800 cursor-pointer active:scale-95"
               >
                 <Mic size={16} />
               </button>
@@ -4944,7 +4965,7 @@ export default function App() {
               <button
                 onClick={handleSendMessage}
                 disabled={isAiLoading || !inputMessage.trim()}
-                className="p-1.5 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 hover:brightness-110 disabled:opacity-40 transition-colors shadow-sm font-bold shrink-0"
+                className="p-1.5 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 hover:brightness-110 disabled:opacity-40 transition-colors shadow-sm font-bold shrink-0 cursor-pointer active:scale-95"
               >
                 {isAiLoading ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
               </button>

@@ -1,12 +1,11 @@
 // Metadados Centrais de Versão e Auto-Update do KYRO Finance
-export const APP_VERSION = '1.32';
-export const APP_BUILD = 32;
+export const APP_VERSION = '1.33';
+export const APP_BUILD = 33;
 
 export const APP_CHANGELOG = [
-  'Gravação de voz limpa estilo WhatsApp sem conflitos ou bipes sonoros repetitivos no celular',
-  'Barra de gravação com cronômetro em tempo real (00:03), ondas sonoras e botão de cancelar',
-  'Transcrição e interpretação neural com filtragem estrita de valor, método, produto e cidade',
-  'Preenchimento exclusivo do que foi falado (ex: apenas valor e Pix deixa cidade e local vazios)',
-  'Reconhecimento cirúrgico de itens como Personal da academia (Saúde) e Almoço em Teresina (Alimentação)',
-  'Conectividade de API resiliente garantindo resposta no app Android mesmo sem backend local'
+  'Transcrição de voz ao vivo em tempo real habilitada universalmente para Mobile e Desktop',
+  'Layout do Chatbot responsivo e proporcional: texto e ícone do botão "Lançar" visíveis no celular',
+  'Card de prévia da transcrição em tempo real destacado com feedback visual de áudio',
+  'Envio instantâneo do texto falado ao tocar em Lançar com filtragem cirúrgica de dados',
+  'Experiência 100% idêntica entre Desktop e Celular'
 ];
