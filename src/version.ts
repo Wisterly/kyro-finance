@@ -1,11 +1,11 @@
 // Metadados Centrais de Versão e Auto-Update do KYRO Finance
-export const APP_VERSION = '1.36';
-export const APP_BUILD = 36;
+export const APP_VERSION = '1.37';
+export const APP_BUILD = 37;
 
 export const APP_CHANGELOG = [
-  'Verificação de atualizações ultra-rápida (1s) com barreira anti-cache do WebView e timeout inteligente de 3.5s',
-  'Fim do travamento do botão "Verificar Atualização": o botão nunca mais fica rodando indefinidamente',
-  'Motor nativo de download com streaming em alta velocidade e suporte a redirecionamentos do GitHub',
-  'Barra de progresso real de download (0% a 100%) exibida no pop-up durante a atualização',
-  'Instalação automática do novo APK com encerramento limpo do aplicativo antigo sem erros'
+  'Sincronização em tempo real de lançamentos: novos registros via WhatsApp ou Desktop refletem imediatamente no mobile',
+  'Gesto nativo Pull-to-Refresh: arraste a tela para baixo para sincronizar todos os dados com efeito elástico e háptico',
+  'Widget visual flutuante no topo com indicador de progresso e rotação elástica durante a atualização',
+  'Reatividade instantânea de primeiro plano: o app sincroniza automaticamente ao retornar da tela de bloqueio ou de outros apps',
+  'Eliminação completa de atrasos e caches do Android WebView com cabeçalhos HTTP no-store e parâmetros anti-cache'
 ];

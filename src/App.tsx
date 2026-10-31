@@ -399,182 +399,7 @@ export default function App() {
     }
   };
 
-  // Carregamento Inicial e Sincronização Contínua em Tempo Real com o Banco Central da Nuvem
-  useEffect(() => {
-    let isMounted = true;
 
-    const pullCentralDb = async () => {
-      try {
-        let res = await fetch('/api/database').catch(() => null);
-        let data: any = res && res.ok ? await res.json().catch(() => null) : null;
-
-        // Se o endpoint padrão estiver vazio ou falhar, consulta o banco persistente do Render
-        if (!data || !Array.isArray(data.transactions) || data.transactions.length === 0) {
-          try {
-            const fallbackBotUrl = 'https://kyro-finance-bot.onrender.com';
-            const botRes = await fetch(`${fallbackBotUrl.replace(/\/$/, '')}/api/database`);
-            if (botRes.ok) {
-              const botData = await botRes.json();
-              if (botData?.success && Array.isArray(botData.transactions) && botData.transactions.length > 0) {
-                data = { ...(data || {}), ...botData };
-              }
-            }
-          } catch (e) {}
-        }
-
-        if (data?.success && isMounted) {
-          // 1. Sincroniza a lista de IDs excluídos
-          if (Array.isArray(data.deletedIds) && data.deletedIds.length > 0) {
-            setDeletedTxIds(prev => {
-              let changed = false;
-              const next = new Set(prev);
-              data.deletedIds.forEach((id: string) => {
-                if (!next.has(String(id))) {
-                  next.add(String(id));
-                  changed = true;
-                }
-              });
-              if (changed) {
-                localStorage.setItem('kyro_deleted_tx_ids', JSON.stringify(Array.from(next)));
-                return next;
-              }
-              return prev;
-            });
-          }
-
-          // 2. Transações do servidor filtradas por exclusão (anti-loop)
-          const incomingTxs: any[] = Array.isArray(data.transactions) ? data.transactions : [];
-          const deletedRaw = localStorage.getItem('kyro_deleted_tx_ids');
-          const localDeletedSet = deletedRaw ? new Set(JSON.parse(deletedRaw)) : new Set();
-
-          const cleanIncoming = incomingTxs.filter((t: any) => t && t.id && !localDeletedSet.has(String(t.id)));
-
-          setTransactions(prev => {
-            const validPrev = prev.filter((t: any) => t && t.id && !localDeletedSet.has(String(t.id)));
-
-            // Se o servidor estiver vazio (banco zerado ou cold start) mas o cliente tiver dados locais:
-            // NUNCA APAGA OS DADOS DO USUÁRIO! Pelo contrário: re-hidrata a nuvem enviando o acervo local!
-            if (cleanIncoming.length === 0) {
-              if (validPrev.length > 0) {
-                console.log('[Central DB Sync] Re-hidratando banco central da nuvem com lançamentos locais...');
-                fetch('/api/database', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ action: 'sync_all', transactions: validPrev })
-                }).catch(() => {});
-                return validPrev;
-              }
-              return [];
-            }
-
-            // Se a nuvem tem transações, faz merge preservando lançamentos locais que ainda não subiram
-            const incomingIds = new Set(cleanIncoming.map((t: any) => String(t.id)));
-            const pendingLocal = validPrev.filter(t => !incomingIds.has(String(t.id)));
-
-            // Se há transações locais que ainda não estão na nuvem, dispara salvamento na nuvem
-            if (pendingLocal.length > 0) {
-              pendingLocal.forEach(tx => syncSaveToCentralDb(tx));
-            }
-
-            const merged = [...pendingLocal, ...cleanIncoming];
-
-            const currentSig = prev.map(t => `${t.id}_${t.amount}_${t.description}`).join('|');
-            const incomingSig = merged.map((t: any) => `${t.id}_${t.amount}_${t.description}`).join('|');
-            if (currentSig !== incomingSig) {
-              localStorage.setItem('kyro_transactions', JSON.stringify(merged));
-              return merged;
-            }
-            return prev;
-          });
-
-          // 3. Sincroniza Regras e Diretrizes do Gemini Aprendidas via Chat
-          if (Array.isArray(data.userAiRules) && data.userAiRules.length > 0) {
-            setUserAiRules(prev => {
-              const set = new Set([...prev, ...data.userAiRules]);
-              const merged = Array.from(set);
-              if (merged.length !== prev.length) {
-                localStorage.setItem('kyro_user_ai_rules', JSON.stringify(merged));
-                return merged;
-              }
-              return prev;
-            });
-          }
-
-          // 4. Sincroniza Configurações de Formato e Instrução do Chat Gemini entre Desktop e Mobile
-          if (data.chatConfig && typeof data.chatConfig === 'object') {
-            if (data.chatConfig.formattingPreference) {
-              setGeminiFormatStyle(prev => {
-                if (prev !== data.chatConfig.formattingPreference) {
-                  localStorage.setItem('kyro_gemini_format', data.chatConfig.formattingPreference);
-                  return data.chatConfig.formattingPreference;
-                }
-                return prev;
-              });
-            }
-            if (typeof data.chatConfig.customPrompt === 'string') {
-              setGeminiCustomPrompt(prev => {
-                if (prev !== data.chatConfig.customPrompt) {
-                  localStorage.setItem('kyro_gemini_custom_prompt', data.chatConfig.customPrompt);
-                  return data.chatConfig.customPrompt;
-                }
-                return prev;
-              });
-            }
-          }
-
-          // 5. Sincroniza Configurações do WhatsApp (Grupo Vinculado & Número) entre Desktop e Mobile
-          if (data.whatsappConfig && typeof data.whatsappConfig === 'object') {
-            if (data.whatsappConfig.groupName) {
-              localStorage.setItem('kyro_group_name', data.whatsappConfig.groupName);
-            }
-            if (data.whatsappConfig.inviteLink) {
-              localStorage.setItem('kyro_group_invite_link', data.whatsappConfig.inviteLink);
-            }
-            if (data.whatsappConfig.groupJid) {
-              localStorage.setItem('kyro_group_jid', data.whatsappConfig.groupJid);
-            }
-            if (data.whatsappConfig.phoneNumber) {
-              localStorage.setItem('kyro_second_phone_number', data.whatsappConfig.phoneNumber);
-            }
-            localStorage.setItem('kyro_group_confirmed', 'true');
-          }
-
-          // 6. Sincroniza Cartões de Crédito entre Desktop, Mobile e Nuvem (Persistência Universal)
-          if (Array.isArray(data.creditCards)) {
-            setCreditCards(prev => {
-              const currentSig = JSON.stringify(prev);
-              const incomingSig = JSON.stringify(data.creditCards);
-              if (currentSig !== incomingSig) {
-                localStorage.setItem('kyro_credit_cards', incomingSig);
-                return data.creditCards;
-              }
-              return prev;
-            });
-          }
-
-          // 7. Sincroniza Despesas Recorrentes / Dívidas entre Desktop, Mobile e Nuvem (Persistência Universal)
-          if (Array.isArray(data.recurringExpenses)) {
-            setRecurringExpenses(prev => {
-              const currentSig = JSON.stringify(prev);
-              const incomingSig = JSON.stringify(data.recurringExpenses);
-              if (currentSig !== incomingSig) {
-                localStorage.setItem('kyro_recurring', incomingSig);
-                return data.recurringExpenses;
-              }
-              return prev;
-            });
-          }
-        }
-      } catch (err) {}
-    };
-
-    pullCentralDb();
-    const interval = setInterval(pullCentralDb, 1500);
-    return () => {
-      isMounted = false;
-      clearInterval(interval);
-    };
-  }, []);
 
   // Listener em tempo real do Firestore se conectado
   useEffect(() => {
@@ -694,12 +519,16 @@ export default function App() {
         };
 
         const cloudBotUrl = localStorage.getItem('kyro_cloud_bot_url') || '';
+        const antiCache = `?_t=${Date.now()}`;
         const fetchPromises = [
-          fetchWithTimeout('http://localhost:3001/api/transactions', 1000),
-          fetchWithTimeout('/api/webhook', 1200)
+          fetchWithTimeout(`/api/webhook${antiCache}`, 1500),
+          fetchWithTimeout(`https://kyro-finance.vercel.app/api/webhook${antiCache}`, 1500)
         ];
+        if (typeof window !== 'undefined' && window.location.hostname === 'localhost' && window.location.port === '3000') {
+          fetchPromises.push(fetchWithTimeout('http://localhost:3001/api/transactions', 1000));
+        }
         if (cloudBotUrl) {
-          fetchPromises.push(fetchWithTimeout(`${cloudBotUrl.replace(/\/$/, '')}/api/transactions`, 1200));
+          fetchPromises.push(fetchWithTimeout(`${cloudBotUrl.replace(/\/$/, '')}/api/transactions${antiCache}`, 1500));
         }
 
         const results = await Promise.all(fetchPromises);
@@ -1066,6 +895,295 @@ export default function App() {
   const [isGeminiModalOpen, setIsGeminiModalOpen] = useState(false);
   const [isTestingGemini, setIsTestingGemini] = useState(false);
   const [geminiTestFeedback, setGeminiTestFeedback] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+
+  // ==============================================================
+  // GESTO PULL-TO-REFRESH NATIVO (MOBILE / CHROME) & SINCRONIZAÇÃO EM TEMPO REAL
+  // ==============================================================
+  const [pullDistance, setPullDistance] = useState<number>(0);
+  const [isPullRefreshing, setIsPullRefreshing] = useState<boolean>(false);
+  const touchStartY = useRef<number>(0);
+  const isPullingRef = useRef<boolean>(false);
+  const mainScrollRef = useRef<HTMLElement | null>(null);
+
+  // Aplicação instantânea dos dados do Banco Central no Estado do React
+  const applyDatabaseSync = useCallback((data: any) => {
+    if (!data || !data.success) return;
+
+    // 1. Sincroniza a lista de IDs excluídos (Tombstones)
+    if (Array.isArray(data.deletedIds) && data.deletedIds.length > 0) {
+      setDeletedTxIds(prev => {
+        let changed = false;
+        const next = new Set(prev);
+        data.deletedIds.forEach((id: string) => {
+          if (!next.has(String(id))) {
+            next.add(String(id));
+            changed = true;
+          }
+        });
+        if (changed) {
+          localStorage.setItem('kyro_deleted_tx_ids', JSON.stringify(Array.from(next)));
+          return next;
+        }
+        return prev;
+      });
+    }
+
+    // 2. Transações do servidor filtradas por exclusão (anti-loop)
+    const incomingTxs: any[] = Array.isArray(data.transactions) ? data.transactions : [];
+    const deletedRaw = localStorage.getItem('kyro_deleted_tx_ids');
+    const localDeletedSet = deletedRaw ? new Set(JSON.parse(deletedRaw)) : new Set();
+    const cleanIncoming = incomingTxs.filter((t: any) => t && t.id && !localDeletedSet.has(String(t.id)));
+
+    setTransactions(prev => {
+      const validPrev = prev.filter((t: any) => t && t.id && !localDeletedSet.has(String(t.id)));
+
+      if (cleanIncoming.length === 0) {
+        if (validPrev.length > 0) {
+          fetch('/api/database', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'sync_all', transactions: validPrev })
+          }).catch(() => {});
+          return validPrev;
+        }
+        return [];
+      }
+
+      const incomingIds = new Set(cleanIncoming.map((t: any) => String(t.id)));
+      const pendingLocal = validPrev.filter(t => !incomingIds.has(String(t.id)));
+
+      if (pendingLocal.length > 0) {
+        pendingLocal.forEach(tx => syncSaveToCentralDb(tx));
+      }
+
+      const merged = [...pendingLocal, ...cleanIncoming];
+      const currentSig = prev.map(t => `${t.id}_${t.amount}_${t.description}`).join('|');
+      const incomingSig = merged.map((t: any) => `${t.id}_${t.amount}_${t.description}`).join('|');
+      if (currentSig !== incomingSig) {
+        localStorage.setItem('kyro_transactions', JSON.stringify(merged));
+        return merged;
+      }
+      return prev;
+    });
+
+    // 3. Sincroniza Regras e Diretrizes de IA
+    if (Array.isArray(data.userAiRules) && data.userAiRules.length > 0) {
+      setUserAiRules(prev => {
+        const set = new Set([...prev, ...data.userAiRules]);
+        const merged = Array.from(set);
+        if (merged.length !== prev.length) {
+          localStorage.setItem('kyro_user_ai_rules', JSON.stringify(merged));
+          return merged;
+        }
+        return prev;
+      });
+    }
+
+    // 4. Sincroniza Configurações de Formato e Chat
+    if (data.chatConfig && typeof data.chatConfig === 'object') {
+      if (data.chatConfig.formattingPreference) {
+        setGeminiFormatStyle(prev => {
+          if (prev !== data.chatConfig.formattingPreference) {
+            localStorage.setItem('kyro_gemini_format', data.chatConfig.formattingPreference);
+            return data.chatConfig.formattingPreference;
+          }
+          return prev;
+        });
+      }
+      if (typeof data.chatConfig.customPrompt === 'string') {
+        setGeminiCustomPrompt(prev => {
+          if (prev !== data.chatConfig.customPrompt) {
+            localStorage.setItem('kyro_gemini_custom_prompt', data.chatConfig.customPrompt);
+            return data.chatConfig.customPrompt;
+          }
+          return prev;
+        });
+      }
+    }
+
+    // 5. Sincroniza Configurações do WhatsApp
+    if (data.whatsappConfig && typeof data.whatsappConfig === 'object') {
+      if (data.whatsappConfig.groupName) {
+        localStorage.setItem('kyro_group_name', data.whatsappConfig.groupName);
+      }
+      if (data.whatsappConfig.inviteLink) {
+        localStorage.setItem('kyro_group_invite_link', data.whatsappConfig.inviteLink);
+      }
+      if (data.whatsappConfig.groupJid) {
+        localStorage.setItem('kyro_group_jid', data.whatsappConfig.groupJid);
+      }
+      if (data.whatsappConfig.phoneNumber) {
+        localStorage.setItem('kyro_second_phone_number', data.whatsappConfig.phoneNumber);
+      }
+      localStorage.setItem('kyro_group_confirmed', 'true');
+    }
+
+    // 6. Sincroniza Cartões de Crédito
+    if (Array.isArray(data.creditCards)) {
+      setCreditCards(prev => {
+        const currentSig = JSON.stringify(prev);
+        const incomingSig = JSON.stringify(data.creditCards);
+        if (currentSig !== incomingSig) {
+          localStorage.setItem('kyro_credit_cards', incomingSig);
+          return data.creditCards;
+        }
+        return prev;
+      });
+    }
+
+    // 7. Sincroniza Despesas Recorrentes / Dívidas
+    if (Array.isArray(data.recurringExpenses)) {
+      setRecurringExpenses(prev => {
+        const currentSig = JSON.stringify(prev);
+        const incomingSig = JSON.stringify(data.recurringExpenses);
+        if (currentSig !== incomingSig) {
+          localStorage.setItem('kyro_recurring', incomingSig);
+          return data.recurringExpenses;
+        }
+        return prev;
+      });
+    }
+  }, []);
+
+  // Busca e sincronização imediata contra servidores locais e em nuvem
+  const refreshAllData = useCallback(async (showFeedback: boolean = false) => {
+    try {
+      const antiCache = `?_t=${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+      const reqHeaders = {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache'
+      };
+
+      const promises = [
+        fetch(`/api/database${antiCache}`, { headers: reqHeaders, cache: 'no-store' }).then(r => r.ok ? r.json() : null).catch(() => null),
+        fetch(`https://kyro-finance.vercel.app/api/database${antiCache}`, { headers: reqHeaders, cache: 'no-store' }).then(r => r.ok ? r.json() : null).catch(() => null)
+      ];
+
+      const [localData, vercelData] = await Promise.all(promises);
+      const chosenData = (vercelData?.transactions && Array.isArray(vercelData.transactions) && vercelData.transactions.length > 0)
+        ? vercelData
+        : (localData?.success ? localData : vercelData);
+
+      if (chosenData?.success) {
+        applyDatabaseSync(chosenData);
+      } else {
+        try {
+          const fallbackBotUrl = 'https://kyro-finance-bot.onrender.com';
+          const renderRes = await fetch(`${fallbackBotUrl}/api/database${antiCache}`, { headers: reqHeaders, cache: 'no-store' });
+          if (renderRes.ok) {
+            const renderData = await renderRes.json();
+            if (renderData?.success) applyDatabaseSync(renderData);
+          }
+        } catch (e) {}
+      }
+
+      if (showFeedback) {
+        setWhatsappSyncToast({
+          show: true,
+          text: '⚡ Lançamentos e dados atualizados em tempo real!'
+        });
+        setTimeout(() => setWhatsappSyncToast(null), 3000);
+      }
+    } catch (e) {
+      console.warn('[refreshAllData Error]:', e);
+    }
+  }, [applyDatabaseSync]);
+
+  // Polling contínuo de alta velocidade e Reatividade instantânea de Ciclo de Vida (Primeiro Plano)
+  useEffect(() => {
+    refreshAllData();
+
+    // Polling contínuo a cada 1.5s
+    const pollInterval = setInterval(() => {
+      refreshAllData();
+    }, 1500);
+
+    // Sincronização imediata ao focar na janela ou destravar o celular
+    const handleWindowFocus = () => refreshAllData();
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        refreshAllData();
+      }
+    };
+
+    window.addEventListener('focus', handleWindowFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    let appStateListener: any = null;
+    try {
+      appStateListener = CapApp.addListener('appStateChange', (state) => {
+        if (state.isActive) {
+          refreshAllData();
+        }
+      });
+    } catch (e) {}
+
+    return () => {
+      clearInterval(pollInterval);
+      window.removeEventListener('focus', handleWindowFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      if (appStateListener && typeof appStateListener.then === 'function') {
+        appStateListener.then((sub: any) => sub?.remove?.()).catch(() => {});
+      }
+    };
+  }, [refreshAllData]);
+
+  // Handlers do Gesto Pull-to-Refresh estilo Google Chrome / Celular Nativo
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (isPullRefreshing) return;
+    const scrollTop = mainScrollRef.current ? mainScrollRef.current.scrollTop : 0;
+    if (scrollTop <= 2) {
+      touchStartY.current = e.touches[0].clientY;
+      isPullingRef.current = true;
+    } else {
+      isPullingRef.current = false;
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isPullingRef.current || isPullRefreshing) return;
+    const currentY = e.touches[0].clientY;
+    const deltaY = currentY - touchStartY.current;
+
+    if (deltaY > 0) {
+      // Efeito de mola com resistência progressiva
+      const distance = Math.min(95, Math.pow(deltaY, 0.85) * 1.3);
+      if (distance >= 65 && pullDistance < 65) {
+        try {
+          if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+            navigator.vibrate(15);
+          }
+        } catch (e) {}
+      }
+      setPullDistance(distance);
+    } else {
+      setPullDistance(0);
+    }
+  };
+
+  const handleTouchEnd = async () => {
+    if (!isPullingRef.current || isPullRefreshing) return;
+    isPullingRef.current = false;
+
+    if (pullDistance >= 65) {
+      setIsPullRefreshing(true);
+      setPullDistance(55); // Trava na posição de rotação enquanto atualiza
+      try {
+        if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+          navigator.vibrate([20, 50, 20]);
+        }
+      } catch (e) {}
+
+      await refreshAllData(true);
+
+      setTimeout(() => {
+        setIsPullRefreshing(false);
+        setPullDistance(0);
+      }, 500);
+    } else {
+      setPullDistance(0);
+    }
+  };
 
   // ==========================================================================
   // NAVEGAÇÃO SEQUENCIAL DE ABAS E BOTÃO VOLTAR ANDROID (DUPLO TOQUE PARA SAIR)
@@ -3238,7 +3356,34 @@ export default function App() {
       </aside>
 
       {/* ===================== ÁREA PRINCIPAL CENTRAL ===================== */}
-      <main className="flex-1 flex flex-col min-w-0 overflow-y-auto">
+      <main 
+        ref={mainScrollRef as any}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        className="flex-1 flex flex-col min-w-0 overflow-y-auto relative"
+      >
+        {/* Widget Flutuante Pull-to-Refresh estilo Chrome / Instagram */}
+        {(pullDistance > 0 || isPullRefreshing) && (
+          <div 
+            className="fixed top-4 left-1/2 -translate-x-1/2 z-50 pointer-events-none transition-transform duration-100 ease-out"
+            style={{ 
+              transform: `translate(-50%, ${Math.max(0, pullDistance - 25)}px)`, 
+              opacity: Math.min(1, Math.max(0.2, pullDistance / 40)) 
+            }}
+          >
+            <div className="flex items-center gap-2.5 bg-[#0E1528]/95 border border-amber-500/70 px-4 py-2 rounded-full shadow-[0_8px_30px_rgba(245,158,11,0.35)] backdrop-blur-md">
+              <RefreshCw 
+                size={16} 
+                className={`text-amber-400 ${isPullRefreshing ? 'animate-spin' : ''}`} 
+                style={!isPullRefreshing ? { transform: `rotate(${pullDistance * 4.5}deg)` } : undefined} 
+              />
+              <span className="text-xs font-bold text-slate-100 tracking-wide">
+                {isPullRefreshing ? 'Sincronizando em tempo real...' : (pullDistance >= 65 ? 'Solte para atualizar' : 'Puxe para atualizar')}
+              </span>
+            </div>
+          </div>
+        )}
         
         {/* Barra Superior / Header */}
         <header className="sticky top-0 z-20 bg-[#0A0D18]/90 backdrop-blur-md px-6 md:px-8 py-5 border-b border-[#1B2338]/60 flex items-center justify-between gap-4">
