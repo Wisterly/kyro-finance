@@ -45,12 +45,12 @@ export const UpdateModal: React.FC<UpdateModalProps> = ({
         }
 
         // 2. Dispara o download nativo via DownloadManager do Android
-        setUpdateStatusText('Baixando atualização... Acompanhe na notificação do celular');
+        setUpdateStatusText('Baixando pacote... O app fechará ao abrir o instalador para atualizar de forma limpa.');
         await appUpdateManager.downloadAndInstall({
           url: updateInfo.apkUrl
         });
 
-        setUpdateStatusText('Download concluído! Abrindo instalador do Android...');
+        setUpdateStatusText('Download concluído! Fechando o app para instalar...');
       } else {
         // No navegador/desktop, abre o download direto
         window.open(updateInfo.apkUrl, '_blank');

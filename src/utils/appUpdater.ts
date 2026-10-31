@@ -143,7 +143,11 @@ export async function checkUpdateDetailed(): Promise<CheckUpdateResult> {
         let highestBuild = 0;
         let bestVersion = '';
 
-        for (const asset of release.assets) {
+        // Prioriza assets de release oficial (sem debug no nome)
+        const nonDebugAssets = release.assets.filter((a: any) => !a.name.toLowerCase().includes('debug'));
+        const candidateAssets = nonDebugAssets.length > 0 ? nonDebugAssets : release.assets;
+
+        for (const asset of candidateAssets) {
           const parsed = extractVersionFromFileName(asset.name);
           if (parsed && parsed.buildNumber > highestBuild) {
             highestBuild = parsed.buildNumber;

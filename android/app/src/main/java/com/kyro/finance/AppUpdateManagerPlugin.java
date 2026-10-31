@@ -6,10 +6,14 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageInfo;
+import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Environment;
+import android.os.Handler;
+import android.os.Looper;
 import android.provider.Settings;
 import androidx.core.content.FileProvider;
 import com.getcapacitor.JSObject;
@@ -18,6 +22,7 @@ import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import java.io.File;
+import java.util.List;
 
 @CapacitorPlugin(name = "AppUpdateManager")
 public class AppUpdateManagerPlugin extends Plugin {
@@ -76,17 +81,23 @@ public class AppUpdateManagerPlugin extends Plugin {
         try {
             Context context = getContext();
             File downloadDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
+            if (downloadDir == null) {
+                downloadDir = context.getExternalCacheDir();
+            }
+            if (downloadDir == null) {
+                downloadDir = context.getCacheDir();
+            }
             if (downloadDir != null && !downloadDir.exists()) {
                 downloadDir.mkdirs();
             }
-            File apkFile = new File(downloadDir, "KYRO-Finance-update.apk");
+            final File apkFile = new File(downloadDir, "KYRO-Finance-update.apk");
             if (apkFile.exists()) {
                 apkFile.delete();
             }
 
-            DownloadManager downloadManager = (DownloadManager) context.getSystemService(Context.DOWNLOAD_SERVICE);
+            final DownloadManager downloadManager = (DownloadManager) context.getSystemService(Context.DOWNLOAD_SERVICE);
             DownloadManager.Request request = new DownloadManager.Request(Uri.parse(downloadUrl));
-            request.setTitle("KYRO Finance - Atualização");
+            request.setTitle("KYRO Finance - Atualização Oficial");
             request.setDescription("Baixando nova versão do aplicativo...");
             request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
             request.setDestinationUri(Uri.fromFile(apkFile));
@@ -108,7 +119,26 @@ public class AppUpdateManagerPlugin extends Plugin {
                             ctx.unregisterReceiver(this);
                         } catch (Exception ignored) {}
                         downloadReceiver = null;
-                        triggerInstall(apkFile);
+
+                        // Verifica se o arquivo foi baixado com sucesso
+                        boolean downloadOk = false;
+                        try {
+                            Cursor cursor = downloadManager.query(new DownloadManager.Query().setFilterById(downloadId));
+                            if (cursor != null && cursor.moveToFirst()) {
+                                int statusIdx = cursor.getColumnIndex(DownloadManager.COLUMN_STATUS);
+                                if (statusIdx != -1) {
+                                    int status = cursor.getInt(statusIdx);
+                                    if (status == DownloadManager.STATUS_SUCCESSFUL) {
+                                        downloadOk = true;
+                                    }
+                                }
+                                cursor.close();
+                            }
+                        } catch (Exception ignored) {}
+
+                        if (apkFile.exists() && apkFile.length() > 1024) {
+                            triggerInstall(apkFile);
+                        }
                     }
                 }
             };
@@ -135,7 +165,7 @@ public class AppUpdateManagerPlugin extends Plugin {
     private void triggerInstall(File apkFile) {
         try {
             Context context = getContext();
-            if (!apkFile.exists()) return;
+            if (!apkFile.exists() || apkFile.length() == 0) return;
 
             // Se for Android 8+, e não tiver permissão, abre o ajuste
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -158,11 +188,46 @@ public class AppUpdateManagerPlugin extends Plugin {
             installIntent.setDataAndType(apkUri, "application/vnd.android.package-archive");
             installIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
             installIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+
+            // Concede permissão de leitura explícita para os pacotes de instalação do sistema
+            List<ResolveInfo> resInfoList = context.getPackageManager().queryIntentActivities(installIntent, PackageManager.MATCH_DEFAULT_ONLY);
+            for (ResolveInfo resolveInfo : resInfoList) {
+                String packageName = resolveInfo.activityInfo.packageName;
+                context.grantUriPermission(packageName, apkUri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            }
+
             context.startActivity(installIntent);
+
+            // Encerra o aplicativo antigo de forma limpa para liberar o processo e permitir a reinstalação sem concorrência
+            new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                try {
+                    if (getActivity() != null) {
+                        getActivity().finishAffinity();
+                    }
+                    android.os.Process.killProcess(android.os.Process.myPid());
+                    System.exit(0);
+                } catch (Exception ignored) {}
+            }, 1200);
 
         } catch (Exception e) {
             e.printStackTrace();
         }
+    }
+
+    @PluginMethod
+    public void closeApp(PluginCall call) {
+        if (call != null) {
+            call.resolve();
+        }
+        new Handler(Looper.getMainLooper()).postDelayed(() -> {
+            try {
+                if (getActivity() != null) {
+                    getActivity().finishAffinity();
+                }
+                android.os.Process.killProcess(android.os.Process.myPid());
+                System.exit(0);
+            } catch (Exception ignored) {}
+        }, 300);
     }
 
     @PluginMethod

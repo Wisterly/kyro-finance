@@ -87,8 +87,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       let targetAsset: any = null;
       let highestBuild = 0;
 
-      // Procura primeiro os assets que contêm a versão no nome
-      for (const asset of releaseData.assets) {
+      // Procura primeiro os assets que contêm a versão no nome e prioriza pacotes de release
+      const nonDebugAssets = releaseData.assets.filter((a: any) => !a.name.toLowerCase().includes('debug'));
+      const candidateAssets = nonDebugAssets.length > 0 ? nonDebugAssets : releaseData.assets;
+
+      for (const asset of candidateAssets) {
         const parsed = parseVersionFromName(asset.name);
         if (parsed && parsed.buildNumber > highestBuild) {
           highestBuild = parsed.buildNumber;
