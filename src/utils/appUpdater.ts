@@ -1,3 +1,4 @@
+import { App as CapApp } from '@capacitor/app';
 import { UpdateInfo } from '../components/UpdateModal';
 import { isRunningInNativeApk } from '../nativeBridge';
 import { APP_VERSION, APP_BUILD, APP_CHANGELOG } from '../version';
@@ -8,29 +9,24 @@ export const CURRENT_APP_BUILD = APP_BUILD;
 
 /**
  * Obtém os dados de versão reais instalados no dispositivo.
- * No Android nativo, consulta o PackageManager do sistema operacional (versionCode e versionName).
+ * No Android nativo, consulta o PackageManager do sistema operacional via @capacitor/app (versionCode e versionName).
  * No navegador / PWA, utiliza as constantes compiladas no bundle.
  */
 export async function getInstalledAppInfo(): Promise<{ versionName: string; buildNumber: number }> {
-  if (isRunningInNativeApk()) {
-    try {
-      const cap = (window as any).Capacitor;
-      const manager = cap?.Plugins?.AppUpdateManager;
-      if (manager && typeof manager.getAppVersion === 'function') {
-        const res = await manager.getAppVersion();
-        if (res && res.versionCode) {
-          const code = Number(res.versionCode);
-          const name = String(res.versionName || CURRENT_APP_VERSION);
-          console.log(`[AutoUpdate] Versão Nativa do APK Instalado: v${name} (buildCode: ${code})`);
-          return {
-            versionName: name,
-            buildNumber: code
-          };
-        }
+  try {
+    const info = await CapApp.getInfo();
+    if (info && info.build) {
+      const code = parseInt(info.build, 10);
+      if (!isNaN(code) && code > 0) {
+        console.log(`[AutoUpdate] Versão Nativa do APK Instalado lida com sucesso: v${info.version} (buildCode: ${code})`);
+        return {
+          versionName: info.version || CURRENT_APP_VERSION,
+          buildNumber: code
+        };
       }
-    } catch (err) {
-      console.warn('[AutoUpdate] Não foi possível ler versão nativa do APK:', err);
     }
+  } catch (err) {
+    console.warn('[AutoUpdate] Fallback para constantes do build:', err);
   }
 
   return {

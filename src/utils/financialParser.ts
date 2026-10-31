@@ -535,7 +535,7 @@ export function parseDynamicFinancialMessage(
   if (!detectedProduct) {
     let remaining = clean
       .replace(/(?:r\$\s*|rs\s*)?\d+(?:[.,]\d+)?\s*(?:reais|real)?/gi, ' ')
-      .replace(/\b(fiz|fazer|gastei|gasto|paguei|pago|comprei|compra|recebi|ganhei|valor|de|em|no|na|um|uma|uns|umas|o|a|os|as|para|pra|com|por|reais|real|comprovante|transferência|pix|pagamento|benefici[aá]rio)\b/gi, ' ')
+      .replace(/\b(fiz|fazer|gastei|gasto|paguei|pago|comprei|compra|recebi|ganhei|valor|de|em|no|na|um|uma|uns|umas|o|a|os|as|para|pra|com|por|reais|real|comprovante|benefici[aá]rio)\b/gi, ' ')
       .replace(/\b(pix|d[eé]bito|cr[eé]dito|cart[aã]o|dinheiro|transfer[eê]ncia|ted|doc)\b/gi, ' ');
 
     if (location) {
@@ -558,28 +558,36 @@ export function parseDynamicFinancialMessage(
     }
   }
 
-  // 3. Definição do Estabelecimento
-  let establishment = location;
-  if (!establishment) {
-    if (isInternetPurchase) {
-      establishment = 'Internet';
+  // 8. REGRA ESTRITA MINIMALISTA DO USUÁRIO:
+  // Se o usuário disser apenas o valor e o método (ex: "transferência de 300 reais", "300 no pix", "50 no débito"):
+  // O produto é estritamente o que foi dito e NUNCA inventa estabelecimento comercial ou cidade!
+  if (!detectedProduct) {
+    if (lower.includes('transferência') || lower.includes('transferencia') || method === 'Transferência') {
+      detectedProduct = 'Transferência';
+    } else if (lower.includes('pix') || method === 'PIX') {
+      detectedProduct = 'PIX';
+    } else if (lower.includes('débito') || lower.includes('debito') || method === 'Débito') {
+      detectedProduct = 'Débito';
+    } else if (lower.includes('crédito') || lower.includes('credito') || method === 'Crédito') {
+      detectedProduct = cardName ? `Crédito (${cardName})` : 'Crédito';
+    } else if (lower.includes('dinheiro') || method === 'Dinheiro') {
+      detectedProduct = 'Dinheiro';
     } else if (type === 'Entrada') {
-      establishment = 'Recebimento';
-    } else if (detectedCategory === 'Transporte' || detectedProduct?.toLowerCase().includes('combust') || detectedProduct?.toLowerCase().includes('gasolina') || lower.includes('abastecer') || lower.includes('combustível') || lower.includes('combustivel')) {
-      establishment = 'Posto de Combustível';
-    } else if (detectedCategory === 'Saúde / Farmácia' || lower.includes('remédio') || lower.includes('medicamento')) {
-      establishment = 'Farmácia';
+      detectedProduct = 'Receita';
     } else {
-      establishment = detectedProduct ? 'Estabelecimento Comercial' : 'Despesa Avulsa';
+      detectedProduct = 'Pagamento';
     }
   }
 
-  // 4. Previsão Semântica da Categoria (Usa Inteligência Preditiva)
+  // 3. Definição do Estabelecimento (APENAS se mencionado explicitamente pelo usuário)
+  let establishment = location || '';
+
+  // 4. Previsão Semântica da Categoria
   if (!detectedCategory) {
-    if (isInternetPurchase) {
-      detectedCategory = 'Compras na Internet';
-    } else if (type === 'Entrada') {
+    if (type === 'Entrada') {
       detectedCategory = 'Recebimento';
+    } else if (detectedProduct === 'Transferência') {
+      detectedCategory = 'Transferência';
     } else if (establishment === 'Supermercado') {
       detectedCategory = 'Supermercado';
     } else if (establishment === 'Farmácia') {
@@ -597,14 +605,11 @@ export function parseDynamicFinancialMessage(
     }
   }
 
-  // 5. Local / Cidade Obrigatória (Se for internet sem cidade, "Internet"; se não informado, "Sem informação")
-  let finalCity = city;
-  if (!finalCity) {
-    finalCity = isInternetPurchase ? 'Internet' : 'Sem informação';
-  }
+  // 5. Local / Cidade Obrigatória (Apenas se mencionada!)
+  let finalCity = city || '';
 
   // 6. Produto formatado
-  const finalProduct = detectedProduct || (type === 'Entrada' ? 'Receita' : establishment);
+  const finalProduct = detectedProduct;
 
   const symbol = type === 'Entrada' ? '+' : '-';
   let prefix = '💬 ';
@@ -614,18 +619,25 @@ export function parseDynamicFinancialMessage(
   const finalCardName = cardName || (method === 'Crédito' ? 'Nubank' : undefined);
   let methodDisplay = method === 'Crédito' && finalCardName ? `Crédito (${finalCardName})` : method;
 
-  let reply = `⚡ Lançamento adicionado ao KYRO Finance!\n\n${prefix}"${clean}"\n\n• Tipo: ${type}\n• Produto: ${finalProduct}\n• Estabelecimento: ${establishment}\n• Categoria: ${detectedCategory}\n• Valor: ${symbol} R$ ${amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n• Forma: ${methodDisplay}\n• Local / Cidade: ${finalCity}`;
+  let reply = `⚡ Lançamento adicionado ao KYRO Finance!\n\n${prefix}"${clean}"\n\n` +
+    `• *Tipo:* ${type === 'Entrada' ? '💰 Entrada (Receita)' : '💸 Saída (Despesa)'}\n` +
+    `• *Descrição / Item:* ${finalProduct}\n` +
+    `• *Categoria:* ${detectedCategory}\n` +
+    (establishment ? `• *Estabelecimento:* ${establishment}\n` : '') +
+    (finalCity ? `• *Local / Cidade:* ${finalCity}\n` : '') +
+    `• *Valor:* ${symbol} R$ ${amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n` +
+    `• *Forma de Pagamento:* ${methodDisplay}`;
 
   if (method === 'Crédito' && finalCardName) {
-    reply += `\n• Fatura: Adicionado à fatura do cartão ${finalCardName}`;
+    reply += `\n• *Fatura:* Adicionado à fatura do cartão ${finalCardName}`;
   }
-  reply += `\n\n✅ Atualizado nas abas de ${type === 'Entrada' ? 'Entradas' : 'Saídas'}${method === 'Crédito' ? ' e Cartões de Crédito' : ''} e no Dashboard!`;
+  reply += `\n\n✅ Atualizado em tempo real no Dashboard, Entradas e Saídas!`;
 
   const savedTx = {
     id: Date.now().toString(),
     product: finalProduct,
     establishment: establishment,
-    description: establishment,
+    description: finalProduct,
     amount,
     type,
     method,

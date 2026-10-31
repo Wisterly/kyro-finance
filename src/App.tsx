@@ -2601,15 +2601,37 @@ export default function App() {
           setIsAiLoading(true);
 
           try {
-            const res = await fetch('/api/transcribe', {
+            // Tenta 1: Endpoint relativo (Vite proxy para bot local ou Vercel)
+            let res = await fetch('/api/transcribe', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ audioBase64, mimeType: mime, geminiApiKey: geminiApiKey || undefined })
-            });
-            const data = await res.json();
-            if (data?.success && data?.text) {
-              finalText = cleanAndDeduplicateTranscript(data.text);
-              setMessages(prev => prev.map(m => m.id === tempMsgId ? { ...m, text: `🎙️ "${finalText}"` } : m));
+            }).catch(() => null);
+
+            // Tenta 2: Bot local direto na porta 3001 (se no desktop ou rede local)
+            if (!res || !res.ok) {
+              res = await fetch('http://localhost:3001/api/transcribe', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ audioBase64, mimeType: mime, geminiApiKey: geminiApiKey || undefined })
+              }).catch(() => null);
+            }
+
+            // Tenta 3: Nuvem Vercel
+            if (!res || !res.ok) {
+              res = await fetch('https://kyro-finance.vercel.app/api/transcribe', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ audioBase64, mimeType: mime, geminiApiKey: geminiApiKey || undefined })
+              }).catch(() => null);
+            }
+
+            if (res && res.ok) {
+              const data = await res.json().catch(() => null);
+              if (data?.success && data?.text) {
+                finalText = cleanAndDeduplicateTranscript(data.text);
+                setMessages(prev => prev.map(m => m.id === tempMsgId ? { ...m, text: `🎙️ "${finalText}"` } : m));
+              }
             }
           } catch (err) {
             console.warn('[Audio Transcribe Fallback]:', err);

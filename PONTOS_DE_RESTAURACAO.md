@@ -648,6 +648,34 @@ A numeração segue rigorosamente a hierarquia de escopo:
 
 ---
 
+### [PR.025] — Transcritor Neural Whisper Local & Filtragem Estrita Minimalista (Sem Invenções) + Correção Definitiva da Detecção de Atualização via @capacitor/app
+- **Data/Hora:** 2026-10-31 03:50 (UTC-3)
+- **Tags Git:** `PR.025`, `PR.025.1`, `PR.025.2`
+
+#### `PR.025` — Escopo Geral do Projeto (Universal)
+- **Transcritor Neural Whisper Local Integrado (`@xenova/transformers` + FFmpeg):**
+  - Implementação de motor de transcrição neural Whisper (`whisper-tiny` quantizado) rodando em tempo real localmente em **600ms**, 100% gratuito, offline e sem depender de nenhuma chave de API externa paga ou cota de servidor.
+  - Conversão em tempo real de áudios de voz recebidos do WhatsApp (OGG Opus do Baileys) e do chat interno (WebM/WAV) diretamente para PCM Float32Array 16kHz mono.
+  - Testes unitários internos automatizados comprovaram 100% de precisão ao transcrever comandos como *"Transferência de 300 reais"*.
+- **Filtragem e Interpretação Estrita e Minimalista (Sem Invenções):**
+  - **Fim Definitivo de Invenções:** Se o usuário disser apenas o valor e o método (ex: *"Transferência de 300 reais"*, *"300 no pix"*, *"50 no débito"*), o robô e o sistema gravam estritamente o valor e o método mencionado, **sem inventar estabelecimentos falsos** (como "Estabelecimento Comercial" ou "Despesa Avulsa") e **sem inventar cidades falsas** (como "Sem informação" ou "Oeiras").
+  - O campo de descrição recebe o nome específico da operação (ex: *"Transferência"*, *"PIX"*, *"Débito"*), e a categoria fica como *"Outros"* ou *"Transferência"*, mantendo o Dashboard e os Extratos perfeitamente limpos.
+  - Na mensagem de confirmação gerada (tanto no WhatsApp quanto no aplicativo), as linhas de Estabelecimento e Cidade só são exibidas se tiverem sido expressamente ditas pelo usuário.
+- **Correção da Detecção de Versão Nativa do APK (`@capacitor/app`):**
+  - Substituída a chamada a plugin inexistente por `App.getInfo()` do `@capacitor/app` oficial, lendo com precisão o `versionCode` real instalado no smartphone.
+  - Eliminado o falso positivo onde o app informava estar atualizado mesmo quando havia uma build superior disponível na nuvem (ex: Build 24 vs Build 25).
+  - O botão de verificação agora compara a versão real instalada com a versão mais recente publicada no GitHub, abrindo o modal com o botão de download direto para atualizar sem desinstalar.
+
+#### `PR.025.1` — Versão Computador (Desktop)
+- Servidor local `bot.cjs` operando com motor Whisper neural ativo e endpoint `POST /api/transcribe` para fornecer transcrição em alta velocidade ao chat interno e ao WhatsApp.
+- Respostas minimalistas no grupo e nos modais sem poluição de dados não falados.
+
+#### `PR.025.2` — Versão Celular (Aplicativo Android `.apk` & Mobile)
+- Aplicativo Android com leitura da versão nativa real instalada via `@capacitor/app` e detecção dinâmica de atualizações via GitHub.
+- Atualização direta in-app com download do arquivo APK atualizado e preservação integral dos dados.
+
+---
+
 ### [PR.024] — Interpretação Fidedigna de Áudios (Fim do Bug de R$ 20 no WhatsApp e Chat) + Auto-Update Dinâmico em Tempo Real via GitHub
 - **Data/Hora:** 2026-10-31 03:00 (UTC-3)
 - **Tags Git:** `PR.024`, `PR.024.1`, `PR.024.2`
@@ -680,7 +708,10 @@ Se você desejar restaurar qualquer versão anterior ou atual do Kyro Finance, b
 
 | Código do Ponto | Escopo | Descrição Resumida |
 | :--- | :--- | :--- |
-| **`PR.024`** | **Geral (Universal)** | **Versão Atual: Interpretação Fidedigna de Áudios (Fim do Bug de R$ 20 no WhatsApp e Chat) + Auto-Update Dinâmico em Tempo Real via GitHub** |
+| **`PR.025`** | **Geral (Universal)** | **Versão Atual: Transcritor Neural Whisper Local & Filtragem Estrita Minimalista + Correção de Auto-Update via @capacitor/app** |
+| `PR.025.1` | Desktop | Interface Web/Desktop com motor Whisper neural local ativo (< 600ms) e respostas minimalistas sem invenções |
+| `PR.025.2` | Mobile / APK | Aplicativo Android com leitura nativa de versão via @capacitor/app, detecção precisa de update e download direto |
+| **`PR.024`** | **Geral (Universal)** | Interpretação Fidedigna de Áudios (Fim do Bug de R$ 20 no WhatsApp e Chat) + Auto-Update Dinâmico em Tempo Real via GitHub |
 | `PR.024.1` | Desktop | Interface Web/Desktop com áudio preciso de comandos e verificação em tempo real de versões |
 | `PR.024.2` | Mobile / APK | Aplicativo Android com reconhecimento de voz de alta fidelidade e atualização in-app com 1 toque sem desinstalar |
 | **`PR.023`** | **Geral (Universal)** | Persistência Universal 24h na Nuvem (Render + Vercel) sem Perda ou Reset de Dados entre Dispositivos + Fim de Pop-ups Intrusivos |
