@@ -65,7 +65,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 }
               },
               {
-                text: 'Transcreva com máxima precisão as palavras ditadas neste áudio em português brasileiro sobre finanças, pagamentos, contas ou comandos de ajuste. Retorne EXCLUSIVAMENTE a frase transcrita, sem aspas, sem pontuações artificiais e sem comentários.'
+                text: 'Você é o motor oficial de transcrição de alta fidelidade do KYRO Finance. Escute atentamente este áudio em português falado por usuário brasileiro sobre lançamentos financeiros, pagamentos, transferências PIX, contas, academia ou despesas. Transcreva com 100% de precisão as palavras exatas, números (ex: 300 reais, R$ 300 e nunca invente 330 ou 20), estabelecimentos, cidades (ex: Teresina, Oeiras) e itens falados (ex: personal da academia). Retorne EXCLUSIVAMENTE o texto falado exatamente como foi dito, sem comentários, sem explicações e sem aspas.'
               }
             ]
           }]

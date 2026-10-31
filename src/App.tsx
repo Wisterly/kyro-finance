@@ -1379,7 +1379,8 @@ export default function App() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         action: 'save_chat_config',
-        chatConfig: { formattingPreference: format, customPrompt: prompt },
+        geminiApiKey: key,
+        chatConfig: { formattingPreference: format, customPrompt: prompt, geminiApiKey: key },
         userAiRules
       })
     }).catch(() => {});
@@ -2442,52 +2443,58 @@ export default function App() {
     }
   };
 
-  // Higienizador e desduplicador cirúrgico contra repetições de palavras no reconhecimento de voz
+  // Higienizador e desduplicador cirúrgico contra repetições de palavras e frases no reconhecimento de voz
   const cleanAndDeduplicateTranscript = (rawText: string): string => {
     if (!rawText) return '';
-    const clean = rawText.replace(/\s+/g, ' ').trim();
+    let clean = rawText.replace(/\s+/g, ' ').trim();
     if (!clean) return '';
-    const words = clean.split(' ');
-    const out: string[] = [];
 
+    // 1. Eliminação de frases ou blocos de palavras repetidas consecutivas (ex: "acabei de fazer acabei de fazer")
+    let words = clean.split(' ');
+    let changed = true;
+    let maxLoops = 8;
+    while (changed && maxLoops-- > 0 && words.length > 1) {
+      changed = false;
+      for (let len = Math.floor(words.length / 2); len >= 1; len--) {
+        for (let i = 0; i + 2 * len <= words.length; i++) {
+          const b1 = words.slice(i, i + len).map(w => w.toLowerCase().replace(/[,.!?;:]/g, '')).join(' ');
+          const b2 = words.slice(i + len, i + 2 * len).map(w => w.toLowerCase().replace(/[,.!?;:]/g, '')).join(' ');
+          if (b1 && b1 === b2) {
+            words.splice(i + len, len);
+            changed = true;
+            break;
+          }
+        }
+        if (changed) break;
+      }
+    }
+
+    // 2. Remove repetições consecutivas de palavras adjacentes idênticas
+    const out: string[] = [];
     for (let i = 0; i < words.length; i++) {
       const cur = words[i];
       const prev = out.length > 0 ? out[out.length - 1] : '';
-
       const curNorm = cur.toLowerCase().replace(/[,.!?;:]/g, '');
       const prevNorm = prev.toLowerCase().replace(/[,.!?;:]/g, '');
-
-      // Se a palavra for repetida consecutiva (ex: "transferir transferir")
       if (curNorm && curNorm === prevNorm) {
         continue;
       }
-
-      // Se for bloco duplo repetido (ex: "transferir 300 transferir 300")
-      if (out.length >= 2 && i + 1 < words.length) {
-        const p1 = out[out.length - 2].toLowerCase().replace(/[,.!?;:]/g, '');
-        const p2 = out[out.length - 1].toLowerCase().replace(/[,.!?;:]/g, '');
-        const c1 = curNorm;
-        const c2 = words[i + 1].toLowerCase().replace(/[,.!?;:]/g, '');
-        if (p1 === c1 && p2 === c2) {
-          i++; // Pula também o segundo termo do bloco duplicado
-          continue;
-        }
-      }
-
       out.push(cur);
     }
-    return out.join(' ');
+    return out.join(' ').trim();
   };
 
   // Gravação de Áudio ao Vivo no Chat Lateral (Unificado Mobile & Desktop com Áudio Real + Gemini)
   const [liveAudioTranscript, setLiveAudioTranscript] = useState('');
   const recordedTextRef = React.useRef<string>('');
+  const finalTranscriptRef = React.useRef<string>('');
   const isRecordingAudioRef = React.useRef<boolean>(false);
 
   const startRecordingAudio = async () => {
     try {
       isRecordingAudioRef.current = true;
       recordedTextRef.current = '';
+      finalTranscriptRef.current = '';
       setLiveAudioTranscript('');
 
       // Formato de áudio suportado pelo dispositivo
@@ -2517,12 +2524,17 @@ export default function App() {
           recognitionInstance.maxAlternatives = 1;
 
           recognitionInstance.onresult = (event: any) => {
-            let fullStr = '';
-            for (let i = 0; i < event.results.length; i++) {
+            let interimTranscript = '';
+            for (let i = event.resultIndex; i < event.results.length; ++i) {
               const part = event.results[i][0]?.transcript || '';
-              fullStr += (fullStr ? ' ' : '') + part;
+              if (event.results[i].isFinal) {
+                finalTranscriptRef.current += (finalTranscriptRef.current ? ' ' : '') + part;
+              } else {
+                interimTranscript += (interimTranscript ? ' ' : '') + part;
+              }
             }
-            const cleaned = cleanAndDeduplicateTranscript(fullStr);
+            const fullCombined = (finalTranscriptRef.current + ' ' + interimTranscript).trim();
+            const cleaned = cleanAndDeduplicateTranscript(fullCombined);
             setLiveAudioTranscript(cleaned);
             setInputMessage(cleaned);
             recordedTextRef.current = cleaned;
@@ -4757,14 +4769,30 @@ export default function App() {
               </div>
 
               {liveAudioTranscript ? (
-                <div className="p-2 rounded-xl bg-black/40 border border-amber-500/30 text-amber-200 text-xs font-medium leading-relaxed max-h-24 overflow-y-auto">
-                  <span className="text-amber-400 font-bold block text-[10px] uppercase tracking-wider mb-0.5">Transcrição ao Vivo:</span>
-                  "{liveAudioTranscript}"
+                <div className="p-2.5 rounded-xl bg-black/50 border border-amber-500/40 text-amber-200 text-xs font-medium leading-relaxed max-h-28 overflow-y-auto shadow-inner">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-amber-400 font-bold text-[10px] uppercase tracking-wider flex items-center gap-1.5">
+                      <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                      Transcrição ao Vivo:
+                    </span>
+                    <span className="text-[10px] text-amber-300/80 bg-amber-500/10 px-1.5 py-0.5 rounded">Fidelidade Alta</span>
+                  </div>
+                  <p className="text-slate-100 font-sans text-xs">"{liveAudioTranscript}"</p>
                 </div>
               ) : (
-                <p className="text-[11px] text-slate-400 italic">
-                  Fale agora com clareza. Suas palavras aparecerão aqui e na caixa de texto simultaneamente.
-                </p>
+                <div className="p-2.5 rounded-xl bg-[#0F1424] border border-[#1E2842] flex items-center gap-3">
+                  <div className="flex items-center gap-1 h-5 px-1 bg-amber-500/10 rounded-lg border border-amber-500/20">
+                    <span className="w-1 bg-amber-400 rounded-full animate-bounce [animation-delay:0ms] h-3"></span>
+                    <span className="w-1 bg-amber-400 rounded-full animate-bounce [animation-delay:150ms] h-4"></span>
+                    <span className="w-1 bg-amber-400 rounded-full animate-bounce [animation-delay:300ms] h-2"></span>
+                    <span className="w-1 bg-amber-400 rounded-full animate-bounce [animation-delay:450ms] h-5"></span>
+                    <span className="w-1 bg-amber-400 rounded-full animate-bounce [animation-delay:200ms] h-3"></span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-slate-200">Captando sua voz com Google Gemini...</p>
+                    <p className="text-[10px] text-slate-400 truncate">Dite o valor, o item e a forma (ex: <em>"Transferência de 300 reais no Pix para o personal"</em>)</p>
+                  </div>
+                </div>
               )}
             </div>
           )}

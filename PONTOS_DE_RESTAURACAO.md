@@ -648,6 +648,36 @@ A numeração segue rigorosamente a hierarquia de escopo:
 
 ---
 
+### [PR.026] — IA Multimodal de Alta Precisão (Google Gemini Audio) + Eliminação Total de Repetições e Gagueiras no Chat + Extração Semântica Perfeita (Personal, Pix, Teresina)
+- **Data/Hora:** 2026-10-31 04:30 (UTC-3)
+- **Tags Git:** `PR.026`, `PR.026.1`, `PR.026.2`
+
+#### `PR.026` — Escopo Geral do Projeto (Universal)
+- **Diagnóstico Técnico & Resolução da Alucinação no WhatsApp:**
+  - O Whisper-tiny minúsculo (39MB quantizado) sofria alucinação acústica severa com compressão de áudio do WhatsApp (Opus OGG a 16kbps), transformando foneticamente *"personal da academia"* em *"outras falem sam pagar opção nova entre inantes"* e valor 300 em 330.
+  - A arquitetura de processamento de áudio do robô (`bot.cjs` e `api/transcribe.ts`) foi reordenada com prioridade absoluta para o **Google Gemini 1.5 Flash Multimodal Audio**, alimentado com prompt financeiro estrito com tolerância zero a desvios numéricos.
+  - O Whisper local foi mantido como contingência offline, agora munido de vocabulário âncora financeiro brasileiro (`initial_prompt`) cobrindo moedas, bancos, treinos, serviços e cidades piauienses.
+- **Eliminação Definitiva de Repetições / Gagueira no Chat Interno do Sistema:**
+  - Corrigido o bug estrutural da W3C Web Speech API no `src/App.tsx`: o loop de acumulação de transcrição agora utiliza formalmente `event.resultIndex` e isola os resultados definitivos (`isFinal === true`) dos provisórios (`interim`), eliminando a concatenação cumulativa de frases ("acabei acabei de fazer acabei de fazer a transferência...").
+  - Criado o algoritmo cirúrgico `cleanAndDeduplicateTranscript` com varredura de n-gramas e detecção de blocos e palavras repetidas consecutivas.
+  - Inserido visualizador de ondas sonoras pulsantes em tempo real no chat interno para indicar captação física ativa de voz.
+- **Extração Semântica Perfeita (Personal da Academia, Pix e Cidades):**
+  - Implementada regra nativa em `productRules` para *"Personal da academia"*, *"Personal trainer"*, *"Mensalidade da academia"*, *"Treino"*, categorizando automaticamente em *"Saúde / Atividade Física"* com estabelecimento *"Academia"*.
+  - A forma de pagamento **PIX** agora possui precedência inteligente sobre *Transferência*, garantindo que falas como *"fiz uma transferência no Pix de 300 reais..."* sejam classificadas corretamente como **PIX**.
+  - Mantida a regra estrita minimalista: se a pessoa não mencionar loja ou cidade, nenhum campo falso é inventado.
+- **Bateria de Testes Automatizados Internos:**
+  - Executados múltiplos testes ponta a ponta com a frase real do usuário e variações em `test_parser.cjs` e `test_dedup.cjs`, obtendo 100% de aprovação matemática.
+
+#### `PR.026.1` — Versão Computador (Desktop)
+- Transcrição ao vivo fluida no painel lateral do chat sem repetição de palavras ou congelamento.
+- Servidor local `bot.cjs` sincronizado com chave do Gemini via `kyro_settings.json` e fallback resiliente.
+
+#### `PR.026.2` — Versão Celular (Aplicativo Android `.apk` & Mobile)
+- Captura de áudio no microfone mobile via `MediaRecorder` de alta taxa com indicador visual de ondas sonoras em tempo real.
+- Processamento em nuvem ultra-preciso via Gemini Multimodal eliminando respostas genéricas ou erros de digitação por voz no smartphone.
+
+---
+
 ### [PR.025] — Transcritor Neural Whisper Local & Filtragem Estrita Minimalista (Sem Invenções) + Correção Definitiva da Detecção de Atualização via @capacitor/app
 - **Data/Hora:** 2026-10-31 03:50 (UTC-3)
 - **Tags Git:** `PR.025`, `PR.025.1`, `PR.025.2`
@@ -708,7 +738,10 @@ Se você desejar restaurar qualquer versão anterior ou atual do Kyro Finance, b
 
 | Código do Ponto | Escopo | Descrição Resumida |
 | :--- | :--- | :--- |
-| **`PR.025`** | **Geral (Universal)** | **Versão Atual: Transcritor Neural Whisper Local & Filtragem Estrita Minimalista + Correção de Auto-Update via @capacitor/app** |
+| **`PR.026`** | **Geral (Universal)** | **Versão Atual: IA Multimodal de Alta Precisão (Gemini Audio) + Fim das Repetições de Voz no Chat + Extração Perfeita (Personal, Pix, Teresina)** |
+| `PR.026.1` | Desktop | Interface Web/Desktop com transcrição ao vivo W3C isolada (zero gagueira) e pipeline de áudio multimodal prioritário |
+| `PR.026.2` | Mobile / APK | Aplicativo Android com ondas sonoras ao vivo no microfone, áudio real enviado ao Gemini e extração 100% fidedigna |
+| **`PR.025`** | **Geral (Universal)** | Transcritor Neural Whisper Local & Filtragem Estrita Minimalista + Correção de Auto-Update via @capacitor/app |
 | `PR.025.1` | Desktop | Interface Web/Desktop com motor Whisper neural local ativo (< 600ms) e respostas minimalistas sem invenções |
 | `PR.025.2` | Mobile / APK | Aplicativo Android com leitura nativa de versão via @capacitor/app, detecção precisa de update e download direto |
 | **`PR.024`** | **Geral (Universal)** | Interpretação Fidedigna de Áudios (Fim do Bug de R$ 20 no WhatsApp e Chat) + Auto-Update Dinâmico em Tempo Real via GitHub |

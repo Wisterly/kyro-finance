@@ -83,18 +83,92 @@ function convertAudioBufferToFloat32(audioBuffer) {
   });
 }
 
+// ==============================================================
+// GESTÃO INTELIGENTE DE CHAVES DE IA (GEMINI MULTIMODAL & WHISPER)
+// ==============================================================
+function getEffectiveGeminiKey(explicitKey = '') {
+  if (explicitKey && explicitKey !== 'dummy_key') return explicitKey;
+  if (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== 'dummy_key') return process.env.GEMINI_API_KEY;
+  if (process.env.GOOGLE_API_KEY && process.env.GOOGLE_API_KEY !== 'dummy_key') return process.env.GOOGLE_API_KEY;
+  if (typeof localSettings !== 'undefined') {
+    if (localSettings.geminiApiKey && localSettings.geminiApiKey !== 'dummy_key') return localSettings.geminiApiKey;
+    if (localSettings.chatConfig && localSettings.chatConfig.geminiApiKey && localSettings.chatConfig.geminiApiKey !== 'dummy_key') return localSettings.chatConfig.geminiApiKey;
+  }
+  
+  // Tenta ler de .env local se existir
+  try {
+    const envPath = path.join(__dirname, '.env');
+    if (fs.existsSync(envPath)) {
+      const content = fs.readFileSync(envPath, 'utf8');
+      const m = content.match(/(?:GEMINI_API_KEY|GOOGLE_API_KEY|VITE_GEMINI_API_KEY)\s*=\s*([^\r\n]+)/);
+      if (m && m[1] && m[1].trim() && m[1].trim() !== 'dummy_key') {
+        return m[1].trim().replace(/^["']|["']$/g, '');
+      }
+    }
+  } catch (e) {}
+
+  return '';
+}
+
 // Transcritor unificado de áudio em múltiplas camadas com garantia de fidelidade
-async function transcribeAudioBuffer(audioBuffer) {
+async function transcribeAudioBuffer(audioBuffer, explicitKey = '') {
   if (!audioBuffer || audioBuffer.length < 50) return '';
 
-  // ESTRATÉGIA 1: Whisper Neural Local (Instantâneo, sem chave, offline)
+  const base64Audio = audioBuffer.toString('base64');
+  const geminiKey = getEffectiveGeminiKey(explicitKey);
+
+  // ESTRATÉGIA 1: GOOGLE GEMINI 1.5 FLASH MULTIMODAL AUDIO (Fidelidade Máxima com Entendimento Semântico de Voz)
+  if (geminiKey) {
+    try {
+      const gUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`;
+      const gRes = await fastAxios.post(gUrl, {
+        contents: [{
+          parts: [
+            { inline_data: { mime_type: 'audio/ogg', data: base64Audio } },
+            { 
+              text: 'Você é o motor de transcrição financeira de alta fidelidade do KYRO Finance. Escute atentamente este áudio em português falado por usuário brasileiro sobre lançamentos, pagamentos, transferências PIX, contas, academia ou despesas. Identifique com 100% de precisão os valores numéricos falados (ex: R$ 300 e nunca 330), as formas de pagamento (Pix, transferência, débito, crédito), os produtos ou serviços (ex: Personal da academia, alimentação, combustível) e as cidades brasileiras (ex: Teresina, Oeiras). Retorne EXCLUSIVAMENTE o texto falado exatamente como foi dito, sem comentários, sem explicações e sem aspas.' 
+            }
+          ]
+        }],
+        generationConfig: {
+          temperature: 0.1
+        }
+      }, { timeout: 10000 });
+      const gTxt = gRes.data?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (gTxt && gTxt.trim().length > 0) {
+        console.log(`🎙️ [WhatsApp Áudio Transcrito via Gemini Multimodal]: "${gTxt.trim()}"`);
+        return gTxt.trim();
+      }
+    } catch (gErr) {
+      console.warn('[Gemini Multimodal Direct Warn]:', gErr?.response?.data || gErr?.message || gErr);
+    }
+  }
+
+  // ESTRATÉGIA 2: Endpoint Central da Nuvem (/api/transcribe na Vercel)
+  try {
+    const trRes = await fastAxios.post('https://kyro-finance.vercel.app/api/transcribe', {
+      audioBase64,
+      mimeType: 'audio/ogg',
+      geminiApiKey: geminiKey
+    }, { timeout: 8000 });
+    if (trRes.data?.success && trRes.data?.text && trRes.data.text.trim().length > 0) {
+      console.log(`🎙️ [WhatsApp Áudio Transcrito via Nuvem Central]: "${trRes.data.text.trim()}"`);
+      return trRes.data.text.trim();
+    }
+  } catch (trErr) {}
+
+  // ESTRATÉGIA 3: Whisper Neural Local (com Vocabulário Contextualizado em Finanças)
   try {
     const whisper = await getLocalWhisper();
     if (whisper) {
       const float32 = await convertAudioBufferToFloat32(audioBuffer);
       if (float32 && float32.length > 0) {
         const start = Date.now();
-        const res = await whisper(float32, { language: 'portuguese', task: 'transcribe' });
+        const res = await whisper(float32, { 
+          language: 'portuguese', 
+          task: 'transcribe',
+          initial_prompt: 'Finanças pessoais, pagamentos, Pix, transferência, R$ 300, reais, personal da academia, mensalidade, Teresina, Oeiras, Piauí, compras, mercado, combustível.' 
+        });
         const elapsed = Date.now() - start;
         const text = (res?.text || '').trim();
         if (text.length > 0) {
@@ -106,42 +180,6 @@ async function transcribeAudioBuffer(audioBuffer) {
   } catch (wErr) {
     console.warn('[Whisper Local Fallback]:', wErr.message);
   }
-
-  const base64Audio = audioBuffer.toString('base64');
-
-  // ESTRATÉGIA 2: Google Gemini Flash Multimodal Direto (se chave disponível)
-  const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
-  if (geminiKey) {
-    try {
-      const gUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`;
-      const gRes = await fastAxios.post(gUrl, {
-        contents: [{
-          parts: [
-            { inline_data: { mime_type: 'audio/ogg', data: base64Audio } },
-            { text: 'Transcreva com máxima precisão o que foi falado neste áudio em português sobre pagamentos, transferências, pix ou compras. Retorne estritamente o texto falado, sem aspas e sem comentários.' }
-          ]
-        }]
-      }, { timeout: 8000 });
-      const gTxt = gRes.data?.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (gTxt && gTxt.trim().length > 0) {
-        console.log(`🎙️ [WhatsApp Áudio Transcrito via Gemini Direto]: "${gTxt.trim()}"`);
-        return gTxt.trim();
-      }
-    } catch (gErr) {}
-  }
-
-  // ESTRATÉGIA 3: Endpoint Central da Nuvem (/api/transcribe)
-  try {
-    const trRes = await fastAxios.post('https://kyro-finance.vercel.app/api/transcribe', {
-      audioBase64,
-      mimeType: 'audio/ogg',
-      geminiApiKey: geminiKey
-    }, { timeout: 6000 });
-    if (trRes.data?.success && trRes.data?.text && trRes.data.text.trim().length > 0) {
-      console.log(`🎙️ [WhatsApp Áudio Transcrito via Nuvem]: "${trRes.data.text.trim()}"`);
-      return trRes.data.text.trim();
-    }
-  } catch (trErr) {}
 
   return '';
 }
@@ -816,12 +854,12 @@ function parseDynamicFinancialMessage(text, isAudio = false) {
     method = 'Crédito';
   } else if (lower.includes('débito') || lower.includes('debito')) {
     method = 'Débito';
-  } else if (lower.includes('dinheiro') || lower.includes('espécie') || lower.includes('especie')) {
-    method = 'Dinheiro';
-  } else if (lower.includes('transferência') || lower.includes('transferencia') || lower.includes('ted') || lower.includes('doc')) {
-    method = 'Transferência';
   } else if (lower.includes('pix')) {
     method = 'PIX';
+  } else if (lower.includes('transferência') || lower.includes('transferencia') || lower.includes('ted') || lower.includes('doc')) {
+    method = 'Transferência';
+  } else if (lower.includes('dinheiro') || lower.includes('espécie') || lower.includes('especie')) {
+    method = 'Dinheiro';
   }
 
   // 7. Cidade (Apenas se mencionada explicitamente)
@@ -991,6 +1029,17 @@ function parseDynamicFinancialMessage(text, isAudio = false) {
   let detectedCategory = '';
 
   const productRules = [
+    // Saúde, Atividade Física, Personal & Academia
+    {
+      regex: /(?:^|[\s,.\-!])(personal(?:\s+trainer|\s+da\s+academia)?|mensalidade(?:\s+da\s+academia)?|muscula[cç][aã]o|crossfit|pilates|nata[cç][aã]o|treino)(?:$|[\s,.\-!])/i,
+      product: (m) => {
+        const low = m.toLowerCase();
+        if (low.includes('personal')) return 'Personal da academia';
+        if (low.includes('mensalidade')) return 'Mensalidade da academia';
+        return m.charAt(0).toUpperCase() + m.slice(1).toLowerCase();
+      },
+      category: 'Saúde / Atividade Física'
+    },
     // Compras na Internet & Tecnologia
     {
       regex: /(?:^|[\s,.\-!])(c[aâ]mera(?:\s+de\s+vigil[aâ]ncia|\s+de\s+seguran[cç]a)?|cftv|sistema\s+de\s+seguran[cç]a)(?:$|[\s,.\-!])/i,
@@ -1086,7 +1135,7 @@ function parseDynamicFinancialMessage(text, isAudio = false) {
   if (!detectedProduct) {
     let remaining = clean
       .replace(/(?:r\$\s*|rs\s*)?\d+(?:[.,]\d+)?\s*(?:reais|real)?/gi, ' ')
-      .replace(/\b(fiz|fazer|gastei|gasto|paguei|pago|comprei|compra|recebi|ganhei|valor|de|em|no|na|um|uma|uns|umas|o|a|os|as|para|pra|com|por|reais|real)\b/gi, ' ')
+      .replace(/\b(fiz|fazer|gastei|gasto|paguei|pago|pagar|comprei|compra|recebi|ganhei|valor|de|em|no|na|um|uma|uns|umas|o|a|os|as|para|pra|com|por|reais|real)\b/gi, ' ')
       .replace(/\b(pix|d[eé]bito|cr[eé]dito|cart[aã]o|dinheiro|transfer[eê]ncia|ted|doc)\b/gi, ' ');
 
     if (location) {
@@ -1802,13 +1851,14 @@ const server = http.createServer(async (req, res) => {
 
         const cleanBase64 = audioBase64.replace(/^data:[a-zA-Z0-9\/]+;base64,/, '');
         const audioBuffer = Buffer.from(cleanBase64, 'base64');
-        const text = await transcribeAudioBuffer(audioBuffer);
+        const effectiveKey = getEffectiveGeminiKey(payload.geminiApiKey);
+        const text = await transcribeAudioBuffer(audioBuffer, effectiveKey);
 
         res.writeHead(200, { 'Content-Type': 'application/json' });
         return res.end(JSON.stringify({
           success: !!text,
           text: text || '',
-          engine: 'whisper-local'
+          engine: effectiveKey ? 'gemini-1.5-flash' : 'whisper-local'
         }));
       } catch (err) {
         res.writeHead(500, { 'Content-Type': 'application/json' });
@@ -2201,17 +2251,23 @@ const server = http.createServer(async (req, res) => {
 
           if (action === 'save_chat_config' && payload.chatConfig) {
             localSettings.chatConfig = { ...localSettings.chatConfig, ...payload.chatConfig };
+            if (payload.geminiApiKey !== undefined) {
+              localSettings.geminiApiKey = payload.geminiApiKey;
+            } else if (payload.chatConfig?.geminiApiKey !== undefined) {
+              localSettings.geminiApiKey = payload.chatConfig.geminiApiKey;
+            }
             if (Array.isArray(payload.userAiRules)) {
               localSettings.userAiRules = payload.userAiRules;
             }
             saveSettingsToDisk();
             fastAxios.post('https://kyro-finance.vercel.app/api/database', {
               action: 'save_chat_config',
+              geminiApiKey: localSettings.geminiApiKey,
               chatConfig: localSettings.chatConfig,
               userAiRules: localSettings.userAiRules
             }).catch(() => {});
             res.writeHead(200, { 'Content-Type': 'application/json' });
-            return res.end(JSON.stringify({ success: true, chatConfig: localSettings.chatConfig }));
+            return res.end(JSON.stringify({ success: true, chatConfig: localSettings.chatConfig, geminiApiKey: localSettings.geminiApiKey }));
           }
 
           if (action === 'save_whatsapp_config' && payload.whatsappConfig) {
@@ -2243,16 +2299,27 @@ const server = http.createServer(async (req, res) => {
     req.on('end', async () => {
       try {
         const payload = JSON.parse(body || '{}');
-        const { message = '', context = {}, geminiApiKey, formattingPreference = 'tabelas', customPrompt = '' } = payload;
-        const effectiveKey = geminiApiKey || process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+        const { message = '', context = {}, geminiApiKey, formattingPreference = 'tabelas', customPrompt = '', audioBase64, audioMimeType, imageBase64, imageMimeType } = payload;
+        const effectiveKey = getEffectiveGeminiKey(geminiApiKey);
 
         if (effectiveKey && effectiveKey !== 'dummy_key') {
           try {
             const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${effectiveKey}`;
-            const sysPrompt = `Você é o Google Gemini integrado como Copiloto Financeiro Nativo do KYRO Finance. Contexto: ${JSON.stringify(context)}. Responda OBRIGATORIAMENTE em JSON: {"reply": "sua resposta em markdown com tabelas", "action": {"type": "none"|"create_transaction"|"delete_transactions", "transaction": {...}, "deleteTargetTerm": "...", "deleteTargetIds": [...]}}`;
+            const sysPrompt = `Você é o Google Gemini integrado como Copiloto Financeiro Nativo do KYRO Finance. Contexto: ${JSON.stringify(context)}. Responda OBRIGATORIAMENTE em JSON: {"reply": "sua resposta em markdown com tabelas", "action": {"type": "none"|"create_transaction"|"delete_transactions", "transaction": {"description": "...", "product": "...", "amount": 0.00, "type": "Saída"|"Entrada", "category": "...", "method": "PIX"|"Crédito"|"Débito"|"Dinheiro"|"Transferência", "city": "..."}, "deleteTargetTerm": "...", "deleteTargetIds": [...]}}`;
             
+            const parts = [];
+            if (audioBase64) {
+              const cleanA = audioBase64.replace(/^data:[a-zA-Z0-9\/-]+;base64,/, '');
+              parts.push({ inline_data: { mime_type: audioMimeType || 'audio/webm', data: cleanA } });
+            }
+            if (imageBase64) {
+              const cleanI = imageBase64.replace(/^data:[a-zA-Z0-9\/-]+;base64,/, '');
+              parts.push({ inline_data: { mime_type: imageMimeType || 'image/jpeg', data: cleanI } });
+            }
+            parts.push({ text: `${sysPrompt}\n\nUsuário: "${message || 'Por favor analise a mídia em anexo e execute o lançamento financeiro.'}"` });
+
             const geminiRes = await axios.post(geminiUrl, {
-              contents: [{ role: 'user', parts: [{ text: `${sysPrompt}\n\nUsuário: "${message}"` }] }],
+              contents: [{ role: 'user', parts }],
               generationConfig: { temperature: 0.2, responseMimeType: 'application/json' }
             }, { timeout: 15000 });
 
@@ -2314,10 +2381,21 @@ process.on('unhandledRejection', (reason) => {
   console.warn('[WhatsApp Bot] Rejeição interceptada (processo mantido ativo):', reason?.message || reason);
 });
 
-server.listen(HTTP_PORT, () => {
-  console.log('====================================================');
-  console.log(`🚀 SERVIDOR DO ROBÔ WHATSAPP RODANDO NA PORTA ${HTTP_PORT}`);
-  console.log(`📡 URL da API do Robô: http://localhost:${HTTP_PORT}`);
-  console.log('====================================================\n');
-  startSocket().catch(err => console.error('Erro ao iniciar socket:', err));
-});
+if (require.main === module) {
+  server.listen(HTTP_PORT, () => {
+    console.log('====================================================');
+    console.log(`🚀 SERVIDOR DO ROBÔ WHATSAPP RODANDO NA PORTA ${HTTP_PORT}`);
+    console.log(`📡 URL da API do Robô: http://localhost:${HTTP_PORT}`);
+    console.log('====================================================\n');
+    startSocket().catch(err => console.error('Erro ao iniciar socket:', err));
+  });
+}
+
+module.exports = {
+  parseDynamicFinancialMessage,
+  extractMonetaryValue,
+  extractCreditCardName,
+  extractInstallments,
+  transcribeAudioBuffer,
+  getEffectiveGeminiKey
+};

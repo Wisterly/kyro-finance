@@ -255,12 +255,12 @@ export function parseDynamicFinancialMessage(
     method = 'Crédito';
   } else if (lower.includes('débito') || lower.includes('debito')) {
     method = 'Débito';
-  } else if (lower.includes('dinheiro') || lower.includes('espécie') || lower.includes('especie')) {
-    method = 'Dinheiro';
-  } else if (lower.includes('transferência') || lower.includes('transferencia') || lower.includes('ted') || lower.includes('doc')) {
-    method = 'Transferência';
   } else if (lower.includes('pix')) {
     method = 'PIX';
+  } else if (lower.includes('transferência') || lower.includes('transferencia') || lower.includes('ted') || lower.includes('doc')) {
+    method = 'Transferência';
+  } else if (lower.includes('dinheiro') || lower.includes('espécie') || lower.includes('especie')) {
+    method = 'Dinheiro';
   }
 
   // 7. Cidade (Apenas se mencionada explicitamente! Suporte a Oeiras com alias Ostras para ditado por voz)
@@ -440,6 +440,17 @@ export function parseDynamicFinancialMessage(
     product: string | ((m: string) => string);
     category: string | ((loc: string) => string);
   }> = [
+    // Saúde, Atividade Física, Personal & Academia
+    {
+      regex: /(?:^|[\s,.\-!])(personal(?:\s+trainer|\s+da\s+academia)?|mensalidade(?:\s+da\s+academia)?|muscula[cç][aã]o|crossfit|pilates|nata[cç][aã]o|treino)(?:$|[\s,.\-!])/i,
+      product: (m) => {
+        const low = m.toLowerCase();
+        if (low.includes('personal')) return 'Personal da academia';
+        if (low.includes('mensalidade')) return 'Mensalidade da academia';
+        return m.charAt(0).toUpperCase() + m.slice(1).toLowerCase();
+      },
+      category: 'Saúde / Atividade Física'
+    },
     // Compras na Internet & Tecnologia (exemplo do usuário: pagamento na internet de câmera de vigilância -> Categoria: Compras na Internet)
     {
       regex: /(?:^|[\s,.\-!])(c[aâ]mera(?:\s+de\s+vigil[aâ]ncia|\s+de\s+seguran[cç]a)?|cftv|sistema\s+de\s+seguran[cç]a)(?:$|[\s,.\-!])/i,
@@ -535,7 +546,7 @@ export function parseDynamicFinancialMessage(
   if (!detectedProduct) {
     let remaining = clean
       .replace(/(?:r\$\s*|rs\s*)?\d+(?:[.,]\d+)?\s*(?:reais|real)?/gi, ' ')
-      .replace(/\b(fiz|fazer|gastei|gasto|paguei|pago|comprei|compra|recebi|ganhei|valor|de|em|no|na|um|uma|uns|umas|o|a|os|as|para|pra|com|por|reais|real|comprovante|benefici[aá]rio)\b/gi, ' ')
+      .replace(/\b(fiz|fazer|gastei|gasto|paguei|pago|pagar|comprei|compra|recebi|ganhei|valor|de|em|no|na|um|uma|uns|umas|o|a|os|as|para|pra|com|por|reais|real|comprovante|benefici[aá]rio)\b/gi, ' ')
       .replace(/\b(pix|d[eé]bito|cr[eé]dito|cart[aã]o|dinheiro|transfer[eê]ncia|ted|doc)\b/gi, ' ');
 
     if (location) {
