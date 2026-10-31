@@ -84,3 +84,100 @@ export function initNativeBridge(): void {
     window.EventSource = PatchedEventSource;
   }
 }
+
+// ============================================================================
+// SERVIÇO DE RECONHECIMENTO DE VOZ NATIVO ANDROID (GOOGLE SPEECH RECOGNIZER)
+// Permite que o app Android transcreva a fala em tempo real exatamente igual
+// ao Chrome Desktop, alimentando o input e o card ao vivo com 100% de precisão.
+// ============================================================================
+
+let speechListeners: any[] = [];
+
+export async function isNativeSpeechAvailable(): Promise<boolean> {
+  try {
+    const cap = (window as any).Capacitor;
+    if (!cap || !cap.Plugins || !cap.Plugins.NativeSpeechRecognizer) {
+      return false;
+    }
+    const res = await cap.Plugins.NativeSpeechRecognizer.isAvailable();
+    return !!res?.available;
+  } catch {
+    return false;
+  }
+}
+
+export async function startNativeSpeech({
+  onPartial,
+  onFinal,
+  onError
+}: {
+  onPartial: (text: string) => void;
+  onFinal: (text: string) => void;
+  onError?: (err: any) => void;
+}): Promise<boolean> {
+  try {
+    const cap = (window as any).Capacitor;
+    const plugin = cap?.Plugins?.NativeSpeechRecognizer;
+    if (!plugin) return false;
+
+    // Limpa listeners antigos
+    for (const handle of speechListeners) {
+      try {
+        if (typeof handle.remove === 'function') handle.remove();
+      } catch {}
+    }
+    speechListeners = [];
+
+    const partialSub = await plugin.addListener('partialResult', (data: { text: string }) => {
+      if (data && data.text) {
+        onPartial(data.text);
+      }
+    });
+    speechListeners.push(partialSub);
+
+    const finalSub = await plugin.addListener('finalResult', (data: { text: string }) => {
+      if (data && data.text) {
+        onFinal(data.text);
+      }
+    });
+    speechListeners.push(finalSub);
+
+    const errSub = await plugin.addListener('error', (data: any) => {
+      if (onError) onError(data);
+    });
+    speechListeners.push(errSub);
+
+    await plugin.startListening();
+    return true;
+  } catch (err) {
+    if (onError) onError(err);
+    return false;
+  }
+}
+
+export async function stopNativeSpeech(): Promise<void> {
+  try {
+    const cap = (window as any).Capacitor;
+    const plugin = cap?.Plugins?.NativeSpeechRecognizer;
+    if (plugin) {
+      await plugin.stopListening();
+    }
+  } catch {}
+}
+
+export async function cancelNativeSpeech(): Promise<void> {
+  try {
+    const cap = (window as any).Capacitor;
+    const plugin = cap?.Plugins?.NativeSpeechRecognizer;
+    if (plugin) {
+      await plugin.cancelListening();
+    }
+    for (const handle of speechListeners) {
+      try {
+        if (typeof handle.remove === 'function') handle.remove();
+      } catch {}
+    }
+    speechListeners = [];
+  } catch {}
+}
+

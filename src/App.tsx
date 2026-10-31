@@ -84,7 +84,7 @@ import {
 } from './utils/aiCopilot';
 import { UpdateModal, UpdateInfo } from './components/UpdateModal';
 import { checkForAppUpdate, checkUpdateDetailed, getInstalledAppInfo, CURRENT_APP_BUILD, CURRENT_APP_VERSION } from './utils/appUpdater';
-import { isRunningInNativeApk } from './nativeBridge';
+import { isRunningInNativeApk, isNativeSpeechAvailable, startNativeSpeech, stopNativeSpeech, cancelNativeSpeech } from './nativeBridge';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'transacoes' | 'orcamentos' | 'mapa' | 'relatorios' | 'whatsapp' | 'configuracoes' | 'cartoes'>('dashboard');
@@ -2566,6 +2566,8 @@ export default function App() {
       timerIntervalRef.current = null;
     }
 
+    cancelNativeSpeech().catch(() => {});
+
     if (speechRecognitionRef.current) {
       try { speechRecognitionRef.current.stop(); } catch (e) {}
     }
@@ -2610,52 +2612,81 @@ export default function App() {
         }
       }
 
-      // 1. Reconhecimento de fala com transcrição ao vivo universal (Desktop e Mobile)
-      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-      if (SpeechRecognition) {
+      // 1. Reconhecimento de fala com transcrição ao vivo universal (Nativo no Android e Web Speech no Desktop)
+      let nativeSpeechActive = false;
+      const nativeAvailable = await isNativeSpeechAvailable();
+      if (nativeAvailable) {
         try {
-          const recognitionInstance = new SpeechRecognition();
-          recognitionInstance.lang = 'pt-BR';
-          recognitionInstance.continuous = true;
-          recognitionInstance.interimResults = true;
-          recognitionInstance.maxAlternatives = 1;
-
-          recognitionInstance.onresult = (event: any) => {
-            let interimTranscript = '';
-            let finalCombinedText = '';
-            for (let i = 0; i < event.results.length; ++i) {
-              const res = event.results[i];
-              const part = res[0]?.transcript || '';
-              if (res.isFinal) {
-                finalCombinedText += (finalCombinedText ? ' ' : '') + part;
-              } else {
-                interimTranscript += (interimTranscript ? ' ' : '') + part;
-              }
+          nativeSpeechActive = await startNativeSpeech({
+            onPartial: (text) => {
+              const cleaned = cleanAndDeduplicateTranscript(text);
+              setLiveAudioTranscript(cleaned);
+              setInputMessage(cleaned);
+              recordedTextRef.current = cleaned;
+            },
+            onFinal: (text) => {
+              const cleaned = cleanAndDeduplicateTranscript(text);
+              setLiveAudioTranscript(cleaned);
+              setInputMessage(cleaned);
+              recordedTextRef.current = cleaned;
+            },
+            onError: (err) => {
+              console.warn('[Native Speech Live Feedback Warning]:', err);
             }
-            const fullCombined = (finalCombinedText + ' ' + interimTranscript).trim();
-            const cleaned = cleanAndDeduplicateTranscript(fullCombined);
-            setLiveAudioTranscript(cleaned);
-            setInputMessage(cleaned);
-            recordedTextRef.current = cleaned;
-          };
-
-          recognitionInstance.onerror = (e: any) => {
-            console.warn('[Speech Recognition Live Feedback]:', e.error || e);
-          };
-
-          recognitionInstance.onend = () => {
-            // Se o usuário ainda estiver com o modo de gravação ativo (ex: respiração), mantém ouvindo
-            if (isRecordingAudioRef.current) {
-              try {
-                recognitionInstance.start();
-              } catch (e) {}
-            }
-          };
-
-          recognitionInstance.start();
-          speechRecognitionRef.current = recognitionInstance;
+          });
         } catch (e) {
-          console.warn('[Speech Recognition Init Info]:', e);
+          console.warn('[Native Speech Init Error]:', e);
+        }
+      }
+
+      // Fallback Web Speech API (se o plugin nativo não estiver ativo, ex: Desktop Chrome)
+      if (!nativeSpeechActive) {
+        const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+        if (SpeechRecognition) {
+          try {
+            const recognitionInstance = new SpeechRecognition();
+            recognitionInstance.lang = 'pt-BR';
+            recognitionInstance.continuous = true;
+            recognitionInstance.interimResults = true;
+            recognitionInstance.maxAlternatives = 1;
+
+            recognitionInstance.onresult = (event: any) => {
+              let interimTranscript = '';
+              let finalCombinedText = '';
+              for (let i = 0; i < event.results.length; ++i) {
+                const res = event.results[i];
+                const part = res[0]?.transcript || '';
+                if (res.isFinal) {
+                  finalCombinedText += (finalCombinedText ? ' ' : '') + part;
+                } else {
+                  interimTranscript += (interimTranscript ? ' ' : '') + part;
+                }
+              }
+              const fullCombined = (finalCombinedText + ' ' + interimTranscript).trim();
+              const cleaned = cleanAndDeduplicateTranscript(fullCombined);
+              setLiveAudioTranscript(cleaned);
+              setInputMessage(cleaned);
+              recordedTextRef.current = cleaned;
+            };
+
+            recognitionInstance.onerror = (e: any) => {
+              console.warn('[Speech Recognition Live Feedback]:', e.error || e);
+            };
+
+            recognitionInstance.onend = () => {
+              // Se o usuário ainda estiver com o modo de gravação ativo (ex: respiração), mantém ouvindo
+              if (isRecordingAudioRef.current) {
+                try {
+                  recognitionInstance.start();
+                } catch (e) {}
+              }
+            };
+
+            recognitionInstance.start();
+            speechRecognitionRef.current = recognitionInstance;
+          } catch (e) {
+            console.warn('[Speech Recognition Init Info]:', e);
+          }
         }
       }
 
@@ -2779,6 +2810,8 @@ export default function App() {
       clearInterval(timerIntervalRef.current);
       timerIntervalRef.current = null;
     }
+
+    stopNativeSpeech().catch(() => {});
 
     if (speechRecognitionRef.current) {
       try { speechRecognitionRef.current.stop(); } catch (e) {}

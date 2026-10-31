@@ -1,11 +1,11 @@
 // Metadados Centrais de Versão e Auto-Update do KYRO Finance
-export const APP_VERSION = '1.33';
-export const APP_BUILD = 33;
+export const APP_VERSION = '1.34';
+export const APP_BUILD = 34;
 
 export const APP_CHANGELOG = [
-  'Transcrição de voz ao vivo em tempo real habilitada universalmente para Mobile e Desktop',
-  'Layout do Chatbot responsivo e proporcional: texto e ícone do botão "Lançar" visíveis no celular',
-  'Card de prévia da transcrição em tempo real destacado com feedback visual de áudio',
-  'Envio instantâneo do texto falado ao tocar em Lançar com filtragem cirúrgica de dados',
-  'Experiência 100% idêntica entre Desktop e Celular'
+  'Motor nativo Android de Reconhecimento de Fala (Google Speech Recognizer) integrado diretamente ao APK',
+  'Transcrição de voz ao vivo em tempo real idêntica ao Desktop com feedback visual contínuo na tela do celular',
+  'Preenchimento instantâneo do texto falado no campo e no card ao vivo enquanto você fala no smartphone',
+  'Lançamento imediato de despesas via botão "Lançar" com extração precisa de valores, itens e cidades (ex: Teresina)',
+  'Ponte nativa com permissões de fala em segundo plano e fallback resiliente sem bloqueios de WebView'
 ];

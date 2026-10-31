@@ -332,6 +332,13 @@ function fallbackCognitiveProcess(text: string, context: any, userAiRules: strin
   }
 
   // 4. Consulta / Ajuda Geral
+  if (text.startsWith('Por favor analise este áudio') || text.startsWith('Por favor, analise a mídia')) {
+    return {
+      reply: `🎙️ **Áudio recebido, mas não consegui identificar palavras com clareza.**\n\nPor favor, fale mais próximo ao microfone dizendo o valor, forma de pagamento, item e local (ex: *"Fiz um Pix de 300 reais para pagar o personal da academia em Teresina"*) ou digite diretamente no campo de texto para lançar!`,
+      action: { type: 'none' }
+    };
+  }
+
   return {
     reply: `👋 Olá! Sou o Copiloto Financeiro KYRO.\n\nPosso te ajudar a:\n- 📝 **Registrar despesas e receitas** por áudio, texto ou foto de comprovante (ex: *"fiz um pix de 300 reais para pagar o personal da academia em Teresina"*);\n- 🗑️ **Remover lançamentos** (ex: *"Remova o lançamento de Caxias"*);\n- 📊 **Consultar seus gastos e saldos** organizados em tabelas e relatórios detalhados.\n\nComo posso te ajudar agora?`,
     action: { type: 'none' }
@@ -386,7 +393,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Se veio áudio mas não veio texto transcrito prévio (ou texto genérico), transcreve o áudio antes
   if (audioBase64 && (!message || message.startsWith('Por favor analise este áudio') || message.startsWith('Por favor, analise a mídia'))) {
     try {
-      const cleanAudio = audioBase64.replace(/^data:[a-zA-Z0-9\/-]+;base64,/, '');
+      const cleanAudio = audioBase64.replace(/^data:[^;]+;base64,/, '').replace(/^data:.*?;base64,/, '').trim();
       const audioBuffer = Buffer.from(cleanAudio, 'base64');
 
       // Tenta Gemini Multimodal para extrair a transcrição exata
@@ -533,7 +540,7 @@ ${JSON.stringify(compactContext)}`;
       }
 
       if (audioBase64) {
-        const cleanAudio = audioBase64.replace(/^data:[a-zA-Z0-9\/-]+;base64,/, '');
+        const cleanAudio = audioBase64.replace(/^data:[^;]+;base64,/, '').replace(/^data:.*?;base64,/, '').trim();
         userParts.push({ inlineData: { mimeType: audioMimeType, data: cleanAudio } });
       }
 

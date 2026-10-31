@@ -21,6 +21,7 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(AppUpdateManagerPlugin.class);
+        registerPlugin(NativeSpeechRecognizerPlugin.class);
         super.onCreate(savedInstanceState);
 
         // Configura barra de status e barra de navegação com a cor escura original do KYRO (#0B0F19)

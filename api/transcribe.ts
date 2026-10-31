@@ -34,7 +34,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: 'O parâmetro "audioBase64" é obrigatório.' });
     }
 
-    const cleanBase64 = audioBase64.replace(/^data:[a-zA-Z0-9\/]+;base64,/, '');
+    const cleanBase64 = audioBase64.replace(/^data:[^;]+;base64,/, '').replace(/^data:.*?;base64,/, '').trim();
     const audioBuffer = Buffer.from(cleanBase64, 'base64');
 
     if (audioBuffer.length < 100) {
