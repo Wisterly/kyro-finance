@@ -612,30 +612,19 @@ async function checkIsAuthorizedGroup(sock, remoteJid) {
 // ==============================================================
 // GESTÃO DE DÍVIDAS RECORRENTES & ALERTA DE VENCIMENTO NO ROBÔ
 // ==============================================================
-const RECURRING_FILE = path.join(__dirname, 'kyro_recurring.json');
-let localStoredRecurring = [];
-try {
-  if (fs.existsSync(RECURRING_FILE)) {
-    const raw = fs.readFileSync(RECURRING_FILE, 'utf-8');
-    localStoredRecurring = JSON.parse(raw);
-    console.log(`[Banco Local] ${localStoredRecurring.length} despesas recorrentes carregadas.`);
-  }
-} catch (e) {
-  localStoredRecurring = [];
-}
+let localStoredRecurring = localRecurringExpenses;
 
 function saveRecurring(rec) {
   if (!rec) return;
-  localStoredRecurring = [rec, ...localStoredRecurring.filter(r => r.id !== rec.id)];
-  try {
-    fs.writeFileSync(RECURRING_FILE, JSON.stringify(localStoredRecurring, null, 2), 'utf-8');
-    console.log(`💾 [Banco Local] Dívida recorrente salva: "${rec.title}" - R$ ${rec.installmentAmount}`);
-  } catch (e) {}
+  localRecurringExpenses = [rec, ...localRecurringExpenses.filter(r => r.id !== rec.id)];
+  localStoredRecurring = localRecurringExpenses;
+  saveRecurringToDisk();
+  console.log(`💾 [Banco Local] Dívida recorrente salva: "${rec.title}" - R$ ${rec.installmentAmount}`);
 }
 
 function markRecurringPaidByName(targetName) {
   const lower = (targetName || '').toLowerCase().trim();
-  const found = localStoredRecurring.find(r => 
+  const found = localRecurringExpenses.find(r => 
     !r.paid && (
       r.title.toLowerCase().includes(lower) ||
       r.category.toLowerCase().includes(lower) ||
@@ -650,9 +639,7 @@ function markRecurringPaidByName(targetName) {
   if (found) {
     found.paid = true;
     found.paidAt = new Date().toISOString();
-    try {
-      fs.writeFileSync(RECURRING_FILE, JSON.stringify(localStoredRecurring, null, 2), 'utf-8');
-    } catch (e) {}
+    saveRecurringToDisk();
 
     // Gera a saída correspondente nas transações
     const paidTx = {
