@@ -103,44 +103,17 @@ export default function App() {
   const [saidasTab, setSaidasTab] = useState<'avulsas' | 'recorrentes'>('avulsas');
   const [newRecModalOpen, setNewRecModalOpen] = useState(false);
 
-  // Gestão de Cartões de Crédito e Faturas
+  // Gestão de Cartões de Crédito e Faturas (100% Sincronizado e Persistente na Nuvem)
   const [creditCards, setCreditCards] = useState<CreditCardData[]>(() => {
     const saved = localStorage.getItem('kyro_credit_cards');
-    if (saved) {
+    if (saved !== null) {
       try {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed)) return parsed;
       } catch (e) {}
     }
-    return [
-      {
-        id: 'card_nu',
-        name: 'Nubank',
-        closingDay: 15,
-        dueDay: 22,
-        limit: 5000,
-        color: 'purple',
-        lastDigits: '8492'
-      },
-      {
-        id: 'card_inter',
-        name: 'Inter',
-        closingDay: 3,
-        dueDay: 10,
-        limit: 3500,
-        color: 'orange',
-        lastDigits: '1920'
-      },
-      {
-        id: 'card_itau',
-        name: 'Itaú',
-        closingDay: 28,
-        dueDay: 5,
-        limit: 8000,
-        color: 'blue',
-        lastDigits: '5543'
-      }
-    ];
+    // Novo dispositivo / App recém-instalado: inicia vazio e aguarda o pull da nuvem central (sem recriar dados deletados)
+    return [];
   });
 
   useEffect(() => {
@@ -262,53 +235,17 @@ export default function App() {
     localStorage.removeItem('kyro_logo_config');
   };
 
-  // Base de Saídas Recorrentes & Parcelamentos (Persistente)
+  // Base de Saídas Recorrentes & Parcelamentos (100% Sincronizado e Persistente na Nuvem)
   const [recurringExpenses, setRecurringExpenses] = useState<RecurringExpense[]>(() => {
     const saved = localStorage.getItem('kyro_recurring');
-    if (saved) {
-      try { return JSON.parse(saved); } catch (e) {}
+    if (saved !== null) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      } catch (e) {}
     }
-    return [
-      {
-        id: 'rec_1',
-        title: 'Passagem Aérea Férias',
-        category: 'Passagem Aérea / Viagem',
-        totalAmount: 2400.00,
-        installmentAmount: 240.00,
-        currentInstallment: 3,
-        totalInstallments: 10,
-        city: 'São Paulo, SP',
-        method: 'Crédito',
-        active: true,
-        dueDateDay: 15
-      },
-      {
-        id: 'rec_2',
-        title: 'Empréstimo Bancário',
-        category: 'Empréstimo',
-        totalAmount: 12000.00,
-        installmentAmount: 500.00,
-        currentInstallment: 6,
-        totalInstallments: 24,
-        city: 'Teresina, PI',
-        method: 'PIX',
-        active: true,
-        dueDateDay: 10
-      },
-      {
-        id: 'rec_3',
-        title: 'Mensalidade Academia / Personal',
-        category: 'Pessoal / Mensalidade',
-        totalAmount: 180.00,
-        installmentAmount: 180.00,
-        currentInstallment: 1,
-        totalInstallments: 0, // 0 = contínuo mensal
-        city: 'Teresina, PI',
-        method: 'PIX',
-        active: true,
-        dueDateDay: 5
-      }
-    ];
+    // Novo dispositivo / App recém-instalado: inicia vazio e aguarda o pull da nuvem central (sem recriar dados deletados)
+    return [];
   });
 
   useEffect(() => {
@@ -433,6 +370,31 @@ export default function App() {
         text: '🗑️ Todos os lançamentos foram excluídos com sucesso!'
       });
       setTimeout(() => setWhatsappSyncToast(null), 4000);
+    }
+  };
+
+  // Sincronização Universal de Cartões de Crédito e Dívidas Recorrentes na Nuvem (Persistente)
+  const syncSaveCreditCardsToCentralDb = async (cards: CreditCardData[]) => {
+    try {
+      await fetch('/api/database', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'save_credit_cards', creditCards: cards })
+      });
+    } catch (e) {
+      console.warn('[Central DB Sync Cards Error]:', e);
+    }
+  };
+
+  const syncSaveRecurringToCentralDb = async (recs: RecurringExpense[]) => {
+    try {
+      await fetch('/api/database', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'save_recurring_expenses', recurringExpenses: recs })
+      });
+    } catch (e) {
+      console.warn('[Central DB Sync Recurring Error]:', e);
     }
   };
 
@@ -574,6 +536,32 @@ export default function App() {
               localStorage.setItem('kyro_second_phone_number', data.whatsappConfig.phoneNumber);
             }
             localStorage.setItem('kyro_group_confirmed', 'true');
+          }
+
+          // 6. Sincroniza Cartões de Crédito entre Desktop, Mobile e Nuvem (Persistência Universal)
+          if (Array.isArray(data.creditCards)) {
+            setCreditCards(prev => {
+              const currentSig = JSON.stringify(prev);
+              const incomingSig = JSON.stringify(data.creditCards);
+              if (currentSig !== incomingSig) {
+                localStorage.setItem('kyro_credit_cards', incomingSig);
+                return data.creditCards;
+              }
+              return prev;
+            });
+          }
+
+          // 7. Sincroniza Despesas Recorrentes / Dívidas entre Desktop, Mobile e Nuvem (Persistência Universal)
+          if (Array.isArray(data.recurringExpenses)) {
+            setRecurringExpenses(prev => {
+              const currentSig = JSON.stringify(prev);
+              const incomingSig = JSON.stringify(data.recurringExpenses);
+              if (currentSig !== incomingSig) {
+                localStorage.setItem('kyro_recurring', incomingSig);
+                return data.recurringExpenses;
+              }
+              return prev;
+            });
           }
         }
       } catch (err) {}
@@ -767,8 +755,11 @@ export default function App() {
         setTransactions(prev => prev.filter(t => t.id !== target.transactionId && t.recurringId !== id));
         kyroCloud.syncDeleteTransaction(target.transactionId);
       }
-      setRecurringExpenses(prev => prev.filter(r => r.id !== id));
+      const next = recurringExpenses.filter(r => r.id !== id);
+      setRecurringExpenses(next);
+      localStorage.setItem('kyro_recurring', JSON.stringify(next));
       kyroCloud.syncDeleteRecurring(id);
+      syncSaveRecurringToCentralDb(next);
     }
   };
 
@@ -795,10 +786,13 @@ export default function App() {
       createdAt: new Date().toISOString()
     };
 
-    setRecurringExpenses(prev => prev.map(r => r.id === recId ? { ...r, paid: true, paidAt: new Date().toISOString(), transactionId: txId } : r));
+    const nextRecs = recurringExpenses.map(r => r.id === recId ? { ...r, paid: true, paidAt: new Date().toISOString(), transactionId: txId } : r);
+    setRecurringExpenses(nextRecs);
+    localStorage.setItem('kyro_recurring', JSON.stringify(nextRecs));
     setTransactions(prev => [paidTx, ...prev]);
     kyroCloud.syncSaveTransaction(paidTx);
     syncSaveToCentralDb(paidTx);
+    syncSaveRecurringToCentralDb(nextRecs);
 
     setWhatsappSyncToast({
       show: true,
@@ -812,11 +806,14 @@ export default function App() {
     const target = recurringExpenses.find(r => r.id === recId);
     if (!target) return;
 
-    setRecurringExpenses(prev => prev.map(r => r.id === recId ? { ...r, paid: false, paidAt: undefined, transactionId: undefined } : r));
+    const nextRecs = recurringExpenses.map(r => r.id === recId ? { ...r, paid: false, paidAt: undefined, transactionId: undefined } : r);
+    setRecurringExpenses(nextRecs);
+    localStorage.setItem('kyro_recurring', JSON.stringify(nextRecs));
     setTransactions(prev => prev.filter(t => t.recurringId !== recId && t.id !== target.transactionId));
     if (target.transactionId) {
       kyroCloud.syncDeleteTransaction(target.transactionId);
     }
+    syncSaveRecurringToCentralDb(nextRecs);
 
     setWhatsappSyncToast({
       show: true,
@@ -962,12 +959,15 @@ export default function App() {
 
     const recurringIdsToMark = metrics.cardRecurring.filter(r => !r.paid).map(r => r.id);
     if (recurringIdsToMark.length > 0) {
-      setRecurringExpenses(prev => prev.map(r => {
+      const nextRecs = recurringExpenses.map(r => {
         if (recurringIdsToMark.includes(r.id)) {
           return { ...r, paid: true, paidAt: new Date().toISOString() };
         }
         return r;
-      }));
+      });
+      setRecurringExpenses(nextRecs);
+      localStorage.setItem('kyro_recurring', JSON.stringify(nextRecs));
+      syncSaveRecurringToCentralDb(nextRecs);
     }
 
     const paymentTx: Transaction = {
@@ -1000,8 +1000,11 @@ export default function App() {
     const target = creditCards.find(c => c.id === cardId);
     if (!target) return;
     if (window.confirm(`Deseja realmente remover o cartão ${target.name}?`)) {
-      setCreditCards(prev => prev.filter(c => c.id !== cardId));
+      const next = creditCards.filter(c => c.id !== cardId);
+      setCreditCards(next);
+      localStorage.setItem('kyro_credit_cards', JSON.stringify(next));
       if (selectedCardId === cardId) setSelectedCardId('todos');
+      syncSaveCreditCardsToCentralDb(next);
     }
   };
 
@@ -2024,7 +2027,12 @@ export default function App() {
                   limit: 5000,
                   color: 'purple'
                 };
-                setCreditCards(prev => [...prev, newCard]);
+                setCreditCards(prev => {
+                  const nextCards = [...prev, newCard];
+                  localStorage.setItem('kyro_credit_cards', JSON.stringify(nextCards));
+                  syncSaveCreditCardsToCentralDb(nextCards);
+                  return nextCards;
+                });
               }
             }
 
@@ -2282,7 +2290,12 @@ export default function App() {
       // Caso 1: Cadastro de Dívida Recorrente (NÃO debita do saldo até o usuário dar o OK de paga!)
       if (parsed.isRecurring && parsed.recurringData) {
         const newRec = parsed.recurringData;
-        setRecurringExpenses(prev => [newRec, ...prev]);
+        setRecurringExpenses(prev => {
+          const nextRecs = [newRec, ...prev];
+          localStorage.setItem('kyro_recurring', JSON.stringify(nextRecs));
+          syncSaveRecurringToCentralDb(nextRecs);
+          return nextRecs;
+        });
         kyroCloud.syncSaveRecurring(newRec);
 
         if (newRec.cardName) {
@@ -2296,7 +2309,12 @@ export default function App() {
               limit: 5000,
               color: 'purple'
             };
-            setCreditCards(prev => [...prev, newCard]);
+            setCreditCards(prev => {
+              const nextCards = [...prev, newCard];
+              localStorage.setItem('kyro_credit_cards', JSON.stringify(nextCards));
+              syncSaveCreditCardsToCentralDb(nextCards);
+              return nextCards;
+            });
           }
         }
 
@@ -2359,7 +2377,12 @@ export default function App() {
               limit: 5000,
               color: 'purple'
             };
-            setCreditCards(prev => [...prev, newCard]);
+            setCreditCards(prev => {
+              const nextCards = [...prev, newCard];
+              localStorage.setItem('kyro_credit_cards', JSON.stringify(nextCards));
+              syncSaveCreditCardsToCentralDb(nextCards);
+              return nextCards;
+            });
           }
         }
 
@@ -5452,7 +5475,12 @@ export default function App() {
                 paid: false
               };
 
-              setRecurringExpenses(prev => [newRec, ...prev]);
+              setRecurringExpenses(prev => {
+                const nextRecs = [newRec, ...prev];
+                localStorage.setItem('kyro_recurring', JSON.stringify(nextRecs));
+                syncSaveRecurringToCentralDb(nextRecs);
+                return nextRecs;
+              });
               kyroCloud.syncSaveRecurring(newRec);
 
               setNewRecModalOpen(false);
@@ -5562,7 +5590,12 @@ export default function App() {
                 lastDigits: f.ultimosDigitos.value || '4821'
               };
 
-              setCreditCards(prev => [...prev, newCard]);
+              setCreditCards(prev => {
+                const nextCards = [...prev, newCard];
+                localStorage.setItem('kyro_credit_cards', JSON.stringify(nextCards));
+                syncSaveCreditCardsToCentralDb(nextCards);
+                return nextCards;
+              });
               setSelectedCardId(newCard.id);
               setNewCardModalOpen(false);
               setWhatsappSyncToast({
@@ -5874,7 +5907,12 @@ export default function App() {
                   paid: false
                 };
 
-                setRecurringExpenses(prev => [newRec, ...prev]);
+                setRecurringExpenses(prev => {
+                  const nextRecs = [newRec, ...prev];
+                  localStorage.setItem('kyro_recurring', JSON.stringify(nextRecs));
+                  syncSaveRecurringToCentralDb(nextRecs);
+                  return nextRecs;
+                });
                 kyroCloud.syncSaveRecurring(newRec);
                 setNewTxModalOpen(false);
                 setWhatsappSyncToast({

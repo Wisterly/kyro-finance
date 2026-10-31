@@ -648,6 +648,29 @@ A numeração segue rigorosamente a hierarquia de escopo:
 
 ---
 
+### [PR.027] — Blindagem Absoluta de Cartões e Dívidas Recorrentes na Nuvem (Anti-Reset) + Eliminação Definitiva de Avisos de Dívidas Atrasadas e Cartões Fantasma
+- **Data/Hora:** 2026-10-31 05:45 (UTC-3)
+- **Tags Git:** `PR.027`, `PR.027.1`, `PR.027.2`
+
+#### `PR.027` — Escopo Geral do Projeto (Universal)
+- **Eliminação Definitiva de Cartões Fictícios e Dívidas de Exemplo (Fim dos Pop-ups de Atraso):**
+  - **Diagnóstico da Causa Raiz:** Os cartões fictícios (`Nubank`, `Inter`, `Itaú`) e dívidas de exemplo (`Passagem Aérea Fortaleza`, `Empréstimo Bancário`, `Mensalidade Academia`) eram reinjetados automaticamente no estado inicial do React (`useState`) sempre que o aplicativo era desinstalado/reinstalado ou aberto em um novo navegador com `localStorage` limpo. Além disso, as 3 dívidas fictícias possuíam datas passadas, disparando falsos avisos permanentes de "Dívida em Atraso".
+  - **Correção Estrutural:** O estado inicial de `creditCards` e `recurringExpenses` foi convertido em `[]` estrito. NENHUM dado de exemplo é injetado. Se o usuário excluiu todos os cartões e dívidas, o acervo permanece 100% limpo, eliminando imediatamente todos os avisos indevidos de dívidas atrasadas.
+- **Persistência Universal Bidirecional na Nuvem (Firestore, Render e Central DB):**
+  - Adicionadas as ações `save_credit_cards` e `save_recurring_expenses` na API central (`api/database.ts`), gravando diretamente nos documentos `kyro_settings/credit_cards` e `kyro_settings/recurring_expenses` do Firestore e espelhando para o disco persistente do robô no Render (`credit_cards.json` e `recurring_expenses.json`).
+  - No `App.tsx`, implementada a sincronização contínua (passos 6 e 7 do `pullCentralDb`) que baixa em tempo real qualquer alteração feita em qualquer aparelho.
+  - Ao excluir um cartão ou dívida recorrente, dar baixa de pagamento ou cadastrar novos itens, a aplicação dispara atualização imediata para a nuvem central (`syncSaveCreditCardsToCentralDb` e `syncSaveRecurringToCentralDb`), garantindo sincronia total e blindagem contra resets.
+
+#### `PR.027.1` — Versão Computador (Desktop)
+- Interface Desktop em total sintonia com a nuvem central: exclusões de cartões e dívidas realizadas no celular ou no computador refletem imediatamente em qualquer aba ou navegador aberto.
+- Eliminação de alertas visuais de atraso quando as dívidas tiverem sido canceladas ou quitadas.
+
+#### `PR.027.2` — Versão Celular (Aplicativo Android `.apk` & Mobile)
+- Aplicativo Android 100% protegido: desinstalar o APK e instalar novamente (ou trocar de celular) não ressuscita mais os cartões ou dívidas excluídas pelo usuário.
+- O aplicativo inicia com acervo limpo e conecta-se à nuvem central para hidratar exclusivamente os cartões e despesas reais cadastradas pelo usuário.
+
+---
+
 ### [PR.026] — IA Multimodal de Alta Precisão (Google Gemini Audio) + Eliminação Total de Repetições e Gagueiras no Chat + Extração Semântica Perfeita (Personal, Pix, Teresina)
 - **Data/Hora:** 2026-10-31 04:30 (UTC-3)
 - **Tags Git:** `PR.026`, `PR.026.1`, `PR.026.2`
@@ -738,7 +761,10 @@ Se você desejar restaurar qualquer versão anterior ou atual do Kyro Finance, b
 
 | Código do Ponto | Escopo | Descrição Resumida |
 | :--- | :--- | :--- |
-| **`PR.026`** | **Geral (Universal)** | **Versão Atual: IA Multimodal de Alta Precisão (Gemini Audio) + Fim das Repetições de Voz no Chat + Extração Perfeita (Personal, Pix, Teresina)** |
+| **`PR.027`** | **Geral (Universal)** | **Versão Atual: Blindagem Absoluta de Cartões e Dívidas Recorrentes na Nuvem (Anti-Reset) + Fim de Falsos Alertas de Atraso** |
+| `PR.027.1` | Desktop | Interface Web/Desktop com persistência em tempo real no Firestore e sincronização bidirecional de cartões e parcelamentos |
+| `PR.027.2` | Mobile / APK | Aplicativo Android com dados blindados contra reinstalação, zero ressurreição de dívidas e sem pop-ups indevidos |
+| **`PR.026`** | **Geral (Universal)** | IA Multimodal de Alta Precisão (Google Gemini Audio) + Fim das Repetições de Voz no Chat + Extração Perfeita (Personal, Pix, Teresina) |
 | `PR.026.1` | Desktop | Interface Web/Desktop com transcrição ao vivo W3C isolada (zero gagueira) e pipeline de áudio multimodal prioritário |
 | `PR.026.2` | Mobile / APK | Aplicativo Android com ondas sonoras ao vivo no microfone, áudio real enviado ao Gemini e extração 100% fidedigna |
 | **`PR.025`** | **Geral (Universal)** | Transcritor Neural Whisper Local & Filtragem Estrita Minimalista + Correção de Auto-Update via @capacitor/app |

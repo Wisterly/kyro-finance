@@ -1,13 +1,11 @@
 {
-  "version": "0.1.26",
-  "buildNumber": 26,
+  "version": "0.1.27",
+  "buildNumber": 27,
   "releaseDate": "2026-10-31",
   "changelog": [
-    "Google Gemini Multimodal Audio de alta fidelidade como motor prioritário de voz para áudios do WhatsApp e Chat interno",
-    "Eliminação total de repetições, gagueiras e sobreposições de frases na gravação de voz com separação W3C resultIndex e desduplicação por n-gramas",
-    "Reconhecimento semântico 100% exato de pagamentos de Personal da academia, treinos, saúde e esportes no Pix, TED e débito",
-    "Ordem inteligente de pagamentos: PIX tem prioridade sobre Transferência genérica quando ambos são citados na mesma frase",
-    "Visualizador de ondas sonoras animado em tempo real no Chat interno durante a captação de voz",
-    "Sincronização bidirecional da chave do Gemini entre o Modal, localStorage, kyro_settings.json e bot local"
+    "Blindagem e persistência definitiva de cartões de crédito e dívidas recorrentes na nuvem (Firestore, Render e Central DB)",
+    "Eliminação total da reinjeção de cartões fictícios (Nubank, Inter, Itaú) e dívidas de exemplo com falsos alertas de atraso",
+    "Sincronização bidirecional de exclusões, criações e baixas de faturas e parcelamentos entre celular, desktop e nuvem",
+    "Preservação integral e permanente das configurações do usuário mesmo após desinstalação ou acesso em novo navegador"
   ]
 }

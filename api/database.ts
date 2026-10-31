@@ -4,6 +4,7 @@ import {
   getFirestore, 
   collection, 
   getDocs, 
+  getDoc,
   doc, 
   setDoc, 
   deleteDoc, 
@@ -140,6 +141,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             transactions = [];
             globalStore.__KYRO_CENTRAL_DB__.transactions = [];
           }
+
+          // Busca cartões de crédito e despesas recorrentes persistidas no Firestore
+          try {
+            const cardsSnap = await getDoc(doc(db, 'kyro_settings', 'credit_cards'));
+            if (cardsSnap.exists() && Array.isArray(cardsSnap.data()?.cards)) {
+              globalStore.__KYRO_CENTRAL_DB__.creditCards = cardsSnap.data().cards;
+            }
+            const recSnap = await getDoc(doc(db, 'kyro_settings', 'recurring_expenses'));
+            if (recSnap.exists() && Array.isArray(recSnap.data()?.expenses)) {
+              globalStore.__KYRO_CENTRAL_DB__.recurringExpenses = recSnap.data().expenses;
+            }
+          } catch (settingsErr) {}
         } catch (err) {
           console.warn('[Central DB GET Firestore]:', err);
         }
@@ -161,6 +174,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 globalStore.__KYRO_CENTRAL_DB__.transactions = cleanBotTxs;
                 globalStore.__KYRO_CENTRAL_DB__.initialized = true;
               }
+            }
+            if (Array.isArray(botData.creditCards)) {
+              globalStore.__KYRO_CENTRAL_DB__.creditCards = botData.creditCards;
+            }
+            if (Array.isArray(botData.recurringExpenses)) {
+              globalStore.__KYRO_CENTRAL_DB__.recurringExpenses = botData.recurringExpenses;
             }
           }
         } catch (botErr) {
@@ -263,9 +282,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         if (Array.isArray(payload.recurringExpenses)) {
           globalStore.__KYRO_CENTRAL_DB__.recurringExpenses = payload.recurringExpenses;
+          if (db) {
+            try {
+              await setDoc(doc(db, 'kyro_settings', 'recurring_expenses'), {
+                expenses: payload.recurringExpenses,
+                updatedAt: new Date().toISOString()
+              }, { merge: true });
+            } catch (e) {}
+          }
         }
         if (Array.isArray(payload.creditCards)) {
           globalStore.__KYRO_CENTRAL_DB__.creditCards = payload.creditCards;
+          if (db) {
+            try {
+              await setDoc(doc(db, 'kyro_settings', 'credit_cards'), {
+                cards: payload.creditCards,
+                updatedAt: new Date().toISOString()
+              }, { merge: true });
+            } catch (e) {}
+          }
         }
         if (Array.isArray(payload.userAiRules)) {
           globalStore.__KYRO_CENTRAL_DB__.userAiRules = payload.userAiRules;
@@ -562,6 +597,52 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           success: true,
           message: 'URL do Robô na Nuvem salva com sucesso.',
           botServerUrl: cleanUrl
+        });
+      }
+
+      // 13. Salvar Cartões de Crédito (save_credit_cards)
+      if (action === 'save_credit_cards' && Array.isArray(payload.creditCards)) {
+        globalStore.__KYRO_CENTRAL_DB__.creditCards = payload.creditCards;
+        globalStore.__KYRO_CENTRAL_DB__.lastUpdated = new Date().toISOString();
+
+        if (db) {
+          try {
+            await setDoc(doc(db, 'kyro_settings', 'credit_cards'), {
+              cards: payload.creditCards,
+              updatedAt: new Date().toISOString()
+            }, { merge: true });
+          } catch (e) {}
+        }
+
+        syncToRenderBot({ action: 'save_credit_cards', creditCards: payload.creditCards });
+
+        return res.status(200).json({
+          success: true,
+          message: 'Cartões de crédito sincronizados com sucesso.',
+          creditCards: payload.creditCards
+        });
+      }
+
+      // 14. Salvar Dívidas Recorrentes / Parcelamentos (save_recurring_expenses)
+      if (action === 'save_recurring_expenses' && Array.isArray(payload.recurringExpenses)) {
+        globalStore.__KYRO_CENTRAL_DB__.recurringExpenses = payload.recurringExpenses;
+        globalStore.__KYRO_CENTRAL_DB__.lastUpdated = new Date().toISOString();
+
+        if (db) {
+          try {
+            await setDoc(doc(db, 'kyro_settings', 'recurring_expenses'), {
+              expenses: payload.recurringExpenses,
+              updatedAt: new Date().toISOString()
+            }, { merge: true });
+          } catch (e) {}
+        }
+
+        syncToRenderBot({ action: 'save_recurring_expenses', recurringExpenses: payload.recurringExpenses });
+
+        return res.status(200).json({
+          success: true,
+          message: 'Dívidas recorrentes sincronizadas com sucesso.',
+          recurringExpenses: payload.recurringExpenses
         });
       }
 

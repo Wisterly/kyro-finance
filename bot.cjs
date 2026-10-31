@@ -249,8 +249,35 @@ let botStatus = {
 const TRANSACTIONS_FILE = path.join(__dirname, 'transactions.json');
 const DELETED_IDS_FILE = path.join(__dirname, 'deleted_tx_ids.json');
 const SETTINGS_FILE = path.join(__dirname, 'kyro_settings.json');
+const RECURRING_FILE = path.join(__dirname, 'recurring_expenses.json');
+const CARDS_FILE = path.join(__dirname, 'credit_cards.json');
+
 let localStoredTransactions = [];
 let localDeletedIds = new Set();
+let localRecurringExpenses = [];
+let localCreditCards = [];
+
+try {
+  if (fs.existsSync(RECURRING_FILE)) {
+    const rawRec = JSON.parse(fs.readFileSync(RECURRING_FILE, 'utf-8'));
+    if (Array.isArray(rawRec)) localRecurringExpenses = rawRec;
+  }
+} catch (e) {}
+
+try {
+  if (fs.existsSync(CARDS_FILE)) {
+    const rawCard = JSON.parse(fs.readFileSync(CARDS_FILE, 'utf-8'));
+    if (Array.isArray(rawCard)) localCreditCards = rawCard;
+  }
+} catch (e) {}
+
+function saveRecurringToDisk() {
+  fs.promises.writeFile(RECURRING_FILE, JSON.stringify(localRecurringExpenses, null, 2), 'utf-8').catch(() => {});
+}
+
+function saveCardsToDisk() {
+  fs.promises.writeFile(CARDS_FILE, JSON.stringify(localCreditCards, null, 2), 'utf-8').catch(() => {});
+}
 let localSettings = {
   whatsappConfig: {
     inviteLink: 'https://chat.whatsapp.com/DQNscf09vX5DljtvTnx6YK',
@@ -2161,6 +2188,8 @@ const server = http.createServer(async (req, res) => {
           connected: botStatus.connected,
           phoneNumber: botStatus.phoneNumber || localSettings.whatsappConfig?.phoneNumber || '558695368780'
         },
+        recurringExpenses: localRecurringExpenses,
+        creditCards: localCreditCards,
         count: localStoredTransactions.length
       }));
     }
@@ -2214,11 +2243,43 @@ const server = http.createServer(async (req, res) => {
             return res.end(JSON.stringify({ success: true, action: 'bulk_deleted', count: targetIds.length }));
           }
 
-          if (action === 'sync_all' && Array.isArray(transactions)) {
-            localStoredTransactions = transactions.filter(t => t && !localDeletedIds.has(String(t.id)));
-            fs.promises.writeFile(TRANSACTIONS_FILE, JSON.stringify(localStoredTransactions, null, 2), 'utf-8').catch(() => {});
+          if (action === 'sync_all') {
+            if (Array.isArray(transactions)) {
+              localStoredTransactions = transactions.filter(t => t && !localDeletedIds.has(String(t.id)));
+              fs.promises.writeFile(TRANSACTIONS_FILE, JSON.stringify(localStoredTransactions, null, 2), 'utf-8').catch(() => {});
+            }
+            if (Array.isArray(payload.creditCards)) {
+              localCreditCards = payload.creditCards;
+              saveCardsToDisk();
+            }
+            if (Array.isArray(payload.recurringExpenses)) {
+              localRecurringExpenses = payload.recurringExpenses;
+              saveRecurringToDisk();
+            }
             res.writeHead(200, { 'Content-Type': 'application/json' });
-            return res.end(JSON.stringify({ success: true, action: 'synced_all', count: localStoredTransactions.length }));
+            return res.end(JSON.stringify({ 
+              success: true, 
+              action: 'synced_all', 
+              count: localStoredTransactions.length,
+              creditCardsCount: localCreditCards.length,
+              recurringExpensesCount: localRecurringExpenses.length
+            }));
+          }
+
+          if (action === 'save_credit_cards' && Array.isArray(payload.creditCards)) {
+            localCreditCards = payload.creditCards;
+            saveCardsToDisk();
+            fastAxios.post('https://kyro-finance.vercel.app/api/database', { action: 'save_credit_cards', creditCards: localCreditCards }).catch(() => {});
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            return res.end(JSON.stringify({ success: true, creditCards: localCreditCards }));
+          }
+
+          if (action === 'save_recurring_expenses' && Array.isArray(payload.recurringExpenses)) {
+            localRecurringExpenses = payload.recurringExpenses;
+            saveRecurringToDisk();
+            fastAxios.post('https://kyro-finance.vercel.app/api/database', { action: 'save_recurring_expenses', recurringExpenses: localRecurringExpenses }).catch(() => {});
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            return res.end(JSON.stringify({ success: true, recurringExpenses: localRecurringExpenses }));
           }
 
           if (action === 'save_ai_rule' && payload.rule) {
