@@ -1495,6 +1495,36 @@ async function startSocket() {
 
         console.log(`📩 [${monitoredGroup.groupName || 'Grupo Vinculado'}] Nova mensagem no grupo: ${isAudio ? '🎙️ Áudio de Voz' : (isImage ? '📸 Foto/Comprovante' : `"${messageText}"`)}`);
 
+        // Comando Instantâneo de Atualização e Link do APK no Grupo do WhatsApp
+        const lowerMsg = (messageText || '').trim().toLowerCase();
+        if (
+          lowerMsg === 'atualizar' ||
+          lowerMsg === 'atualização' ||
+          lowerMsg === 'atualizacao' ||
+          lowerMsg === 'versão' ||
+          lowerMsg === 'versao' ||
+          lowerMsg === 'apk' ||
+          lowerMsg === 'baixar app' ||
+          lowerMsg === 'novo app' ||
+          lowerMsg === 'link do apk' ||
+          lowerMsg.includes('atualizar aplicativo') ||
+          lowerMsg.includes('atualizar app')
+        ) {
+          const updateReply = `📲 *Atualização do Aplicativo Android — KYRO Finance*\n\n` +
+            `• *Versão Mais Recente:* v0.1.25 (Build 25)\n` +
+            `• *Status:* 🟢 Nova versão pronta para instalação!\n\n` +
+            `• *Principais Novidades do Build 25:*\n` +
+            `  1. Transcritor neural Whisper integrado localmente com 100% de precisão de voz e custo zero\n` +
+            `  2. Filtragem estrita minimalista: registra somente o valor e o método (ex: 300 no pix, 50 no débito) sem inventar comida, lanche ou cidades\n` +
+            `  3. Detecção nativa da versão real do APK sem falso "Já atualizado"\n\n` +
+            `🚀 *Toque no link abaixo para baixar e atualizar:* \n` +
+            `https://github.com/Wisterly/kyro-finance/releases/download/apk-latest/KYRO-Finance.apk\n\n` +
+            `📌 *Como Instalar:* Basta baixar o arquivo e tocar em *Atualizar* no Android. Não é necessário desinstalar a versão anterior; todos os seus dados e configurações continuam 100% preservados!`;
+
+          await sock.sendMessage(remoteJid, { text: updateReply });
+          continue;
+        }
+
         let parsed = null;
 
         // ==============================================================
