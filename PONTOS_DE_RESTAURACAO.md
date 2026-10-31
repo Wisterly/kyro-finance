@@ -623,13 +623,41 @@ A numeração segue rigorosamente a hierarquia de escopo:
 
 ---
 
+### [PR.023] — Persistência Universal 24h na Nuvem (Render + Vercel) sem Perda ou Reset de Dados entre Dispositivos + Fim de Pop-ups Intrusivos
+- **Data/Hora:** 2026-10-31 02:45 (UTC-3)
+- **Tags Git:** `PR.023`, `PR.023.1`, `PR.023.2`
+
+#### `PR.023` — Escopo Geral do Projeto (Universal)
+- **Persistência Universal Contínua e Única Fonte de Verdade:**
+  - Espelhamento bidirecional e redundante em tempo real entre a API Vercel e o servidor de alta disponibilidade no Render (`https://kyro-finance-bot.onrender.com/api/database`).
+  - Todas as transações (entradas, saídas, Pix, débito, crédito) gravadas em qualquer dispositivo ou pelo grupo de WhatsApp são persistidas imediatamente em disco na nuvem.
+  - Eliminação definitiva da necessidade de "restaurações manuais" ou backups: qualquer dispositivo novo, computador diferente, aba anônima ou celular recém-instalado carrega os dados reais instantaneamente ao abrir a aplicação.
+  - Se um novo aparelho acessar com cache zerado, a nuvem responde na hora com o acervo financeiro completo, impedindo qualquer reset ou sobrescrita acidental.
+- **Erradicação Completa de Pop-ups e Notificações Intrusivas:**
+  - Fim do intervalo repetitivo de 45 segundos (`setInterval(performUpdateCheck, 45000)`) que forçava a abertura contínua do modal de atualização durante o uso do app.
+  - Respeito à dispensa do usuário: ao fechar o pop-up de versão uma vez, a escolha é registrada e o modal nunca mais reabre sozinho.
+  - O painel de Configurações permanece com a verificação manual limpa e sob demanda sempre que o usuário desejar.
+
+#### `PR.023.1` — Versão Computador (Desktop)
+- Sincronização em tempo real direta com a nuvem central em qualquer navegador (Chrome, Edge, Firefox, Brave) sem requerer login repetido ou ações de restauração.
+- Interface panorâmica estável, sem pop-ups saltando na tela durante a navegação nos relatórios e extratos.
+
+#### `PR.023.2` — Versão Celular (Aplicativo Android `.apk` & Mobile)
+- Ao desinstalar o aplicativo e reinstalar (ou trocar de smartphone), todos os lançamentos financeiros reaparecem intactos no primeiro segundo de abertura.
+- Remoção definitiva de qualquer interrupção na tela móvel durante o uso cotidiano.
+
+---
+
 ## TABELA DE CÓDIGOS DE PONTOS DE RESTAURAÇÃO
 
 Se você desejar restaurar qualquer versão anterior ou atual do Kyro Finance, basta colar o código do ponto de restauração na conversa:
 
 | Código do Ponto | Escopo | Descrição Resumida |
 | :--- | :--- | :--- |
-| **`PR.022`** | **Geral (Universal)** | **Versão Atual: Robô WhatsApp 24h na Nuvem Gratuita (Render/Koyeb/Docker) + Auto-Ping Anti-Hibernação + Backup Remoto de Sessão** |
+| **`PR.023`** | **Geral (Universal)** | **Versão Atual: Persistência Universal 24h na Nuvem (Render + Vercel) sem Perda ou Reset de Dados entre Dispositivos + Fim de Pop-ups Intrusivos** |
+| `PR.023.1` | Desktop | Interface Web/Desktop com sincronização contínua na nuvem em qualquer navegador sem necessidade de restauração |
+| `PR.023.2` | Mobile / APK | Aplicativo Android livre de pop-ups intrusivos, com histórico financeiro 100% blindado contra desinstalação |
+| **`PR.022`** | **Geral (Universal)** | Robô WhatsApp 24h na Nuvem Gratuita (Render/Koyeb/Docker) + Auto-Ping Anti-Hibernação + Backup Remoto de Sessão |
 | `PR.022.1` | Desktop | Interface Web/Desktop com painel de status da nuvem, teste de conectividade e guia passo a passo |
 | `PR.022.2` | Mobile / APK | Aplicativo Android 100% autônomo com computador desligado, sincronia 24h do grupo WhatsApp e persistência |
 | **`PR.021`** | **Geral (Universal)** | Blindagem Absoluta de Dados Financeiros (Anti-Reset) & Auto-Update Dinâmico em Tempo Real com Pop-up Durante o Uso |

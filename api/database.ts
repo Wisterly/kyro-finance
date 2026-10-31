@@ -85,9 +85,20 @@ if (!globalStore.__KYRO_CENTRAL_DB__) {
     globalStore.__KYRO_CENTRAL_DB__.chatConfig = { ...DEFAULT_CHAT_CONFIG };
   }
   if (globalStore.__KYRO_CENTRAL_DB__.botServerUrl === undefined) {
-    globalStore.__KYRO_CENTRAL_DB__.botServerUrl = '';
+    globalStore.__KYRO_CENTRAL_DB__.botServerUrl = 'https://kyro-finance-bot.onrender.com';
   }
 }
+
+// Espelhamento assíncrono para o robô com disco persistente no Render
+const syncToRenderBot = (payload: any) => {
+  const botUrl = globalStore.__KYRO_CENTRAL_DB__?.botServerUrl || 'https://kyro-finance-bot.onrender.com';
+  if (!botUrl) return;
+  fetch(`${botUrl.replace(/\/$/, '')}/api/database`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  }).catch(() => {});
+};
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -131,6 +142,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           }
         } catch (err) {
           console.warn('[Central DB GET Firestore]:', err);
+        }
+      }
+
+      // Se o Firestore ou memória local estiverem vazios, sincroniza com o banco persistente do Render
+      if (transactions.length === 0) {
+        try {
+          const cloudBotUrl = globalStore.__KYRO_CENTRAL_DB__.botServerUrl || 'https://kyro-finance-bot.onrender.com';
+          const botRes = await fetch(`${cloudBotUrl.replace(/\/$/, '')}/api/database`, {
+            signal: AbortSignal.timeout(3000)
+          });
+          if (botRes.ok) {
+            const botData: any = await botRes.json();
+            if (Array.isArray(botData.transactions) && botData.transactions.length > 0) {
+              const cleanBotTxs = botData.transactions.filter((t: any) => !deletedSet.has(String(t.id)));
+              if (cleanBotTxs.length > 0) {
+                transactions = cleanBotTxs;
+                globalStore.__KYRO_CENTRAL_DB__.transactions = cleanBotTxs;
+                globalStore.__KYRO_CENTRAL_DB__.initialized = true;
+              }
+            }
+          }
+        } catch (botErr) {
+          console.warn('[Central DB GET Render sync]:', botErr);
         }
       }
 
@@ -237,6 +271,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           globalStore.__KYRO_CENTRAL_DB__.userAiRules = payload.userAiRules;
         }
 
+        // Espelha no robô com disco persistente no Render
+        syncToRenderBot(payload);
+
         return res.status(200).json({
           success: true,
           message: 'Banco central sincronizado.',
@@ -275,6 +312,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           } catch (e) {}
         }
 
+        syncToRenderBot({ action: 'save_transaction', transaction: tx });
+
         return res.status(200).json({
           success: true,
           message: 'Transação salva no banco central.',
@@ -297,6 +336,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             await deleteDoc(doc(db, 'kyro_transactions', txId));
           } catch (e) {}
         }
+
+        syncToRenderBot({ action: 'delete_transaction', id: txId });
 
         return res.status(200).json({
           success: true,
@@ -324,6 +365,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             } catch (e) {}
           }
         }
+
+        syncToRenderBot({ action: 'delete_transactions', ids });
 
         return res.status(200).json({
           success: true,

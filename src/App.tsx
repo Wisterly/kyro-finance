@@ -442,9 +442,23 @@ export default function App() {
 
     const pullCentralDb = async () => {
       try {
-        const res = await fetch('/api/database');
-        if (!res.ok) return;
-        const data = await res.json();
+        let res = await fetch('/api/database').catch(() => null);
+        let data: any = res && res.ok ? await res.json().catch(() => null) : null;
+
+        // Se o endpoint padrão estiver vazio ou falhar, consulta o banco persistente do Render
+        if (!data || !Array.isArray(data.transactions) || data.transactions.length === 0) {
+          try {
+            const fallbackBotUrl = 'https://kyro-finance-bot.onrender.com';
+            const botRes = await fetch(`${fallbackBotUrl.replace(/\/$/, '')}/api/database`);
+            if (botRes.ok) {
+              const botData = await botRes.json();
+              if (botData?.success && Array.isArray(botData.transactions) && botData.transactions.length > 0) {
+                data = { ...(data || {}), ...botData };
+              }
+            }
+          } catch (e) {}
+        }
+
         if (data?.success && isMounted) {
           // 1. Sincroniza a lista de IDs excluídos
           if (Array.isArray(data.deletedIds) && data.deletedIds.length > 0) {
@@ -1055,13 +1069,13 @@ export default function App() {
   const exitToastTimerRef = useRef<any>(null);
   const [exitToastVisible, setExitToastVisible] = useState(false);
 
-  // Pop-up e Gerenciador de Auto-Update no Aplicativo
+  // Pop-up e Gerenciador de Auto-Update no Aplicativo (Discreto e Não Intrusivo)
   const [availableUpdate, setAvailableUpdate] = useState<UpdateInfo | null>(null);
   const [isCheckingUpdateManual, setIsCheckingUpdateManual] = useState(false);
   const availableUpdateRef = useRef(availableUpdate);
   availableUpdateRef.current = availableUpdate;
 
-  // Verificação contínua e automática de novas versões (Auto-Update em Tempo Real)
+  // Verificação discreta de novas versões (sem pop-ups repetitivos na tela)
   useEffect(() => {
     let isSubscribed = true;
 
@@ -1070,50 +1084,21 @@ export default function App() {
       try {
         const info = await checkForAppUpdate();
         if (info && isSubscribed) {
-          console.log('[AutoUpdate] Nova versão detectada na nuvem:', info);
-          setAvailableUpdate(prev => prev ? prev : info);
+          const dismissedBuild = localStorage.getItem('kyro_dismissed_update_build');
+          // Só define se o usuário não tiver dispensado esta versão anteriormente
+          if (String(info.buildNumber) !== dismissedBuild) {
+            setAvailableUpdate(info);
+          }
         }
-      } catch (err) {
-        console.warn('[AutoUpdate] Erro na verificação de atualização:', err);
-      }
+      } catch (err) {}
     };
 
-    // 1. Checagem inicial após 2.5s do app aberto
-    const initialTimer = setTimeout(performUpdateCheck, 2500);
-
-    // 2. Polling contínuo a cada 45 segundos enquanto o usuário mexe no app
-    const intervalTimer = setInterval(performUpdateCheck, 45000);
-
-    // 3. Listener ao focar ou retornar para a aba/tela
-    const handleFocusOrVisible = () => {
-      if (document.visibilityState === 'visible') {
-        performUpdateCheck();
-      }
-    };
-    window.addEventListener('focus', handleFocusOrVisible);
-    document.addEventListener('visibilitychange', handleFocusOrVisible);
-
-    // 4. Listener nativo do Capacitor ao retornar para o primeiro plano (resume)
-    let capListenerHandle: any = null;
-    try {
-      CapApp.addListener('appStateChange', (state) => {
-        if (state.isActive) {
-          performUpdateCheck();
-        }
-      }).then(handle => {
-        capListenerHandle = handle;
-      }).catch(() => {});
-    } catch {}
+    // Apenas uma checagem única silenciosa 8 segundos após abrir o app
+    const initialTimer = setTimeout(performUpdateCheck, 8000);
 
     return () => {
       isSubscribed = false;
       clearTimeout(initialTimer);
-      clearInterval(intervalTimer);
-      window.removeEventListener('focus', handleFocusOrVisible);
-      document.removeEventListener('visibilitychange', handleFocusOrVisible);
-      if (capListenerHandle && typeof capListenerHandle.remove === 'function') {
-        capListenerHandle.remove();
-      }
     };
   }, []);
 
@@ -6593,7 +6578,12 @@ export default function App() {
           updateInfo={availableUpdate}
           currentBuild={CURRENT_APP_BUILD}
           currentVersion={CURRENT_APP_VERSION}
-          onClose={() => setAvailableUpdate(null)}
+          onClose={() => {
+            if (availableUpdate?.buildNumber) {
+              localStorage.setItem('kyro_dismissed_update_build', String(availableUpdate.buildNumber));
+            }
+            setAvailableUpdate(null);
+          }}
         />
       )}
 
