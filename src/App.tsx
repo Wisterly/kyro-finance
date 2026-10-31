@@ -2571,7 +2571,7 @@ export default function App() {
 
         let finalText = cleanAndDeduplicateTranscript(recordedTextRef.current || liveAudioTranscript || inputMessage);
 
-        // Extrai Base64 do áudio para envio multimodal ao Gemini / Whisper
+        // Extrai Base64 do áudio para envio multimodal
         let audioBase64 = '';
         if (audioBlob.size > 200) {
           try {
@@ -2585,14 +2585,13 @@ export default function App() {
           } catch (e) {}
         }
 
-        // Se o texto estiver vazio ou muito curto (< 3 palavras), transcreve diretamente pela IA em nuvem
-        const wordsCount = finalText.split(' ').filter(Boolean).length;
-        if (audioBase64 && (wordsCount < 3 || !finalText)) {
+        // Se o reconhecimento nativo não capturou nenhuma palavra, recorre à transcrição em nuvem
+        if (!finalText && audioBase64) {
           const tempMsgId = `temp_audio_${Date.now()}`;
           setMessages(prev => [...prev, {
             id: tempMsgId,
             sender: 'user',
-            text: '🎙️ [Áudio de Voz]: Interpretando com máxima precisão via IA...',
+            text: '🎙️ [Áudio de Voz]: Interpretando sua voz com IA...',
             audioUrl,
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
           }]);

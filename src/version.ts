@@ -1,11 +1,10 @@
 // Metadados Centrais de Versão e Auto-Update do KYRO Finance
-export const APP_VERSION = '0.1.23';
-export const APP_BUILD = 23;
+export const APP_VERSION = '0.1.24';
+export const APP_BUILD = 24;
 
 export const APP_CHANGELOG = [
-  'Persistência universal contínua na nuvem: dados 100% preservados entre celulares, computadores e navegadores',
-  'Fim definitivo de pop-ups intrusivos e notificações repetitivas durante o uso do aplicativo',
-  'Sincronização bidirecional em tempo real entre Render, Vercel e aplicativo móvel',
-  'Zero perda ou reset ao desinstalar, reinstalar ou trocar de aparelho',
-  'Exclusão definitiva de loops e garantias de integridade contínua'
+  'Fim definitivo de respostas e valores padrão de R$ 20 em áudios de voz',
+  'Filtragem e interpretação fidedigna de áudios no WhatsApp e no chat interno',
+  'Verificação de atualização dinâmica e em tempo real via GitHub sem falso positivo',
+  'Atualização in-app com download e instalação direta do APK sem precisar desinstalar'
 ];

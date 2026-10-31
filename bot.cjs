@@ -1365,7 +1365,7 @@ async function startSocket() {
         }
 
         // ==============================================================
-        // CAMINHO MULTIMODAL PARALELO PARA ÁUDIO DE VOZ E FOTO DE COMPROVANTE
+        // CAMINHO MULTIMODAL REAL PARA ÁUDIO DE VOZ E FOTO DE COMPROVANTE
         // ==============================================================
         if (!parsed && (isAudio || isImage)) {
           let audioBuffer = null;
@@ -1395,38 +1395,88 @@ async function startSocket() {
             }
           }
 
-          // Corrida Paralela de IA (Gemini Multimodal + Vision AI + Whisper) para resposta mais rápida possível
-          try {
-            const geminiPayload = {
-              message: messageText || (isAudio ? 'Analise este áudio de despesa/receita' : 'Analise esta foto de comprovante/recibo e extraia os dados financeiros'),
-              audioBase64: audioBuffer ? audioBuffer.toString('base64') : undefined,
-              audioMimeType: isAudio ? 'audio/ogg' : undefined,
-              imageBase64: imageBuffer ? imageBuffer.toString('base64') : undefined,
-              imageMimeType: isImage ? (msg.message.imageMessage?.mimetype || 'image/jpeg') : undefined,
-              context: {
-                userName: 'Kayro Wisterly',
-                transactions: localStoredTransactions.slice(0, 10)
+          // 1. PROCESSAMENTO DE ÁUDIO REAL DE VOZ
+          if (isAudio && audioBuffer && audioBuffer.length > 100) {
+            const base64Audio = audioBuffer.toString('base64');
+            let transcribedText = '';
+
+            // Tenta Transcrição 1: Endpoint Central da Nuvem (/api/transcribe)
+            try {
+              const trRes = await fastAxios.post('https://kyro-finance.vercel.app/api/transcribe', {
+                audioBase64: base64Audio,
+                mimeType: 'audio/ogg',
+                geminiApiKey: process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY
+              }, { timeout: 10000 });
+              if (trRes.data?.success && trRes.data?.text && trRes.data.text.trim().length > 0) {
+                transcribedText = trRes.data.text.trim();
+                console.log(`🎙️ [WhatsApp Áudio Transcrito via Nuvem]: "${transcribedText}"`);
               }
-            };
+            } catch (trErr) {}
 
-            const resp = await fastAxios.post('https://kyro-finance.vercel.app/api/chat', geminiPayload, { timeout: 8000 });
-            if (resp.data && resp.data.action?.type === 'create_transaction' && resp.data.action.transaction) {
-              const tx = resp.data.savedTx || resp.data.action.transaction;
-              const isInc = tx.type === 'Entrada';
-              const formattedReply = `✅ *${isInc ? 'Entrada' : 'Saída'} Registrada — KYRO Finance*\n\n` +
-                `• *Tipo:* ${isInc ? '💰 Entrada (Receita)' : '💸 Saída (Despesa)'}\n` +
-                `• *Descrição / Produto:* ${tx.product || tx.description}\n` +
-                `• *Categoria:* ${tx.category || 'Outros'}\n` +
-                (tx.establishment ? `• *Estabelecimento:* ${tx.establishment}\n` : '') +
-                (tx.city && tx.city !== 'Não informada' ? `• *Cidade:* ${tx.city}\n` : '') +
-                `• *Valor:* ${isInc ? '+' : '-'} R$ ${Number(tx.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n` +
-                `• *Forma de Pagamento:* ${tx.method || 'PIX'}\n\n` +
-                `📊 _Sincronizado em tempo real no Dashboard, Entradas e Saídas!_`;
-              parsed = { savedTx: tx, reply: formattedReply };
+            // Tenta Transcrição 2: Google Gemini Flash Multimodal Direto
+            if (!transcribedText) {
+              const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+              if (geminiKey) {
+                try {
+                  const gUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`;
+                  const gRes = await fastAxios.post(gUrl, {
+                    contents: [{
+                      parts: [
+                        { inline_data: { mime_type: 'audio/ogg', data: base64Audio } },
+                        { text: 'Transcreva com máxima precisão o que foi falado neste áudio em português sobre pagamentos, transferências, pix ou compras. Retorne estritamente o texto falado, sem aspas e sem comentários.' }
+                      ]
+                    }]
+                  }, { timeout: 10000 });
+                  const gTxt = gRes.data?.candidates?.[0]?.content?.parts?.[0]?.text;
+                  if (gTxt && gTxt.trim().length > 0) {
+                    transcribedText = gTxt.trim();
+                    console.log(`🎙️ [WhatsApp Áudio Transcrito via Gemini Direto]: "${transcribedText}"`);
+                  }
+                } catch (gErr) {}
+              }
             }
-          } catch (e) {}
 
-          // Se for IMAGEM e ainda não processou, usa Pollinations OpenAI Vision
+            // Tenta Transcrição 3: Consulta ao Chat IA Central
+            if (!transcribedText) {
+              try {
+                const chatRes = await fastAxios.post('https://kyro-finance.vercel.app/api/chat', {
+                  message: 'Analise este áudio de despesa/receita',
+                  audioBase64: base64Audio,
+                  audioMimeType: 'audio/ogg',
+                  context: { userName: 'Kayro Wisterly', transactions: localStoredTransactions.slice(0, 10) }
+                }, { timeout: 9000 });
+                if (chatRes.data?.action?.type === 'create_transaction' && chatRes.data.action.transaction) {
+                  const tx = chatRes.data.savedTx || chatRes.data.action.transaction;
+                  const isInc = tx.type === 'Entrada';
+                  const formattedReply = `✅ *${isInc ? 'Entrada' : 'Saída'} Registrada — KYRO Finance*\n\n` +
+                    `• *Tipo:* ${isInc ? '💰 Entrada (Receita)' : '💸 Saída (Despesa)'}\n` +
+                    `• *Descrição / Produto:* ${tx.product || tx.description}\n` +
+                    `• *Categoria:* ${tx.category || 'Outros'}\n` +
+                    (tx.establishment ? `• *Estabelecimento:* ${tx.establishment}\n` : '') +
+                    (tx.city && tx.city !== 'Não informada' ? `• *Cidade:* ${tx.city}\n` : '') +
+                    `• *Valor:* ${isInc ? '+' : '-'} R$ ${Number(tx.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n` +
+                    `• *Forma de Pagamento:* ${tx.method || 'PIX'}\n\n` +
+                    `📊 _Sincronizado em tempo real no Dashboard, Entradas e Saídas!_`;
+                  parsed = { savedTx: tx, reply: formattedReply };
+                }
+              } catch (cErr) {}
+            }
+
+            // Se o áudio foi transcrito para texto, processa com o motor financeiro dinâmico
+            if (!parsed && transcribedText) {
+              parsed = parseDynamicFinancialMessage(transcribedText, true);
+            }
+
+            // Se todas as tentativas falharam e o áudio é inaudível: NUNCA INVENTA R$ 20!
+            if (!parsed) {
+              await sock.sendMessage(remoteJid, {
+                text: '🎙️ *Áudio recebido, mas não consegui identificar com nitidez o valor ou o item.*\n\nPor favor, envie o áudio novamente falando mais próximo ao microfone ou digite o lançamento no grupo (ex: *"Transferência de R$ 300"* ou *"Lanche 15 no débito"*).'
+              });
+              continue;
+            }
+          }
+
+          // 2. PROCESSAMENTO DE IMAGEM / COMPROVANTE
           if (!parsed && isImage && imageBuffer) {
             try {
               const mime = msg.message.imageMessage?.mimetype || 'image/jpeg';
@@ -1483,11 +1533,14 @@ async function startSocket() {
                 }
               }
             } catch (vErr) {}
-          }
 
-          if (!parsed) {
-            const fallbackText = messageText || (isAudio ? 'Despesa registrada por áudio de 20 reais' : 'Comprovante enviado por foto de 50 reais');
-            parsed = parseDynamicFinancialMessage(fallbackText, isAudio);
+            // Se não conseguiu ler a imagem, avisa sem inventar valor falso
+            if (!parsed) {
+              await sock.sendMessage(remoteJid, {
+                text: '📸 *Foto/Comprovante recebido, mas não foi possível ler os valores.*\n\nPor favor, envie uma foto com melhor iluminação e nitidez, ou digite o valor no grupo.'
+              });
+              continue;
+            }
           }
         }
 

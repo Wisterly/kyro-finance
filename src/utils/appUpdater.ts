@@ -46,22 +46,48 @@ export async function getInstalledAppInfo(): Promise<{ versionName: string; buil
 export async function checkForAppUpdate(): Promise<UpdateInfo | null> {
   try {
     const installed = await getInstalledAppInfo();
+    let data: UpdateInfo | null = null;
 
-    const res = await fetch('/api/app-version', {
-      headers: {
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
-        'Pragma': 'no-cache'
+    // 1. Tenta buscar no endpoint serverless /api/app-version
+    try {
+      const res = await fetch(`/api/app-version?t=${Date.now()}`, {
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache'
+        }
+      });
+      if (res.ok) {
+        data = await res.json();
       }
-    });
+    } catch (e) {}
 
-    if (!res.ok) return null;
+    // 2. Fallback direto para o GitHub raw version.json (sempre atualizado no push)
+    if (!data || typeof data.buildNumber !== 'number') {
+      try {
+        const ghRes = await fetch(`https://raw.githubusercontent.com/Wisterly/kyro-finance/main/version.json?t=${Date.now()}`, {
+          headers: { 'Cache-Control': 'no-cache' }
+        });
+        if (ghRes.ok) {
+          const rawV = await ghRes.json();
+          if (rawV && typeof rawV.buildNumber === 'number') {
+            data = {
+              latestVersion: rawV.version || '0.1.24',
+              buildNumber: rawV.buildNumber,
+              publishedAt: rawV.releaseDate || new Date().toISOString(),
+              apkUrl: 'https://github.com/Wisterly/kyro-finance/releases/download/apk-latest/KYRO-Finance.apk',
+              apkSize: '9.1 MB',
+              changelog: rawV.changelog || []
+            };
+          }
+        }
+      } catch (ghErr) {}
+    }
 
-    const data: UpdateInfo = await res.json();
     if (!data || typeof data.buildNumber !== 'number') return null;
 
     console.log(`[AutoUpdate] Comparando: Nuvem Build ${data.buildNumber} vs Instalado Build ${installed.buildNumber}`);
 
-    // Se houver build superior na nuvem, aciona a atualização
+    // Se houver build superior na nuvem, retorna para abertura do modal
     if (data.buildNumber > installed.buildNumber) {
       return data;
     }

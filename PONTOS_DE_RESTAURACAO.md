@@ -648,13 +648,42 @@ A numeração segue rigorosamente a hierarquia de escopo:
 
 ---
 
+### [PR.024] — Interpretação Fidedigna de Áudios (Fim do Bug de R$ 20 no WhatsApp e Chat) + Auto-Update Dinâmico em Tempo Real via GitHub
+- **Data/Hora:** 2026-10-31 03:00 (UTC-3)
+- **Tags Git:** `PR.024`, `PR.024.1`, `PR.024.2`
+
+#### `PR.024` — Escopo Geral do Projeto (Universal)
+- **Erradicação Absoluta de Valores Padrão em Áudios (Fim do Bug de R$ 20):**
+  - Eliminação definitiva da linha de fallback que inseria `'Despesa registrada por áudio de 20 reais'` quando a transcrição sofria latência.
+  - O robô do WhatsApp e o chat interno agora processam o áudio real com pipeline de transcrição multimodal em múltiplas camadas (Gemini Flash Audio + Speech Recognition nativo do microfone).
+  - Se um áudio de "Transferência de R$ 300" for falado, o valor extraído é exatamente R$ 300,00, categorizado corretamente em transferências/saídas.
+  - Se um áudio for inaudível ou mudo, o robô responde com gentileza solicitando repetição ou digitação, **sem jamais criar lançamentos falsos de R$ 20**.
+- **Detecção Precisa de Voz no Chat Interno (Preservação de Comandos Curtos):**
+  - Remoção da trava que descartava falas com menos de 3 palavras (ex: *"Pix 300"*, *"Transferência 300"*). Qualquer fala reconhecida pelo microfone é aproveitada com 100% de prioridade.
+- **Auto-Update Dinâmico via GitHub em Tempo Real (Fim do Falso "Já Atualizado"):**
+  - O endpoint `/api/app-version` agora consulta dinamicamente o `version.json` do GitHub com cache-busting (`?t=timestamp`) e os dados da Release oficial.
+  - Eliminação de valores fixos hardcoded (`buildNumber: 21`). Quando a nuvem possui versão superior (ex: Build 24), o botão "Verificar Atualização" detecta imediatamente e abre o modal com botão de download nativo do APK atualizado.
+
+#### `PR.024.1` — Versão Computador (Desktop)
+- Reconhecimento de voz no painel lateral de chat com processamento imediato de comandos de valores e transferências sem distorções de quantia.
+- Verificação precisa de versões no menu de configurações com detalhes reais do changelog da compilação ativa.
+
+#### `PR.024.2` — Versão Celular (Aplicativo Android `.apk` & Mobile)
+- Transcrição no smartphone Android preservando comandos de voz rápidos com o microfone nativo.
+- Botão "Verificar Atualização" com leitura da versão nativa via `PackageManager` e download direto com 1 toque do APK atualizado sem necessidade de desinstalar o app.
+
+---
+
 ## TABELA DE CÓDIGOS DE PONTOS DE RESTAURAÇÃO
 
 Se você desejar restaurar qualquer versão anterior ou atual do Kyro Finance, basta colar o código do ponto de restauração na conversa:
 
 | Código do Ponto | Escopo | Descrição Resumida |
 | :--- | :--- | :--- |
-| **`PR.023`** | **Geral (Universal)** | **Versão Atual: Persistência Universal 24h na Nuvem (Render + Vercel) sem Perda ou Reset de Dados entre Dispositivos + Fim de Pop-ups Intrusivos** |
+| **`PR.024`** | **Geral (Universal)** | **Versão Atual: Interpretação Fidedigna de Áudios (Fim do Bug de R$ 20 no WhatsApp e Chat) + Auto-Update Dinâmico em Tempo Real via GitHub** |
+| `PR.024.1` | Desktop | Interface Web/Desktop com áudio preciso de comandos e verificação em tempo real de versões |
+| `PR.024.2` | Mobile / APK | Aplicativo Android com reconhecimento de voz de alta fidelidade e atualização in-app com 1 toque sem desinstalar |
+| **`PR.023`** | **Geral (Universal)** | Persistência Universal 24h na Nuvem (Render + Vercel) sem Perda ou Reset de Dados entre Dispositivos + Fim de Pop-ups Intrusivos |
 | `PR.023.1` | Desktop | Interface Web/Desktop com sincronização contínua na nuvem em qualquer navegador sem necessidade de restauração |
 | `PR.023.2` | Mobile / APK | Aplicativo Android livre de pop-ups intrusivos, com histórico financeiro 100% blindado contra desinstalação |
 | **`PR.022`** | **Geral (Universal)** | Robô WhatsApp 24h na Nuvem Gratuita (Render/Koyeb/Docker) + Auto-Ping Anti-Hibernação + Backup Remoto de Sessão |
