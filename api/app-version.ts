@@ -20,7 +20,7 @@ function parseVersionFromName(filename: string) {
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Cache-Control, Pragma');
+  res.setHeader('Access-Control-Allow-Headers', '*');
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0');
   res.setHeader('Pragma', 'no-cache');
   res.setHeader('Expires', '0');
@@ -31,8 +31,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // 1. Sempre lê o version.json do deploy atual da Vercel (garantia de frescor a cada requisição)
   let localVersionData: any = {
-    version: '1.35',
-    buildNumber: 35,
+    version: '1.38',
+    buildNumber: 38,
     releaseDate: new Date().toISOString().split('T')[0],
     changelog: []
   };

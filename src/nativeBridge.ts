@@ -45,30 +45,17 @@ export function initNativeBridge(): void {
   const originalFetch = window.fetch.bind(window);
   window.fetch = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     try {
-      const modifiedInit: RequestInit = { ...(init || {}) };
-      const reqHeaders = new Headers(modifiedInit.headers || {});
-      if (!reqHeaders.has('Cache-Control')) {
-        reqHeaders.set('Cache-Control', 'no-cache, no-store, must-revalidate');
-      }
-      if (!reqHeaders.has('Pragma')) {
-        reqHeaders.set('Pragma', 'no-cache');
-      }
-      modifiedInit.headers = reqHeaders;
-      if (!modifiedInit.cache) {
-        modifiedInit.cache = 'no-store';
-      }
-
       if (typeof input === 'string') {
         if (input.startsWith('/api/') || input === '/api') {
           const sep = input.includes('?') ? '&' : '?';
           const antiCache = `_nc=${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
-          return originalFetch(`${cloudBase}${input}${sep}${antiCache}`, modifiedInit);
+          return originalFetch(`${cloudBase}${input}${sep}${antiCache}`, init);
         }
       } else if (input instanceof URL) {
         if (input.origin === window.location.origin && input.pathname.startsWith('/api/')) {
           const sep = input.search ? '&' : '?';
           const antiCache = `_nc=${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
-          return originalFetch(`${cloudBase}${input.pathname}${input.search}${sep}${antiCache}`, modifiedInit);
+          return originalFetch(`${cloudBase}${input.pathname}${input.search}${sep}${antiCache}`, init);
         }
       } else if (input instanceof Request) {
         const reqUrl = new URL(input.url, window.location.origin);
@@ -76,7 +63,7 @@ export function initNativeBridge(): void {
           const sep = reqUrl.search ? '&' : '?';
           const antiCache = `_nc=${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
           const targetUrl = `${cloudBase}${reqUrl.pathname}${reqUrl.search}${sep}${antiCache}`;
-          const newReq = new Request(targetUrl, { ...input, ...modifiedInit });
+          const newReq = new Request(targetUrl, input);
           return originalFetch(newReq);
         }
       }

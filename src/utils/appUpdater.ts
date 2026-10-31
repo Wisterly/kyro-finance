@@ -9,8 +9,10 @@ export const CURRENT_APP_BUILD = APP_BUILD;
 
 /**
  * Função utilitária com timeout estrito e proteção contra cache do WebView/navegador
+ * NOTA CRUCIAL: NÃO adiciona headers customizados (Pragma/Expires) para evitar preflight CORS (OPTIONS)
+ * que é rejeitado pelo GitHub e CDNs no WebView do Android. O anti-cache é garantido via query string única e cache: 'no-store'.
  */
-async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs: number = 3500): Promise<Response> {
+async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs: number = 4500): Promise<Response> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -18,13 +20,7 @@ async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutM
     const res = await fetch(url, {
       ...options,
       signal: controller.signal,
-      cache: 'no-store',
-      headers: {
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
-        'Pragma': 'no-cache',
-        'Expires': '0',
-        ...(options.headers || {})
-      }
+      cache: 'no-store'
     });
     return res;
   } finally {
@@ -142,68 +138,71 @@ export async function checkUpdateDetailed(): Promise<CheckUpdateResult> {
   let changelog: string[] = [...APP_CHANGELOG];
   let connectionSuccess = false;
 
-  // 1. PRIMEIRA PRIORIDADE (MAIS RÁPIDA E SEM CACHE): API Vercel Nuvem
+  const antiCacheParam = `_t=${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+
+  // 1. PRIMEIRA PRIORIDADE (ULTRARRÁPIDA E CDN GLOBAL): version.json no repositório GitHub
+  // Responde em ~150ms via Fastly CDN, não requer preflight CORS e possui dados 100% atualizados
   try {
-    const vercelEndpoints = [
-      `https://kyro-finance.vercel.app/api/app-version?t=${Date.now()}_${Math.random()}`,
-      `/api/app-version?t=${Date.now()}_${Math.random()}`
-    ];
-
-    for (const endpoint of vercelEndpoints) {
-      try {
-        const res = await fetchWithTimeout(endpoint, {}, 3500);
-        if (res.ok) {
-          const vData = await res.json().catch(() => null);
-          if (vData && typeof vData.buildNumber === 'number') {
-            connectionSuccess = true;
-            if (Array.isArray(vData.changelog) && vData.changelog.length > 0) {
-              changelog = vData.changelog;
-            }
-            latestAssetInfo = {
-              versionStr: vData.latestVersion || `1.${vData.buildNumber}`,
-              buildNumber: vData.buildNumber,
-              downloadUrl: vData.apkUrl || `https://github.com/Wisterly/kyro-finance/releases/download/apk-latest/KYRO-Finance-1.${vData.buildNumber}.apk`,
-              fileName: vData.apkFileName || `KYRO-Finance-1.${vData.buildNumber}.apk`,
-              sizeStr: vData.apkSize || '9.8 MB',
-              publishedAt: vData.publishedAt || new Date().toISOString()
-            };
-            break;
-          }
+    const rawRes = await fetchWithTimeout(`https://raw.githubusercontent.com/Wisterly/kyro-finance/main/version.json?${antiCacheParam}`, {}, 4500);
+    if (rawRes.ok) {
+      const rawData = await rawRes.json().catch(() => null);
+      if (rawData && typeof rawData.buildNumber === 'number') {
+        connectionSuccess = true;
+        if (Array.isArray(rawData.changelog) && rawData.changelog.length > 0) {
+          changelog = rawData.changelog;
         }
-      } catch (inner) {}
+        latestAssetInfo = {
+          versionStr: rawData.version || `1.${rawData.buildNumber}`,
+          buildNumber: rawData.buildNumber,
+          downloadUrl: `https://github.com/Wisterly/kyro-finance/releases/download/apk-latest/KYRO-Finance-1.${rawData.buildNumber}.apk`,
+          fileName: `KYRO-Finance-1.${rawData.buildNumber}.apk`,
+          sizeStr: '9.8 MB',
+          publishedAt: rawData.releaseDate || new Date().toISOString()
+        };
+      }
     }
-  } catch (vErr) {}
+  } catch (rawErr) {}
 
-  // 2. SEGUNDA PRIORIDADE: version.json no repositório GitHub (com anti-cache)
+  // 2. SEGUNDA PRIORIDADE: API Vercel Nuvem (/api/app-version)
   if (!latestAssetInfo) {
     try {
-      const rawRes = await fetchWithTimeout(`https://raw.githubusercontent.com/Wisterly/kyro-finance/main/version.json?t=${Date.now()}_${Math.random()}`, {}, 3500);
-      if (rawRes.ok) {
-        const rawData = await rawRes.json().catch(() => null);
-        if (rawData && typeof rawData.buildNumber === 'number') {
-          connectionSuccess = true;
-          if (Array.isArray(rawData.changelog)) {
-            changelog = rawData.changelog;
+      const vercelEndpoints = [
+        `https://kyro-finance.vercel.app/api/app-version?${antiCacheParam}`,
+        `/api/app-version?${antiCacheParam}`
+      ];
+
+      for (const endpoint of vercelEndpoints) {
+        try {
+          const res = await fetchWithTimeout(endpoint, {}, 4500);
+          if (res.ok) {
+            const vData = await res.json().catch(() => null);
+            if (vData && typeof vData.buildNumber === 'number') {
+              connectionSuccess = true;
+              if (Array.isArray(vData.changelog) && vData.changelog.length > 0) {
+                changelog = vData.changelog;
+              }
+              latestAssetInfo = {
+                versionStr: vData.latestVersion || `1.${vData.buildNumber}`,
+                buildNumber: vData.buildNumber,
+                downloadUrl: vData.apkUrl || `https://github.com/Wisterly/kyro-finance/releases/download/apk-latest/KYRO-Finance-1.${vData.buildNumber}.apk`,
+                fileName: vData.apkFileName || `KYRO-Finance-1.${vData.buildNumber}.apk`,
+                sizeStr: vData.apkSize || '9.8 MB',
+                publishedAt: vData.publishedAt || new Date().toISOString()
+              };
+              break;
+            }
           }
-          latestAssetInfo = {
-            versionStr: rawData.version || `1.${rawData.buildNumber}`,
-            buildNumber: rawData.buildNumber,
-            downloadUrl: `https://github.com/Wisterly/kyro-finance/releases/download/apk-latest/KYRO-Finance-1.${rawData.buildNumber}.apk`,
-            fileName: `KYRO-Finance-1.${rawData.buildNumber}.apk`,
-            sizeStr: '9.8 MB',
-            publishedAt: rawData.releaseDate || new Date().toISOString()
-          };
-        }
+        } catch (inner) {}
       }
-    } catch (rawErr) {}
+    } catch (vErr) {}
   }
 
-  // 3. TERCEIRA PRIORIDADE: GitHub Releases API
+  // 3. TERCEIRA PRIORIDADE: GitHub Releases API Oficial
   if (!latestAssetInfo) {
     try {
-      const ghRes = await fetchWithTimeout(`https://api.github.com/repos/Wisterly/kyro-finance/releases/tags/apk-latest?t=${Date.now()}_${Math.random()}`, {
+      const ghRes = await fetchWithTimeout(`https://api.github.com/repos/Wisterly/kyro-finance/releases/tags/apk-latest?${antiCacheParam}`, {
         headers: { 'Accept': 'application/vnd.github.v3+json' }
-      }, 3500);
+      }, 4500);
 
       if (ghRes.ok) {
         const release = await ghRes.json().catch(() => null);
@@ -231,7 +230,7 @@ export async function checkUpdateDetailed(): Promise<CheckUpdateResult> {
 
           if (bestAsset) {
             const parsed = extractVersionFromFileName(bestAsset.name);
-            const foundBuild = parsed?.buildNumber || highestBuild || 35;
+            const foundBuild = parsed?.buildNumber || highestBuild || 37;
             const foundVersion = parsed?.versionStr || bestVersion || `1.${foundBuild}`;
 
             latestAssetInfo = {

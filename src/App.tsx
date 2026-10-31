@@ -1232,14 +1232,14 @@ export default function App() {
     try {
       const detailedPromise = checkUpdateDetailed();
       const timeoutPromise = new Promise<CheckUpdateResult>((_, reject) => 
-        setTimeout(() => reject(new Error('Tempo limite de consulta esgotado (8s). Verifique sua conexão.')), 8000)
+        setTimeout(() => reject(new Error('Tempo limite de consulta esgotado (12s).')), 12000)
       );
 
       const detailed = await Promise.race([detailedPromise, timeoutPromise]);
       if (detailed.hasUpdate && detailed.updateInfo) {
         setAvailableUpdate(detailed.updateInfo);
       } else if (detailed.errorMessage) {
-        alert(`⚠️ Não foi possível verificar no momento: ${detailed.errorMessage}\n\nVerifique sua conexão à internet e tente novamente.`);
+        alert(`⚠️ Consulta de Atualizações:\n\n${detailed.errorMessage}\n\nO servidor de atualizações está temporariamente inacessível.`);
       } else {
         const pkgName = detailed.remoteInfo?.apkFileName ? `\n• Pacote no GitHub: ${detailed.remoteInfo.apkFileName}` : '';
         alert(`✅ Você já está usando a versão mais recente do KYRO Finance!\n\n• Versão Instalada: v${detailed.installedInfo.versionName} (Build ${detailed.installedInfo.buildNumber})${pkgName}\n\nNenhuma atualização pendente.`);
