@@ -1,11 +1,11 @@
 // Metadados Centrais de Versão e Auto-Update do KYRO Finance
-export const APP_VERSION = '0.1.21';
-export const APP_BUILD = 21;
+export const APP_VERSION = '0.1.22';
+export const APP_BUILD = 22;
 
 export const APP_CHANGELOG = [
-  'Blindagem total da persistência financeira: impossível resetar ou perder lançamentos locais e em nuvem',
-  'Sincronização imediata de novas entradas e saídas no banco central da nuvem e Firestore',
-  'Sistema autossuficiente de auto-update com detecção dinâmica e pop-up em tempo real durante o uso',
-  'Verificação automática periódica a cada 45 segundos e ao retornar ao aplicativo',
-  'Download e instalação in-app com 1 toque no celular Android'
+  'Hospedagem 24h na nuvem gratuita para o robô WhatsApp sem precisar de computador ligado',
+  'Mecanismo anti-hibernação (auto-ping 9 min) para manter o bot sempre ativo no Render/Koyeb',
+  'Persistência e restauração remota de credenciais WhatsApp (creds.json) no banco central',
+  'Painel de controle de nuvem com status e teste de conexão no WhatsAppTab (Desktop & Mobile)',
+  'Alimentação contínua de despesas e receitas a partir do grupo WhatsApp Finanças KYRO'
 ];

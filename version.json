@@ -1,12 +1,12 @@
 {
-  "version": "0.1.21",
-  "buildNumber": 21,
-  "releaseDate": "2026-10-30",
+  "version": "0.1.22",
+  "buildNumber": 22,
+  "releaseDate": "2026-10-31",
   "changelog": [
-    "Blindagem total da persistência financeira: impossível resetar ou perder lançamentos locais e em nuvem",
-    "Sincronização imediata de entradas e saídas no banco central e Firestore",
-    "Sistema autossuficiente de auto-update com detecção dinâmica e pop-up em tempo real durante o uso",
-    "Verificação automática periódica a cada 45 segundos e ao retornar para o aplicativo",
-    "Download e instalação nativa com 1 toque no celular Android"
+    "Hospedagem 24h na nuvem gratuita para o robô WhatsApp sem precisar de computador ligado",
+    "Mecanismo anti-hibernação (auto-ping 9 min) para Render.com e Koyeb manterem o bot 24/7 online",
+    "Persistência e restauração remota da sessão WhatsApp (creds.json) no banco central da nuvem",
+    "Painel de controle de nuvem integrado no WhatsAppTab para Desktop e Celular",
+    "Sincronização imediata de lançamentos de áudio, imagem e texto do grupo 'Finanças KYRO'"
   ]
 }

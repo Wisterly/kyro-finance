@@ -690,10 +690,19 @@ export default function App() {
           return null;
         };
 
-        const [dataLocal, dataCloud] = await Promise.all([
+        const cloudBotUrl = localStorage.getItem('kyro_cloud_bot_url') || '';
+        const fetchPromises = [
           fetchWithTimeout('http://localhost:3001/api/transactions', 1000),
           fetchWithTimeout('/api/webhook', 1200)
-        ]);
+        ];
+        if (cloudBotUrl) {
+          fetchPromises.push(fetchWithTimeout(`${cloudBotUrl.replace(/\/$/, '')}/api/transactions`, 1200));
+        }
+
+        const results = await Promise.all(fetchPromises);
+        const dataLocal = results[0];
+        const dataCloud = results[1];
+        const dataRemoteBot = results[2];
 
         const incoming: any[] = [];
         if (dataLocal?.transactions && Array.isArray(dataLocal.transactions)) {
@@ -701,6 +710,9 @@ export default function App() {
         }
         if (dataCloud?.transactions && Array.isArray(dataCloud.transactions)) {
           incoming.push(...dataCloud.transactions);
+        }
+        if (dataRemoteBot?.transactions && Array.isArray(dataRemoteBot.transactions)) {
+          incoming.push(...dataRemoteBot.transactions);
         }
 
         if (incoming.length > 0) {

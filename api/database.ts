@@ -66,6 +66,8 @@ if (!globalStore.__KYRO_CENTRAL_DB__) {
     userAiRules: [...DEFAULT_AI_RULES],
     whatsappConfig: { ...DEFAULT_WHATSAPP_CONFIG },
     chatConfig: { ...DEFAULT_CHAT_CONFIG },
+    botServerUrl: '',
+    baileysCreds: null,
     initialized: false,
     lastUpdated: new Date().toISOString()
   };
@@ -81,6 +83,9 @@ if (!globalStore.__KYRO_CENTRAL_DB__) {
   }
   if (!globalStore.__KYRO_CENTRAL_DB__.chatConfig) {
     globalStore.__KYRO_CENTRAL_DB__.chatConfig = { ...DEFAULT_CHAT_CONFIG };
+  }
+  if (globalStore.__KYRO_CENTRAL_DB__.botServerUrl === undefined) {
+    globalStore.__KYRO_CENTRAL_DB__.botServerUrl = '';
   }
 }
 
@@ -139,6 +144,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         userAiRules: globalStore.__KYRO_CENTRAL_DB__.userAiRules || DEFAULT_AI_RULES,
         whatsappConfig: globalStore.__KYRO_CENTRAL_DB__.whatsappConfig || DEFAULT_WHATSAPP_CONFIG,
         chatConfig: globalStore.__KYRO_CENTRAL_DB__.chatConfig || DEFAULT_CHAT_CONFIG,
+        botServerUrl: globalStore.__KYRO_CENTRAL_DB__.botServerUrl || '',
+        hasBaileysCreds: !!globalStore.__KYRO_CENTRAL_DB__.baileysCreds,
         recurringExpenses: globalStore.__KYRO_CENTRAL_DB__.recurringExpenses || [],
         creditCards: globalStore.__KYRO_CENTRAL_DB__.creditCards || [],
         lastUpdated: globalStore.__KYRO_CENTRAL_DB__.lastUpdated,
@@ -449,6 +456,69 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           message: 'Configuração do Chat Gemini salva e sincronizada entre Desktop e Mobile.',
           chatConfig: nextChat,
           userAiRules: globalStore.__KYRO_CENTRAL_DB__.userAiRules
+        });
+      }
+
+      // 10. Salvar Credenciais do Baileys para Persistência Cloud 24h (save_baileys_creds)
+      if (action === 'save_baileys_creds' && payload.creds) {
+        globalStore.__KYRO_CENTRAL_DB__.baileysCreds = payload.creds;
+        globalStore.__KYRO_CENTRAL_DB__.lastUpdated = new Date().toISOString();
+
+        if (db) {
+          try {
+            await setDoc(doc(db, 'kyro_settings', 'baileys_auth'), {
+              creds: typeof payload.creds === 'string' ? payload.creds : JSON.stringify(payload.creds),
+              updatedAt: new Date().toISOString()
+            }, { merge: true });
+          } catch (e) {}
+        }
+
+        return res.status(200).json({
+          success: true,
+          message: 'Credenciais do Baileys salvas na nuvem com sucesso.'
+        });
+      }
+
+      // 11. Recuperar Credenciais do Baileys na Nuvem (get_baileys_creds)
+      if (action === 'get_baileys_creds') {
+        let creds = globalStore.__KYRO_CENTRAL_DB__.baileysCreds || null;
+        if (!creds && db) {
+          try {
+            const snap = await getDocs(query(collection(db, 'kyro_settings')));
+            snap.forEach(d => {
+              if (d.id === 'baileys_auth' && d.data()?.creds) {
+                creds = d.data().creds;
+              }
+            });
+          } catch (e) {}
+        }
+
+        return res.status(200).json({
+          success: true,
+          hasCreds: !!creds,
+          creds
+        });
+      }
+
+      // 12. Salvar URL Pública do Robô na Nuvem (save_bot_url)
+      if (action === 'save_bot_url' && payload.botServerUrl) {
+        const cleanUrl = String(payload.botServerUrl).trim().replace(/\/$/, '');
+        globalStore.__KYRO_CENTRAL_DB__.botServerUrl = cleanUrl;
+        globalStore.__KYRO_CENTRAL_DB__.lastUpdated = new Date().toISOString();
+
+        if (db) {
+          try {
+            await setDoc(doc(db, 'kyro_settings', 'bot_url'), {
+              botServerUrl: cleanUrl,
+              updatedAt: new Date().toISOString()
+            }, { merge: true });
+          } catch (e) {}
+        }
+
+        return res.status(200).json({
+          success: true,
+          message: 'URL do Robô na Nuvem salva com sucesso.',
+          botServerUrl: cleanUrl
         });
       }
 

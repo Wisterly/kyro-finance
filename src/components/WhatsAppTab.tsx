@@ -16,7 +16,11 @@ import {
   MessageSquare,
   ShieldCheck,
   ExternalLink,
-  Camera
+  Camera,
+  Globe,
+  Cloud,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { Transaction } from '../types';
@@ -80,6 +84,14 @@ export const WhatsAppTab: React.FC<WhatsAppTabProps> = ({
   ]);
   const [isLoadingGroups, setIsLoadingGroups] = useState(false);
 
+  // URL do Robô Hospedado 24h na Nuvem (Render / Koyeb / etc.)
+  const [cloudBotUrl, setCloudBotUrl] = useState(() => {
+    return localStorage.getItem('kyro_cloud_bot_url') || '';
+  });
+  const [isSavingCloudUrl, setIsSavingCloudUrl] = useState(false);
+  const [cloudUrlFeedback, setCloudUrlFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [showCloudGuide, setShowCloudGuide] = useState(false);
+
   const filterOnlyKyroGroup = (groupsList: any[]) => {
     const filtered = (groupsList || []).filter((g: any) => {
       if (!g) return false;
@@ -131,8 +143,11 @@ export const WhatsAppTab: React.FC<WhatsAppTabProps> = ({
     const checkBotStatus = async () => {
       let foundStatus = false;
 
-      // 1. Tenta buscar direto da porta 3001 ou via proxy local /api/status
+      // 1. Tenta buscar da Nuvem 24h (se configurada), direto da porta 3001 ou via proxy local /api/status
       const statusEndpoints = ['/api/status', 'http://localhost:3001/api/status'];
+      if (cloudBotUrl) {
+        statusEndpoints.unshift(`${cloudBotUrl.replace(/\/$/, '')}/api/status`);
+      }
       for (const ep of statusEndpoints) {
         try {
           const res = await fetch(ep);
@@ -205,6 +220,10 @@ export const WhatsAppTab: React.FC<WhatsAppTabProps> = ({
 
         if (resDb && resDb.ok) {
           const dataDb = await resDb.json();
+          if (dataDb?.botServerUrl && !cloudBotUrl) {
+            setCloudBotUrl(dataDb.botServerUrl);
+            localStorage.setItem('kyro_cloud_bot_url', dataDb.botServerUrl);
+          }
           if (dataDb?.whatsappConfig) {
             applyRemoteGroupConfig(dataDb.whatsappConfig);
             if (dataDb.whatsappConfig.phoneNumber) {
@@ -244,6 +263,50 @@ export const WhatsAppTab: React.FC<WhatsAppTabProps> = ({
     }
   };
 
+  // Função para salvar e testar a URL do Robô Hospedado 24h na Nuvem
+  const handleSaveAndTestCloudBot = async () => {
+    setIsSavingCloudUrl(true);
+    setCloudUrlFeedback(null);
+    const cleanUrl = cloudBotUrl.trim().replace(/\/$/, '');
+    try {
+      localStorage.setItem('kyro_cloud_bot_url', cleanUrl);
+      setCloudBotUrl(cleanUrl);
+
+      await fetch('/api/database', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'save_bot_url', botServerUrl: cleanUrl })
+      });
+
+      if (!cleanUrl) {
+        setCloudUrlFeedback({ type: 'success', message: 'Configuração de nuvem redefinida para servidor local.' });
+        return;
+      }
+
+      // Testa a rota de healthcheck do servidor na nuvem
+      try {
+        const testRes = await fetch(`${cleanUrl}/api/health`);
+        if (testRes.ok) {
+          const testData = await testRes.json();
+          setCloudUrlFeedback({
+            type: 'success',
+            message: `🎉 Robô na Nuvem Conectado 24h! WhatsApp: ${testData.connected ? 'Online (' + (testData.phoneNumber || 'Ativo') + ')' : 'Aguardando Pareamento'}`
+          });
+          return;
+        }
+      } catch (e) {}
+
+      setCloudUrlFeedback({
+        type: 'success',
+        message: 'URL da Nuvem salva com sucesso! (Se for no Render Free, ele pode levar cerca de 40s para acordar na primeira vez).'
+      });
+    } catch (e: any) {
+      setCloudUrlFeedback({ type: 'error', message: 'Erro ao salvar URL no banco central.' });
+    } finally {
+      setIsSavingCloudUrl(false);
+    }
+  };
+
   // Função para forçar a geração de um novo QR Code Oficial do WhatsApp Web
   const handleGenerateNewOfficialQr = async () => {
     setIsGeneratingQr(true);
@@ -252,8 +315,9 @@ export const WhatsAppTab: React.FC<WhatsAppTabProps> = ({
     localStorage.removeItem('kyro_second_phone_connected');
 
     try {
-      // Tenta via rota local ou proxy Vite
+      // Tenta via rota da nuvem, rota local ou proxy Vite
       const endpoints = ['/api/reset-qr', 'http://localhost:3001/api/reset-qr'];
+      if (cloudBotUrl) endpoints.unshift(`${cloudBotUrl.replace(/\/$/, '')}/api/reset-qr`);
       for (const ep of endpoints) {
         try {
           const res = await fetch(ep, { method: 'POST' });
@@ -295,27 +359,38 @@ export const WhatsAppTab: React.FC<WhatsAppTabProps> = ({
     }
 
     try {
-      const response = await fetch('http://localhost:3001/api/request-code', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phoneNumber: cleanNum })
-      });
+      const codeEndpoints = ['http://localhost:3001/api/request-code'];
+      if (cloudBotUrl) codeEndpoints.unshift(`${cloudBotUrl.replace(/\/$/, '')}/api/request-code`);
+      let successData = null;
+      for (const ep of codeEndpoints) {
+        try {
+          const response = await fetch(ep, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ phoneNumber: cleanNum })
+          });
+          const data = await response.json();
+          if (response.ok && (data.code || data.alreadyRegistered)) {
+            successData = data;
+            break;
+          }
+        } catch (e) {}
+      }
 
-      const data = await response.json();
-      if (response.ok && data.code) {
-        setPairingCode(data.code);
-        localStorage.setItem('kyro_pairing_code', data.code);
+      if (successData && successData.code) {
+        setPairingCode(successData.code);
+        localStorage.setItem('kyro_pairing_code', successData.code);
         localStorage.setItem('kyro_second_phone_number', cleanNum);
-        alert(`Código Oficial do WhatsApp Gerado: ${data.formattedCode || data.code}\n\nAgora vá no WhatsApp do seu celular > Aparelhos Conectados > Conectar com número de telefone e digite este código!`);
-      } else if (data.alreadyRegistered) {
+        alert(`Código Oficial do WhatsApp Gerado: ${successData.formattedCode || successData.code}\n\nAgora vá no WhatsApp do seu celular > Aparelhos Conectados > Conectar com número de telefone e digite este código!`);
+      } else if (successData && successData.alreadyRegistered) {
         setIsConnected(true);
         localStorage.setItem('kyro_second_phone_connected', 'true');
         alert('Este número já está conectado e online no sistema!');
       } else {
-        setCodeErrorMessage(data.error || 'Não foi possível gerar o código. Verifique se o iniciar_robo.bat está aberto.');
+        setCodeErrorMessage('Não foi possível gerar o código. Verifique se o servidor local ou da nuvem está ligado.');
       }
     } catch (err: any) {
-      setCodeErrorMessage('O Robô local não está ligado. Abra o arquivo iniciar_robo.bat para ligar o robô local.');
+      setCodeErrorMessage('O servidor do robô não está acessível no momento.');
     } finally {
       setIsRequestingCode(false);
     }
@@ -474,6 +549,98 @@ export const WhatsAppTab: React.FC<WhatsAppTabProps> = ({
           >
             Desconectar Aparelho
           </button>
+        )}
+      </div>
+
+      {/* ================= CARD HOSPEDAGEM 24H NA NUVEM (SEM DEPENDER DO PC) ================= */}
+      <div className="bg-gradient-to-r from-[#10172B] via-[#121B35] to-[#10172B] p-4 sm:p-5 rounded-2xl border border-sky-500/30 shadow-lg space-y-3.5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-xl bg-sky-500/15 text-sky-400 flex items-center justify-center font-bold flex-shrink-0 border border-sky-500/30">
+              <Cloud size={20} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="font-bold text-sm text-white flex items-center gap-1.5">
+                  Hospedagem 24h na Nuvem (Gratuita)
+                </h3>
+                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border flex items-center gap-1.5 ${
+                  cloudBotUrl
+                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                    : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                }`}>
+                  <span className={`h-1.5 w-1.5 rounded-full ${cloudBotUrl ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`}></span>
+                  {cloudBotUrl ? 'Modo Nuvem 24h Configurado' : 'Modo Computador Local (Porta 3001)'}
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400 mt-0.5">
+                Para o robô responder mesmo com o seu computador desligado, informe a URL do seu serviço gratuito no Render / Koyeb.
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setShowCloudGuide(!showCloudGuide)}
+            className="text-[11px] text-sky-400 hover:text-sky-300 font-semibold flex items-center gap-1 self-start sm:self-center px-3 py-1.5 rounded-lg bg-sky-500/10 border border-sky-500/25 transition-all"
+          >
+            <span>Como hospedar grátis no Render</span>
+            {showCloudGuide ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+          </button>
+        </div>
+
+        {/* Input da URL da Nuvem */}
+        <div className="flex flex-col sm:flex-row gap-2 pt-1">
+          <div className="relative flex-1">
+            <Globe size={15} className="absolute left-3.5 top-3 text-slate-500" />
+            <input
+              type="url"
+              value={cloudBotUrl}
+              onChange={(e) => setCloudBotUrl(e.target.value)}
+              placeholder="Ex: https://kyro-whatsapp-bot.onrender.com"
+              className="w-full bg-[#080B14] border border-[#202940] rounded-xl pl-9 pr-4 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-sky-500 font-mono"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={handleSaveAndTestCloudBot}
+            disabled={isSavingCloudUrl}
+            className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-gradient-to-r from-sky-600 to-teal-600 hover:brightness-110 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md disabled:opacity-50 transition-all whitespace-nowrap"
+          >
+            {isSavingCloudUrl ? <RefreshCw size={14} className="animate-spin" /> : <CheckCheck size={14} />}
+            <span>Salvar & Conectar Nuvem 24h</span>
+          </button>
+        </div>
+
+        {cloudUrlFeedback && (
+          <div className={`p-3 rounded-xl text-xs font-semibold flex items-center gap-2 border ${
+            cloudUrlFeedback.type === 'success'
+              ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
+              : 'bg-rose-500/15 border-rose-500/30 text-rose-300'
+          }`}>
+            <CheckCircle2 size={15} className="flex-shrink-0" />
+            <span>{cloudUrlFeedback.message}</span>
+          </div>
+        )}
+
+        {/* Guia Didático de 3 Minutos para o Render.com */}
+        {showCloudGuide && (
+          <div className="p-4 rounded-xl bg-[#090D18] border border-sky-500/20 text-xs text-slate-300 space-y-2.5 animate-in fade-in">
+            <strong className="text-white block font-bold text-xs flex items-center gap-1.5">
+              🚀 Como subir o Robô de graça no Render.com (Passo a Passo de 3 Minutos):
+            </strong>
+            <ol className="list-decimal list-inside space-y-1.5 text-slate-300 text-[11px] leading-relaxed">
+              <li>Acesse <a href="https://render.com" target="_blank" rel="noreferrer" className="text-sky-400 underline font-semibold">render.com</a> e faça login com sua conta do GitHub (<strong className="text-white">Wisterly</strong>).</li>
+              <li>No painel do Render, clique em <strong className="text-white">New +</strong> e escolha <strong className="text-emerald-400">Web Service</strong>.</li>
+              <li>Selecione o seu repositório <strong className="text-white font-mono">Wisterly/kyro-finance</strong>.</li>
+              <li>O Render detectará o arquivo <strong className="text-amber-400 font-mono">render.yaml</strong> e o plano <strong className="text-emerald-400">Free</strong> automaticamente!</li>
+              <li>Clique em <strong className="text-white">Deploy Web Service</strong>. Em cerca de 2 minutos ele estará ativo!</li>
+              <li>Copie o link gerado pelo Render (ex: <code className="text-amber-300 bg-black/40 px-1 py-0.5 rounded">https://kyro-whatsapp-bot.onrender.com</code>), cole no campo acima e clique em <strong className="text-white">Salvar & Conectar Nuvem 24h</strong>.</li>
+            </ol>
+            <p className="text-[10px] text-emerald-400/90 font-medium pt-1">
+              💡 As credenciais do seu WhatsApp e o grupo Finanças KYRO já estão sincronizados no banco de dados. Quando o servidor no Render ligar, ele conectará automaticamente sem precisar de novo QR Code!
+            </p>
+          </div>
         )}
       </div>
 

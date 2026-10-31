@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: kyro-whatsapp-bot
+    runtime: node
+    plan: free
+    region: oregon
+    buildCommand: npm install --legacy-peer-deps
+    startCommand: node bot.cjs
+    envVars:
+      - key: NODE_VERSION
+        value: 20.10.0
+      - key: BOT_PORT
+        value: "10000"
+      - key: REMOTE_WEBHOOK_URL
+        value: https://kyro-finance.vercel.app/api/webhook

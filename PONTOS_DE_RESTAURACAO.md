@@ -591,13 +591,48 @@ A numeração segue rigorosamente a hierarquia de escopo:
 
 ---
 
+### [PR.022] — Robô WhatsApp 24h na Nuvem Gratuita (Render/Koyeb/Docker) + Auto-Ping Anti-Hibernação + Backup Remoto de Sessão
+- **Data/Hora:** 2026-10-31 02:00 (UTC-3)
+- **Tags Git:** `PR.022`, `PR.022.1`, `PR.022.2`
+
+#### `PR.022` — Escopo Geral do Projeto (Universal)
+- **Arquitetura de Nuvem Gratuita 24h para o Robô do WhatsApp:**
+  - Desacoplamento da dependência de manter o computador pessoal ligado ou rodando o servidor de desenvolvimento.
+  - Criação da infraestrutura pronta para deploy gratuito em 1 clique via `render.yaml` (Render.com Web Service Free) e `Dockerfile` multi-plataforma (Koyeb, Railway, HuggingFace Spaces).
+  - Porta dinâmica HTTP via `process.env.PORT || process.env.BOT_PORT || 3001` e healthcheck nativo `/api/health`.
+- **Mecanismo Anti-Hibernação Inteligente (Keep-Alive):**
+  - Implementação de auto-ping programado a cada 9 minutos no próprio endpoint `/api/health` quando a variável de ambiente `CLOUD_BOT_URL` estiver configurada.
+  - Elimina a suspensão de inatividade padrão de 15 minutos dos planos gratuitos de nuvem, mantendo a conexão do WhatsApp Web (Baileys) ativa 24 horas por dia e 7 dias por semana sem nenhum custo.
+- **Persistência Remota de Sessão do WhatsApp (Anti-Logout em Nuvem Efêmera):**
+  - Rotina de backup automático `syncBaileysCredsToCloud()` e restauração remota `restoreBaileysCredsFromCloud()`.
+  - O arquivo crítico de autenticação criptografada (`creds.json`) é salvo no banco central da nuvem (`/api/database` com ação `save_baileys_creds`).
+  - Quando a instância da nuvem é reiniciada ou transferida de container, ela puxa as credenciais da nuvem e restabelece a conexão com o WhatsApp sem solicitar novo escaneamento de QR Code.
+- **Sincronização Contínua de Transações:**
+  - O robô na nuvem processa mensagens de texto, áudio e fotos no grupo `"Finanças KYRO"`, grava no banco central da nuvem e o frontend consome em tempo real via polling paralelo (`${cloudBotUrl}/api/transactions`).
+
+#### `PR.022.1` — Versão Computador (Desktop)
+- **Painel de Hospedagem 24h no WhatsAppTab:**
+  - Card dedicado no topo da aba *"WhatsApp & IA"* com indicador visual de status (Conectado / Desconectado), campo para salvar a URL do bot da nuvem e botão de teste de conectividade imediato.
+  - Guia didático passo a passo de 3 minutos para conectar o repositório GitHub ao Render.com gratuitamente.
+
+#### `PR.022.2` — Versão Celular (Aplicativo Android `.apk` & Mobile)
+- **Operação 100% Autônoma no Celular:**
+  - O usuário pode enviar áudios, comprovantes em foto e textos para o grupo do WhatsApp no celular com o computador totalmente desligado.
+  - A resposta automática com o filtro e a inserção imediata nos lançamentos do app mobile ocorrem diretamente pela nuvem.
+  - Interface do card de nuvem e testes com suporte touch responsivo no smartphone.
+
+---
+
 ## TABELA DE CÓDIGOS DE PONTOS DE RESTAURAÇÃO
 
 Se você desejar restaurar qualquer versão anterior ou atual do Kyro Finance, basta colar o código do ponto de restauração na conversa:
 
 | Código do Ponto | Escopo | Descrição Resumida |
 | :--- | :--- | :--- |
-| **`PR.021`** | **Geral (Universal)** | **Versão Atual: Blindagem Absoluta de Dados Financeiros (Anti-Reset) & Auto-Update Dinâmico em Tempo Real com Pop-up Durante o Uso** |
+| **`PR.022`** | **Geral (Universal)** | **Versão Atual: Robô WhatsApp 24h na Nuvem Gratuita (Render/Koyeb/Docker) + Auto-Ping Anti-Hibernação + Backup Remoto de Sessão** |
+| `PR.022.1` | Desktop | Interface Web/Desktop com painel de status da nuvem, teste de conectividade e guia passo a passo |
+| `PR.022.2` | Mobile / APK | Aplicativo Android 100% autônomo com computador desligado, sincronia 24h do grupo WhatsApp e persistência |
+| **`PR.021`** | **Geral (Universal)** | Blindagem Absoluta de Dados Financeiros (Anti-Reset) & Auto-Update Dinâmico em Tempo Real com Pop-up Durante o Uso |
 | `PR.021.1` | Desktop | Interface Web/Desktop com persistência blindada, re-hidratação de nuvem e sincronização contínua 24h |
 | `PR.021.2` | Mobile / APK | Aplicativo Android com pop-up automático durante o uso (45s/retorno), checagem nativa via PackageManager e zero perda de lançamentos |
 | **`PR.020`** | **Geral (Universal)** | Correção Definitiva de Áudio no Celular (Fim da Repetição de Palavras + MediaRecorder Real Unificado + Gemini 1.5 Flash Multimodal) |

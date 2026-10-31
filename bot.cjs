@@ -21,7 +21,7 @@ const http = require('http');
 const https = require('https');
 const fs = require('fs');
 
-const HTTP_PORT = process.env.BOT_PORT || 3001;
+const HTTP_PORT = process.env.PORT || process.env.BOT_PORT || 3001;
 const REMOTE_WEBHOOK_URL = 'https://kyro-finance.vercel.app/api/webhook';
 const LOCAL_WEBHOOK_URL = 'http://localhost:3000/api/webhook';
 
@@ -33,6 +33,22 @@ const fastAxios = axios.create({
   httpsAgent,
   timeout: 4500
 });
+
+// Auto-ping anti-sleep para manter hospedagens gratuitas (como Render ou Koyeb) 100% acordadas 24h/dia
+const CLOUD_BOT_URL = process.env.RENDER_EXTERNAL_URL || process.env.BOT_PUBLIC_URL || process.env.SERVER_URL || '';
+if (CLOUD_BOT_URL) {
+  console.log(`🌐 [Nuvem 24h] URL pública detectada: ${CLOUD_BOT_URL}. Ativando auto-ping a cada 9 min para manter acordado.`);
+  setInterval(() => {
+    fastAxios.get(`${CLOUD_BOT_URL.replace(/\/$/, '')}/api/health`).catch(() => {});
+  }, 9 * 60 * 1000);
+
+  setTimeout(() => {
+    fastAxios.post('https://kyro-finance.vercel.app/api/database', {
+      action: 'save_bot_url',
+      botServerUrl: CLOUD_BOT_URL
+    }).catch(() => {});
+  }, 3000);
+}
 
 // Clientes conectados via Server-Sent Events (SSE) para atualização em 0ms no navegador
 const sseClients = new Set();
@@ -1122,11 +1138,53 @@ async function forceResetAndGenerateNewQr() {
   await startSocket();
 }
 
+// Sincronização e Restauração de Sessão Baileys para Nuvem 24h sem perder conexão
+async function syncBaileysCredsToCloud() {
+  const authFolder = path.join(__dirname, 'auth_info_baileys');
+  const credsFile = path.join(authFolder, 'creds.json');
+  if (fs.existsSync(credsFile)) {
+    try {
+      const credsRaw = fs.readFileSync(credsFile, 'utf-8');
+      await fastAxios.post('https://kyro-finance.vercel.app/api/database', {
+        action: 'save_baileys_creds',
+        creds: credsRaw
+      });
+      console.log('☁️ [Nuvem 24h] Backup das credenciais do WhatsApp salvo no banco central.');
+    } catch (e) {
+      console.warn('[Nuvem 24h] Aviso ao sincronizar credenciais:', e.message);
+    }
+  }
+}
+
+async function restoreBaileysCredsFromCloud() {
+  const authFolder = path.join(__dirname, 'auth_info_baileys');
+  const credsFile = path.join(authFolder, 'creds.json');
+  if (!fs.existsSync(credsFile)) {
+    try {
+      console.log('☁️ [Nuvem 24h] Verificando se há credenciais salvas no banco central...');
+      const res = await fastAxios.post('https://kyro-finance.vercel.app/api/database', {
+        action: 'get_baileys_creds'
+      });
+      if (res.data?.hasCreds && res.data?.creds) {
+        if (!fs.existsSync(authFolder)) fs.mkdirSync(authFolder, { recursive: true });
+        const credsContent = typeof res.data.creds === 'string' ? res.data.creds : JSON.stringify(res.data.creds);
+        fs.writeFileSync(credsFile, credsContent, 'utf-8');
+        console.log('✅ [Nuvem 24h] Credenciais do WhatsApp restauradas da nuvem com sucesso! Conectando sem QR Code.');
+      }
+    } catch (e) {
+      console.warn('[Nuvem 24h] Nenhuma credencial remota encontrada:', e.message);
+    }
+  }
+}
+
 async function startSocket() {
   const authFolder = path.join(__dirname, 'auth_info_baileys');
   if (!fs.existsSync(authFolder)) {
     fs.mkdirSync(authFolder, { recursive: true });
   }
+
+  // Tenta restaurar credenciais da nuvem se for a primeira vez no servidor gratuito
+  await restoreBaileysCredsFromCloud();
 
   const { state, saveCreds } = await useMultiFileAuthState(authFolder);
   const { version } = await fetchLatestBaileysVersion();
@@ -1154,7 +1212,10 @@ async function startSocket() {
 
   sockInstance = sock;
 
-  sock.ev.on('creds.update', saveCreds);
+  sock.ev.on('creds.update', async () => {
+    await saveCreds();
+    syncBaileysCredsToCloud();
+  });
 
   // Atualiza o cache de metadados EXCLUSIVAMENTE do grupo oficial Finanças KYRO
   sock.ev.on('groups.update', async (updates) => {
@@ -1184,6 +1245,7 @@ async function startSocket() {
       botStatus.error = null;
       botStatus.phoneNumber = sock.user?.id?.split(':')[0] || 'Conectado';
       console.log(`🎉 [WhatsApp] CONECTADO COM SUCESSO! Número: ${botStatus.phoneNumber}`);
+      syncBaileysCredsToCloud();
 
       // Carrega a lista de todos os grupos onde este número é membro e resolve o link salvo
       setTimeout(async () => {
@@ -1485,6 +1547,19 @@ const server = http.createServer(async (req, res) => {
   }
 
   const url = new URL(req.url, `http://localhost:${HTTP_PORT}`);
+
+  // Endpoint 0.0: Healthcheck para Render, Koyeb, Railway e Nuvem 24h
+  if ((url.pathname === '/api/health' || url.pathname === '/healthz' || url.pathname === '/ping') && req.method === 'GET') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify({
+      status: 'ok',
+      uptime: Math.round(process.uptime()),
+      connected: botStatus.connected,
+      phoneNumber: botStatus.phoneNumber,
+      monitoredGroup: monitoredGroup.groupName,
+      timestamp: Date.now()
+    }));
+  }
 
   // Endpoint 0: Stream em Tempo Real Server-Sent Events (SSE) — Entrega em 0ms ao Navegador
   if (url.pathname === '/api/stream' && req.method === 'GET') {
