@@ -2690,97 +2690,104 @@ export default function App() {
         }
       }
 
-      // 2. Captura limpa do microfone físico (estilo WhatsApp)
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        audio: { 
-          echoCancellation: true, 
-          noiseSuppression: true, 
-          autoGainControl: true,
-          channelCount: 1,
-          sampleRate: 48000
-        } 
-      });
-      audioStreamRef.current = stream;
-
-      const recorder = selectedMimeType 
-        ? new MediaRecorder(stream, { mimeType: selectedMimeType })
-        : new MediaRecorder(stream);
-
-      audioChunksRef.current = [];
-      recorder.ondataavailable = (e) => {
-        if (e.data && e.data.size > 0) audioChunksRef.current.push(e.data);
-      };
-
-      recorder.onstop = async () => {
-        const mime = selectedMimeType || recorder.mimeType || 'audio/webm';
-        const audioBlob = new Blob(audioChunksRef.current, { type: mime });
-        const audioUrl = URL.createObjectURL(audioBlob);
-        stream.getTracks().forEach(track => track.stop());
-        audioStreamRef.current = null;
-
-        let finalText = cleanAndDeduplicateTranscript(recordedTextRef.current || liveAudioTranscript || inputMessage);
-
-        // Extrai Base64 do áudio para envio multimodal
-        let audioBase64 = '';
-        if (audioBlob.size > 200) {
-          try {
-            const reader = new FileReader();
-            const base64Promise = new Promise<string>((resolve) => {
-              reader.onload = () => resolve(reader.result as string);
-              reader.onerror = () => resolve('');
-            });
-            reader.readAsDataURL(audioBlob);
-            audioBase64 = await base64Promise;
-          } catch (e) {}
-        }
-
-        const tempMsgId = `temp_audio_${Date.now()}`;
-        setMessages(prev => [...prev, {
-          id: tempMsgId,
-          sender: 'user',
-          text: finalText ? `🎙️ "${finalText}"` : '🎙️ [Áudio de Voz]: Interpretando e filtrando com IA...',
-          audioUrl,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        }]);
-
-        setInputMessage('');
-        setLiveAudioTranscript('');
-        setIsAiLoading(true);
-
-        // Se ainda não tivermos o texto transcrito no cliente, transcrevemos via IA
-        if (!finalText && audioBase64) {
-          try {
-            const res = await executeApiCall('/api/transcribe', {
-              audioBase64,
-              mimeType: mime,
-              geminiApiKey: geminiApiKey || undefined,
-              groqApiKey: groqApiKey || undefined
-            });
-
-            if (res && res.ok) {
-              const data = await res.json().catch(() => null);
-              if (data?.success && data?.text) {
-                finalText = cleanAndDeduplicateTranscript(data.text);
-                setMessages(prev => prev.map(m => m.id === tempMsgId ? { ...m, text: `🎙️ "${finalText}"` } : m));
-              }
-            }
-          } catch (err) {
-            console.warn('[Audio Transcribe Error]:', err);
-          }
-        }
-
-        await handleProcessUserInteraction({
-          type: 'audio',
-          text: finalText || 'Por favor analise este áudio e realize o lançamento ou comando financeiro.',
-          audioUrl,
-          audioBase64,
-          audioMimeType: mime,
-          replaceMessageId: tempMsgId
+      // 2. Captura do fluxo de áudio físico (estilo WhatsApp) com cancelamento de ruído
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+          audio: { 
+            echoCancellation: true, 
+            noiseSuppression: true, 
+            autoGainControl: true, 
+            channelCount: 1, 
+            sampleRate: 48000 
+          } 
         });
-      };
+        audioStreamRef.current = stream;
 
-      recorder.start(250);
-      mediaRecorderRef.current = recorder;
+        const recorder = selectedMimeType 
+          ? new MediaRecorder(stream, { mimeType: selectedMimeType })
+          : new MediaRecorder(stream);
+
+        audioChunksRef.current = [];
+        recorder.ondataavailable = (e) => {
+          if (e.data && e.data.size > 0) audioChunksRef.current.push(e.data);
+        };
+
+        recorder.onstop = async () => {
+          const mime = selectedMimeType || recorder.mimeType || 'audio/webm';
+          const audioBlob = new Blob(audioChunksRef.current, { type: mime });
+          const audioUrl = URL.createObjectURL(audioBlob);
+          stream.getTracks().forEach(track => track.stop());
+          audioStreamRef.current = null;
+
+          let finalText = cleanAndDeduplicateTranscript(recordedTextRef.current || liveAudioTranscript || inputMessage);
+
+          // Extrai Base64 do áudio para envio multimodal
+          let audioBase64 = '';
+          if (audioBlob.size > 200) {
+            try {
+              const reader = new FileReader();
+              const base64Promise = new Promise<string>((resolve) => {
+                reader.onload = () => resolve(reader.result as string);
+                reader.onerror = () => resolve('');
+              });
+              reader.readAsDataURL(audioBlob);
+              audioBase64 = await base64Promise;
+            } catch (e) {}
+          }
+
+          const tempMsgId = `temp_audio_${Date.now()}`;
+          setMessages(prev => [...prev, {
+            id: tempMsgId,
+            sender: 'user',
+            text: finalText ? `🎙️ "${finalText}"` : '🎙️ [Áudio de Voz]: Interpretando e filtrando com IA...',
+            audioUrl,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          }]);
+
+          setInputMessage('');
+          setLiveAudioTranscript('');
+          setIsAiLoading(true);
+
+          // Se ainda não tivermos o texto transcrito no cliente, transcrevemos via IA
+          if (!finalText && audioBase64) {
+            try {
+              const res = await executeApiCall('/api/transcribe', {
+                audioBase64,
+                mimeType: mime,
+                geminiApiKey: geminiApiKey || undefined,
+                groqApiKey: groqApiKey || undefined
+              });
+
+              if (res && res.ok) {
+                const data = await res.json().catch(() => null);
+                if (data?.success && data?.text) {
+                  finalText = cleanAndDeduplicateTranscript(data.text);
+                  setMessages(prev => prev.map(m => m.id === tempMsgId ? { ...m, text: `🎙️ "${finalText}"` } : m));
+                }
+              }
+            } catch (err) {
+              console.warn('[Audio Transcribe Error]:', err);
+            }
+          }
+
+          await handleProcessUserInteraction({
+            type: 'audio',
+            text: finalText || 'Por favor analise este áudio e realize o lançamento ou comando financeiro.',
+            audioUrl,
+            audioBase64,
+            audioMimeType: mime,
+            replaceMessageId: tempMsgId
+          });
+        };
+
+        recorder.start(250);
+        mediaRecorderRef.current = recorder;
+      } catch (streamErr) {
+        console.warn('[MediaRecorder Capture Info]:', streamErr);
+        if (!nativeSpeechActive && !speechRecognitionRef.current) {
+          throw streamErr;
+        }
+      }
 
       setIsRecordingAudio(true);
       setAudioRecordingTime(0);
