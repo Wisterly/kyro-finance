@@ -7,6 +7,7 @@ export interface UpdateInfo {
   buildNumber: number;
   publishedAt: string;
   apkUrl: string;
+  apkFileName?: string;
   apkSize: string;
   changelog: string[];
 }
@@ -105,9 +106,16 @@ export const UpdateModal: React.FC<UpdateModalProps> = ({
           </div>
         </div>
 
-        <p className="text-xs text-slate-300 mb-4 leading-relaxed">
+        <p className="text-xs text-slate-300 mb-3 leading-relaxed">
           Uma nova versão otimizada do aplicativo está pronta para ser instalada no seu celular.
         </p>
+
+        {updateInfo.apkFileName && (
+          <div className="mb-4 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 flex items-center justify-between text-[11px] text-slate-300">
+            <span className="text-slate-400">Pacote GitHub:</span>
+            <code className="text-amber-300 font-mono font-semibold">{updateInfo.apkFileName}</code>
+          </div>
+        )}
 
         {/* Novidades da versão */}
         {updateInfo.changelog && updateInfo.changelog.length > 0 && (

@@ -1,10 +1,11 @@
 // Metadados Centrais de Versão e Auto-Update do KYRO Finance
-export const APP_VERSION = '0.1.27';
-export const APP_BUILD = 27;
+export const APP_VERSION = '1.28';
+export const APP_BUILD = 28;
 
 export const APP_CHANGELOG = [
-  'Blindagem e persistência definitiva de cartões de crédito e dívidas recorrentes na nuvem (Firestore, Render e Central DB)',
-  'Eliminação total da reinjeção de cartões fictícios (Nubank, Inter, Itaú) e dívidas de exemplo com falsos alertas de atraso',
-  'Sincronização bidirecional de exclusões, criações e baixas de faturas e parcelamentos entre celular, desktop e nuvem',
-  'Preservação integral e permanente das configurações do usuário mesmo após desinstalação ou acesso em novo navegador'
+  'Identificação inteligente da versão exata dos arquivos na pasta de downloads do GitHub (Releases)',
+  'Publicação do APK com o nome expressando a versão (KYRO-Finance-1.28.apk)',
+  'Comparação fidedigna entre o aplicativo instalado e a última versão disponível no GitHub',
+  'Download e atualização automática do novo aplicativo sem necessidade de desinstalar',
+  'Aviso informativo preciso quando o aplicativo já se encontra na versão mais recente'
 ];

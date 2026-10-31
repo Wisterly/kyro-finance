@@ -54,20 +54,25 @@ jobs:
       - name: Compilar APK Otimizado (Debug e Release Assinados)
         working-directory: ./android
         run: |
-          BUILD_CODE=$(node -p "require('../version.json').buildNumber || 21")
-          VERSION_NAME=$(node -p "require('../version.json').version || '0.1.21'")
+          BUILD_CODE=$(node -p "require('../version.json').buildNumber || 28")
+          VERSION_NAME=$(node -p "require('../version.json').version || '1.28'")
           echo "Compilando KYRO Finance com versionCode=$BUILD_CODE versionName=$VERSION_NAME"
+          echo "BUILD_CODE=$BUILD_CODE" >> $GITHUB_ENV
+          echo "VERSION_NAME=$VERSION_NAME" >> $GITHUB_ENV
           ./gradlew assembleDebug assembleRelease -PversionCode=$BUILD_CODE -PversionName="$VERSION_NAME"
           cp app/build/outputs/apk/release/app-release.apk ../KYRO-Finance.apk
+          cp app/build/outputs/apk/release/app-release.apk ../KYRO-Finance-${VERSION_NAME}.apk
+          cp app/build/outputs/apk/release/app-release.apk ../KYRO-Finance-1.${BUILD_CODE}.apk
+          cp app/build/outputs/apk/release/app-release.apk ../KYRO-Finance-v1.${BUILD_CODE}.apk
           cp app/build/outputs/apk/debug/app-debug.apk ../KYRO-Finance-debug.apk
+          cp app/build/outputs/apk/debug/app-debug.apk ../KYRO-Finance-${VERSION_NAME}-debug.apk
 
       - name: Disponibilizar KYRO-Finance.apk na aba Actions
         uses: actions/upload-artifact@v4
         with:
           name: KYRO-Finance-APK
           path: |
-            KYRO-Finance.apk
-            KYRO-Finance-debug.apk
+            KYRO-Finance*.apk
           if-no-files-found: error
 
       - name: Publicar APK pronto para download direto em Releases
@@ -75,15 +80,16 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: apk-latest
-          name: "📱 KYRO Finance - Aplicativo Android (Última Versão)"
+          name: "📱 KYRO Finance v${{ env.VERSION_NAME }} (Build ${{ env.BUILD_CODE }})"
           body: |
             ### 🚀 Aplicativo Oficial Android — KYRO | Private Finance
-            - **Download Direto no Celular:** Clique em **`KYRO-Finance.apk`** abaixo para baixar e instalar diretamente no seu celular Android (sem precisar descompactar `.zip`).
+            - **Download da Versão Atualizada:** Baixe o arquivo **`KYRO-Finance-1.${{ env.BUILD_CODE }}.apk`** abaixo para instalar ou atualizar diretamente no seu celular Android.
+            - **Versão:** v${{ env.VERSION_NAME }} (Build ${{ env.BUILD_CODE }})
             - **Sincronização 24h:** Conectado automaticamente ao banco central e WhatsApp na Vercel (`https://kyro-finance.vercel.app`).
             - **Carregamento Instantâneo:** Interface empacotada nativamente na memória do aparelho.
           files: |
             KYRO-Finance.apk
-            KYRO-Finance-debug.apk
+            KYRO-Finance-*.apk
           prerelease: false
           make_latest: true
         env:

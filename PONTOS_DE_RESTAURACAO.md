@@ -648,6 +648,34 @@ A numeração segue rigorosamente a hierarquia de escopo:
 
 ---
 
+### [PR.028] — Auto-Update Inteligente via Releases do GitHub (Nome de Arquivo Versionado `KYRO-Finance-1.XX.apk` + Detecção Precisa de Atualização In-App)
+- **Data/Hora:** 2026-10-31 06:10 (UTC-3)
+- **Tags Git:** `PR.028`, `PR.028.1`, `PR.028.2`
+
+#### `PR.028` — Escopo Geral do Projeto (Universal)
+- **Publicação Automatizada de APK Versionado no GitHub Releases:**
+  - O pipeline do GitHub Actions (`android-build.yml`) agora compila e publica arquivos nomeados expressamente com o número da versão (ex: `KYRO-Finance-1.28.apk` e `KYRO-Finance-v1.28.apk`), além de manter o link genérico `KYRO-Finance.apk`.
+  - A aba de Releases do GitHub (pasta de downloads) agora expõe de forma limpa o pacote exato correspondente a cada build.
+- **Leitor Semântico e Inspeção Inteligente na Pasta de Downloads do GitHub:**
+  - Implementado o extrator dinâmico `extractVersionFromFileName` em `src/utils/appUpdater.ts` e `api/app-version.ts`, capaz de inspecionar os assets da Release oficial (`apk-latest`) e listar o pacote de maior versão.
+  - Consulta multi-camadas de alta resiliência: API oficial do GitHub Releases + API Vercel (`https://kyro-finance.vercel.app/api/app-version` com URL absoluta, garantindo funcionamento tanto no navegador quanto dentro do WebView móvel do Android) + `version.json` com cache-busting.
+- **Comparação Fidedigna e Fim do Falso Positivo "Já Atualizado":**
+  - Resolvido o erro em que falhas de rede no WebView relativo (`/api/app-version`) caíam no fallback e exibiam incorretamente que o usuário estava na versão mais recente.
+  - Implementada a função `checkUpdateDetailed()` que compara matematicamente a versão instalada no aparelho (`versionCode` e `versionName`) com o arquivo disponível na pasta de downloads do GitHub.
+  - Se a versão instalada for anterior à do GitHub, abre o pop-up com o nome real do arquivo (`KYRO-Finance-1.28.apk`) e permite download e instalação imediata com 1 toque.
+  - Se a versão for a mesma, informa com clareza o pacote verificado e confirma que o aplicativo já se encontra 100% atualizado.
+
+#### `PR.028.1` — Versão Computador (Desktop)
+- Menu de Configurações com verificação direta via API do GitHub Releases exibindo o nome do arquivo publicado e link de download.
+- Sincronização automática de dados e metadados de versão com a Vercel 24h.
+
+#### `PR.028.2` — Versão Celular (Aplicativo Android `.apk` & Mobile)
+- Aplicativo Android com leitura nativa da versão via `@capacitor/app` e `AppUpdateManagerPlugin` nativo (`PackageManager`).
+- Botão "Verificar Atualização" executando varredura na pasta de downloads do GitHub com URL absoluta e comparador semântico de versão.
+- Download direto via `DownloadManager` do Android e acionamento do instalador do sistema preservando integralmente o banco de dados e as configurações locais.
+
+---
+
 ### [PR.027] — Blindagem Absoluta de Cartões e Dívidas Recorrentes na Nuvem (Anti-Reset) + Eliminação Definitiva de Avisos de Dívidas Atrasadas e Cartões Fantasma
 - **Data/Hora:** 2026-10-31 05:45 (UTC-3)
 - **Tags Git:** `PR.027`, `PR.027.1`, `PR.027.2`
@@ -761,7 +789,10 @@ Se você desejar restaurar qualquer versão anterior ou atual do Kyro Finance, b
 
 | Código do Ponto | Escopo | Descrição Resumida |
 | :--- | :--- | :--- |
-| **`PR.027`** | **Geral (Universal)** | **Versão Atual: Blindagem Absoluta de Cartões e Dívidas Recorrentes na Nuvem (Anti-Reset) + Fim de Falsos Alertas de Atraso** |
+| **`PR.028`** | **Geral (Universal)** | **Versão Atual: Auto-Update Inteligente via Releases do GitHub (Nome de Arquivo Versionado `KYRO-Finance-1.XX.apk` + Detecção Precisa In-App)** |
+| `PR.028.1` | Desktop | Interface Web/Desktop com inspeção direta de assets do GitHub e download do APK versionado |
+| `PR.028.2` | Mobile / APK | Aplicativo Android com leitura nativa de versão, inspeção na pasta de downloads do GitHub e atualização com 1 toque |
+| **`PR.027`** | **Geral (Universal)** | Blindagem Absoluta de Cartões e Dívidas Recorrentes na Nuvem (Anti-Reset) + Fim de Falsos Alertas de Atraso |
 | `PR.027.1` | Desktop | Interface Web/Desktop com persistência em tempo real no Firestore e sincronização bidirecional de cartões e parcelamentos |
 | `PR.027.2` | Mobile / APK | Aplicativo Android com dados blindados contra reinstalação, zero ressurreição de dívidas e sem pop-ups indevidos |
 | **`PR.026`** | **Geral (Universal)** | IA Multimodal de Alta Precisão (Google Gemini Audio) + Fim das Repetições de Voz no Chat + Extração Perfeita (Personal, Pix, Teresina) |

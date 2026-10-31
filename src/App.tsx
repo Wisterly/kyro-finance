@@ -83,7 +83,7 @@ import {
   searchTransactionsByTerm
 } from './utils/aiCopilot';
 import { UpdateModal, UpdateInfo } from './components/UpdateModal';
-import { checkForAppUpdate, getInstalledAppInfo, CURRENT_APP_BUILD, CURRENT_APP_VERSION } from './utils/appUpdater';
+import { checkForAppUpdate, checkUpdateDetailed, getInstalledAppInfo, CURRENT_APP_BUILD, CURRENT_APP_VERSION } from './utils/appUpdater';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'transacoes' | 'orcamentos' | 'mapa' | 'relatorios' | 'whatsapp' | 'configuracoes' | 'cartoes'>('dashboard');
@@ -1108,15 +1108,17 @@ export default function App() {
   const handleManualCheckUpdate = async () => {
     setIsCheckingUpdateManual(true);
     try {
-      const installed = await getInstalledAppInfo();
-      const info = await checkForAppUpdate();
-      if (info) {
-        setAvailableUpdate(info);
+      const detailed = await checkUpdateDetailed();
+      if (detailed.hasUpdate && detailed.updateInfo) {
+        setAvailableUpdate(detailed.updateInfo);
+      } else if (detailed.errorMessage) {
+        alert(`⚠️ Não foi possível verificar no GitHub: ${detailed.errorMessage}\n\nVerifique sua conexão à internet e tente novamente.`);
       } else {
-        alert(`✅ Você já está usando a versão mais recente do KYRO Finance (v${installed.versionName} • Build ${installed.buildNumber})!`);
+        const pkgName = detailed.remoteInfo?.apkFileName ? `\n• Pacote no GitHub: ${detailed.remoteInfo.apkFileName}` : '';
+        alert(`✅ Você já está usando a versão mais recente do KYRO Finance!\n\n• Versão Instalada: v${detailed.installedInfo.versionName} (Build ${detailed.installedInfo.buildNumber})${pkgName}\n\nNenhuma atualização pendente.`);
       }
-    } catch {
-      alert('Não foi possível verificar atualizações no momento.');
+    } catch (err: any) {
+      alert(`⚠️ Erro ao consultar atualizações: ${err?.message || 'Verifique sua conexão'}`);
     } finally {
       setIsCheckingUpdateManual(false);
     }
