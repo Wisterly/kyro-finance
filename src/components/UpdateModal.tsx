@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Sparkles, Download, CheckCircle2, X, RefreshCw, Smartphone } from 'lucide-react';
 import { isRunningInNativeApk } from '../nativeBridge';
 
@@ -26,31 +26,79 @@ export const UpdateModal: React.FC<UpdateModalProps> = ({
   onClose
 }) => {
   const [isUpdating, setIsUpdating] = useState(false);
+  const [downloadPercent, setDownloadPercent] = useState<number>(-1);
   const [updateStatusText, setUpdateStatusText] = useState<string | null>(null);
+
+  useEffect(() => {
+    let progressSub: any = null;
+    let compSub: any = null;
+    let errSub: any = null;
+
+    const setupListeners = async () => {
+      try {
+        const cap = (window as any).Capacitor;
+        const appUpdateManager = cap?.Plugins?.AppUpdateManager;
+        if (appUpdateManager && isRunningInNativeApk()) {
+          progressSub = await appUpdateManager.addListener('downloadProgress', (data: any) => {
+            if (typeof data?.percent === 'number' && data.percent >= 0) {
+              setDownloadPercent(data.percent);
+              setUpdateStatusText(`Baixando atualização: ${data.percent}% concluído...`);
+            } else if (data?.downloaded && data?.total) {
+              const mbDown = (data.downloaded / (1024 * 1024)).toFixed(1);
+              const mbTotal = (data.total / (1024 * 1024)).toFixed(1);
+              setUpdateStatusText(`Baixando: ${mbDown} MB de ${mbTotal} MB...`);
+            }
+          });
+
+          compSub = await appUpdateManager.addListener('downloadCompleted', () => {
+            setDownloadPercent(100);
+            setUpdateStatusText('Download 100% concluído! Abrindo instalador do Android...');
+          });
+
+          errSub = await appUpdateManager.addListener('downloadError', (data: any) => {
+            console.warn('[AutoUpdate] Erro no download nativo:', data);
+            setUpdateStatusText('Abrindo download seguro no navegador...');
+            setTimeout(() => {
+              window.open(updateInfo.apkUrl, '_blank');
+              onClose();
+            }, 1200);
+          });
+        }
+      } catch (e) {}
+    };
+
+    setupListeners();
+
+    return () => {
+      if (progressSub && typeof progressSub.remove === 'function') progressSub.remove();
+      if (compSub && typeof compSub.remove === 'function') compSub.remove();
+      if (errSub && typeof errSub.remove === 'function') errSub.remove();
+    };
+  }, [updateInfo, onClose]);
 
   const handleStartUpdate = async () => {
     setIsUpdating(true);
-    setUpdateStatusText('Iniciando download do pacote...');
+    setDownloadPercent(0);
+    setUpdateStatusText('Conectando ao servidor para baixar o pacote...');
 
     try {
       const cap = (window as any).Capacitor;
       const appUpdateManager = cap?.Plugins?.AppUpdateManager;
 
       if (isRunningInNativeApk() && appUpdateManager) {
-        // 1. Verifica se tem permissão de instalar pacotes (Android 8+)
+        // 1. Verifica permissão de instalar pacotes (Android 8+)
         const permResult = await appUpdateManager.checkInstallPermission().catch(() => ({ canInstall: true }));
         if (permResult && permResult.canInstall === false) {
-          setUpdateStatusText('Habilite a permissão de atualização nas configurações...');
+          setUpdateStatusText('Habilitando permissão de instalação...');
           await appUpdateManager.requestInstallPermission().catch(() => {});
         }
 
-        // 2. Dispara o download nativo via DownloadManager do Android
-        setUpdateStatusText('Baixando pacote... O app fechará ao abrir o instalador para atualizar de forma limpa.');
+        // 2. Dispara o download nativo com streaming e progresso real
+        setUpdateStatusText('Baixando pacote APK em alta velocidade...');
         await appUpdateManager.downloadAndInstall({
           url: updateInfo.apkUrl
         });
 
-        setUpdateStatusText('Download concluído! Fechando o app para instalar...');
       } else {
         // No navegador/desktop, abre o download direto
         window.open(updateInfo.apkUrl, '_blank');
@@ -59,9 +107,9 @@ export const UpdateModal: React.FC<UpdateModalProps> = ({
       }
     } catch (err: any) {
       console.error('[AutoUpdate] Erro ao atualizar:', err);
-      setUpdateStatusText('Abrindo link direto de download...');
+      setUpdateStatusText('Abrindo link direto no navegador...');
       window.open(updateInfo.apkUrl, '_blank');
-      setTimeout(() => onClose(), 3000);
+      setTimeout(() => onClose(), 2500);
     }
   };
 
@@ -135,11 +183,27 @@ export const UpdateModal: React.FC<UpdateModalProps> = ({
           </div>
         )}
 
+        {/* Barra de Progresso Real de Download */}
+        {isUpdating && downloadPercent >= 0 && (
+          <div className="mb-4">
+            <div className="flex items-center justify-between text-xs font-bold text-amber-300 mb-1.5">
+              <span>Progresso do Download</span>
+              <span>{downloadPercent}%</span>
+            </div>
+            <div className="w-full h-3 bg-slate-800/90 rounded-full overflow-hidden border border-amber-500/30">
+              <div 
+                className="h-full bg-gradient-to-r from-amber-500 via-orange-500 to-amber-400 transition-all duration-200"
+                style={{ width: `${Math.max(5, Math.min(100, downloadPercent))}%` }}
+              />
+            </div>
+          </div>
+        )}
+
         {/* Status de Download */}
         {updateStatusText && (
-          <div className="mb-4 px-3.5 py-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-medium flex items-center gap-2.5 animate-pulse">
+          <div className="mb-4 px-3.5 py-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-medium flex items-center gap-2.5">
             <RefreshCw size={15} className="animate-spin shrink-0 text-amber-400" />
-            <span>{updateStatusText}</span>
+            <span className="leading-tight">{updateStatusText}</span>
           </div>
         )}
 
@@ -164,9 +228,9 @@ export const UpdateModal: React.FC<UpdateModalProps> = ({
               </button>
             </>
           ) : (
-            <div className="w-full py-3 rounded-xl bg-slate-800 text-slate-300 font-bold text-xs text-center flex items-center justify-center gap-2">
+            <div className="w-full py-3 rounded-xl bg-slate-800/90 border border-amber-500/30 text-slate-200 font-bold text-xs text-center flex items-center justify-center gap-2">
               <RefreshCw size={14} className="animate-spin text-amber-400" />
-              <span>Instalando atualização...</span>
+              <span>{downloadPercent >= 100 ? 'Iniciando instalador...' : 'Baixando atualização...'}</span>
             </div>
           )}
         </div>

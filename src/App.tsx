@@ -83,7 +83,7 @@ import {
   searchTransactionsByTerm
 } from './utils/aiCopilot';
 import { UpdateModal, UpdateInfo } from './components/UpdateModal';
-import { checkForAppUpdate, checkUpdateDetailed, getInstalledAppInfo, CURRENT_APP_BUILD, CURRENT_APP_VERSION } from './utils/appUpdater';
+import { checkForAppUpdate, checkUpdateDetailed, getInstalledAppInfo, CURRENT_APP_BUILD, CURRENT_APP_VERSION, CheckUpdateResult } from './utils/appUpdater';
 import { isRunningInNativeApk, isNativeSpeechAvailable, startNativeSpeech, stopNativeSpeech, cancelNativeSpeech } from './nativeBridge';
 
 export default function App() {
@@ -1112,11 +1112,16 @@ export default function App() {
   const handleManualCheckUpdate = async () => {
     setIsCheckingUpdateManual(true);
     try {
-      const detailed = await checkUpdateDetailed();
+      const detailedPromise = checkUpdateDetailed();
+      const timeoutPromise = new Promise<CheckUpdateResult>((_, reject) => 
+        setTimeout(() => reject(new Error('Tempo limite de consulta esgotado (8s). Verifique sua conexão.')), 8000)
+      );
+
+      const detailed = await Promise.race([detailedPromise, timeoutPromise]);
       if (detailed.hasUpdate && detailed.updateInfo) {
         setAvailableUpdate(detailed.updateInfo);
       } else if (detailed.errorMessage) {
-        alert(`⚠️ Não foi possível verificar no GitHub: ${detailed.errorMessage}\n\nVerifique sua conexão à internet e tente novamente.`);
+        alert(`⚠️ Não foi possível verificar no momento: ${detailed.errorMessage}\n\nVerifique sua conexão à internet e tente novamente.`);
       } else {
         const pkgName = detailed.remoteInfo?.apkFileName ? `\n• Pacote no GitHub: ${detailed.remoteInfo.apkFileName}` : '';
         alert(`✅ Você já está usando a versão mais recente do KYRO Finance!\n\n• Versão Instalada: v${detailed.installedInfo.versionName} (Build ${detailed.installedInfo.buildNumber})${pkgName}\n\nNenhuma atualização pendente.`);

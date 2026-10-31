@@ -8,16 +8,36 @@ export const CURRENT_APP_VERSION = APP_VERSION;
 export const CURRENT_APP_BUILD = APP_BUILD;
 
 /**
+ * Função utilitária com timeout estrito e proteção contra cache do WebView/navegador
+ */
+async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs: number = 3500): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const res = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+      cache: 'no-store',
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+        ...(options.headers || {})
+      }
+    });
+    return res;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+/**
  * Extrai dados semânticos de versão a partir do nome do arquivo .apk no GitHub
- * Exemplos:
- * "KYRO-Finance-1.28.apk" -> versionStr: "1.28", buildNumber: 28
- * "KYRO-Finance-v1.28.apk" -> versionStr: "1.28", buildNumber: 28
- * "KYRO-Finance-0.1.28.apk" -> versionStr: "1.28", buildNumber: 28
  */
 export function extractVersionFromFileName(filename: string): { versionStr: string; buildNumber: number } | null {
   if (!filename || !filename.toLowerCase().endsWith('.apk')) return null;
 
-  // Regex busca padrões como: KYRO-Finance-1.28.apk, KYRO-Finance-v1.28.apk, 1.28.apk
   const match = filename.match(/(?:KYRO[-_]Finance[-_]|v)?(\d+[\._]\d+(?:[\._]\d+)?)(?:[-_]debug)?\.apk/i);
   if (!match) return null;
 
@@ -42,7 +62,7 @@ export function extractVersionFromFileName(filename: string): { versionStr: stri
 }
 
 /**
- * Normaliza qualquer formato de versão para o número sequencial da build (ex: "1.28" -> 28, "0.1.28" -> 28, 28 -> 28)
+ * Normaliza qualquer formato de versão para o número sequencial da build
  */
 export function normalizeVersionCode(versionInput?: string | number): number {
   if (typeof versionInput === 'number' && !isNaN(versionInput)) {
@@ -59,12 +79,9 @@ export function normalizeVersionCode(versionInput?: string | number): number {
 
 /**
  * Obtém os dados de versão reais instalados no dispositivo.
- * No Android nativo, consulta o PackageManager do sistema operacional via @capacitor/app e AppUpdateManager.
- * No navegador / PWA, utiliza as constantes compiladas no bundle.
  */
 export async function getInstalledAppInfo(): Promise<{ versionName: string; buildNumber: number }> {
   try {
-    // 1. Tenta plugin nativo customizado AppUpdateManager
     const cap = (window as any).Capacitor;
     if (cap?.Plugins?.AppUpdateManager?.getAppVersion) {
       const nativeVer = await cap.Plugins.AppUpdateManager.getAppVersion().catch(() => null);
@@ -72,7 +89,6 @@ export async function getInstalledAppInfo(): Promise<{ versionName: string; buil
         const code = parseInt(nativeVer.versionCode, 10);
         if (!isNaN(code) && code > 0) {
           const vName = nativeVer.versionName ? `1.${normalizeVersionCode(nativeVer.versionName)}` : `1.${code}`;
-          console.log(`[AutoUpdate] Versão Nativa lida via AppUpdateManager: ${vName} (build: ${code})`);
           return {
             versionName: vName,
             buildNumber: code
@@ -81,13 +97,11 @@ export async function getInstalledAppInfo(): Promise<{ versionName: string; buil
       }
     }
 
-    // 2. Tenta plugin padrão do Capacitor @capacitor/app
     const info = await CapApp.getInfo().catch(() => null);
     if (info && info.build) {
       const code = parseInt(info.build, 10);
       if (!isNaN(code) && code > 0) {
         const vName = info.version ? `1.${normalizeVersionCode(info.version)}` : `1.${code}`;
-        console.log(`[AutoUpdate] Versão Nativa lida via CapApp: ${vName} (build: ${code})`);
         return {
           versionName: vName,
           buildNumber: code
@@ -113,8 +127,7 @@ export interface CheckUpdateResult {
 }
 
 /**
- * Inspeciona a pasta de Downloads (Releases) do GitHub e APIs de versionamento.
- * Compara a versão do arquivo mais recente disponível com a versão instalada no aparelho.
+ * Inspeciona imediatamente a nuvem e GitHub com timeout estrito e anti-cache.
  */
 export async function checkUpdateDetailed(): Promise<CheckUpdateResult> {
   const installed = await getInstalledAppInfo();
@@ -129,140 +142,126 @@ export async function checkUpdateDetailed(): Promise<CheckUpdateResult> {
   let changelog: string[] = [...APP_CHANGELOG];
   let connectionSuccess = false;
 
-  // 1. Consulta diretamente a pasta de Downloads do GitHub (Releases do repositório)
+  // 1. PRIMEIRA PRIORIDADE (MAIS RÁPIDA E SEM CACHE): API Vercel Nuvem
   try {
-    const ghRes = await fetch(`https://api.github.com/repos/Wisterly/kyro-finance/releases/tags/apk-latest?t=${Date.now()}`, {
-      headers: { 'Accept': 'application/vnd.github.v3+json' }
-    });
-
-    if (ghRes.ok) {
-      const release = await ghRes.json();
-      if (release && Array.isArray(release.assets) && release.assets.length > 0) {
-        connectionSuccess = true;
-        let bestAsset: any = null;
-        let highestBuild = 0;
-        let bestVersion = '';
-
-        // Prioriza assets de release oficial (sem debug no nome)
-        const nonDebugAssets = release.assets.filter((a: any) => !a.name.toLowerCase().includes('debug'));
-        const candidateAssets = nonDebugAssets.length > 0 ? nonDebugAssets : release.assets;
-
-        for (const asset of candidateAssets) {
-          const parsed = extractVersionFromFileName(asset.name);
-          if (parsed && parsed.buildNumber > highestBuild) {
-            highestBuild = parsed.buildNumber;
-            bestVersion = parsed.versionStr;
-            bestAsset = asset;
-          }
-        }
-
-        if (!bestAsset) {
-          bestAsset = release.assets.find((a: any) => a.name === 'KYRO-Finance.apk') || release.assets[0];
-        }
-
-        if (bestAsset) {
-          const parsed = extractVersionFromFileName(bestAsset.name);
-          const foundBuild = parsed?.buildNumber || highestBuild || 28;
-          const foundVersion = parsed?.versionStr || bestVersion || `1.${foundBuild}`;
-
-          latestAssetInfo = {
-            versionStr: foundVersion,
-            buildNumber: foundBuild,
-            downloadUrl: bestAsset.browser_download_url,
-            fileName: bestAsset.name,
-            sizeStr: bestAsset.size ? `${(bestAsset.size / (1024 * 1024)).toFixed(2)} MB` : '9.5 MB',
-            publishedAt: release.published_at || new Date().toISOString()
-          };
-        }
-      }
-    }
-  } catch (ghErr) {
-    console.warn('[AutoUpdate] Consulta direta ao GitHub Releases falhou:', ghErr);
-  }
-
-  // 2. Consulta a API na Nuvem Vercel (com URL absoluta para funcionar no WebView do Android e Web)
-  try {
-    const vercelUrls = [
-      `https://kyro-finance.vercel.app/api/app-version?t=${Date.now()}`,
-      `/api/app-version?t=${Date.now()}`
+    const vercelEndpoints = [
+      `https://kyro-finance.vercel.app/api/app-version?t=${Date.now()}_${Math.random()}`,
+      `/api/app-version?t=${Date.now()}_${Math.random()}`
     ];
 
-    for (const url of vercelUrls) {
+    for (const endpoint of vercelEndpoints) {
       try {
-        const res = await fetch(url, {
-          headers: { 'Cache-Control': 'no-cache' }
-        });
+        const res = await fetchWithTimeout(endpoint, {}, 3500);
         if (res.ok) {
-          const vData = await res.json();
+          const vData = await res.json().catch(() => null);
           if (vData && typeof vData.buildNumber === 'number') {
             connectionSuccess = true;
             if (Array.isArray(vData.changelog) && vData.changelog.length > 0) {
               changelog = vData.changelog;
             }
-            if (!latestAssetInfo || vData.buildNumber > latestAssetInfo.buildNumber) {
-              latestAssetInfo = {
-                versionStr: vData.latestVersion || `1.${vData.buildNumber}`,
-                buildNumber: vData.buildNumber,
-                downloadUrl: vData.apkUrl || `https://github.com/Wisterly/kyro-finance/releases/download/apk-latest/KYRO-Finance-1.${vData.buildNumber}.apk`,
-                fileName: vData.apkFileName || `KYRO-Finance-1.${vData.buildNumber}.apk`,
-                sizeStr: vData.apkSize || '9.5 MB',
-                publishedAt: vData.publishedAt || new Date().toISOString()
-              };
-            }
+            latestAssetInfo = {
+              versionStr: vData.latestVersion || `1.${vData.buildNumber}`,
+              buildNumber: vData.buildNumber,
+              downloadUrl: vData.apkUrl || `https://github.com/Wisterly/kyro-finance/releases/download/apk-latest/KYRO-Finance-1.${vData.buildNumber}.apk`,
+              fileName: vData.apkFileName || `KYRO-Finance-1.${vData.buildNumber}.apk`,
+              sizeStr: vData.apkSize || '9.8 MB',
+              publishedAt: vData.publishedAt || new Date().toISOString()
+            };
             break;
           }
         }
-      } catch (innerErr) {}
+      } catch (inner) {}
     }
   } catch (vErr) {}
 
-  // 3. Fallback para version.json no repositório GitHub
-  try {
-    const rawRes = await fetch(`https://raw.githubusercontent.com/Wisterly/kyro-finance/main/version.json?t=${Date.now()}`, {
-      headers: { 'Cache-Control': 'no-cache' }
-    });
-    if (rawRes.ok) {
-      const rawData = await rawRes.json();
-      if (rawData && typeof rawData.buildNumber === 'number') {
-        connectionSuccess = true;
-        if (Array.isArray(rawData.changelog)) {
-          changelog = rawData.changelog;
-        }
-        if (!latestAssetInfo || rawData.buildNumber > latestAssetInfo.buildNumber) {
+  // 2. SEGUNDA PRIORIDADE: version.json no repositório GitHub (com anti-cache)
+  if (!latestAssetInfo) {
+    try {
+      const rawRes = await fetchWithTimeout(`https://raw.githubusercontent.com/Wisterly/kyro-finance/main/version.json?t=${Date.now()}_${Math.random()}`, {}, 3500);
+      if (rawRes.ok) {
+        const rawData = await rawRes.json().catch(() => null);
+        if (rawData && typeof rawData.buildNumber === 'number') {
+          connectionSuccess = true;
+          if (Array.isArray(rawData.changelog)) {
+            changelog = rawData.changelog;
+          }
           latestAssetInfo = {
             versionStr: rawData.version || `1.${rawData.buildNumber}`,
             buildNumber: rawData.buildNumber,
             downloadUrl: `https://github.com/Wisterly/kyro-finance/releases/download/apk-latest/KYRO-Finance-1.${rawData.buildNumber}.apk`,
             fileName: `KYRO-Finance-1.${rawData.buildNumber}.apk`,
-            sizeStr: '9.5 MB',
+            sizeStr: '9.8 MB',
             publishedAt: rawData.releaseDate || new Date().toISOString()
           };
         }
       }
-    }
-  } catch (rawErr) {}
+    } catch (rawErr) {}
+  }
 
-  // Se nenhuma fonte de rede respondeu
+  // 3. TERCEIRA PRIORIDADE: GitHub Releases API
   if (!latestAssetInfo) {
-    if (!connectionSuccess) {
-      return {
-        hasUpdate: false,
-        installedInfo: installed,
-        errorMessage: 'Sem conexão com a internet ou GitHub inacessível no momento.'
-      };
-    }
+    try {
+      const ghRes = await fetchWithTimeout(`https://api.github.com/repos/Wisterly/kyro-finance/releases/tags/apk-latest?t=${Date.now()}_${Math.random()}`, {
+        headers: { 'Accept': 'application/vnd.github.v3+json' }
+      }, 3500);
+
+      if (ghRes.ok) {
+        const release = await ghRes.json().catch(() => null);
+        if (release && Array.isArray(release.assets) && release.assets.length > 0) {
+          connectionSuccess = true;
+          let bestAsset: any = null;
+          let highestBuild = 0;
+          let bestVersion = '';
+
+          const nonDebugAssets = release.assets.filter((a: any) => !a.name.toLowerCase().includes('debug'));
+          const candidateAssets = nonDebugAssets.length > 0 ? nonDebugAssets : release.assets;
+
+          for (const asset of candidateAssets) {
+            const parsed = extractVersionFromFileName(asset.name);
+            if (parsed && parsed.buildNumber > highestBuild) {
+              highestBuild = parsed.buildNumber;
+              bestVersion = parsed.versionStr;
+              bestAsset = asset;
+            }
+          }
+
+          if (!bestAsset) {
+            bestAsset = release.assets.find((a: any) => a.name === 'KYRO-Finance.apk') || release.assets[0];
+          }
+
+          if (bestAsset) {
+            const parsed = extractVersionFromFileName(bestAsset.name);
+            const foundBuild = parsed?.buildNumber || highestBuild || 35;
+            const foundVersion = parsed?.versionStr || bestVersion || `1.${foundBuild}`;
+
+            latestAssetInfo = {
+              versionStr: foundVersion,
+              buildNumber: foundBuild,
+              downloadUrl: bestAsset.browser_download_url,
+              fileName: bestAsset.name,
+              sizeStr: bestAsset.size ? `${(bestAsset.size / (1024 * 1024)).toFixed(1)} MB` : '9.8 MB',
+              publishedAt: release.published_at || new Date().toISOString()
+            };
+          }
+        }
+      }
+    } catch (ghErr) {}
+  }
+
+  // Se nenhuma fonte respondeu
+  if (!latestAssetInfo) {
     return {
       hasUpdate: false,
-      installedInfo: installed
+      installedInfo: installed,
+      errorMessage: connectionSuccess ? undefined : 'Não foi possível conectar ao servidor de atualizações. Verifique sua conexão com a internet.'
     };
   }
 
   const remoteBuild = latestAssetInfo.buildNumber;
   const installedBuild = installed.buildNumber;
 
-  console.log(`[AutoUpdate] Comparando versão: GitHub (${latestAssetInfo.fileName} • Build ${remoteBuild}) vs Instalado (Build ${installedBuild})`);
+  console.log(`[AutoUpdate] Comparação instantânea: Remoto Build ${remoteBuild} (${latestAssetInfo.versionStr}) vs Instalado Build ${installedBuild} (${installed.versionName})`);
 
-  // Se a versão remota no GitHub for superior à instalada
   if (remoteBuild > installedBuild) {
     const updateInfo: UpdateInfo = {
       latestVersion: latestAssetInfo.versionStr,
@@ -286,7 +285,6 @@ export async function checkUpdateDetailed(): Promise<CheckUpdateResult> {
     };
   }
 
-  // Mesma versão ou superior instalada
   return {
     hasUpdate: false,
     installedInfo: installed,

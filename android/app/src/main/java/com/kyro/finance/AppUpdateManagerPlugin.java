@@ -1,14 +1,11 @@
 package com.kyro.finance;
 
 import android.app.DownloadManager;
-import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
-import android.content.IntentFilter;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
-import android.database.Cursor;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Environment;
@@ -21,14 +18,18 @@ import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import java.io.BufferedInputStream;
 import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.util.List;
 
 @CapacitorPlugin(name = "AppUpdateManager")
 public class AppUpdateManagerPlugin extends Plugin {
 
-    private long downloadId = -1;
-    private BroadcastReceiver downloadReceiver;
+    private boolean isDownloading = false;
 
     @PluginMethod
     public void getAppVersion(PluginCall call) {
@@ -77,95 +78,144 @@ public class AppUpdateManagerPlugin extends Plugin {
     @PluginMethod
     public void downloadAndInstall(PluginCall call) {
         String downloadUrl = call.getString("url", "https://github.com/Wisterly/kyro-finance/releases/download/apk-latest/KYRO-Finance.apk");
-        
-        try {
-            Context context = getContext();
-            File downloadDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
-            if (downloadDir == null) {
-                downloadDir = context.getExternalCacheDir();
-            }
-            if (downloadDir == null) {
-                downloadDir = context.getCacheDir();
-            }
-            if (downloadDir != null && !downloadDir.exists()) {
-                downloadDir.mkdirs();
-            }
-            final File apkFile = new File(downloadDir, "KYRO-Finance-update.apk");
-            if (apkFile.exists()) {
-                apkFile.delete();
-            }
 
-            final DownloadManager downloadManager = (DownloadManager) context.getSystemService(Context.DOWNLOAD_SERVICE);
-            DownloadManager.Request request = new DownloadManager.Request(Uri.parse(downloadUrl));
-            request.setTitle("KYRO Finance - Atualização Oficial");
-            request.setDescription("Baixando nova versão do aplicativo...");
-            request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
-            request.setDestinationUri(Uri.fromFile(apkFile));
-            request.setMimeType("application/vnd.android.package-archive");
+        if (isDownloading) {
+            call.reject("Já existe um download de atualização em andamento.");
+            return;
+        }
 
-            // Registra receiver para quando o download concluir
-            if (downloadReceiver != null) {
-                try {
-                    context.unregisterReceiver(downloadReceiver);
-                } catch (Exception ignored) {}
-            }
+        isDownloading = true;
 
-            downloadReceiver = new BroadcastReceiver() {
-                @Override
-                public void onReceive(Context ctx, Intent intent) {
-                    long id = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1);
-                    if (id == downloadId) {
-                        try {
-                            ctx.unregisterReceiver(this);
-                        } catch (Exception ignored) {}
-                        downloadReceiver = null;
+        new Thread(() -> {
+            File apkFile = null;
+            try {
+                Context context = getContext();
+                File downloadDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
+                if (downloadDir == null) {
+                    downloadDir = context.getExternalCacheDir();
+                }
+                if (downloadDir == null) {
+                    downloadDir = context.getCacheDir();
+                }
+                if (downloadDir != null && !downloadDir.exists()) {
+                    downloadDir.mkdirs();
+                }
 
-                        // Verifica se o arquivo foi baixado com sucesso
-                        boolean downloadOk = false;
-                        try {
-                            Cursor cursor = downloadManager.query(new DownloadManager.Query().setFilterById(downloadId));
-                            if (cursor != null && cursor.moveToFirst()) {
-                                int statusIdx = cursor.getColumnIndex(DownloadManager.COLUMN_STATUS);
-                                if (statusIdx != -1) {
-                                    int status = cursor.getInt(statusIdx);
-                                    if (status == DownloadManager.STATUS_SUCCESSFUL) {
-                                        downloadOk = true;
-                                    }
-                                }
-                                cursor.close();
-                            }
-                        } catch (Exception ignored) {}
+                apkFile = new File(downloadDir, "KYRO-Finance-update.apk");
+                if (apkFile.exists()) {
+                    apkFile.delete();
+                }
 
-                        if (apkFile.exists() && apkFile.length() > 1024) {
-                            triggerInstall(apkFile);
+                // 1. Conexão HTTP com suporte a múltiplos redirecionamentos (GitHub 302 -> AWS S3 / Fastly)
+                String currentUrl = downloadUrl;
+                HttpURLConnection conn = null;
+                int redirects = 0;
+
+                while (redirects < 6) {
+                    URL u = new URL(currentUrl);
+                    conn = (HttpURLConnection) u.openConnection();
+                    conn.setInstanceFollowRedirects(true);
+                    conn.setConnectTimeout(15000);
+                    conn.setReadTimeout(30000);
+                    conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Android; KYRO-Finance-Updater)");
+                    conn.setRequestProperty("Accept-Encoding", "identity");
+                    conn.connect();
+
+                    int status = conn.getResponseCode();
+                    if (status == HttpURLConnection.HTTP_MOVED_PERM ||
+                        status == HttpURLConnection.HTTP_MOVED_TEMP ||
+                        status == 307 || status == 308) {
+                        String newLocation = conn.getHeaderField("Location");
+                        conn.disconnect();
+                        if (newLocation == null || newLocation.isEmpty()) {
+                            break;
                         }
+                        currentUrl = newLocation;
+                        redirects++;
+                    } else {
+                        break;
                     }
                 }
-            };
 
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                context.registerReceiver(downloadReceiver, new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE), Context.RECEIVER_EXPORTED);
-            } else {
-                context.registerReceiver(downloadReceiver, new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE));
+                if (conn == null || conn.getResponseCode() != HttpURLConnection.HTTP_OK) {
+                    throw new Exception("Falha na conexão HTTP com o servidor (Código: " + (conn != null ? conn.getResponseCode() : "Nulo") + ")");
+                }
+
+                long totalBytes = conn.getContentLengthLong();
+                InputStream in = new BufferedInputStream(conn.getInputStream(), 16384);
+                FileOutputStream out = new FileOutputStream(apkFile);
+
+                byte[] buffer = new byte[8192];
+                long downloadedBytes = 0;
+                int readBytes;
+                long lastNotifyTime = 0;
+
+                while ((readBytes = in.read(buffer)) != -1) {
+                    downloadedBytes += readBytes;
+                    out.write(buffer, 0, readBytes);
+
+                    long now = System.currentTimeMillis();
+                    if (now - lastNotifyTime > 200 || (totalBytes > 0 && downloadedBytes >= totalBytes)) {
+                        lastNotifyTime = now;
+                        int percent = (totalBytes > 0) ? (int) ((downloadedBytes * 100) / totalBytes) : -1;
+
+                        JSObject progressData = new JSObject();
+                        progressData.put("percent", percent);
+                        progressData.put("downloaded", downloadedBytes);
+                        progressData.put("total", totalBytes);
+                        notifyListeners("downloadProgress", progressData);
+                    }
+                }
+
+                out.flush();
+                out.close();
+                in.close();
+                conn.disconnect();
+
+                isDownloading = false;
+
+                // 2. Validação de integridade do arquivo APK baixado
+                if (apkFile != null && apkFile.exists() && apkFile.length() > 2 * 1024 * 1024) { // Pelo menos 2 MB
+                    JSObject compData = new JSObject();
+                    compData.put("status", "completed");
+                    compData.put("filePath", apkFile.getAbsolutePath());
+                    compData.put("fileSize", apkFile.length());
+                    notifyListeners("downloadCompleted", compData);
+
+                    final File finalApk = apkFile;
+                    getActivity().runOnUiThread(() -> {
+                        triggerInstall(finalApk);
+                    });
+
+                    call.resolve(compData);
+                } else {
+                    throw new Exception("O pacote APK baixado está incompleto ou corrompido.");
+                }
+
+            } catch (Exception e) {
+                isDownloading = false;
+                JSObject errData = new JSObject();
+                errData.put("error", e.getMessage());
+                notifyListeners("downloadError", errData);
+
+                // Fallback automático para o navegador
+                getActivity().runOnUiThread(() -> {
+                    try {
+                        Intent browserIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(downloadUrl));
+                        browserIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                        getContext().startActivity(browserIntent);
+                    } catch (Exception ignored) {}
+                });
+
+                call.reject("Falha no download da atualização: " + e.getMessage(), e);
             }
-
-            downloadId = downloadManager.enqueue(request);
-
-            JSObject res = new JSObject();
-            res.put("status", "downloading");
-            res.put("downloadId", downloadId);
-            res.put("filePath", apkFile.getAbsolutePath());
-            call.resolve(res);
-
-        } catch (Exception e) {
-            call.reject("Falha ao iniciar download da atualização: " + e.getMessage(), e);
-        }
+        }).start();
     }
 
     private void triggerInstall(File apkFile) {
         try {
             Context context = getContext();
-            if (!apkFile.exists() || apkFile.length() == 0) return;
+            if (apkFile == null || !apkFile.exists() || apkFile.length() == 0) return;
 
             // Se for Android 8+, e não tiver permissão, abre o ajuste
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -189,7 +239,7 @@ public class AppUpdateManagerPlugin extends Plugin {
             installIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
             installIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
 
-            // Concede permissão de leitura explícita para os pacotes de instalação do sistema
+            // Concede permissão de leitura explícita para os instaladores do sistema
             List<ResolveInfo> resInfoList = context.getPackageManager().queryIntentActivities(installIntent, PackageManager.MATCH_DEFAULT_ONLY);
             for (ResolveInfo resolveInfo : resInfoList) {
                 String packageName = resolveInfo.activityInfo.packageName;

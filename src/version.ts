@@ -1,11 +1,11 @@
 // Metadados Centrais de Versão e Auto-Update do KYRO Finance
-export const APP_VERSION = '1.35';
-export const APP_BUILD = 35;
+export const APP_VERSION = '1.36';
+export const APP_BUILD = 36;
 
 export const APP_CHANGELOG = [
-  'Paridade absoluta de 100% entre Mobile e Desktop: as 4 etapas de áudio executadas de forma idêntica',
-  'Blindagem de hardware no microfone com prioridade contínua de voz e cancelamento de ruído no Android',
-  'Filtro anti-duplicação ativo em tempo real no smartphone eliminando gagueiras ou repetições',
-  'Card dourado e transcrição dinâmica idêntica ao Chrome do Desktop agora operando dentro do APK',
-  'Lançamento instantâneo via botão "Lançar" com extração precisa de valores, itens, categorias e cidades'
+  'Verificação de atualizações ultra-rápida (1s) com barreira anti-cache do WebView e timeout inteligente de 3.5s',
+  'Fim do travamento do botão "Verificar Atualização": o botão nunca mais fica rodando indefinidamente',
+  'Motor nativo de download com streaming em alta velocidade e suporte a redirecionamentos do GitHub',
+  'Barra de progresso real de download (0% a 100%) exibida no pop-up durante a atualização',
+  'Instalação automática do novo APK com encerramento limpo do aplicativo antigo sem erros'
 ];
