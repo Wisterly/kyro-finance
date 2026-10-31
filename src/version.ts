@@ -1,11 +1,10 @@
 // Metadados Centrais de Versão e Auto-Update do KYRO Finance
-export const APP_VERSION = '1.40';
-export const APP_BUILD = 40;
+export const APP_VERSION = '1.41';
+export const APP_BUILD = 41;
 
 export const APP_CHANGELOG = [
-  'Chatbot Multimodal no Grupo do WhatsApp: transcrição neural de áudio e leitura automática de fotos de comprovantes',
-  'Motor Whisper-Small com normalização matemática de ganho vocal para áudios falados baixo ou longe do microfone no WhatsApp',
-  'Leitura inteligente de comprovantes (OCR + IA Vision): extrai Valor, Local/Favorecido, Cidade e Método (PIX, Débito, Crédito, Dinheiro)',
-  'Pré-processamento de imagem para comprovantes de bancos em modo escuro (Dark Mode) e recibos térmicos de maquininha',
-  'Correção de parser dinâmico e chaves de API com proteção anti-duplicação e sincronização instantânea com o App e Web'
+  'Edição Manual Completa de Lançamentos: clique em qualquer item nas caixas de Entradas, Saídas, Últimas Transações ou na aba de Transações para editar Valor, Método, Tipo, Categoria, Cidade, Local e Data',
+  'Edição por Comando no Chat Interno (Texto e Áudio): comandos como "Corrija o último lançamento, modifique de PIX para crédito" ou "Correção do último lançamento, o valor é 400 e não 500"',
+  'Edição por Comando no Grupo do WhatsApp (Texto e Áudio de Voz): o robô interpreta correções faladas ou digitadas e altera o lançamento em tempo real sem duplicar',
+  'Sincronização Instantânea In-Place (SSE + Cloud Sync): edições feitas no celular, PC ou WhatsApp atualizam imediatamente todos os dispositivos abertos'
 ];

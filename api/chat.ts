@@ -285,7 +285,130 @@ function fallbackCognitiveProcess(text: string, context: any, userAiRules: strin
     }
   }
 
-  // 3. Detecção e Extração Estrita de Lançamento Financeiro
+  // 2.5 Detecção e Execução de Correção / Edição de Lançamento (ex: "corrija o último lançamento, modifique de PIX para crédito", "o valor é 400 e não 500")
+  const hasAdjustVerb = /\b(ajust|alter|mud|troc|corrij|corrig|correcao|correcoes|atualiz|modific|edit|retific|consert)/i.test(normalized);
+  const hasAdjustTarget = /\b(ultim|levantamento|lancamento|transacao|gasto|despesa|registro|compra|saida|entrada|valor|metodo|forma|pix|credito|debito|dinheiro|transferencia|cidade|local|estabelecimento|item|produto|categoria|cartao)/i.test(normalized);
+  const isDirectCorrection =
+    /\b(o|a|no|na)\s+(ultimo|ultima)\s+(lancamento|levantamento|transacao|gasto|despesa|saida|entrada)?\s*(foi|era|e|para|na verdade|muda|modifique)/i.test(normalized) ||
+    /\b(valor|metodo|forma|lancamento|pagamento)\s+(correto\s+)?(e|era|foi)\s+.+\bnao\b/i.test(normalized) ||
+    /\b(de\s+(pix|credito|debito|dinheiro|transferencia|saida|entrada)\s+para\s+(pix|credito|debito|dinheiro|transferencia|saida|entrada))\b/i.test(normalized) ||
+    /\b(\d+\s+(reais\s+)?e\s+nao\s+\d+)\b/i.test(normalized);
+
+  if (!isRemove && ((hasAdjustVerb && hasAdjustTarget) || isDirectCorrection) && transactions.length > 0) {
+    const mapMethodToken = (tok: string): string | null => {
+      const t = normalizeStr(tok);
+      if (t.includes('pix') || t.includes('piques')) return 'PIX';
+      if (t.includes('debito')) return 'Débito';
+      if (t.includes('credito') || t.includes('cartao')) return 'Crédito';
+      if (t.includes('dinheiro') || t.includes('especie')) return 'Dinheiro';
+      if (t.includes('transferencia') || t.includes('ted') || t.includes('doc')) return 'Transferência';
+      return null;
+    };
+
+    const parseNumTok = (s: string): number => {
+      if (!s) return 0;
+      let c = s.trim().replace(/^r\$\s*/i, '');
+      if (c.includes(',') && c.includes('.')) c = c.replace(/\./g, '').replace(',', '.');
+      else if (c.includes(',')) c = c.replace(',', '.');
+      else if (c.includes('.')) {
+        const parts = c.split('.');
+        if (parts[parts.length - 1].length === 3) c = c.replace(/\./g, '');
+      }
+      const v = parseFloat(c);
+      return !isNaN(v) && v > 0 ? v : 0;
+    };
+
+    let newAmount = 0;
+    let oldAmount = 0;
+    const mNewNotOld = text.match(/(?:r\$\s*)?(\d+(?:[.,]\d{1,3})?(?:,\d{1,2})?)\s*(?:reais|real|conto)?\s*(?:,\s*n[aã]o|\s+e\s+n[aã]o|\s+n[aã]o(?:\s+foi|\s+era|\s+[eé])?)\s*(?:r\$\s*)?(\d+(?:[.,]\d{1,3})?(?:,\d{1,2})?)/i);
+    const mFromOldToNew = text.match(/\bde\s+(?:r\$\s*)?(\d+(?:[.,]\d{1,3})?(?:,\d{1,2})?)\s*(?:reais|real|conto)?\s+para\s+(?:r\$\s*)?(\d+(?:[.,]\d{1,3})?(?:,\d{1,2})?)/i);
+    const mNotOldButNew = text.match(/(?:n[aã]o\s+(?:[eé]|foi|era)?|em\s+vez\s+de)\s*(?:r\$\s*)?(\d+(?:[.,]\d{1,3})?(?:,\d{1,2})?)\s*(?:reais|real|conto)?[\s,]*(?:e\s+sim|mas\s+sim|mas|[eé]|foi|era|coloque|mude\s+para|para)\s*(?:r\$\s*)?(\d+(?:[.,]\d{1,3})?(?:,\d{1,2})?)/i);
+    if (mNewNotOld) {
+      newAmount = parseNumTok(mNewNotOld[1]);
+      oldAmount = parseNumTok(mNewNotOld[2]);
+    } else if (mFromOldToNew) {
+      oldAmount = parseNumTok(mFromOldToNew[1]);
+      newAmount = parseNumTok(mFromOldToNew[2]);
+    } else if (mNotOldButNew) {
+      oldAmount = parseNumTok(mNotOldButNew[1]);
+      newAmount = parseNumTok(mNotOldButNew[2]);
+    } else {
+      newAmount = extractMonetaryValueStrict(text);
+    }
+
+    const methodRx = '(pix|piques|cr[eé]dito|cart[aã]o(?:\\s+de\\s+cr[eé]dito)?|d[eé]bito|cart[aã]o\\s+de\\s+d[eé]bito|dinheiro|esp[eé]cie|transfer[eê]ncia|ted|doc)';
+    let newMethod: string | null = null;
+    let oldMethod: string | null = null;
+    const mDePara = text.match(new RegExp(`\\bde\\s+(?:no\\s+|o\\s+)?${methodRx}\\s+para\\s+(?:no\\s+|o\\s+|em\\s+)?${methodRx}`, 'i'));
+    const mMethodNewNotOld = text.match(new RegExp(`${methodRx}\\s*(?:,\\s*n[aã]o|\\s+e\\s+n[aã]o|\\s+n[aã]o)\\s+(?:no\\s+|o\\s+|em\\s+|de\\s+|foi\\s+)?${methodRx}`, 'i'));
+    const mParaNew = text.match(new RegExp(`\\bpara\\s+(?:o\\s+|no\\s+|em\\s+)?${methodRx}`, 'i'));
+    const mSingleMethod = text.match(new RegExp(`\\b${methodRx}\\b`, 'i'));
+    if (mDePara) {
+      oldMethod = mapMethodToken(mDePara[1]);
+      newMethod = mapMethodToken(mDePara[2]);
+    } else if (mMethodNewNotOld) {
+      newMethod = mapMethodToken(mMethodNewNotOld[1]);
+      oldMethod = mapMethodToken(mMethodNewNotOld[2]);
+    } else if (mParaNew) {
+      newMethod = mapMethodToken(mParaNew[1]);
+    } else if (mSingleMethod) {
+      newMethod = mapMethodToken(mSingleMethod[1]);
+    }
+
+    let targetIdx = 0;
+    if (oldAmount > 0) {
+      const idx = transactions.findIndex(t => Math.abs(Number(t.amount) - oldAmount) < 0.01);
+      if (idx >= 0) targetIdx = idx;
+    } else if (oldMethod && transactions[0].method !== oldMethod) {
+      const idx = transactions.findIndex(t => t.method === oldMethod);
+      if (idx >= 0 && idx <= 5) targetIdx = idx;
+    }
+
+    const target = { ...transactions[targetIdx] };
+    const adjustments: Record<string, any> = { updatedAt: new Date().toISOString() };
+    const changes: string[] = [];
+
+    if (newAmount > 0 && Math.abs(newAmount - Number(target.amount)) >= 0.01) {
+      changes.push(`- 💰 **Valor Corrigido:** de R$ ${Number(target.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} para **R$ ${newAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}**`);
+      adjustments.amount = newAmount;
+    }
+
+    if (newMethod && newMethod !== target.method) {
+      changes.push(`- 💳 **Forma de Pagamento:** de ${target.method} para **${newMethod}**`);
+      adjustments.method = newMethod;
+      if (newMethod === 'Crédito' && !target.cardName) adjustments.cardName = 'Nubank';
+    }
+
+    if (/\bde\s+(?:sa[ií]da|despesa)\s+para\s+(?:entrada|receita)/i.test(text) || /\b(?:mude|modifique|altere|corrija)\s+(?:o\s+tipo\s+)?para\s+(?:entrada|receita)\b/i.test(text)) {
+      if (target.type !== 'Entrada') {
+        changes.push(`- 📊 **Tipo de Lançamento:** de ${target.type} para **Entrada**`);
+        adjustments.type = 'Entrada';
+      }
+    } else if (/\bde\s+(?:entrada|receita)\s+para\s+(?:sa[ií]da|despesa)/i.test(text) || /\b(?:mude|modifique|altere|corrija)\s+(?:o\s+tipo\s+)?para\s+(?:sa[ií]da|despesa)\b/i.test(text)) {
+      if (target.type !== 'Saída') {
+        changes.push(`- 📊 **Tipo de Lançamento:** de ${target.type} para **Saída**`);
+        adjustments.type = 'Saída';
+      }
+    }
+
+    const newCity = extractCityStrict(text);
+    if (newCity && newCity !== target.city) {
+      changes.push(`- 📍 **Cidade / Local:** de ${target.city || 'Não informada'} para **${newCity}**`);
+      adjustments.city = newCity;
+    }
+
+    if (changes.length > 0) {
+      const mergedTx = { ...target, ...adjustments };
+      return {
+        reply: `✏️ **Lançamento Corrigido com Sucesso!**\n\n${changes.join('\n')}\n\n- 📝 **Resumo Atualizado:** ${mergedTx.product || mergedTx.description} (${mergedTx.type}) — R$ ${Number(mergedTx.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} via ${mergedTx.method}${mergedTx.city ? ` em ${mergedTx.city}` : ''}\n\n*Seus saldos e gráficos foram recalculados automaticamente!*`,
+        action: {
+          type: 'adjust_transaction',
+          targetTxId: target.id,
+          adjustments
+        }
+      };
+    }
+  }
   const amount = extractMonetaryValueStrict(text);
   if (amount > 0) {
     const isIncome = /(recebi|ganhei|salario|pix\s+recebido|vendi|deposito|caiu|entrada)/i.test(normalized);

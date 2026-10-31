@@ -223,19 +223,27 @@ export const executeRemoveLastTransaction = (transactions: Transaction[]) =>
   executeSmartRemoveTransaction('último', transactions);
 
 // =========================================================================
-// 2. DETECÇÃO ULTRA ROBUSTA: AJUSTAR / ALTERAR / MODIFICAR ÚLTIMO LANÇAMENTO
+// 2. DETECÇÃO ULTRA ROBUSTA: AJUSTAR / CORRIGIR / ALTERAR / MODIFICAR LANÇAMENTO
 // =========================================================================
 export function isAdjustLastCommand(rawText: string): boolean {
   if (!rawText) return false;
   const norm = normalizeText(rawText);
 
-  // Não confunde com comando de remoção
+  // Não confunde com comando de remoção ou de atualização do APK
   if (isRemoveLastCommand(rawText)) return false;
+  if (/(atualizar\s+aplicativo|atualizar\s+app|nova\s+versao|baixar\s+apk)/i.test(norm)) return false;
 
-  const hasAdjustVerb = /(ajust|alter|mud|troc|corrij|corrig|atualiz|modific)/i.test(norm);
-  const hasTargetRef = /(ultim|levantamento|lancamento|gasto|despesa|registro|compra|saida|entrada)/i.test(norm);
+  // Verbos e substantivos de correção / edição / modificação
+  const hasAdjustVerb = /\b(ajust|alter|mud|troc|corrij|corrig|correcao|correcoes|atualiz|modific|edit|retific|consert)/i.test(norm);
+  const hasTargetRef = /\b(ultim|levantamento|lancamento|transacao|gasto|despesa|registro|compra|saida|entrada|valor|metodo|forma|pix|credito|debito|dinheiro|transferencia|cidade|local|estabelecimento|item|produto|categoria|cartao)/i.test(norm);
 
-  const directChangePattern = /(o|a|no|na)\s+(ultimo|ultima)\s+(lancamento|levantamento|gasto|despesa)?\s*(foi|era|para|na verdade foi|muda para)/i.test(norm);
+  // Padrões diretos: "no último lançamento...", "o valor é 400 e não 500", "modifique de pix para crédito", "na verdade foi..."
+  const directChangePattern =
+    /\b(o|a|no|na)\s+(ultimo|ultima)\s+(lancamento|levantamento|transacao|gasto|despesa|saida|entrada)?\s*(foi|era|e|para|na verdade|muda|modifique)/i.test(norm) ||
+    /\b(valor|metodo|forma|lancamento|pagamento)\s+(correto\s+)?(e|era|foi)\s+.+\bnao\b/i.test(norm) ||
+    /\b(de\s+(pix|credito|debito|dinheiro|transferencia|saida|entrada)\s+para\s+(pix|credito|debito|dinheiro|transferencia|saida|entrada))\b/i.test(norm) ||
+    /\b(\d+\s+(reais\s+)?e\s+nao\s+\d+)\b/i.test(norm) ||
+    /\b(nao\s+(foi|era|e)\s+\d+\s*(reais)?\s*(e\s+sim|mas|foi|era|e)\s+\d+)\b/i.test(norm);
 
   return (hasAdjustVerb && hasTargetRef) || directChangePattern;
 }
@@ -256,73 +264,233 @@ export function isEnrichLastCommand(rawText: string): boolean {
   return (hasEnrichVerb && (hasTargetRef || hasFieldRef));
 }
 
+function mapMethodTokenToPaymentMethod(token: string): PaymentMethod | null {
+  if (!token) return null;
+  const t = normalizeText(token);
+  if (t.includes('pix') || t.includes('piques')) return 'PIX';
+  if (t.includes('debito')) return 'Débito';
+  if (t.includes('credito') || t.includes('cartao')) return 'Crédito';
+  if (t.includes('dinheiro') || t.includes('especie')) return 'Dinheiro';
+  if (t.includes('transferencia') || t.includes('ted') || t.includes('doc')) return 'Transferência';
+  return null;
+}
+
+function parseNumericToken(str: string): number {
+  if (!str) return 0;
+  let clean = str.trim().replace(/^r\$\s*/i, '');
+  if (clean.includes(',') && clean.includes('.')) {
+    clean = clean.replace(/\./g, '').replace(',', '.');
+  } else if (clean.includes(',')) {
+    clean = clean.replace(',', '.');
+  } else if (clean.includes('.')) {
+    const parts = clean.split('.');
+    if (parts[parts.length - 1].length === 3) clean = clean.replace(/\./g, '');
+  }
+  const v = parseFloat(clean);
+  return !isNaN(v) && v > 0 ? v : 0;
+}
+
+export function extractCorrectionAmountPair(text: string): { newAmount: number; oldAmount: number } {
+  if (!text) return { newAmount: 0, oldAmount: 0 };
+  const clean = text.trim();
+
+  // Caso 1: "<novo> e não <antigo>" / "o valor é 400 e não 500" / "foi 400, não 500"
+  const newNotOldMatch = clean.match(/(?:r\$\s*)?(\d+(?:[.,]\d{1,3})?(?:,\d{1,2})?)\s*(?:reais|real|conto)?\s*(?:,\s*n[aã]o|\s+e\s+n[aã]o|\s+n[aã]o(?:\s+foi|\s+era|\s+[eé])?)\s*(?:r\$\s*)?(\d+(?:[.,]\d{1,3})?(?:,\d{1,2})?)/i);
+  if (newNotOldMatch) {
+    return {
+      newAmount: parseNumericToken(newNotOldMatch[1]),
+      oldAmount: parseNumericToken(newNotOldMatch[2])
+    };
+  }
+
+  // Caso 2: "de <antigo> para <novo>" / "mude de 500 para 400"
+  const fromOldToNewMatch = clean.match(/\bde\s+(?:r\$\s*)?(\d+(?:[.,]\d{1,3})?(?:,\d{1,2})?)\s*(?:reais|real|conto)?\s+para\s+(?:r\$\s*)?(\d+(?:[.,]\d{1,3})?(?:,\d{1,2})?)/i);
+  if (fromOldToNewMatch) {
+    return {
+      oldAmount: parseNumericToken(fromOldToNewMatch[1]),
+      newAmount: parseNumericToken(fromOldToNewMatch[2])
+    };
+  }
+
+  // Caso 3: "não (é|foi|era) <antigo>, (é|foi|era|e sim|mas) <novo>" / "em vez de <antigo> coloque <novo>"
+  const notOldButNewMatch = clean.match(/(?:n[aã]o\s+(?:[eé]|foi|era)?|em\s+vez\s+de)\s*(?:r\$\s*)?(\d+(?:[.,]\d{1,3})?(?:,\d{1,2})?)\s*(?:reais|real|conto)?[\s,]*(?:e\s+sim|mas\s+sim|mas|[eé]|foi|era|coloque|mude\s+para|para)\s*(?:r\$\s*)?(\d+(?:[.,]\d{1,3})?(?:,\d{1,2})?)/i);
+  if (notOldButNewMatch) {
+    return {
+      oldAmount: parseNumericToken(notOldButNewMatch[1]),
+      newAmount: parseNumericToken(notOldButNewMatch[2])
+    };
+  }
+
+  // Caso 4: Valor único informado no comando de correção
+  const singleAmount = extractMonetaryValue(clean);
+  return { newAmount: singleAmount, oldAmount: 0 };
+}
+
+export function extractCorrectionMethodPair(text: string): { newMethod: PaymentMethod | null; oldMethod: PaymentMethod | null } {
+  if (!text) return { newMethod: null, oldMethod: null };
+  const methodRx = '(pix|piques|cr[eé]dito|cart[aã]o(?:\\s+de\\s+cr[eé]dito)?|d[eé]bito|cart[aã]o\\s+de\\s+d[eé]bito|dinheiro|esp[eé]cie|transfer[eê]ncia|ted|doc)';
+
+  // Caso 1: "de <antigo> para <novo>" (ex: "modifique de PIX para crédito")
+  const dePara = text.match(new RegExp(`\\bde\\s+(?:no\\s+|o\\s+)?${methodRx}\\s+para\\s+(?:no\\s+|o\\s+|em\\s+)?${methodRx}`, 'i'));
+  if (dePara) {
+    return {
+      oldMethod: mapMethodTokenToPaymentMethod(dePara[1]),
+      newMethod: mapMethodTokenToPaymentMethod(dePara[2])
+    };
+  }
+
+  // Caso 2: "<novo> e não <antigo>" (ex: "foi no crédito e não no PIX")
+  const newNotOld = text.match(new RegExp(`${methodRx}\\s*(?:,\\s*n[aã]o|\\s+e\\s+n[aã]o|\\s+n[aã]o)\\s+(?:no\\s+|o\\s+|em\\s+|de\\s+|foi\\s+)?${methodRx}`, 'i'));
+  if (newNotOld) {
+    return {
+      newMethod: mapMethodTokenToPaymentMethod(newNotOld[1]),
+      oldMethod: mapMethodTokenToPaymentMethod(newNotOld[2])
+    };
+  }
+
+  // Caso 3: "não (foi|era|é) <antigo>, (foi|é|mas) <novo>" / "em vez de <antigo> ... <novo>"
+  const notOldButNew = text.match(new RegExp(`(?:n[aã]o\\s+(?:foi|era|[eé])?\\s*(?:no|em|de)?|em\\s+vez\\s+de)\\s*${methodRx}[\\s,]*(?:e\\s+sim|mas|foi|[eé]|era|coloque|para|no|em)*\\s*${methodRx}`, 'i'));
+  if (notOldButNew) {
+    return {
+      oldMethod: mapMethodTokenToPaymentMethod(notOldButNew[1]),
+      newMethod: mapMethodTokenToPaymentMethod(notOldButNew[2])
+    };
+  }
+
+  // Caso 4: "para <novo>" (ex: "mude para crédito", "altere para débito")
+  const paraNew = text.match(new RegExp(`\\bpara\\s+(?:o\\s+|no\\s+|em\\s+)?${methodRx}`, 'i'));
+  if (paraNew) {
+    return {
+      newMethod: mapMethodTokenToPaymentMethod(paraNew[1]),
+      oldMethod: null
+    };
+  }
+
+  // Caso 5: Único método mencionado
+  const singleMatch = text.match(new RegExp(`\\b${methodRx}\\b`, 'i'));
+  if (singleMatch) {
+    return {
+      newMethod: mapMethodTokenToPaymentMethod(singleMatch[1]),
+      oldMethod: null
+    };
+  }
+
+  return { newMethod: null, oldMethod: null };
+}
+
 // =========================================================================
-// EXECUÇÃO: AJUSTAR ÚLTIMO LANÇAMENTO
+// EXECUÇÃO: AJUSTAR / CORRIGIR ÚLTIMO LANÇAMENTO OU LANÇAMENTO ESPECÍFICO
 // =========================================================================
 export function executeAdjustLastTransaction(text: string, transactions: Transaction[]): LastTransactionAction {
   if (!transactions || transactions.length === 0) {
     return {
       type: 'adjust',
-      reply: '⚠️ Não encontrei nenhum lançamento recente para ajustar.'
+      reply: '⚠️ Não encontrei nenhum lançamento recente para corrigir ou ajustar.'
     };
   }
 
-  const target = { ...transactions[0] };
   const lower = text.toLowerCase();
+  const norm = normalizeText(text);
+  const { newAmount, oldAmount } = extractCorrectionAmountPair(text);
+  const { newMethod, oldMethod } = extractCorrectionMethodPair(text);
+
+  // Seleciona a transação alvo: por padrão a mais recente (índice 0), mas se o usuário informou o valor antigo (ex: "é 400 e não 500") ou método antigo ou nome do item, localiza a transação correspondente!
+  let targetIndex = 0;
+  if (oldAmount > 0) {
+    const idxByOldAmount = transactions.findIndex(t => Math.abs(Number(t.amount) - oldAmount) < 0.01);
+    if (idxByOldAmount >= 0) targetIndex = idxByOldAmount;
+  } else if (oldMethod && transactions[0].method !== oldMethod) {
+    const idxByOldMethod = transactions.findIndex(t => t.method === oldMethod);
+    if (idxByOldMethod >= 0 && idxByOldMethod <= 5) targetIndex = idxByOldMethod;
+  } else if (!/(ultimo|ultima|recente|anterior)/i.test(norm)) {
+    // Verifica se mencionou um item específico do histórico recente
+    const itemIdx = transactions.findIndex(t => {
+      const p = normalizeText(t.product || t.description || '');
+      return p.length >= 3 && norm.includes(p);
+    });
+    if (itemIdx >= 0) targetIndex = itemIdx;
+  }
+
+  const target = { ...transactions[targetIndex], updatedAt: new Date().toISOString() } as Transaction & { updatedAt?: string };
   const changes: string[] = [];
 
-  // 1. Ajuste de Valor Monetário
-  const newAmount = extractMonetaryValue(text);
-  if (newAmount > 0 && newAmount !== target.amount) {
+  // 1. Ajuste de Valor Monetário (suporta "o valor é 400 e não 500", "de 500 para 400", "para 400")
+  if (newAmount > 0 && Math.abs(newAmount - target.amount) >= 0.01) {
     const oldAmountStr = target.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
     const newAmountStr = newAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
     target.amount = newAmount;
-    changes.push(`• **Valor alterado:** de R$ ${oldAmountStr} para **R$ ${newAmountStr}**`);
+    changes.push(`• **Valor corrigido:** de R$ ${oldAmountStr} para **R$ ${newAmountStr}**`);
   }
 
-  // 2. Ajuste de Forma de Pagamento
-  let newMethod: PaymentMethod | null = null;
-  if (lower.includes('pix')) newMethod = 'PIX';
-  else if (lower.includes('débito') || lower.includes('debito')) newMethod = 'Débito';
-  else if (lower.includes('crédito') || lower.includes('credito') || lower.includes('cartão') || lower.includes('cartao')) newMethod = 'Crédito';
-  else if (lower.includes('dinheiro') || lower.includes('espécie')) newMethod = 'Dinheiro';
-  else if (lower.includes('transferência') || lower.includes('transferencia') || lower.includes('ted') || lower.includes('doc')) newMethod = 'Transferência';
-
+  // 2. Ajuste de Forma de Pagamento / Transferência (suporta "modifique de PIX para crédito", "foi no débito e não no pix")
   if (newMethod && newMethod !== target.method) {
     changes.push(`• **Forma de pagamento:** de ${target.method} para **${newMethod}**`);
     target.method = newMethod;
+    if (newMethod === 'Crédito' && !target.cardName) {
+      target.cardName = extractCreditCardName(text) || 'Nubank';
+    } else if (newMethod !== 'Crédito') {
+      target.cardName = undefined;
+    }
   }
 
   // 3. Ajuste de Cartão de Crédito
   const detectedCard = extractCreditCardName(text);
   if (detectedCard && detectedCard !== target.cardName) {
     target.cardName = detectedCard;
-    target.method = 'Crédito';
+    if (target.method !== 'Crédito') {
+      changes.push(`• **Forma de pagamento:** de ${target.method} para **Crédito**`);
+      target.method = 'Crédito';
+    }
     changes.push(`• **Cartão vinculado:** **${detectedCard}**`);
   }
 
-  // 4. Ajuste de Cidade
+  // 4. Ajuste de Tipo (Entrada vs Saída)
+  let newType: 'Entrada' | 'Saída' | null = null;
+  if (/\bde\s+(?:sa[ií]da|despesa|gasto)\s+para\s+(?:entrada|receita|ganho)/i.test(text) ||
+      /\b(?:entrada|receita)\s+e\s+n[aã]o\s+(?:sa[ií]da|despesa)/i.test(text) ||
+      /\b(?:mude|modifique|altere|corrija)\s+(?:o\s+tipo\s+)?para\s+(?:entrada|receita)\b/i.test(text)) {
+    newType = 'Entrada';
+  } else if (/\bde\s+(?:entrada|receita)\s+para\s+(?:sa[ií]da|despesa|gasto)/i.test(text) ||
+             /\b(?:sa[ií]da|despesa)\s+e\s+n[aã]o\s+(?:entrada|receita)/i.test(text) ||
+             /\b(?:mude|modifique|altere|corrija)\s+(?:o\s+tipo\s+)?para\s+(?:sa[ií]da|despesa)\b/i.test(text)) {
+    newType = 'Saída';
+  }
+  if (newType && newType !== target.type) {
+    changes.push(`• **Tipo de lançamento:** de ${target.type} para **${newType}**`);
+    target.type = newType;
+  }
+
+  // 5. Ajuste de Cidade
   let newCity = '';
   if (lower.includes('oeiras') || lower.includes('oeira') || lower.includes('ostras')) newCity = 'Oeiras, PI';
   else if (lower.includes('teresina')) newCity = 'Teresina, PI';
-  else if (lower.includes('caxias')) newCity = 'Caxias, MA';
-  else if (lower.includes('são paulo') || lower.includes('sao paulo') || lower.includes('sp')) newCity = 'São Paulo, SP';
-  else if (lower.includes('fortaleza')) newCity = 'Fortaleza, CE';
-  else if (lower.includes('brasília') || lower.includes('brasilia')) newCity = 'Brasília, DF';
-  else if (lower.includes('timon')) newCity = 'Timon, MA';
+  else if (lower.includes('picos')) newCity = 'Picos, PI';
   else if (lower.includes('floriano')) newCity = 'Floriano, PI';
   else if (lower.includes('parnaíba') || lower.includes('parnaiba')) newCity = 'Parnaíba, PI';
+  else if (lower.includes('caxias')) newCity = 'Caxias, MA';
+  else if (lower.includes('timon')) newCity = 'Timon, MA';
+  else if (lower.includes('são paulo') || lower.includes('sao paulo')) newCity = 'São Paulo, SP';
+  else if (lower.includes('fortaleza')) newCity = 'Fortaleza, CE';
+  else if (lower.includes('brasília') || lower.includes('brasilia')) newCity = 'Brasília, DF';
   else if (lower.includes('internet')) newCity = 'Internet';
 
   if (newCity && newCity !== target.city) {
-    changes.push(`• **Cidade / Local:** de ${target.city} para **${newCity}**`);
+    changes.push(`• **Cidade / Local:** de ${target.city || 'Não informada'} para **${newCity}**`);
     target.city = newCity;
   }
 
-  // 5. Ajuste de Estabelecimento
-  const localMatch = lower.match(/(?:estabelecimento|local|loja|lugar|no|na)\s+(farm[aá]cia|supermercado|mercado|posto|padaria|restaurante|lanchonete|academia|oficina)/i);
-  if (localMatch) {
-    const rawEst = localMatch[1].toLowerCase();
+  // 6. Ajuste de Estabelecimento / Local
+  const customLocalMatch = text.match(/(?:estabelecimento|local|lugar)\s+(?:correto\s+)?(?:[eé]|foi|era|para)\s+([A-Za-zÀ-ÿ0-9\s]{2,35}?)(?:\s+e\s+n[aã]o|\s+em\s+|\.|,|$)/i);
+  const genericLocalMatch = lower.match(/(?:estabelecimento|local|loja|lugar|no|na)\s+(farm[aá]cia|supermercado|mercado|posto|padaria|restaurante|lanchonete|academia|oficina)/i);
+  if (customLocalMatch && customLocalMatch[1]) {
+    const estName = customLocalMatch[1].trim().replace(/^(o|a|no|na)\s+/i, '');
+    if (estName.length >= 2 && estName !== target.establishment) {
+      const capEst = estName.charAt(0).toUpperCase() + estName.slice(1);
+      changes.push(`• **Local / Estabelecimento:** de ${target.establishment || 'Geral'} para **${capEst}**`);
+      target.establishment = capEst;
+    }
+  } else if (genericLocalMatch) {
+    const rawEst = genericLocalMatch[1].toLowerCase();
     let estName = target.establishment || 'Estabelecimento';
     if (rawEst.includes('farm')) estName = 'Farmácia';
     else if (rawEst.includes('supermercado') || rawEst.includes('mercado')) estName = 'Supermercado';
@@ -330,38 +498,51 @@ export function executeAdjustLastTransaction(text: string, transactions: Transac
     else if (rawEst.includes('padaria')) estName = 'Padaria';
     else if (rawEst.includes('restaurante')) estName = 'Restaurante';
     else if (rawEst.includes('lanchonete')) estName = 'Lanchonete';
+    else if (rawEst.includes('academia')) estName = 'Academia';
+    else if (rawEst.includes('oficina')) estName = 'Oficina';
 
     if (estName !== target.establishment) {
-      changes.push(`• **Estabelecimento:** de ${target.establishment || 'Geral'} para **${estName}**`);
+      changes.push(`• **Local / Estabelecimento:** de ${target.establishment || 'Geral'} para **${estName}**`);
       target.establishment = estName;
-      target.description = estName;
     }
   }
 
-  // 6. Ajuste de Produto
-  const prodMatch = lower.match(/(?:produto|item|compra|comprei)\s+(?:foi|era|para)?\s*([a-zà-ÿ\s]{3,30})/i);
-  if (prodMatch) {
-    const rawProd = prodMatch[1].trim();
+  // 7. Ajuste de Produto / Descrição / Item
+  const prodMatch = text.match(/(?:produto|item|descri[cç][aã]o)\s+(?:correto\s+|correta\s+)?(?:[eé]|foi|era|para)\s+([A-Za-zÀ-ÿ0-9\s]{2,35}?)(?:\s+e\s+n[aã]o|\s+no\s+|\s+em\s+|\.|,|$)/i);
+  if (prodMatch && prodMatch[1]) {
+    const rawProd = prodMatch[1].trim().replace(/^(o|a|um|uma)\s+/i, '');
     const cleanProd = rawProd.charAt(0).toUpperCase() + rawProd.slice(1);
     if (cleanProd && cleanProd !== target.product) {
-      changes.push(`• **Produto:** para **${cleanProd}**`);
+      changes.push(`• **Descrição / Item:** de ${target.product || target.description} para **${cleanProd}**`);
       target.product = cleanProd;
+      target.description = cleanProd;
       target.subcategory = cleanProd;
+    }
+  }
+
+  // 8. Ajuste de Categoria
+  const catMatch = text.match(/(?:categoria)\s+(?:correta\s+)?(?:[eé]|foi|era|para)\s+([A-Za-zÀ-ÿ\s]{3,30}?)(?:\s+e\s+n[aã]o|\.|,|$)/i);
+  if (catMatch && catMatch[1]) {
+    const rawCat = catMatch[1].trim();
+    const cleanCat = rawCat.charAt(0).toUpperCase() + rawCat.slice(1);
+    if (cleanCat && cleanCat !== target.category) {
+      changes.push(`• **Categoria:** de ${target.category} para **${cleanCat}**`);
+      target.category = cleanCat;
     }
   }
 
   if (changes.length === 0) {
     return {
       type: 'adjust',
-      reply: `✏️ Identifiquei que você deseja ajustar o último lançamento ("${target.product || target.description}"), mas não identifiquei qual informação mudar. Exemplos de como me dizer:\n• *"Ajuste o valor para R$ 150"*\n• *"Mude para Crédito Nubank"*\n• *"Ajuste a cidade para Oeiras"*`
+      reply: `✏️ Identifiquei que você deseja corrigir o lançamento (**"${target.product || target.description}"**), mas não identifiquei qual campo alterar. Exemplos:\n• *"Corrija o último lançamento, modifique de PIX para crédito"*\n• *"Correção do último lançamento, o valor é 400 e não 500"*\n• *"Mude a cidade do último lançamento para Oeiras"*`
     };
   }
 
-  const updatedTransactions = [target, ...transactions.slice(1)];
-  const reply = `✏️ **Último Lançamento Ajustado com Sucesso!**\n\n` +
+  const updatedTransactions = transactions.map((t, idx) => idx === targetIndex ? target : t);
+  const reply = `✏️ **Lançamento Corrigido com Sucesso!**\n\n` +
     changes.join('\n') + `\n\n` +
-    `• **Resumo Atualizado:** ${target.product || target.description} (${target.type}) — R$ ${target.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} via ${target.method}${target.cardName ? ` (${target.cardName})` : ''} em ${target.city}.\n\n` +
-    `✅ Seus saldos e relatórios foram recalculados automaticamente!`;
+    `• **Resumo Atualizado:** ${target.product || target.description} (${target.type}) — R$ ${target.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} via ${target.method}${target.cardName ? ` (${target.cardName})` : ''}${target.establishment ? ` em ${target.establishment}` : ''}${target.city ? ` (${target.city})` : ''}.\n\n` +
+    `✅ Seus saldos, entradas, saídas e relatórios foram recalculados e sincronizados automaticamente!`;
 
   return {
     type: 'adjust',

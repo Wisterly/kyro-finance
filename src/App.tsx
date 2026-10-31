@@ -419,15 +419,41 @@ export default function App() {
     const ingestIncomingTransactions = (incoming: any[]) => {
       if (!incoming || incoming.length === 0) return;
       setTransactions(prev => {
-        const existingIds = new Set(prev.map(t => String(t.id)));
+        const existingMap = new Map<string, Transaction>(prev.map(t => [String(t.id), t]));
         const deletedRaw = localStorage.getItem('kyro_deleted_tx_ids');
         const localDeletedSet = deletedRaw ? new Set(JSON.parse(deletedRaw)) : new Set();
+
+        let hasInPlaceUpdates = false;
+        const updatedPrev = prev.map(existingTx => {
+          const tid = String(existingTx.id);
+          const matchIn = incoming.find((inc: any) => inc && String(inc.id) === tid);
+          if (!matchIn) return existingTx;
+
+          // Verifica se o item recebido teve alguma edição recente (valor, método, tipo, cidade, local, descrição, updatedAt)
+          const incUpdated = (matchIn as any).updatedAt ? new Date((matchIn as any).updatedAt).getTime() : 0;
+          const prevUpdated = (existingTx as any).updatedAt ? new Date((existingTx as any).updatedAt).getTime() : 0;
+          const fieldsChanged =
+            Math.abs(Number(existingTx.amount) - Number(matchIn.amount)) >= 0.01 ||
+            existingTx.method !== matchIn.method ||
+            existingTx.type !== matchIn.type ||
+            (existingTx.description || '') !== (matchIn.description || '') ||
+            (existingTx.product || '') !== (matchIn.product || '') ||
+            (existingTx.establishment || '') !== (matchIn.establishment || '') ||
+            (existingTx.city || '') !== (matchIn.city || '') ||
+            (existingTx.category || '') !== (matchIn.category || '');
+
+          if (fieldsChanged && incUpdated >= prevUpdated) {
+            hasInPlaceUpdates = true;
+            return { ...existingTx, ...matchIn };
+          }
+          return existingTx;
+        });
 
         const newOnes = incoming.filter((t: any) => {
           if (!t || !t.amount) return false;
           const tid = String(t.id);
-          // SE JÁ EXISTE NA TELA OU FOI EXCLUÍDO PELO USUÁRIO, IGNORA SUMARIAMENTE!
-          if (existingIds.has(tid) || localDeletedSet.has(tid)) return false;
+          // SE JÁ EXISTE NA TELA OU FOI EXCLUÍDO PELO USUÁRIO, IGNORA CRIAÇÃO NOVA!
+          if (existingMap.has(tid) || localDeletedSet.has(tid)) return false;
 
           // Apenas aceita se for mensagem recebida recentemente (últimos 10 minutos)
           if (t.createdAt) {
@@ -436,7 +462,7 @@ export default function App() {
           }
 
           // Antiduplicação por assinatura idêntica recente (últimos 30 segundos)
-          const isDuplicate = prev.some(p => {
+          const isDuplicate = updatedPrev.some(p => {
             const sameDesc = (p.description || '').trim().toLowerCase() === (t.description || '').trim().toLowerCase();
             const sameAmount = Math.abs(Number(p.amount) - Number(t.amount)) < 0.01;
             const sameType = p.type === t.type;
@@ -446,7 +472,7 @@ export default function App() {
           });
 
           if (isDuplicate) return false;
-          existingIds.add(tid);
+          existingMap.set(tid, t);
           return true;
         });
 
@@ -465,9 +491,14 @@ export default function App() {
             syncSaveToCentralDb(ntx);
           });
 
-          const updated = [...newOnes, ...prev];
+          const updated = [...newOnes, ...updatedPrev];
           localStorage.setItem('kyro_transactions', JSON.stringify(updated));
           return updated;
+        }
+
+        if (hasInPlaceUpdates) {
+          localStorage.setItem('kyro_transactions', JSON.stringify(updatedPrev));
+          return updatedPrev;
         }
         return prev;
       });
@@ -481,7 +512,7 @@ export default function App() {
       sseProxy.onmessage = (ev) => {
         try {
           const payload = JSON.parse(ev.data);
-          if (payload?.type === 'new_transaction' && payload.transaction) {
+          if ((payload?.type === 'new_transaction' || payload?.type === 'update_transaction') && payload.transaction) {
             ingestIncomingTransactions([payload.transaction]);
           }
         } catch (e) {}
@@ -494,7 +525,7 @@ export default function App() {
         sseDirect.onmessage = (ev) => {
           try {
             const payload = JSON.parse(ev.data);
-            if (payload?.type === 'new_transaction' && payload.transaction) {
+            if ((payload?.type === 'new_transaction' || payload?.type === 'update_transaction') && payload.transaction) {
               ingestIncomingTransactions([payload.transaction]);
             }
           } catch (e) {}
@@ -950,15 +981,29 @@ export default function App() {
       }
 
       const incomingIds = new Set(cleanIncoming.map((t: any) => String(t.id)));
+      const prevMap = new Map<string, Transaction>(validPrev.map(t => [String(t.id), t]));
       const pendingLocal = validPrev.filter(t => !incomingIds.has(String(t.id)));
 
       if (pendingLocal.length > 0) {
         pendingLocal.forEach(tx => syncSaveToCentralDb(tx));
       }
 
-      const merged = [...pendingLocal, ...cleanIncoming];
-      const currentSig = prev.map(t => `${t.id}_${t.amount}_${t.description}`).join('|');
-      const incomingSig = merged.map((t: any) => `${t.id}_${t.amount}_${t.description}`).join('|');
+      const reconciledIncoming = cleanIncoming.map((inc: any) => {
+        const localTx = prevMap.get(String(inc.id));
+        if (!localTx) return inc;
+        const localUpd = (localTx as any).updatedAt ? new Date((localTx as any).updatedAt).getTime() : 0;
+        const incUpd = inc.updatedAt ? new Date(inc.updatedAt).getTime() : 0;
+        if (localUpd > incUpd) {
+          syncSaveToCentralDb(localTx);
+          return localTx;
+        }
+        return inc;
+      });
+
+      const merged = [...pendingLocal, ...reconciledIncoming];
+      const buildTxSig = (t: any) => `${t.id}_${t.amount}_${t.type}_${t.method}_${t.description}_${t.product || ''}_${t.establishment || ''}_${t.city || ''}_${t.category || ''}_${t.cardName || ''}_${t.date || ''}_${t.updatedAt || ''}`;
+      const currentSig = prev.map(buildTxSig).join('|');
+      const incomingSig = merged.map(buildTxSig).join('|');
       if (currentSig !== incomingSig) {
         localStorage.setItem('kyro_transactions', JSON.stringify(merged));
         return merged;
@@ -1294,6 +1339,8 @@ export default function App() {
   const isGeminiModalOpenRef = useRef(isGeminiModalOpen);
   isGeminiModalOpenRef.current = isGeminiModalOpen;
 
+  const editingTxFromChatRef = useRef<Transaction | null>(null);
+
   // Rastreia navegação voluntária entre abas para empilhar no histórico
   useEffect(() => {
     if (isBackNavigatingRef.current) {
@@ -1310,9 +1357,13 @@ export default function App() {
 
   // Manipulador hierárquico do botão voltar do celular Android
   const handleAndroidBack = useCallback(() => {
-    // 0. Se o pop-up de atualização estiver aberto, fecha o pop-up
+    // 0. Se o pop-up de atualização ou modal de edição estiver aberto, fecha primeiro
     if (availableUpdateRef.current) {
       setAvailableUpdate(null);
+      return;
+    }
+    if (editingTxFromChatRef.current) {
+      setEditingTxFromChat(null);
       return;
     }
 
@@ -1889,17 +1940,36 @@ export default function App() {
   // Estado para seleção e exclusão interativa de lançamentos no chat
   const [selectedTxIdsForRemoval, setSelectedTxIdsForRemoval] = useState<Set<string>>(new Set());
   const [editingTxFromChat, setEditingTxFromChat] = useState<Transaction | null>(null);
+  editingTxFromChatRef.current = editingTxFromChat;
 
-  const handleSaveEditedTransaction = (updatedTx: Transaction) => {
-    if (!updatedTx || !updatedTx.id) return;
+  const handleSaveEditedTransaction = (rawUpdatedTx: Transaction) => {
+    if (!rawUpdatedTx || !rawUpdatedTx.id) return;
 
-    setTransactions(prev => prev.map(t => t.id === updatedTx.id ? updatedTx : t));
+    const cleanDesc = (rawUpdatedTx.description || rawUpdatedTx.product || 'Lançamento').trim();
+    const cleanProduct = rawUpdatedTx.product ? rawUpdatedTx.product.trim() : undefined;
+    const updatedTx: Transaction = {
+      ...rawUpdatedTx,
+      product: cleanProduct || cleanDesc,
+      description: cleanDesc,
+      subcategory: rawUpdatedTx.subcategory || cleanProduct || cleanDesc,
+      cardName: rawUpdatedTx.method === 'Crédito' ? (rawUpdatedTx.cardName || 'Nubank') : undefined,
+      updatedAt: new Date().toISOString()
+    } as Transaction;
+
+    setTransactions(prev => {
+      const next = prev.map(t => t.id === updatedTx.id ? updatedTx : t);
+      localStorage.setItem('kyro_transactions', JSON.stringify(next));
+      return next;
+    });
+    if (selectedTx && selectedTx.id === updatedTx.id) {
+      setSelectedTx(updatedTx);
+    }
     kyroCloud.syncSaveTransaction(updatedTx);
     syncSaveToCentralDb(updatedTx);
 
     setWhatsappSyncToast({
       show: true,
-      text: `✏️ Lançamento "${updatedTx.product || updatedTx.description}" atualizado com sucesso!`
+      text: `✏️ Lançamento "${updatedTx.product || updatedTx.description}" (${updatedTx.type === 'Saída' ? '-' : '+'} R$ ${updatedTx.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} • ${updatedTx.method}) atualizado!`
     });
     setTimeout(() => setWhatsappSyncToast(null), 4000);
 
@@ -1907,13 +1977,15 @@ export default function App() {
     const confirmMsg: ChatMessage = {
       id: Date.now().toString(),
       sender: 'ia',
-      text: `✏️ **Lançamento Ajustado com Sucesso!**\n\n` +
-        `• **Item:** ${updatedTx.product || updatedTx.description}\n` +
+      text: `✏️ **Lançamento Editado com Sucesso!**\n\n` +
+        `• **Tipo:** ${updatedTx.type === 'Entrada' ? '💰 Entrada (+)' : '💸 Saída (-)'}\n` +
+        `• **Item / Descrição:** ${updatedTx.product || updatedTx.description}\n` +
+        `• **Categoria:** ${updatedTx.category}\n` +
         `• **Valor Atualizado:** ${typeSign} R$ ${updatedTx.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n` +
         `• **Forma de Pagamento:** ${updatedTx.method}${updatedTx.cardName ? ` (${updatedTx.cardName})` : ''}\n` +
         `• **Local / Estabelecimento:** ${updatedTx.establishment || 'Geral'} (${updatedTx.city || 'Sem cidade'})\n` +
         `• **Data:** ${updatedTx.date}\n\n` +
-        `✅ Operação concluída: Seus saldos, total de saídas e gráficos foram recalculados imediatamente!`,
+        `✅ Operação concluída: Seus saldos, entradas, saídas e gráficos foram recalculados imediatamente!`,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
 
@@ -2103,476 +2175,538 @@ export default function App() {
     const isAudio = type === 'audio';
     const isImage = type === 'image';
 
-    // =========================================================================
-    // INTEGRAÇÃO NATIVA COM GOOGLE GEMINI 1.5 FLASH (MULTIMODAL & FUNCTION CALLING)
-    // =========================================================================
-    try {
-      const apiResponse = await executeApiCall('/api/chat', {
-        message: text,
-        audioBase64,
-        audioMimeType,
-        imageBase64,
-        imageMimeType,
-        history: messages.slice(-6).map(m => ({ sender: m.sender, text: m.text })),
-        context: {
-          userName: userFullName,
-          totalBalance,
-          monthIncomes,
-          monthExpenses,
-          transactions: transactions.slice(0, 35),
-          creditCards,
-          recurringExpenses
-        },
-        geminiApiKey: geminiApiKey || undefined,
-        groqApiKey: groqApiKey || undefined,
-        formattingPreference: geminiFormatStyle,
-        customPrompt: geminiCustomPrompt,
-        userAiRules: userAiRules
-      });
-
-      if (apiResponse && apiResponse.ok) {
-        const data = await apiResponse.json();
-        if (data && data.reply) {
-          // Atualiza a transcrição real na mensagem do usuário caso tenha sido extraída pelo backend
-          if (data.transcribedText && isAudio && replaceMessageId) {
-            setMessages(prev => prev.map(m => m.id === replaceMessageId ? { ...m, text: `🎙️ "${data.transcribedText}"` } : m));
+    const appendOrReplaceAiMessage = (aiReplyMsg: ChatMessage) => {
+      setMessages(prev => {
+        if (replaceMessageId) {
+          const targetMsg = prev.find(m => m.id === replaceMessageId);
+          // Só substitui se for bolha temporária de carregamento da IA; se for bolha do usuário, preserva e adiciona a resposta abaixo!
+          if (targetMsg && targetMsg.sender === 'ia') {
+            return prev.map(m => m.id === replaceMessageId ? aiReplyMsg : m);
           }
+        }
+        return [...prev, aiReplyMsg];
+      });
+    };
 
-          const action = data.action || { type: 'none' };
+    try {
+      const hasTranscribedText = Boolean(text && !text.startsWith('Por favor analise este áudio') && !text.startsWith('Por favor, analise a mídia'));
 
-          // 1. Criação de transação pelo Gemini
-          if (action.type === 'create_transaction' && action.transaction) {
-            const tx = action.transaction;
-            const newTx: Transaction = {
-              ...tx,
-              id: tx.id || `tx_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-              date: tx.date || new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }),
-              status: 'Concluído'
-            };
-
-            if (newTx.cardName) {
-              const cardExists = creditCards.some(c => c.name.toLowerCase() === newTx.cardName?.toLowerCase());
-              if (!cardExists) {
-                const newCard: CreditCardData = {
-                  id: `card_${Date.now()}`,
-                  name: newTx.cardName,
-                  closingDay: 15,
-                  dueDay: 20,
-                  limit: 5000,
-                  color: 'purple'
-                };
-                setCreditCards(prev => {
-                  const nextCards = [...prev, newCard];
-                  localStorage.setItem('kyro_credit_cards', JSON.stringify(nextCards));
-                  syncSaveCreditCardsToCentralDb(nextCards);
-                  return nextCards;
-                });
-              }
-            }
-
-            setTransactions(prev => [newTx, ...prev]);
-            kyroCloud.syncSaveTransaction(newTx);
-            syncSaveToCentralDb(newTx);
-
+      // =========================================================================
+      // PRIORIDADE 0 (INSTANTÂNEA < 1ms): COMANDOS DE REMOÇÃO, CORREÇÃO/EDIÇÃO E ENRIQUECIMENTO
+      // Funciona tanto para texto digitado quanto para voz transcrita ao vivo (Desktop e Mobile)
+      // =========================================================================
+      if (hasTranscribedText && !isImage) {
+        if (isRemoveTransactionCommand(text)) {
+          const action = executeSmartRemoveTransaction(text, transactions);
+          if (action.actionType === 'single_deleted' && action.updatedTransactions && action.deletedTransactionId) {
+            setTransactions(action.updatedTransactions);
+            localStorage.setItem('kyro_transactions', JSON.stringify(action.updatedTransactions));
+            kyroCloud.syncDeleteTransaction(action.deletedTransactionId);
+            syncDeleteFromCentralDb(action.deletedTransactionId);
             setWhatsappSyncToast({
               show: true,
-              text: `✨ ${newTx.description} (${newTx.type === 'Saída' ? '-' : '+'} R$ ${newTx.amount.toFixed(2)}) lançado com sucesso!`
+              text: '🗑️ Lançamento removido com sucesso!'
             });
             setTimeout(() => setWhatsappSyncToast(null), 4000);
           }
 
-          // 2. Remoção de transação pelo Gemini
-          let actionableTxs: Transaction[] | undefined = undefined;
-          if (action.type === 'delete_transactions') {
-            const targetIds: string[] = action.deleteTargetIds || [];
-            const targetTerm = action.deleteTargetTerm || '';
+          appendOrReplaceAiMessage({
+            id: (Date.now() + 2).toString(),
+            sender: 'ia',
+            text: action.reply,
+            actionableTransactions: action.actionableTransactions,
+            actionCompleted: false,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          });
+          return;
+        }
 
-            let matched: Transaction[] = [];
-            if (targetIds.length > 0) {
-              matched = transactions.filter(t => targetIds.includes(t.id));
+        if (isAdjustLastCommand(text)) {
+          const action = executeAdjustLastTransaction(text, transactions);
+          if (action.updatedTransactions && action.modifiedTransaction) {
+            setTransactions(action.updatedTransactions);
+            localStorage.setItem('kyro_transactions', JSON.stringify(action.updatedTransactions));
+            if (selectedTx && selectedTx.id === action.modifiedTransaction.id) {
+              setSelectedTx(action.modifiedTransaction);
             }
-            if (matched.length === 0 && targetTerm) {
-              matched = searchTransactionsByTerm(targetTerm, transactions);
+            kyroCloud.syncSaveTransaction(action.modifiedTransaction);
+            syncSaveToCentralDb(action.modifiedTransaction);
+            setWhatsappSyncToast({
+              show: true,
+              text: `✏️ Lançamento corrigido: ${action.modifiedTransaction.product || action.modifiedTransaction.description} — R$ ${action.modifiedTransaction.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} (${action.modifiedTransaction.method})!`
+            });
+            setTimeout(() => setWhatsappSyncToast(null), 4000);
+          }
+
+          appendOrReplaceAiMessage({
+            id: (Date.now() + 2).toString(),
+            sender: 'ia',
+            text: action.reply,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          });
+          return;
+        }
+
+        if (isEnrichLastCommand(text)) {
+          const action = executeEnrichLastTransaction(text, transactions);
+          if (action.updatedTransactions && action.modifiedTransaction) {
+            setTransactions(action.updatedTransactions);
+            localStorage.setItem('kyro_transactions', JSON.stringify(action.updatedTransactions));
+            kyroCloud.syncSaveTransaction(action.modifiedTransaction);
+            syncSaveToCentralDb(action.modifiedTransaction);
+            setWhatsappSyncToast({
+              show: true,
+              text: `➕ Informação acrescentada ao lançamento!`
+            });
+            setTimeout(() => setWhatsappSyncToast(null), 4000);
+          }
+
+          appendOrReplaceAiMessage({
+            id: (Date.now() + 2).toString(),
+            sender: 'ia',
+            text: action.reply,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          });
+          return;
+        }
+      }
+
+      // =========================================================================
+      // INTEGRAÇÃO NATIVA COM GOOGLE GEMINI 1.5 FLASH (MULTIMODAL & FUNCTION CALLING)
+      // =========================================================================
+      try {
+        const apiResponse = await executeApiCall('/api/chat', {
+          message: text,
+          audioBase64,
+          audioMimeType,
+          imageBase64,
+          imageMimeType,
+          history: messages.slice(-6).map(m => ({ sender: m.sender, text: m.text })),
+          context: {
+            userName: userFullName,
+            totalBalance,
+            monthIncomes,
+            monthExpenses,
+            transactions: transactions.slice(0, 35),
+            creditCards,
+            recurringExpenses
+          },
+          geminiApiKey: geminiApiKey || undefined,
+          groqApiKey: groqApiKey || undefined,
+          formattingPreference: geminiFormatStyle,
+          customPrompt: geminiCustomPrompt,
+          userAiRules: userAiRules
+        });
+
+        if (apiResponse && apiResponse.ok) {
+          const data = await apiResponse.json();
+          if (data && data.reply) {
+            // Atualiza a transcrição real na mensagem do usuário caso tenha sido extraída pelo backend
+            if (data.transcribedText && isAudio && replaceMessageId) {
+              setMessages(prev => prev.map(m => m.id === replaceMessageId ? { ...m, text: `🎙️ "${data.transcribedText}"` } : m));
+              // Se o áudio foi transcrito pelo backend e era um comando de correção/edição:
+              if (isAdjustLastCommand(data.transcribedText)) {
+                const action = executeAdjustLastTransaction(data.transcribedText, transactions);
+                if (action.updatedTransactions && action.modifiedTransaction) {
+                  setTransactions(action.updatedTransactions);
+                  localStorage.setItem('kyro_transactions', JSON.stringify(action.updatedTransactions));
+                  kyroCloud.syncSaveTransaction(action.modifiedTransaction);
+                  syncSaveToCentralDb(action.modifiedTransaction);
+                  appendOrReplaceAiMessage({
+                    id: (Date.now() + 2).toString(),
+                    sender: 'ia',
+                    text: action.reply,
+                    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                  });
+                  return;
+                }
+              }
             }
 
-            if (matched.length === 1) {
-              const toDelete = matched[0];
-              setTransactions(prev => prev.filter(t => t.id !== toDelete.id));
-              kyroCloud.syncDeleteTransaction(toDelete.id);
-              syncDeleteFromCentralDb(toDelete.id);
+            const action = data.action || { type: 'none' };
+
+            // 1. Criação de transação pelo Gemini
+            if (action.type === 'create_transaction' && action.transaction) {
+              const tx = action.transaction;
+              const newTx: Transaction = {
+                ...tx,
+                id: tx.id || `tx_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+                date: tx.date || new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }),
+                status: 'Concluído'
+              };
+
+              if (newTx.cardName) {
+                const cardExists = creditCards.some(c => c.name.toLowerCase() === newTx.cardName?.toLowerCase());
+                if (!cardExists) {
+                  const newCard: CreditCardData = {
+                    id: `card_${Date.now()}`,
+                    name: newTx.cardName,
+                    closingDay: 15,
+                    dueDay: 20,
+                    limit: 5000,
+                    color: 'purple'
+                  };
+                  setCreditCards(prev => {
+                    const nextCards = [...prev, newCard];
+                    localStorage.setItem('kyro_credit_cards', JSON.stringify(nextCards));
+                    syncSaveCreditCardsToCentralDb(nextCards);
+                    return nextCards;
+                  });
+                }
+              }
+
+              setTransactions(prev => [newTx, ...prev]);
+              kyroCloud.syncSaveTransaction(newTx);
+              syncSaveToCentralDb(newTx);
 
               setWhatsappSyncToast({
                 show: true,
-                text: `🗑️ Lançamento "${toDelete.product || toDelete.description}" removido com sucesso!`
+                text: `✨ ${newTx.description} (${newTx.type === 'Saída' ? '-' : '+'} R$ ${newTx.amount.toFixed(2)}) lançado com sucesso!`
               });
               setTimeout(() => setWhatsappSyncToast(null), 4000);
-            } else if (matched.length > 1) {
-              actionableTxs = matched;
-              setSelectedTxIdsForRemoval(new Set(matched.map(t => t.id)));
             }
-          }
 
-          // 3. Aprendizado e Memorização de Nova Regra de Filtragem pelo Gemini
-          if (action.type === 'save_user_rule') {
-            const ruleText = typeof action.rule === 'string' ? action.rule.trim() : '';
-            if (ruleText) {
-              setUserAiRules(prev => {
-                if (prev.includes(ruleText)) return prev;
-                const next = [...prev, ruleText];
-                localStorage.setItem('kyro_user_ai_rules', JSON.stringify(next));
-                fetch('/api/database', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ action: 'save_ai_rule', rule: ruleText })
-                }).catch(() => {});
-                return next;
+            // 2. Remoção de transação pelo Gemini
+            let actionableTxs: Transaction[] | undefined = undefined;
+            if (action.type === 'delete_transactions') {
+              const targetIds: string[] = action.deleteTargetIds || [];
+              const targetTerm = action.deleteTargetTerm || '';
+
+              let matched: Transaction[] = [];
+              if (targetIds.length > 0) {
+                matched = transactions.filter(t => targetIds.includes(t.id));
+              }
+              if (matched.length === 0 && targetTerm) {
+                matched = searchTransactionsByTerm(targetTerm, transactions);
+              }
+
+              if (matched.length === 1) {
+                const toDelete = matched[0];
+                setTransactions(prev => prev.filter(t => t.id !== toDelete.id));
+                kyroCloud.syncDeleteTransaction(toDelete.id);
+                syncDeleteFromCentralDb(toDelete.id);
+
+                setWhatsappSyncToast({
+                  show: true,
+                  text: `🗑️ Lançamento "${toDelete.product || toDelete.description}" removido com sucesso!`
+                });
+                setTimeout(() => setWhatsappSyncToast(null), 4000);
+              } else if (matched.length > 1) {
+                actionableTxs = matched;
+                setSelectedTxIdsForRemoval(new Set(matched.map(t => t.id)));
+              }
+            }
+
+            // 3. Aprendizado e Memorização de Nova Regra de Filtragem pelo Gemini
+            if (action.type === 'save_user_rule') {
+              const ruleText = typeof action.rule === 'string' ? action.rule.trim() : '';
+              if (ruleText) {
+                setUserAiRules(prev => {
+                  if (prev.includes(ruleText)) return prev;
+                  const next = [...prev, ruleText];
+                  localStorage.setItem('kyro_user_ai_rules', JSON.stringify(next));
+                  fetch('/api/database', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'save_ai_rule', rule: ruleText })
+                  }).catch(() => {});
+                  return next;
+                });
+              }
+
+              // Se a regra requerer ajuste retroativo do lançamento recente
+              if (action.adjustRecentTransaction && action.adjustedFields) {
+                const targetId = action.targetTxId;
+                setTransactions(prev => {
+                  let found = false;
+                  const updated = prev.map(t => {
+                    if (targetId && t.id === targetId) {
+                      found = true;
+                      const mod = { ...t, ...action.adjustedFields };
+                      kyroCloud.syncSaveTransaction(mod);
+                      syncSaveToCentralDb(mod);
+                      return mod;
+                    }
+                    return t;
+                  });
+
+                  if (!found && updated.length > 0) {
+                    const idx = updated.findIndex(t => 
+                      (t.description || '').includes('/') || 
+                      (t.description || '').toLowerCase().includes('alimenta')
+                    );
+                    const targetIndex = idx >= 0 ? idx : 0;
+                    const mod = { ...updated[targetIndex], ...action.adjustedFields };
+                    updated[targetIndex] = mod;
+                    kyroCloud.syncSaveTransaction(mod);
+                    syncSaveToCentralDb(mod);
+                  }
+
+                  localStorage.setItem('kyro_transactions', JSON.stringify(updated));
+                  return updated;
+                });
+              }
+
+              setWhatsappSyncToast({
+                show: true,
+                text: '🧠 Nova diretriz de filtragem memorizada pelo Gemini!'
               });
+              setTimeout(() => setWhatsappSyncToast(null), 4000);
             }
 
-            // Se a regra requerer ajuste retroativo do lançamento recente
-            if (action.adjustRecentTransaction && action.adjustedFields) {
+            // 4. Ajuste Direto de Lançamento pelo Gemini
+            if (action.type === 'adjust_transaction') {
               const targetId = action.targetTxId;
+              const adjustments = action.adjustments || {};
               setTransactions(prev => {
-                let found = false;
                 const updated = prev.map(t => {
                   if (targetId && t.id === targetId) {
-                    found = true;
-                    const mod = { ...t, ...action.adjustedFields };
+                    const mod = { ...t, ...adjustments };
                     kyroCloud.syncSaveTransaction(mod);
                     syncSaveToCentralDb(mod);
                     return mod;
                   }
                   return t;
                 });
-
-                if (!found && updated.length > 0) {
-                  const idx = updated.findIndex(t => 
-                    (t.description || '').includes('/') || 
-                    (t.description || '').toLowerCase().includes('alimenta')
-                  );
-                  const targetIndex = idx >= 0 ? idx : 0;
-                  const mod = { ...updated[targetIndex], ...action.adjustedFields };
-                  updated[targetIndex] = mod;
-                  kyroCloud.syncSaveTransaction(mod);
-                  syncSaveToCentralDb(mod);
-                }
-
                 localStorage.setItem('kyro_transactions', JSON.stringify(updated));
                 return updated;
               });
+
+              setWhatsappSyncToast({
+                show: true,
+                text: '✏️ Lançamento ajustado com sucesso!'
+              });
+              setTimeout(() => setWhatsappSyncToast(null), 4000);
             }
 
-            setWhatsappSyncToast({
-              show: true,
-              text: '🧠 Nova diretriz de filtragem memorizada pelo Gemini!'
-            });
-            setTimeout(() => setWhatsappSyncToast(null), 4000);
-          }
+            const aiReplyMsg: ChatMessage = {
+              id: (Date.now() + 2).toString(),
+              sender: 'ia',
+              text: data.reply,
+              actionableTransactions: actionableTxs,
+              actionCompleted: false,
+              engine: data.engine || 'gemini-1.5-flash',
+              timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            };
 
-          // 4. Ajuste Direto de Lançamento pelo Gemini
-          if (action.type === 'adjust_transaction') {
-            const targetId = action.targetTxId;
-            const adjustments = action.adjustments || {};
-            setTransactions(prev => {
-              const updated = prev.map(t => {
-                if (targetId && t.id === targetId) {
-                  const mod = { ...t, ...adjustments };
-                  kyroCloud.syncSaveTransaction(mod);
-                  syncSaveToCentralDb(mod);
-                  return mod;
-                }
-                return t;
+            appendOrReplaceAiMessage(aiReplyMsg);
+            return;
+          }
+        }
+      } catch (geminiApiError) {
+        console.warn('[Gemini 1.5 Flash Chat API Fallback]:', geminiApiError);
+      }
+
+      // =========================================================================
+      // COMANDO 1: REMOÇÃO INTELIGENTE DE LANÇAMENTOS (ÚLTIMO OU BUSCA POR TERMO/CIDADE)
+      // =========================================================================
+      if (isRemoveTransactionCommand(text)) {
+        const action = executeSmartRemoveTransaction(text, transactions);
+
+        // Se encontrou exatamente 1 e já excluiu automaticamente
+        if (action.actionType === 'single_deleted' && action.updatedTransactions && action.deletedTransactionId) {
+          setTransactions(action.updatedTransactions);
+          kyroCloud.syncDeleteTransaction(action.deletedTransactionId);
+          syncDeleteFromCentralDb(action.deletedTransactionId);
+          setWhatsappSyncToast({
+            show: true,
+            text: '🗑️ Lançamento removido com sucesso!'
+          });
+          setTimeout(() => setWhatsappSyncToast(null), 4000);
+        }
+
+        appendOrReplaceAiMessage({
+          id: (Date.now() + 2).toString(),
+          sender: 'ia',
+          text: action.reply,
+          actionableTransactions: action.actionableTransactions,
+          actionCompleted: false,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        });
+        return;
+      }
+
+      // =========================================================================
+      // COMANDO 2: AJUSTE DO ÚLTIMO LANÇAMENTO ("ajuste o valor do último para R$...", etc.)
+      // =========================================================================
+      if (isAdjustLastCommand(text)) {
+        const action = executeAdjustLastTransaction(text, transactions);
+        if (action.updatedTransactions && action.modifiedTransaction) {
+          setTransactions(action.updatedTransactions);
+          kyroCloud.syncSaveTransaction(action.modifiedTransaction);
+          syncSaveToCentralDb(action.modifiedTransaction);
+          setWhatsappSyncToast({
+            show: true,
+            text: `✏️ Último lançamento atualizado: R$ ${action.modifiedTransaction.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}!`
+          });
+          setTimeout(() => setWhatsappSyncToast(null), 4000);
+        }
+
+        appendOrReplaceAiMessage({
+          id: (Date.now() + 2).toString(),
+          sender: 'ia',
+          text: action.reply,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        });
+        return;
+      }
+
+      // =========================================================================
+      // COMANDO 3: ENRIQUECER/ACRESCENTAR INFORMAÇÃO NO ÚLTIMO LANÇAMENTO
+      // =========================================================================
+      if (isEnrichLastCommand(text)) {
+        const action = executeEnrichLastTransaction(text, transactions);
+        if (action.updatedTransactions && action.modifiedTransaction) {
+          setTransactions(action.updatedTransactions);
+          kyroCloud.syncSaveTransaction(action.modifiedTransaction);
+          syncSaveToCentralDb(action.modifiedTransaction);
+          setWhatsappSyncToast({
+            show: true,
+            text: `➕ Informação acrescentada ao último lançamento!`
+          });
+          setTimeout(() => setWhatsappSyncToast(null), 4000);
+        }
+
+        appendOrReplaceAiMessage({
+          id: (Date.now() + 2).toString(),
+          sender: 'ia',
+          text: action.reply,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        });
+        return;
+      }
+
+      // Extrai dados financeiros diretamente com o algoritmo dinâmico de alta precisão
+      const parsed = parseDynamicFinancialMessage(text, isAudio, isImage);
+
+      if (parsed) {
+        // Caso 1: Cadastro de Dívida Recorrente (NÃO debita do saldo até o usuário dar o OK de paga!)
+        if (parsed.isRecurring && parsed.recurringData) {
+          const newRec = parsed.recurringData;
+          setRecurringExpenses(prev => {
+            const nextRecs = [newRec, ...prev];
+            localStorage.setItem('kyro_recurring', JSON.stringify(nextRecs));
+            syncSaveRecurringToCentralDb(nextRecs);
+            return nextRecs;
+          });
+          kyroCloud.syncSaveRecurring(newRec);
+
+          if (newRec.cardName) {
+            const cardExists = creditCards.some(c => c.name.toLowerCase() === newRec.cardName?.toLowerCase());
+            if (!cardExists) {
+              const newCard: CreditCardData = {
+                id: `card_${Date.now()}`,
+                name: newRec.cardName,
+                closingDay: 15,
+                dueDay: newRec.dueDateDay || 20,
+                limit: 5000,
+                color: 'purple'
+              };
+              setCreditCards(prev => {
+                const nextCards = [...prev, newCard];
+                localStorage.setItem('kyro_credit_cards', JSON.stringify(nextCards));
+                syncSaveCreditCardsToCentralDb(nextCards);
+                return nextCards;
               });
-              localStorage.setItem('kyro_transactions', JSON.stringify(updated));
-              return updated;
-            });
-
-            setWhatsappSyncToast({
-              show: true,
-              text: '✏️ Lançamento ajustado com sucesso!'
-            });
-            setTimeout(() => setWhatsappSyncToast(null), 4000);
+            }
           }
 
-          const aiReplyMsg: ChatMessage = {
+          setWhatsappSyncToast({
+            show: true,
+            text: `🔁 Dívida Recorrente "${newRec.title}" salva! Ficará separada até você confirmar o pagamento.`
+          });
+          setTimeout(() => setWhatsappSyncToast(null), 5000);
+
+          appendOrReplaceAiMessage({
             id: (Date.now() + 2).toString(),
             sender: 'ia',
-            text: data.reply,
-            actionableTransactions: actionableTxs,
-            actionCompleted: false,
-            engine: data.engine || 'gemini-1.5-flash',
+            text: parsed.reply,
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          });
+          return;
+        }
+
+        // Caso 2: Confirmação de Pagamento de Dívida Recorrente ("Paguei a passagem aérea")
+        if (parsed.isPaymentConfirmation) {
+          const replyText = handleConfirmRecurringPaymentByName(parsed.paymentTargetName || parsed.object || '');
+          appendOrReplaceAiMessage({
+            id: (Date.now() + 2).toString(),
+            sender: 'ia',
+            text: replyText,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          });
+          return;
+        }
+
+        // Caso 3: Lançamento Financeiro Avulso (Entrada ou Saída)
+        if (parsed.savedTx) {
+          const newTx: Transaction = {
+            ...parsed.savedTx,
+            status: 'Concluído'
           };
 
-          setMessages(prev => {
-            if (replaceMessageId) {
-              return prev.map(m => m.id === replaceMessageId ? aiReplyMsg : m);
+          if (newTx.cardName) {
+            const cardExists = creditCards.some(c => c.name.toLowerCase() === newTx.cardName?.toLowerCase());
+            if (!cardExists) {
+              const newCard: CreditCardData = {
+                id: `card_${Date.now()}`,
+                name: newTx.cardName,
+                closingDay: 15,
+                dueDay: 20,
+                limit: 5000,
+                color: 'purple'
+              };
+              setCreditCards(prev => {
+                const nextCards = [...prev, newCard];
+                localStorage.setItem('kyro_credit_cards', JSON.stringify(nextCards));
+                syncSaveCreditCardsToCentralDb(nextCards);
+                return nextCards;
+              });
             }
-            return [...prev, aiReplyMsg];
+          }
+
+          setTransactions(prev => [newTx, ...prev]);
+          kyroCloud.syncSaveTransaction(newTx);
+          syncSaveToCentralDb(newTx);
+
+          const symbol = newTx.type === 'Entrada' ? '+' : '-';
+          setWhatsappSyncToast({
+            show: true,
+            text: `Lançamento: ${newTx.description} (${symbol} R$ ${newTx.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}) atualizado no Dashboard e nas abas!`
+          });
+          setTimeout(() => setWhatsappSyncToast(null), 5000);
+
+          appendOrReplaceAiMessage({
+            id: (Date.now() + 2).toString(),
+            sender: 'ia',
+            text: parsed.reply,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
           });
           return;
         }
       }
-    } catch (geminiApiError) {
-      console.warn('[Gemini 1.5 Flash Chat API Fallback]:', geminiApiError);
-    }
 
-    // =========================================================================
-    // COMANDO 1: REMOÇÃO INTELIGENTE DE LANÇAMENTOS (ÚLTIMO OU BUSCA POR TERMO/CIDADE)
-    // =========================================================================
-    if (isRemoveTransactionCommand(text)) {
-      const action = executeSmartRemoveTransaction(text, transactions);
+      // Se não for lançamento financeiro direto nem comando de dívida, processa com o Motor Cognitivo Conversacional KYRO
+      const reply = generateThinkingFinancialReply(text, {
+        userName: userFullName,
+        totalBalance,
+        monthIncomes,
+        monthExpenses,
+        savingsRate,
+        transactions,
+        recurringExpenses,
+        creditCards
+      });
 
-      // Se encontrou exatamente 1 e já excluiu automaticamente
-      if (action.actionType === 'single_deleted' && action.updatedTransactions && action.deletedTransactionId) {
-        setTransactions(action.updatedTransactions);
-        kyroCloud.syncDeleteTransaction(action.deletedTransactionId);
-        syncDeleteFromCentralDb(action.deletedTransactionId);
-        setWhatsappSyncToast({
-          show: true,
-          text: '🗑️ Lançamento removido com sucesso!'
-        });
-        setTimeout(() => setWhatsappSyncToast(null), 4000);
-      }
-
-      const aiReplyMsg: ChatMessage = {
+      appendOrReplaceAiMessage({
         id: (Date.now() + 2).toString(),
         sender: 'ia',
-        text: action.reply,
-        actionableTransactions: action.actionableTransactions,
-        actionCompleted: false,
+        text: reply,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      };
-
-      setMessages(prev => {
-        if (replaceMessageId) {
-          return prev.map(m => m.id === replaceMessageId ? aiReplyMsg : m);
-        }
-        return [...prev, aiReplyMsg];
       });
-      return;
+    } finally {
+      setIsAiLoading(false);
     }
-
-    // =========================================================================
-    // COMANDO 2: AJUSTE DO ÚLTIMO LANÇAMENTO ("ajuste o valor do último para R$...", etc.)
-    // =========================================================================
-    if (isAdjustLastCommand(text)) {
-      const action = executeAdjustLastTransaction(text, transactions);
-      if (action.updatedTransactions && action.modifiedTransaction) {
-        setTransactions(action.updatedTransactions);
-        kyroCloud.syncSaveTransaction(action.modifiedTransaction);
-        syncSaveToCentralDb(action.modifiedTransaction);
-        setWhatsappSyncToast({
-          show: true,
-          text: `✏️ Último lançamento atualizado: R$ ${action.modifiedTransaction.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}!`
-        });
-        setTimeout(() => setWhatsappSyncToast(null), 4000);
-      }
-
-      const aiReplyMsg: ChatMessage = {
-        id: (Date.now() + 2).toString(),
-        sender: 'ia',
-        text: action.reply,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      };
-
-      setMessages(prev => {
-        if (replaceMessageId) {
-          return prev.map(m => m.id === replaceMessageId ? aiReplyMsg : m);
-        }
-        return [...prev, aiReplyMsg];
-      });
-      return;
-    }
-
-    // =========================================================================
-    // COMANDO 3: ENRIQUECER/ACRESCENTAR INFORMAÇÃO NO ÚLTIMO LANÇAMENTO
-    // =========================================================================
-    if (isEnrichLastCommand(text)) {
-      const action = executeEnrichLastTransaction(text, transactions);
-      if (action.updatedTransactions && action.modifiedTransaction) {
-        setTransactions(action.updatedTransactions);
-        kyroCloud.syncSaveTransaction(action.modifiedTransaction);
-        syncSaveToCentralDb(action.modifiedTransaction);
-        setWhatsappSyncToast({
-          show: true,
-          text: `➕ Informação acrescentada ao último lançamento!`
-        });
-        setTimeout(() => setWhatsappSyncToast(null), 4000);
-      }
-
-      const aiReplyMsg: ChatMessage = {
-        id: (Date.now() + 2).toString(),
-        sender: 'ia',
-        text: action.reply,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      };
-
-      setMessages(prev => {
-        if (replaceMessageId) {
-          return prev.map(m => m.id === replaceMessageId ? aiReplyMsg : m);
-        }
-        return [...prev, aiReplyMsg];
-      });
-      return;
-    }
-
-    // Extrai dados financeiros diretamente com o algoritmo dinâmico de alta precisão
-    const parsed = parseDynamicFinancialMessage(text, isAudio, isImage);
-
-    if (parsed) {
-      // Caso 1: Cadastro de Dívida Recorrente (NÃO debita do saldo até o usuário dar o OK de paga!)
-      if (parsed.isRecurring && parsed.recurringData) {
-        const newRec = parsed.recurringData;
-        setRecurringExpenses(prev => {
-          const nextRecs = [newRec, ...prev];
-          localStorage.setItem('kyro_recurring', JSON.stringify(nextRecs));
-          syncSaveRecurringToCentralDb(nextRecs);
-          return nextRecs;
-        });
-        kyroCloud.syncSaveRecurring(newRec);
-
-        if (newRec.cardName) {
-          const cardExists = creditCards.some(c => c.name.toLowerCase() === newRec.cardName?.toLowerCase());
-          if (!cardExists) {
-            const newCard: CreditCardData = {
-              id: `card_${Date.now()}`,
-              name: newRec.cardName,
-              closingDay: 15,
-              dueDay: newRec.dueDateDay || 20,
-              limit: 5000,
-              color: 'purple'
-            };
-            setCreditCards(prev => {
-              const nextCards = [...prev, newCard];
-              localStorage.setItem('kyro_credit_cards', JSON.stringify(nextCards));
-              syncSaveCreditCardsToCentralDb(nextCards);
-              return nextCards;
-            });
-          }
-        }
-
-        setWhatsappSyncToast({
-          show: true,
-          text: `🔁 Dívida Recorrente "${newRec.title}" salva! Ficará separada até você confirmar o pagamento.`
-        });
-        setTimeout(() => setWhatsappSyncToast(null), 5000);
-
-        const aiReplyMsg: ChatMessage = {
-          id: (Date.now() + 2).toString(),
-          sender: 'ia',
-          text: parsed.reply,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        };
-
-        setMessages(prev => {
-          if (replaceMessageId) {
-            return prev.map(m => m.id === replaceMessageId ? aiReplyMsg : m);
-          }
-          return [...prev, aiReplyMsg];
-        });
-        return;
-      }
-
-      // Caso 2: Confirmação de Pagamento de Dívida Recorrente ("Paguei a passagem aérea")
-      if (parsed.isPaymentConfirmation) {
-        const replyText = handleConfirmRecurringPaymentByName(parsed.paymentTargetName || parsed.object || '');
-        const aiReplyMsg: ChatMessage = {
-          id: (Date.now() + 2).toString(),
-          sender: 'ia',
-          text: replyText,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        };
-
-        setMessages(prev => {
-          if (replaceMessageId) {
-            return prev.map(m => m.id === replaceMessageId ? aiReplyMsg : m);
-          }
-          return [...prev, aiReplyMsg];
-        });
-        return;
-      }
-
-      // Caso 3: Lançamento Financeiro Avulso (Entrada ou Saída)
-      if (parsed.savedTx) {
-        const newTx: Transaction = {
-          ...parsed.savedTx,
-          status: 'Concluído'
-        };
-
-        if (newTx.cardName) {
-          const cardExists = creditCards.some(c => c.name.toLowerCase() === newTx.cardName?.toLowerCase());
-          if (!cardExists) {
-            const newCard: CreditCardData = {
-              id: `card_${Date.now()}`,
-              name: newTx.cardName,
-              closingDay: 15,
-              dueDay: 20,
-              limit: 5000,
-              color: 'purple'
-            };
-            setCreditCards(prev => {
-              const nextCards = [...prev, newCard];
-              localStorage.setItem('kyro_credit_cards', JSON.stringify(nextCards));
-              syncSaveCreditCardsToCentralDb(nextCards);
-              return nextCards;
-            });
-          }
-        }
-
-        setTransactions(prev => [newTx, ...prev]);
-        kyroCloud.syncSaveTransaction(newTx);
-        syncSaveToCentralDb(newTx);
-
-        const symbol = newTx.type === 'Entrada' ? '+' : '-';
-        setWhatsappSyncToast({
-          show: true,
-          text: `Lançamento: ${newTx.description} (${symbol} R$ ${newTx.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}) atualizado no Dashboard e nas abas!`
-        });
-        setTimeout(() => setWhatsappSyncToast(null), 5000);
-
-        const aiReplyMsg: ChatMessage = {
-          id: (Date.now() + 2).toString(),
-          sender: 'ia',
-          text: parsed.reply,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        };
-
-        setMessages(prev => {
-          if (replaceMessageId) {
-            return prev.map(m => m.id === replaceMessageId ? aiReplyMsg : m);
-          }
-          return [...prev, aiReplyMsg];
-        });
-        return;
-      }
-    }
-
-    // Se não for lançamento financeiro direto nem comando de dívida, processa com o Motor Cognitivo Conversacional KYRO
-    const reply = generateThinkingFinancialReply(text, {
-      userName: userFullName,
-      totalBalance,
-      monthIncomes,
-      monthExpenses,
-      savingsRate,
-      transactions,
-      recurringExpenses,
-      creditCards
-    });
-
-    const aiReplyMsg: ChatMessage = {
-      id: (Date.now() + 2).toString(),
-      sender: 'ia',
-      text: reply,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    };
-
-    setMessages(prev => {
-      if (replaceMessageId) {
-        return prev.map(m => m.id === replaceMessageId ? aiReplyMsg : m);
-      }
-      return [...prev, aiReplyMsg];
-    });
   };
 
   const handleSendMessage = async () => {
@@ -3810,7 +3944,8 @@ export default function App() {
                       {filteredTransactions.slice(0, 6).map((tx) => (
                         <tr 
                           key={tx.id} 
-                          onClick={() => setSelectedTx(tx)}
+                          onClick={() => setEditingTxFromChat({ ...tx })}
+                          title="Clique para editar este lançamento"
                           className="hover:bg-slate-800/40 transition-colors group cursor-pointer"
                         >
                           <td className="py-3.5 pl-2">
@@ -3824,10 +3959,11 @@ export default function App() {
                                  tx.category.includes('Empréstimo') ? '🏦' : '💰'}
                               </div>
                               <div>
-                                <p className="font-semibold text-slate-100 group-hover:text-amber-300 transition-colors">
-                                  {tx.description}
+                                <p className="font-semibold text-slate-100 group-hover:text-amber-300 transition-colors flex items-center gap-1.5">
+                                  <span>{tx.description}</span>
+                                  <span className="text-[10px] text-amber-400/70 opacity-0 group-hover:opacity-100 transition-opacity font-normal">✏️ Editar</span>
                                   {tx.totalInstallments && tx.totalInstallments > 0 && (
-                                    <span className="ml-2 text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-1.5 py-0.5 rounded-full font-bold">
+                                    <span className="ml-1 text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-1.5 py-0.5 rounded-full font-bold">
                                       {tx.currentInstallment}/{tx.totalInstallments}
                                     </span>
                                   )}
@@ -3853,12 +3989,22 @@ export default function App() {
                           <td className={`py-3.5 text-right pr-2 font-bold ${
                             tx.type === 'Entrada' ? 'text-emerald-400' : 'text-orange-400'
                           }`}>
-                            <div className="flex items-center justify-end gap-2">
+                            <div className="flex items-center justify-end gap-1.5">
                               <span>{tx.type === 'Entrada' ? '+' : '-'} R$ {tx.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                              <button 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setEditingTxFromChat({ ...tx });
+                                }}
+                                title="Editar transação"
+                                className="p-1 rounded-lg text-amber-400/80 hover:text-amber-300 hover:bg-amber-500/15 transition-all"
+                              >
+                                <Sliders size={14} />
+                              </button>
                               <button 
                                 onClick={(e) => handleDeleteTransaction(tx.id, e)}
                                 title="Excluir transação"
-                                className="opacity-0 group-hover:opacity-100 p-1 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-all"
+                                className="p-1 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-all"
                               >
                                 <Trash2 size={14} />
                               </button>
@@ -3947,8 +4093,9 @@ export default function App() {
                     {filteredTransactions.map(tx => (
                       <tr 
                         key={tx.id} 
-                        onClick={() => setSelectedTx(tx)} 
-                        className={`transition-colors cursor-pointer ${
+                        onClick={() => setEditingTxFromChat({ ...tx })} 
+                        title="Clique para editar este lançamento"
+                        className={`transition-colors cursor-pointer group ${
                           selectedTxTabIds.has(tx.id) ? 'bg-amber-500/10 hover:bg-amber-500/15' : 'hover:bg-slate-800/40'
                         }`}
                       >
@@ -3967,8 +4114,12 @@ export default function App() {
                                 <span className="px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/40 text-xs font-bold">
                                   {tx.product}
                                 </span>
-                                <span className="text-slate-400 font-normal text-xs">em</span>
-                                <span className="text-slate-100">{tx.description}</span>
+                                {tx.description && tx.description !== tx.product && (
+                                  <>
+                                    <span className="text-slate-400 font-normal text-xs">em</span>
+                                    <span className="text-slate-100">{tx.description}</span>
+                                  </>
+                                )}
                               </>
                             ) : (
                               <span>{tx.description}</span>
@@ -3978,6 +4129,7 @@ export default function App() {
                                 {tx.currentInstallment}/{tx.totalInstallments}
                               </span>
                             )}
+                            <span className="text-[10px] text-amber-400/75 opacity-0 group-hover:opacity-100 transition-opacity font-normal">✏️ Editar</span>
                           </div>
                         </td>
                         <td className="py-3.5 text-slate-300 text-xs">{tx.category} • {tx.subcategory}</td>
@@ -3993,8 +4145,18 @@ export default function App() {
                         </td>
                         <td className="py-3.5 text-right text-xs text-slate-400">{tx.date}</td>
                         <td className={`py-3.5 text-right pr-2 font-bold ${tx.type === 'Entrada' ? 'text-emerald-400' : 'text-orange-400'}`}>
-                          <div className="flex items-center justify-end gap-2">
+                          <div className="flex items-center justify-end gap-1.5">
                             <span>{tx.type === 'Entrada' ? '+' : '-'} R$ {tx.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                            <button 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingTxFromChat({ ...tx });
+                              }}
+                              title="Editar transação"
+                              className="p-1 rounded-lg text-amber-400/80 hover:text-amber-300 hover:bg-amber-500/15 transition-all"
+                            >
+                              <Sliders size={14} />
+                            </button>
                             <button 
                               onClick={(e) => handleDeleteTransaction(tx.id, e)}
                               title="Excluir transação"
@@ -5334,7 +5496,8 @@ export default function App() {
                 transactions.filter(t => t.type === 'Entrada').map(t => (
                   <div 
                     key={t.id} 
-                    onClick={() => handleToggleSelectEntry(t.id)}
+                    onClick={() => setEditingTxFromChat({ ...t })}
+                    title="Clique para editar esta entrada"
                     className={`p-3 rounded-xl border flex justify-between items-center text-xs group cursor-pointer transition-all ${
                       selectedEntryIds.has(t.id)
                         ? 'bg-amber-500/10 border-amber-500/60 shadow-[0_0_10px_rgba(245,158,11,0.15)]'
@@ -5350,12 +5513,25 @@ export default function App() {
                         className="h-4 w-4 rounded border-slate-700 bg-slate-900 text-amber-500 focus:ring-amber-500 cursor-pointer accent-amber-500"
                       />
                       <div>
-                        <p className="font-semibold text-slate-100">{t.description}</p>
+                        <p className="font-semibold text-slate-100 flex items-center gap-1.5">
+                          <span>{t.description}</span>
+                          <span className="text-[10px] text-amber-400/75 opacity-0 group-hover:opacity-100 transition-opacity font-normal">✏️ Editar</span>
+                        </p>
                         <p className="text-[11px] text-slate-400">{t.method} • {t.city} • {t.date}</p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2">
                       <span className="font-bold text-emerald-400 text-sm">+ R$ {t.amount.toLocaleString('pt-BR', {minimumFractionDigits:2})}</span>
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditingTxFromChat({ ...t });
+                        }}
+                        title="Editar esta entrada"
+                        className="p-1.5 rounded-lg text-amber-400/80 hover:text-amber-300 hover:bg-amber-500/15 transition-all"
+                      >
+                        <Sliders size={14} />
+                      </button>
                       <button 
                         onClick={(e) => {
                           e.stopPropagation();
@@ -5538,7 +5714,8 @@ export default function App() {
                     transactions.filter(t => t.type === 'Saída').map(tx => (
                       <div 
                         key={tx.id} 
-                        onClick={() => handleToggleSelectExit(tx.id)}
+                        onClick={() => setEditingTxFromChat({ ...tx })}
+                        title="Clique para editar esta saída"
                         className={`p-3.5 rounded-xl border transition-all group cursor-pointer ${
                           selectedExitIds.has(tx.id)
                             ? 'bg-amber-500/10 border-amber-500/60 shadow-[0_0_10px_rgba(245,158,11,0.15)]'
@@ -5564,8 +5741,12 @@ export default function App() {
                                     <span className="text-xs bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded-md font-bold">
                                       {tx.product}
                                     </span>
-                                    <span className="text-slate-400 font-normal text-xs">em</span>
-                                    <span>{tx.description}</span>
+                                    {tx.description && tx.description !== tx.product && (
+                                      <>
+                                        <span className="text-slate-400 font-normal text-xs">em</span>
+                                        <span>{tx.description}</span>
+                                      </>
+                                    )}
                                   </>
                                 ) : (
                                   <span>{tx.description}</span>
@@ -5575,14 +5756,25 @@ export default function App() {
                                     {tx.currentInstallment}/{tx.totalInstallments}
                                   </span>
                                 )}
+                                <span className="text-[10px] text-amber-400/75 opacity-0 group-hover:opacity-100 transition-opacity font-normal">✏️ Editar</span>
                               </h4>
-                              <p className="text-xs text-amber-400/90 font-medium">{tx.category} • {tx.city}</p>
+                              <p className="text-xs text-amber-400/90 font-medium">{tx.category} • {tx.city} • {tx.method}</p>
                             </div>
                           </div>
-                          <div className="flex items-center gap-2.5">
+                          <div className="flex items-center gap-2">
                             <span className="font-bold text-orange-400 text-sm">
                               - R$ {tx.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                             </span>
+                            <button 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingTxFromChat({ ...tx });
+                              }}
+                              title="Editar esta saída"
+                              className="p-1.5 rounded-lg text-amber-400/80 hover:text-amber-300 hover:bg-amber-500/15 transition-all"
+                            >
+                              <Sliders size={14} />
+                            </button>
                             <button 
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -6087,16 +6279,25 @@ export default function App() {
               </div>
             </div>
 
-            <div className="mt-5 flex gap-3">
+            <div className="mt-5 flex gap-2.5">
               <button 
                 onClick={() => handleDeleteTransaction(selectedTx.id)}
-                className="py-2.5 px-4 rounded-xl bg-red-500/20 hover:bg-red-500/30 text-red-400 font-bold text-xs transition-all border border-red-500/30 flex items-center justify-center gap-1.5"
+                className="py-2.5 px-3.5 rounded-xl bg-red-500/20 hover:bg-red-500/30 text-red-400 font-bold text-xs transition-all border border-red-500/30 flex items-center justify-center gap-1.5"
               >
                 <Trash2 size={15} /> Excluir
               </button>
               <button 
+                onClick={() => {
+                  setEditingTxFromChat({ ...selectedTx });
+                  setSelectedTx(null);
+                }}
+                className="flex-1 py-2.5 px-4 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:brightness-110 text-slate-950 font-bold text-xs transition-all shadow-md flex items-center justify-center gap-1.5"
+              >
+                <Sliders size={14} /> Editar Lançamento
+              </button>
+              <button 
                 onClick={() => setSelectedTx(null)}
-                className="flex-1 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition-all shadow-md"
+                className="py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs transition-all"
               >
                 Fechar
               </button>
@@ -6486,9 +6687,9 @@ export default function App() {
         </div>
       )}
 
-      {/* Modal de Ajuste Rápido de Lançamento Selecionado no Chat */}
+      {/* Modal de Edição Completa de Lançamento (Acesso por Clique nas Tabelas, Entradas, Saídas ou Chat) */}
       {editingTxFromChat && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-[#12172A] border border-[#2A3554] rounded-2xl max-w-md w-full p-6 shadow-2xl relative animate-in fade-in max-h-[90vh] overflow-y-auto">
             <button 
               type="button"
@@ -6503,8 +6704,8 @@ export default function App() {
                 <Sliders size={16} />
               </div>
               <div>
-                <h3 className="font-bold text-white text-sm">Ajustar Lançamento</h3>
-                <p className="text-[11px] text-slate-400">Modifique os dados abaixo para recalcular saldos</p>
+                <h3 className="font-bold text-white text-sm">Editar Lançamento</h3>
+                <p className="text-[11px] text-slate-400">Altere qualquer dado e os saldos serão recalculados</p>
               </div>
             </div>
 
@@ -6539,19 +6740,49 @@ export default function App() {
                 </div>
               </div>
 
-              <div>
-                <label className="text-slate-400 block mb-1 font-semibold">Produto / Item:</label>
-                <input 
-                  type="text"
-                  required
-                  value={editingTxFromChat.product || editingTxFromChat.description}
-                  onChange={(e) => setEditingTxFromChat({ 
-                    ...editingTxFromChat, 
-                    product: e.target.value,
-                    description: editingTxFromChat.description || e.target.value 
-                  })}
-                  className="w-full bg-[#161D32] border border-[#2A3554] p-2.5 rounded-lg text-slate-100"
-                />
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-slate-400 block mb-1 font-semibold">Produto / Descrição:</label>
+                  <input 
+                    type="text"
+                    required
+                    value={editingTxFromChat.product || editingTxFromChat.description}
+                    onChange={(e) => setEditingTxFromChat({ 
+                      ...editingTxFromChat, 
+                      product: e.target.value,
+                      description: e.target.value 
+                    })}
+                    className="w-full bg-[#161D32] border border-[#2A3554] p-2.5 rounded-lg text-slate-100"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-slate-400 block mb-1 font-semibold">Categoria:</label>
+                  <select 
+                    value={editingTxFromChat.category}
+                    onChange={(e) => setEditingTxFromChat({ ...editingTxFromChat, category: e.target.value })}
+                    className="w-full bg-[#161D32] border border-[#2A3554] p-2.5 rounded-lg text-slate-100"
+                  >
+                    {!['Lanche', 'Alimentação', 'Supermercado', 'Transporte', 'Saúde', 'Vestuário', 'Compras na Internet', 'Segurança & Eletrônicos', 'Pet & Animais', 'Educação', 'Renda Principal', 'Renda Extra', 'Transferências / PIX', 'Contas & Utilidades', 'Outros'].includes(editingTxFromChat.category) && (
+                      <option value={editingTxFromChat.category}>{editingTxFromChat.category}</option>
+                    )}
+                    <option value="Lanche">Lanche</option>
+                    <option value="Alimentação">Alimentação</option>
+                    <option value="Supermercado">Supermercado</option>
+                    <option value="Transporte">Transporte / Posto</option>
+                    <option value="Saúde">Saúde & Farmácia</option>
+                    <option value="Vestuário">Vestuário / Compras</option>
+                    <option value="Compras na Internet">Compras na Internet</option>
+                    <option value="Segurança & Eletrônicos">Segurança & Eletrônicos</option>
+                    <option value="Pet & Animais">Pet & Animais</option>
+                    <option value="Educação">Educação</option>
+                    <option value="Contas & Utilidades">Contas & Utilidades</option>
+                    <option value="Renda Principal">Renda Principal</option>
+                    <option value="Renda Extra">Renda Extra</option>
+                    <option value="Transferências / PIX">Transferências / PIX</option>
+                    <option value="Outros">Outros</option>
+                  </select>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-2">
@@ -6608,7 +6839,29 @@ export default function App() {
                 </div>
               </div>
 
+              <div>
+                <label className="text-slate-400 block mb-1 font-semibold">Data do Lançamento:</label>
+                <input 
+                  type="text"
+                  value={editingTxFromChat.date || 'Hoje'}
+                  onChange={(e) => setEditingTxFromChat({ ...editingTxFromChat, date: e.target.value })}
+                  className="w-full bg-[#161D32] border border-[#2A3554] p-2.5 rounded-lg text-slate-100"
+                />
+              </div>
+
               <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const idToDelete = editingTxFromChat.id;
+                    setEditingTxFromChat(null);
+                    handleDeleteTransaction(idToDelete);
+                  }}
+                  title="Excluir este lançamento"
+                  className="py-2.5 px-3 rounded-xl bg-red-500/20 hover:bg-red-500/30 text-red-400 font-bold transition-all border border-red-500/30 flex items-center justify-center"
+                >
+                  <Trash2 size={15} />
+                </button>
                 <button
                   type="button"
                   onClick={() => setEditingTxFromChat(null)}

@@ -1184,22 +1184,63 @@ function saveDeletedIdsToDisk() {
   fs.promises.writeFile(DELETED_IDS_FILE, JSON.stringify(Array.from(localDeletedIds)), 'utf-8').catch(() => {});
 }
 
-function recordTransaction(tx) {
-  if (!tx || !tx.amount) return;
-  const txId = String(tx.id);
+function recordTransaction(tx, allowUpdate = true) {
+  if (!tx || !tx.amount) return null;
+  const txId = tx.id ? String(tx.id) : `${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+  tx.id = txId;
 
   // Se o usuário recriou/recebeu essa transação nova, garante que não está bloqueada
   if (localDeletedIds.has(txId)) {
-    return;
+    return null;
   }
 
-  // 1. Previne duplicata por ID exato
-  const existsById = localStoredTransactions.some(t => String(t.id) === txId);
-  if (existsById) {
-    return;
+  // 1. Verifica se o ID já existe (caso seja Edição Manual ou Correção por Comando/Áudio)
+  const existingIndex = localStoredTransactions.findIndex(t => String(t.id) === txId);
+  if (existingIndex !== -1) {
+    if (!allowUpdate) {
+      return localStoredTransactions[existingIndex];
+    }
+    const existing = localStoredTransactions[existingIndex];
+    const updatedTx = {
+      ...existing,
+      ...tx,
+      id: txId,
+      updatedAt: tx.updatedAt || new Date().toISOString()
+    };
+    localStoredTransactions[existingIndex] = updatedTx;
+
+    // 1.A. Disparo Instantâneo via SSE Stream de Atualização In-Place
+    broadcastSSE({
+      type: 'update_transaction',
+      transaction: updatedTx,
+      timestamp: Date.now()
+    });
+
+    // 1.B. Gravação em disco
+    fs.promises.writeFile(TRANSACTIONS_FILE, JSON.stringify(localStoredTransactions, null, 2), 'utf-8')
+      .then(() => {
+        console.log(`✏️ [Instant Sync Update] Lançamento atualizado em tempo real: "${updatedTx.description}" -> R$ ${updatedTx.amount} (${updatedTx.method}) [ID: ${updatedTx.id}]`);
+      })
+      .catch((errFile) => {
+        console.error('[Banco Local] Erro ao atualizar transactions.json:', errFile.message);
+      });
+
+    // 1.C. Sincroniza atualização com a Nuvem Vercel 24h
+    Promise.allSettled([
+      fastAxios.post('https://kyro-finance.vercel.app/api/database', {
+        action: 'save_transaction',
+        transaction: updatedTx
+      }),
+      fastAxios.post(REMOTE_WEBHOOK_URL, {
+        action: 'sync_transactions',
+        transaction: updatedTx
+      })
+    ]).catch(() => {});
+
+    return updatedTx;
   }
 
-  // 2. Previne duplicata por assinatura idêntica nos últimos 45 segundos
+  // 2. Previne duplicata por assinatura idêntica nos últimos 45 segundos (apenas para lançamentos novos)
   const now = new Date(tx.createdAt || Date.now()).getTime();
   const existsDuplicate = localStoredTransactions.some(t => {
     const isSameDesc = (t.description || '').trim().toLowerCase() === (tx.description || '').trim().toLowerCase();
@@ -1216,7 +1257,7 @@ function recordTransaction(tx) {
   });
 
   if (existsDuplicate) {
-    return;
+    return null;
   }
 
   localStoredTransactions.unshift(tx);
@@ -1251,6 +1292,8 @@ function recordTransaction(tx) {
       transaction: tx
     })
   ]).catch(() => {});
+
+  return tx;
 }
 
 // ==============================================================
@@ -1739,6 +1782,272 @@ function extractCityFromText(text) {
   }
 
   return '';
+}
+
+// ==============================================================
+// MOTOR DE DETECÇÃO E EXECUÇÃO DE CORREÇÃO / EDIÇÃO DE LANÇAMENTOS
+// Suporta comandos por Texto e por Áudio de Voz no WhatsApp e Chat
+// ==============================================================
+function isCorrectionCommand(text) {
+  if (!text) return false;
+  const lower = String(text).toLowerCase().trim();
+
+  // Padrão 1: "o valor é 400 e não 500", "foi 400 e não 500", "é 400 não 500"
+  if (/(?:valor|era|foi|[eé])\s*(?:de\s*)?(?:r\$\s*)?\d+(?:[.,]\d+)?\s*(?:reais\s*)?(?:e\s+n[aã]o|n[aã]o|em\s+vez\s+de)\s*(?:de\s*)?(?:r\$\s*)?\d+/i.test(lower)) {
+    return true;
+  }
+
+  // Padrão 2: "de PIX para crédito", "de crédito para débito", "de 500 para 400"
+  if (/\bde\s+(pix|cr[eé]dito|d[eé]bito|dinheiro|transfer[eê]ncia|entrada|sa[ií]da)\s+para\s+(pix|cr[eé]dito|d[eé]bito|dinheiro|transfer[eê]ncia|entrada|sa[ií]da)\b/i.test(lower)) {
+    return true;
+  }
+
+  // Padrão 3: Verbos explícitos de correção/edição/modificação
+  const hasEditVerb = /(corrigir|corrija|corrige|corre[cç][aã]o|ajustar|ajuste|ajusta|alterar|altere|altera|mudar|mude|muda|editar|edite|edita|modificar|modifique|modifica|trocar|troque|troca|atualizar\s+o\s+[uú]ltimo|atualize\s+o\s+[uú]ltimo|errei|enganei|estava\s+errad[oa]|foi\s+errad[oa]|lancei\s+errad[oa]|na\s+verdade\s+(?:foi|era|[eé]))/i.test(lower);
+
+  const hasTargetContext = /(\b[uú]ltim[oa]\b|\blan[cç]amento\b|\btransa[cç][aã]o\b|\bgasto\b|\bdespesa\b|\bentrada\b|\bsa[ií]da\b|\bvalor\b|\bpix\b|\bcr[eé]dito\b|\bd[eé]bito\b|\bdinheiro\b|\btransfer[eê]ncia\b|\bcidade\b|\blocal\b|\bestabelecimento\b|\bcategoria\b|\bitem\b|\bproduto\b|\bdescri[cç][aã]o\b|\bn[aã]o\s+\d+|\bpara\s+(?:r\$\s*)?\d+)/i.test(lower);
+
+  return hasEditVerb && hasTargetContext;
+}
+
+function normalizeMethodTokenBot(raw) {
+  const t = (raw || '').toLowerCase().trim();
+  if (t.includes('crédito') || t.includes('credito') || t.includes('cartão') || t.includes('cartao')) return 'Crédito';
+  if (t.includes('débito') || t.includes('debito')) return 'Débito';
+  if (t.includes('dinheiro') || t.includes('espécie') || t.includes('especie')) return 'Dinheiro';
+  if (t.includes('transferência') || t.includes('transferencia') || t.includes('ted') || t.includes('doc')) return 'Transferência';
+  if (t.includes('pix')) return 'PIX';
+  return null;
+}
+
+function parseNumericStrBot(raw) {
+  if (!raw) return 0;
+  let clean = String(raw).trim().replace(/^r\$\s*/i, '');
+  if (/^\d{1,3}(\.\d{3})+(,\d{1,2})?$/.test(clean)) {
+    clean = clean.replace(/\./g, '').replace(',', '.');
+  } else {
+    clean = clean.replace(',', '.');
+  }
+  const n = parseFloat(clean);
+  return isNaN(n) ? 0 : n;
+}
+
+function extractCorrectionAmountPairBot(text) {
+  const lower = (text || '').toLowerCase();
+
+  // 1. "<NOVO> e não <ANTIGO>" (ex: "o valor é 400 e não 500")
+  const mNewNotOld = lower.match(/(?:valor\s*(?:[eé]|era|foi|correto\s*[eé])?\s*(?:de\s*)?|foi\s*(?:de\s*)?|[eé]\s*(?:de\s*)?)?(?:r\$\s*)?(\d+(?:[.,]\d+)?)\s*(?:reais\s*)?(?:,\s*)?(?:e\s+n[aã]o|mas\s+n[aã]o|n[aã]o\s+(?:foi|era|[eé])?)\s*(?:de\s*)?(?:r\$\s*)?(\d+(?:[.,]\d+)?)/i);
+  if (mNewNotOld) {
+    const newVal = parseNumericStrBot(mNewNotOld[1]);
+    const oldVal = parseNumericStrBot(mNewNotOld[2]);
+    if (newVal > 0) return { newAmount: newVal, oldAmount: oldVal > 0 ? oldVal : null };
+  }
+
+  // 2. "não foi <ANTIGO>, foi <NOVO>" / "em vez de <ANTIGO> coloque <NOVO>"
+  const mNotOldButNew = lower.match(/(?:n[aã]o\s+(?:foi|era|[eé])\s*(?:de\s*)?|em\s+vez\s+de\s*)(?:r\$\s*)?(\d+(?:[.,]\d+)?)\s*(?:reais\s*)?[\s,]*(?:e\s+sim|mas\s+sim|foi|era|[eé]|coloque|para)?\s*(?:de\s*)?(?:r\$\s*)?(\d+(?:[.,]\d+)?)/i);
+  if (mNotOldButNew) {
+    const oldVal = parseNumericStrBot(mNotOldButNew[1]);
+    const newVal = parseNumericStrBot(mNotOldButNew[2]);
+    if (newVal > 0) return { newAmount: newVal, oldAmount: oldVal > 0 ? oldVal : null };
+  }
+
+  // 3. "de <ANTIGO> para <NOVO>" (ex: "mude o valor de 500 para 400")
+  const mFromOldToNew = lower.match(/\bde\s*(?:r\$\s*)?(\d+(?:[.,]\d+)?)\s*(?:reais\s*)?\bpara\s*(?:r\$\s*)?(\d+(?:[.,]\d+)?)/i);
+  if (mFromOldToNew) {
+    const oldVal = parseNumericStrBot(mFromOldToNew[1]);
+    const newVal = parseNumericStrBot(mFromOldToNew[2]);
+    if (newVal > 0) return { newAmount: newVal, oldAmount: oldVal > 0 ? oldVal : null };
+  }
+
+  // 4. "para R$ 400" / "o valor é 400"
+  const mSingleTarget = lower.match(/(?:para|valor\s*(?:[eé]|para|de)|por)\s*(?:r\$\s*)?(\d+(?:[.,]\d+)?)/i);
+  if (mSingleTarget) {
+    const newVal = parseNumericStrBot(mSingleTarget[1]);
+    if (newVal > 0) return { newAmount: newVal, oldAmount: null };
+  }
+
+  const fallbackVal = extractMonetaryValue(text);
+  return { newAmount: fallbackVal > 0 ? fallbackVal : null, oldAmount: null };
+}
+
+function extractCorrectionMethodPairBot(text) {
+  const lower = (text || '').toLowerCase();
+  const methodRegexToken = '(pix|cr[eé]dito|credito|cart[aã]o\\s+de\\s+cr[eé]dito|cart[aã]o|cartao|d[eé]bito|debito|dinheiro|esp[eé]cie|transfer[eê]ncia|transferencia)';
+
+  // 1. "de <ANTIGO> para <NOVO>" (ex: "modifique de PIX para crédito")
+  const mFromTo = lower.match(new RegExp(`\\bde\\s+(?:no\\s+|na\\s+|pelo\\s+)?${methodRegexToken}\\s+para\\s+(?:o\\s+|no\\s+|na\\s+|pelo\\s+)?${methodRegexToken}`, 'i'));
+  if (mFromTo) {
+    return {
+      oldMethod: normalizeMethodTokenBot(mFromTo[1]),
+      newMethod: normalizeMethodTokenBot(mFromTo[2])
+    };
+  }
+
+  // 2. "<NOVO> e não <ANTIGO>" (ex: "foi no crédito e não no PIX")
+  const mNewNotOld = lower.match(new RegExp(`${methodRegexToken}\\s+(?:e\\s+n[aã]o|n[aã]o|em\\s+vez\\s+de)\\s+(?:no\\s+|na\\s+|o\\s+|pelo\\s+)?${methodRegexToken}`, 'i'));
+  if (mNewNotOld) {
+    return {
+      newMethod: normalizeMethodTokenBot(mNewNotOld[1]),
+      oldMethod: normalizeMethodTokenBot(mNewNotOld[2])
+    };
+  }
+
+  // 3. "não foi <ANTIGO>, foi <NOVO>"
+  const mNotOldNew = lower.match(new RegExp(`(?:n[aã]o\\s+(?:foi|era|[eé])\\s+(?:no\\s+|na\\s+|pelo\\s+)?|em\\s+vez\\s+de\\s+)${methodRegexToken}[\\s,]+(?:foi|era|[eé]|coloque|mude\\s+para|para)?\\s*(?:no\\s+|na\\s+|o\\s+|pelo\\s+)?${methodRegexToken}`, 'i'));
+  if (mNotOldNew) {
+    return {
+      oldMethod: normalizeMethodTokenBot(mNotOldNew[1]),
+      newMethod: normalizeMethodTokenBot(mNotOldNew[2])
+    };
+  }
+
+  // 4. "para <NOVO>" (ex: "mude para crédito")
+  const mToMethod = lower.match(new RegExp(`\\b(?:para|como|no|na|pelo)\\s+(?:o\\s+)?${methodRegexToken}`, 'i'));
+  if (mToMethod) {
+    return {
+      newMethod: normalizeMethodTokenBot(mToMethod[1]),
+      oldMethod: null
+    };
+  }
+
+  // 5. Qualquer menção isolada
+  const singleMatch = lower.match(new RegExp(`\\b${methodRegexToken}\\b`, 'i'));
+  if (singleMatch) {
+    return {
+      newMethod: normalizeMethodTokenBot(singleMatch[1]),
+      oldMethod: null
+    };
+  }
+
+  return { newMethod: null, oldMethod: null };
+}
+
+function executeWhatsAppCorrectionCommand(text, isAudio = false) {
+  if (!localStoredTransactions || localStoredTransactions.length === 0) {
+    return {
+      isCorrection: true,
+      updatedTx: null,
+      reply: `⚠️ *Não há nenhum lançamento registrado no momento para corrigir.*\n\nEnvie primeiro um lançamento (por exemplo: *"Paguei 50 reais de almoço no PIX"*) e depois você poderá corrigi-lo a qualquer momento!`
+    };
+  }
+
+  const lower = (text || '').toLowerCase();
+  const { newAmount, oldAmount } = extractCorrectionAmountPairBot(text);
+  const { newMethod, oldMethod } = extractCorrectionMethodPairBot(text);
+  const newCity = extractCityFromText(text);
+  const cardName = extractCreditCardName(text);
+
+  // Localiza a transação alvo:
+  // 1. Se o comando não pediu explicitamente "o último", tenta encontrar pelo oldAmount, oldMethod ou pelo nome do item citado
+  let targetTx = localStoredTransactions[0];
+  const explicitlyLast = /\b([uú]ltim[oa]|anterior|acab(?:ei|ou)\s+de)\b/i.test(lower);
+
+  if (oldAmount && oldAmount > 0) {
+    const byOldAmount = localStoredTransactions.find(t => Math.abs(Number(t.amount) - oldAmount) < 0.05);
+    if (byOldAmount) targetTx = byOldAmount;
+  } else if (!explicitlyLast) {
+    const byItemName = localStoredTransactions.find(t => {
+      const desc = (t.product || t.description || '').toLowerCase().trim();
+      const estab = (t.establishment || '').toLowerCase().trim();
+      return (desc.length >= 3 && lower.includes(desc)) || (estab.length >= 3 && lower.includes(estab));
+    });
+    if (byItemName) {
+      targetTx = byItemName;
+    } else if (oldMethod) {
+      const byOldMethod = localStoredTransactions.find(t => t.method === oldMethod);
+      if (byOldMethod) targetTx = byOldMethod;
+    }
+  }
+
+  const updatedTx = { ...targetTx };
+  const changes = [];
+
+  // 1. Alterar Tipo (Entrada vs Saída)
+  if (/\bde\s+sa[ií]da\s+para\s+entrada\b/i.test(lower) || /\b(?:como|para)\s+entrada\b/i.test(lower) || (lower.includes('receita') && !lower.includes('despesa'))) {
+    if (updatedTx.type !== 'Entrada') {
+      changes.push(`• *Tipo:* ${updatedTx.type} ➔ 💰 *Entrada (+)*`);
+      updatedTx.type = 'Entrada';
+    }
+  } else if (/\bde\s+entrada\s+para\s+sa[ií]da\b/i.test(lower) || /\b(?:como|para)\s+sa[ií]da\b/i.test(lower) || (lower.includes('despesa') && !lower.includes('receita'))) {
+    if (updatedTx.type !== 'Saída') {
+      changes.push(`• *Tipo:* ${updatedTx.type} ➔ 💸 *Saída (-)*`);
+      updatedTx.type = 'Saída';
+    }
+  }
+
+  // 2. Alterar Método de Pagamento (ex: "modifique de PIX para crédito")
+  if (newMethod) {
+    const prevMethod = updatedTx.method;
+    updatedTx.method = newMethod;
+    if (newMethod === 'Crédito') {
+      updatedTx.cardName = cardName || updatedTx.cardName || 'Nubank';
+    } else {
+      delete updatedTx.cardName;
+    }
+    changes.push(`• *Forma de Pagamento:* ${prevMethod} ➔ *${updatedTx.method}*${updatedTx.cardName ? ` (${updatedTx.cardName})` : ''}`);
+  } else if (cardName) {
+    updatedTx.method = 'Crédito';
+    updatedTx.cardName = cardName;
+    changes.push(`• *Cartão / Método:* ➔ *Crédito (${cardName})*`);
+  }
+
+  // 3. Alterar Valor Monetário (ex: "o valor é 400 e não 500")
+  if (newAmount && newAmount > 0) {
+    const prevAmount = Number(updatedTx.amount) || 0;
+    updatedTx.amount = newAmount;
+    changes.push(`• *Valor:* R$ ${prevAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} ➔ *R$ ${newAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}*`);
+  }
+
+  // 4. Alterar Cidade
+  if (newCity) {
+    const prevCity = updatedTx.city || 'Não informada';
+    updatedTx.city = newCity;
+    changes.push(`• *Cidade:* ${prevCity} ➔ *${newCity}*`);
+  }
+
+  // 5. Alterar Descrição / Produto / Estabelecimento explícito
+  const descMatch = text.match(/(?:descri[cç][aã]o|item|produto|nome)\s+(?:para|[eé])\s+["']?([A-Za-zÀ-ÿ0-9\s]{2,35})["']?$/i);
+  if (descMatch && descMatch[1]) {
+    const cleanNewDesc = descMatch[1].trim();
+    const formattedDesc = cleanNewDesc.charAt(0).toUpperCase() + cleanNewDesc.slice(1);
+    const prevDesc = updatedTx.product || updatedTx.description;
+    updatedTx.product = formattedDesc;
+    updatedTx.description = formattedDesc;
+    changes.push(`• *Item / Descrição:* ${prevDesc} ➔ *${formattedDesc}*`);
+  }
+
+  const locMatch = text.match(/(?:local|estabelecimento|loja|lugar)\s+(?:para|[eé]|no|na|em)\s+["']?([A-Za-zÀ-ÿ0-9\s]{2,35})["']?$/i);
+  if (locMatch && locMatch[1]) {
+    const cleanLoc = locMatch[1].trim();
+    const formattedLoc = cleanLoc.charAt(0).toUpperCase() + cleanLoc.slice(1);
+    const prevLoc = updatedTx.establishment || 'Geral';
+    updatedTx.establishment = formattedLoc;
+    changes.push(`• *Estabelecimento:* ${prevLoc} ➔ *${formattedLoc}*`);
+  }
+
+  updatedTx.updatedAt = new Date().toISOString();
+
+  const audioHeader = isAudio ? `\n🎙️ *Comando de Voz:* "${text}"\n` : '';
+  const sign = updatedTx.type === 'Saída' ? '-' : '+';
+
+  const reply = changes.length > 0
+    ? `✏️ *Lançamento Corrigido com Sucesso — KYRO Finance!*${audioHeader}\n` +
+      `• *Lançamento Alvo:* ${updatedTx.product || updatedTx.description}\n` +
+      `${changes.join('\n')}\n\n` +
+      `📋 *Resumo Atualizado do Lançamento:*\n` +
+      `• *Tipo:* ${updatedTx.type === 'Entrada' ? '💰 Entrada (+)' : '💸 Saída (-)'}\n` +
+      `• *Valor Atual:* ${sign} R$ ${Number(updatedTx.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n` +
+      `• *Método:* ${updatedTx.method}${updatedTx.cardName ? ` (${updatedTx.cardName})` : ''}\n` +
+      (updatedTx.city ? `• *Cidade:* ${updatedTx.city}\n` : '') +
+      `\n✅ _Sincronizado em tempo real no Dashboard, Entradas, Saídas e App Mobile!_`
+    : `ℹ️ *Identifiquei seu pedido de correção para "${updatedTx.product || updatedTx.description}"*, mas especifique o novo dado (ex: *"Corrija o último lançamento, modifique de PIX para crédito"* ou *"Correção do último lançamento, o valor é 400 e não 500"*).`;
+
+  return {
+    isCorrection: true,
+    hasChanges: changes.length > 0,
+    updatedTx,
+    reply
+  };
 }
 
 // Extrator Inteligente e Dinâmico do KYRO Finance (sem inventar cidades ou dados)
@@ -2504,6 +2813,8 @@ async function startSocket() {
           messageText.startsWith('✅') ||
           messageText.startsWith('⚡') ||
           messageText.startsWith('🔁') ||
+          messageText.startsWith('✏️') ||
+          messageText.startsWith('ℹ️') ||
           messageText.includes('Sincronizado em tempo real no Dashboard') ||
           messageText.includes('Atualizado nas abas de') ||
           messageText.includes('O valor agora foi computado nas Saídas')
@@ -2535,11 +2846,11 @@ async function startSocket() {
           lowerMsg.includes('atualizar app')
         ) {
           const updateReply = `📲 *Atualização do Aplicativo Android — KYRO Finance*\n\n` +
-            `• *Versão Mais Recente:* v1.40 (Build 40)\n` +
+            `• *Versão Mais Recente:* v1.41 (Build 41)\n` +
             `• *Status:* 🟢 Nova versão pronta para instalação!\n\n` +
-            `• *Principais Novidades do Build 40:*\n` +
-            `  1. Chatbot de Voz no WhatsApp com motor Whisper-Small de alta precisão e normalização acústica\n` +
-            `  2. Leitor Inteligente de Comprovantes (OCR + Vision AI): envie a foto de qualquer comprovante e o robô extrai Valor, Local, Cidade e Forma de Pagamento (Pix, Dinheiro, Débito, Crédito)\n` +
+            `• *Principais Novidades do Build 41:*\n` +
+            `  1. Edição Completa de Lançamentos por Clique Manual (Tabelas, Entradas, Saídas e Extrato)\n` +
+            `  2. Edição de Lançamentos por Comando de Texto ou Áudio no Chat Interno e no Grupo do WhatsApp (ex: *"Corrija o último lançamento, modifique de PIX para crédito"* ou *"Correção do último lançamento, o valor é 400 e não 500"*)\n` +
             `  3. Sincronização instantânea em tempo real e Pull-to-Refresh no aplicativo\n\n` +
             `🚀 *Toque no link abaixo para baixar e atualizar:* \n` +
             `https://github.com/Wisterly/kyro-finance/releases/download/apk-latest/KYRO-Finance.apk\n\n` +
@@ -2555,7 +2866,12 @@ async function startSocket() {
         // FAST-PATH INSTANTÂNEO (< 1ms) PARA MENSAGENS DE TEXTO PURO!
         // ==============================================================
         if (!isAudio && !isImage && messageText) {
-          parsed = parseDynamicFinancialMessage(messageText, false);
+          // Prioridade 0: Verifica se é comando de correção/edição de lançamento existente
+          if (isCorrectionCommand(messageText)) {
+            parsed = executeWhatsAppCorrectionCommand(messageText, false);
+          } else {
+            parsed = parseDynamicFinancialMessage(messageText, false);
+          }
         }
 
         // ==============================================================
@@ -2595,7 +2911,9 @@ async function startSocket() {
 
             // ESTRATÉGIA A: Gemini 1.5 Flash Multimodal Direto (se chave configurada)
             const geminiExtracted = await interpretAudioDirectlyWithGemini(audioBuffer);
-            if (geminiExtracted && geminiExtracted.amount > 0) {
+            if (geminiExtracted && geminiExtracted.transcription && isCorrectionCommand(geminiExtracted.transcription)) {
+              parsed = executeWhatsAppCorrectionCommand(geminiExtracted.transcription, true);
+            } else if (geminiExtracted && geminiExtracted.amount > 0) {
               const amount = parseFloat(geminiExtracted.amount) || 0;
               const type = geminiExtracted.type === 'Entrada' ? 'Entrada' : 'Saída';
               const method = geminiExtracted.method || 'PIX';
@@ -2657,8 +2975,13 @@ async function startSocket() {
             if (!parsed) {
               const transcribedText = await transcribeAudioBuffer(audioBuffer);
               if (transcribedText) {
+                // 0. Verifica se o áudio transcrito é um comando de correção/edição de lançamento
+                if (isCorrectionCommand(transcribedText)) {
+                  parsed = executeWhatsAppCorrectionCommand(transcribedText, true);
+                }
+
                 // 1. Tenta extração estruturada via LLM (se chave configurada)
-                const llmExtracted = await extractFinancialDataWithLLM(transcribedText);
+                const llmExtracted = !parsed ? await extractFinancialDataWithLLM(transcribedText) : null;
                 if (llmExtracted && llmExtracted.amount > 0) {
                   const amount = parseFloat(llmExtracted.amount) || 0;
                   const type = llmExtracted.type === 'Entrada' ? 'Entrada' : 'Saída';
@@ -2800,7 +3123,20 @@ async function startSocket() {
         }
 
         if (parsed) {
-          if (parsed.isRecurring && parsed.recurringData) {
+          if (parsed.isCorrection) {
+            if (parsed.updatedTx && parsed.hasChanges) {
+              recordTransaction(parsed.updatedTx, true);
+            }
+            sock.sendMessage(remoteJid, { text: parsed.reply })
+              .then((sent) => {
+                if (sent?.key?.id) botSentMessageIds.add(sent.key.id);
+                const elapsedMs = Date.now() - startTime;
+                console.log(`✏️ [Ultra-Fast WhatsApp Correction] Lançamento corrigido e confirmado no grupo em ${elapsedMs}ms!`);
+              })
+              .catch((sendErr) => {
+                console.error('[WhatsApp] Erro ao enviar confirmação de correção:', sendErr.message);
+              });
+          } else if (parsed.isRecurring && parsed.recurringData) {
             saveRecurring(parsed.recurringData);
             const sent = await sock.sendMessage(remoteJid, { text: parsed.reply });
             if (sent?.key?.id) botSentMessageIds.add(sent.key.id);
@@ -3013,6 +3349,21 @@ const server = http.createServer(async (req, res) => {
           const audioBuf = Buffer.from(cleanA, 'base64');
           const transcribed = await transcribeAudioBuffer(audioBuf);
           if (transcribed) {
+            if (isCorrectionCommand(transcribed)) {
+              const corr = executeWhatsAppCorrectionCommand(transcribed, true);
+              if (corr.updatedTx && corr.hasChanges && !payload.dryRun) {
+                recordTransaction(corr.updatedTx, true);
+              }
+              res.writeHead(200, { 'Content-Type': 'application/json' });
+              return res.end(JSON.stringify({
+                status: 'updated',
+                isCorrection: true,
+                transcribedText: transcribed,
+                replySent: corr.reply,
+                updatedTx: corr.updatedTx,
+                savedTx: corr.updatedTx
+              }));
+            }
             const parsedAudio = parseDynamicFinancialMessage(transcribed, true);
             if (parsedAudio && parsedAudio.savedTx) {
               if (!payload.dryRun) recordTransaction(parsedAudio.savedTx);
@@ -3073,6 +3424,21 @@ const server = http.createServer(async (req, res) => {
         }
 
         if (msgText) {
+          if (isCorrectionCommand(msgText)) {
+            const corr = executeWhatsAppCorrectionCommand(msgText, false);
+            if (corr.updatedTx && corr.hasChanges && !payload.dryRun) {
+              recordTransaction(corr.updatedTx, true);
+            }
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            return res.end(JSON.stringify({
+              status: 'updated',
+              isCorrection: true,
+              replySent: corr.reply,
+              updatedTx: corr.updatedTx,
+              savedTx: corr.updatedTx
+            }));
+          }
+
           const parsed = parseDynamicFinancialMessage(msgText, false);
           if (parsed && parsed.savedTx) {
             if (!payload.dryRun) recordTransaction(parsed.savedTx);
@@ -3525,6 +3891,21 @@ const server = http.createServer(async (req, res) => {
           }
         }
 
+        // Prioridade 0 no /api/chat: Verifica se é comando de correção/edição de lançamento
+        if (message && isCorrectionCommand(message)) {
+          const corr = executeWhatsAppCorrectionCommand(message, !!audioBase64);
+          if (corr.updatedTx && corr.hasChanges) {
+            recordTransaction(corr.updatedTx, true);
+          }
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({
+            reply: corr.reply.replace(/\*/g, '**'),
+            action: corr.updatedTx ? { type: 'update_transaction', transaction: corr.updatedTx } : { type: 'none' },
+            engine: 'kyro-local-correction',
+            transcribedText: message
+          }));
+        }
+
         if (effectiveKey && effectiveKey !== 'dummy_key') {
           try {
             const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${effectiveKey}`;
@@ -3661,6 +4042,10 @@ module.exports = {
   extractReceiptFromImageBuffer,
   parseFinancialReceiptOcrText,
   parseDynamicFinancialMessage,
+  isCorrectionCommand,
+  executeWhatsAppCorrectionCommand,
+  extractCorrectionAmountPairBot,
+  extractCorrectionMethodPairBot,
   extractMonetaryValue,
   extractCityFromText,
   normalizeTranscribedPortugueseText,

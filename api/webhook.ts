@@ -662,15 +662,48 @@ async function saveTransaction(tx: any) {
     createdAt: tx.createdAt || new Date().toISOString()
   };
 
-  // Previne duplicação em memória global por ID ou assinatura recente
+  // 1. Se o ID já existir, atualiza in-place (Edição Manual ou Correção por Comando/Áudio)
+  const existingWebhookIdx = globalAny.__KYRO_WEBHOOK_TRANSACTIONS__.findIndex((t: any) => String(t.id) === txId);
+  if (existingWebhookIdx !== -1) {
+    const updatedPayload = {
+      ...globalAny.__KYRO_WEBHOOK_TRANSACTIONS__[existingWebhookIdx],
+      ...payload,
+      updatedAt: tx.updatedAt || new Date().toISOString()
+    };
+    globalAny.__KYRO_WEBHOOK_TRANSACTIONS__[existingWebhookIdx] = updatedPayload;
+
+    if (db) {
+      try {
+        await setDoc(doc(db, 'kyro_transactions', txId), updatedPayload, { merge: true });
+      } catch (err) {
+        console.warn('[Firestore] Erro ao atualizar transação:', err);
+      }
+    }
+
+    if (globalAny.__KYRO_CENTRAL_DB__) {
+      const centralList = globalAny.__KYRO_CENTRAL_DB__.transactions || [];
+      const cIdx = centralList.findIndex((t: any) => String(t.id) === txId);
+      if (cIdx !== -1) {
+        centralList[cIdx] = { ...centralList[cIdx], ...updatedPayload };
+      } else {
+        centralList.unshift(updatedPayload);
+      }
+      globalAny.__KYRO_CENTRAL_DB__.transactions = centralList;
+      globalAny.__KYRO_CENTRAL_DB__.lastUpdated = new Date().toISOString();
+    }
+
+    return updatedPayload;
+  }
+
+  // 2. Previne duplicação em memória global por assinatura recente (apenas para lançamentos novos)
   const now = new Date(payload.createdAt).getTime();
   const exists = globalAny.__KYRO_WEBHOOK_TRANSACTIONS__.some((t: any) => {
-    if (String(t.id) === txId) return true;
     if (t.whatsappMsgId && payload.whatsappMsgId && t.whatsappMsgId === payload.whatsappMsgId) return true;
     const sameDesc = (t.description || '').trim().toLowerCase() === (payload.description || '').trim().toLowerCase();
     const sameAmount = Math.abs(Number(t.amount) - Number(payload.amount)) < 0.01;
     const sameType = t.type === payload.type;
-    if (sameDesc && sameAmount && sameType) {
+    const sameMethod = t.method === payload.method;
+    if (sameDesc && sameAmount && sameType && sameMethod) {
       const tTime = new Date(t.createdAt || 0).getTime();
       if (Math.abs(now - tTime) < 90000) return true;
     }
@@ -692,12 +725,14 @@ async function saveTransaction(tx: any) {
   // Sincroniza também no banco central global em memória (se disponível)
   if (globalAny.__KYRO_CENTRAL_DB__) {
     const centralList = globalAny.__KYRO_CENTRAL_DB__.transactions || [];
-    const existsInCentral = centralList.some((t: any) => String(t.id) === txId);
-    if (!existsInCentral) {
+    const cIdx = centralList.findIndex((t: any) => String(t.id) === txId);
+    if (cIdx !== -1) {
+      centralList[cIdx] = { ...centralList[cIdx], ...payload };
+    } else {
       centralList.unshift(payload);
-      globalAny.__KYRO_CENTRAL_DB__.transactions = centralList;
-      globalAny.__KYRO_CENTRAL_DB__.lastUpdated = new Date().toISOString();
     }
+    globalAny.__KYRO_CENTRAL_DB__.transactions = centralList;
+    globalAny.__KYRO_CENTRAL_DB__.lastUpdated = new Date().toISOString();
   }
 
   // Sempre armazena no buffer global em memória para sincronização imediata
