@@ -245,6 +245,9 @@ export const WhatsAppTab: React.FC<WhatsAppTabProps> = ({
     setIsLoadingGroups(true);
     try {
       const eps = ['/api/groups', 'http://localhost:3001/api/groups', '/api/webhook'];
+      if (cloudBotUrl) {
+        eps.unshift(`${cloudBotUrl.replace(/\/$/, '')}/api/groups`);
+      }
       for (const ep of eps) {
         try {
           const res = await fetch(ep);
@@ -408,7 +411,10 @@ export const WhatsAppTab: React.FC<WhatsAppTabProps> = ({
 
   const handleDisconnect = async () => {
     try {
-      await fetch('http://localhost:3001/api/disconnect', { method: 'POST' });
+      if (cloudBotUrl) {
+        await fetch(`${cloudBotUrl.replace(/\/$/, '')}/api/disconnect`, { method: 'POST' }).catch(() => null);
+      }
+      await fetch('http://localhost:3001/api/disconnect', { method: 'POST' }).catch(() => null);
     } catch (e) {}
     setIsConnected(false);
     localStorage.removeItem('kyro_second_phone_connected');
@@ -444,8 +450,11 @@ export const WhatsAppTab: React.FC<WhatsAppTabProps> = ({
         lockedByUser: true
       };
 
-      // 1. Notifica o robô local via proxy Vite e direto na porta 3001
+      // 1. Notifica o robô na nuvem e o robô local via proxy Vite e direto na porta 3001
       const setGroupEndpoints = ['/api/set-group', 'http://localhost:3001/api/set-group'];
+      if (cloudBotUrl) {
+        setGroupEndpoints.unshift(`${cloudBotUrl.replace(/\/$/, '')}/api/set-group`);
+      }
       for (const ep of setGroupEndpoints) {
         try {
           const res = await fetch(ep, {
