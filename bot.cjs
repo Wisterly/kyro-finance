@@ -55,11 +55,12 @@ setTimeout(() => {
   getLocalWhisper().catch(() => {});
 }, 1000);
 
-// Converte qualquer buffer de áudio (OGG Opus do WhatsApp, WebM, AAC, MP3) para Float32Array 16kHz mono via FFmpeg
+// Converte qualquer buffer de áudio (OGG Opus do WhatsApp, WebM, AAC, MP3) para Float32Array 16kHz mono via FFmpeg com Loudnorm
 function convertAudioBufferToFloat32(audioBuffer) {
   return new Promise((resolve, reject) => {
     const ffmpeg = spawn('ffmpeg', [
       '-i', 'pipe:0',
+      '-af', 'loudnorm=I=-16:TP=-1.5:LRA=11',
       '-ar', '16000',
       '-ac', '1',
       '-f', 'f32le',
@@ -83,8 +84,35 @@ function convertAudioBufferToFloat32(audioBuffer) {
   });
 }
 
+// Converte qualquer buffer de áudio para WAV 16kHz 16-bit mono normalizado (padrão de estúdio para APIs de IA Whisper)
+function convertAudioBufferToNormalizedWav(audioBuffer) {
+  return new Promise((resolve, reject) => {
+    const ffmpeg = spawn('ffmpeg', [
+      '-i', 'pipe:0',
+      '-af', 'loudnorm=I=-16:TP=-1.5:LRA=11',
+      '-ar', '16000',
+      '-ac', '1',
+      '-f', 'wav',
+      'pipe:1'
+    ], { stdio: ['pipe', 'pipe', 'ignore'] });
+
+    const chunks = [];
+    ffmpeg.stdout.on('data', chunk => chunks.push(chunk));
+    ffmpeg.on('close', code => {
+      if (code === 0) {
+        resolve(Buffer.concat(chunks));
+      } else {
+        reject(new Error(`FFmpeg WAV falhou com código ${code}`));
+      }
+    });
+    ffmpeg.on('error', err => reject(err));
+    ffmpeg.stdin.write(audioBuffer);
+    ffmpeg.stdin.end();
+  });
+}
+
 // ==============================================================
-// GESTÃO INTELIGENTE DE CHAVES DE IA (GEMINI MULTIMODAL & WHISPER)
+// GESTÃO INTELIGENTE DE CHAVES DE IA (GEMINI, GROQ WHISPER & OPENAI)
 // ==============================================================
 function getEffectiveGeminiKey(explicitKey = '') {
   if (explicitKey && explicitKey !== 'dummy_key') return explicitKey;
@@ -95,7 +123,6 @@ function getEffectiveGeminiKey(explicitKey = '') {
     if (localSettings.chatConfig && localSettings.chatConfig.geminiApiKey && localSettings.chatConfig.geminiApiKey !== 'dummy_key') return localSettings.chatConfig.geminiApiKey;
   }
   
-  // Tenta ler de .env local se existir
   try {
     const envPath = path.join(__dirname, '.env');
     if (fs.existsSync(envPath)) {
@@ -107,6 +134,47 @@ function getEffectiveGeminiKey(explicitKey = '') {
     }
   } catch (e) {}
 
+  return '';
+}
+
+function getEffectiveGroqKey(explicitKey = '') {
+  if (explicitKey && explicitKey !== 'dummy_key') return explicitKey;
+  if (process.env.GROQ_API_KEY && process.env.GROQ_API_KEY !== 'dummy_key') return process.env.GROQ_API_KEY;
+  if (typeof localSettings !== 'undefined') {
+    if (localSettings.groqApiKey && localSettings.groqApiKey !== 'dummy_key') return localSettings.groqApiKey;
+    if (localSettings.chatConfig && localSettings.chatConfig.groqApiKey && localSettings.chatConfig.groqApiKey !== 'dummy_key') return localSettings.chatConfig.groqApiKey;
+  }
+  
+  try {
+    const envPath = path.join(__dirname, '.env');
+    if (fs.existsSync(envPath)) {
+      const content = fs.readFileSync(envPath, 'utf8');
+      const m = content.match(/(?:GROQ_API_KEY|VITE_GROQ_API_KEY)\s*=\s*([^\r\n]+)/);
+      if (m && m[1] && m[1].trim() && m[1].trim() !== 'dummy_key') {
+        return m[1].trim().replace(/^["']|["']$/g, '');
+      }
+    }
+  } catch (e) {}
+
+  return '';
+}
+
+function getEffectiveOpenAIKey(explicitKey = '') {
+  if (explicitKey && explicitKey !== 'dummy_key') return explicitKey;
+  if (process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== 'dummy_key') return process.env.OPENAI_API_KEY;
+  if (typeof localSettings !== 'undefined') {
+    if (localSettings.openaiApiKey && localSettings.openaiApiKey !== 'dummy_key') return localSettings.openaiApiKey;
+  }
+  try {
+    const envPath = path.join(__dirname, '.env');
+    if (fs.existsSync(envPath)) {
+      const content = fs.readFileSync(envPath, 'utf8');
+      const m = content.match(/(?:OPENAI_API_KEY)\s*=\s*([^\r\n]+)/);
+      if (m && m[1] && m[1].trim() && m[1].trim() !== 'dummy_key') {
+        return m[1].trim().replace(/^["']|["']$/g, '');
+      }
+    }
+  } catch (e) {}
   return '';
 }
 
@@ -172,6 +240,177 @@ Responda OBRIGATORIAMENTE em JSON puro no formato especificado.`;
   return null;
 }
 
+// ==============================================================
+// MOTOR 2: GROQ WHISPER-LARGE-V3 (Super Rápido ~400ms & Alta Precisão em Português)
+// Aprendizado de engenharia do repositório impacte-ai/transcrevezap
+// ==============================================================
+async function transcribeWithGroqWhisper(audioBuffer, explicitKey = '') {
+  const groqKey = getEffectiveGroqKey(explicitKey);
+  if (!groqKey) return '';
+
+  try {
+    const wavBuffer = await convertAudioBufferToNormalizedWav(audioBuffer);
+    const FormData = require('form-data');
+    const form = new FormData();
+    form.append('file', wavBuffer, {
+      filename: 'voice.wav',
+      contentType: 'audio/wav'
+    });
+    form.append('model', 'whisper-large-v3');
+    form.append('language', 'pt');
+    form.append('temperature', '0.0');
+    form.append('prompt', 'Finanças pessoais, pagamentos, Pix, transferência, R$ 300, reais, personal da academia, mensalidade, Teresina, Oeiras, Piauí, compras, mercado, combustível.');
+
+    const res = await fastAxios.post('https://api.groq.com/openai/v1/audio/transcriptions', form, {
+      headers: {
+        'Authorization': `Bearer ${groqKey}`,
+        ...form.getHeaders()
+      },
+      timeout: 12000
+    });
+
+    const text = (res.data?.text || '').trim();
+    if (text.length >= 4) {
+      console.log(`🎙️ [WhatsApp Áudio Transcrito via Groq Whisper-large-v3]: "${text}"`);
+      return text;
+    }
+  } catch (err) {
+    console.warn('[Groq Whisper Error]:', err?.response?.data || err?.message || err);
+  }
+  return '';
+}
+
+// ==============================================================
+// MOTOR 3: OPENAI WHISPER-1 (Padrão de Indústria com Normalização)
+// Aprendizado do repositório rishikanthc/Scriberr
+// ==============================================================
+async function transcribeWithOpenAIWhisper(audioBuffer, explicitKey = '') {
+  const openAiKey = getEffectiveOpenAIKey(explicitKey);
+  if (!openAiKey) return '';
+
+  try {
+    const wavBuffer = await convertAudioBufferToNormalizedWav(audioBuffer);
+    const FormData = require('form-data');
+    const form = new FormData();
+    form.append('file', wavBuffer, {
+      filename: 'voice.wav',
+      contentType: 'audio/wav'
+    });
+    form.append('model', 'whisper-1');
+    form.append('language', 'pt');
+    form.append('temperature', '0.0');
+    form.append('prompt', 'Finanças pessoais, pagamentos, Pix, transferência, R$ 300, reais, personal da academia, mensalidade, Teresina, Oeiras, Piauí, compras, mercado, combustível.');
+
+    const res = await fastAxios.post('https://api.openai.com/v1/audio/transcriptions', form, {
+      headers: {
+        'Authorization': `Bearer ${openAiKey}`,
+        ...form.getHeaders()
+      },
+      timeout: 12000
+    });
+
+    const text = (res.data?.text || '').trim();
+    if (text.length >= 4) {
+      console.log(`🎙️ [WhatsApp Áudio Transcrito via OpenAI Whisper-1]: "${text}"`);
+      return text;
+    }
+  } catch (err) {
+    console.warn('[OpenAI Whisper Error]:', err?.response?.data || err?.message || err);
+  }
+  return '';
+}
+
+// ==============================================================
+// EXTRAÇÃO ESTRUTURADA VIA LLM (TEXTO -> JSON FINANCEIRO PURO)
+// Aprendizado dos repositórios DrDroidLab/voicesummary e transcrevezap
+// ==============================================================
+async function extractFinancialDataWithLLM(text, explicitKey = '') {
+  if (!text || text.trim().length < 3) return null;
+
+  const geminiKey = getEffectiveGeminiKey(explicitKey);
+  const groqKey = getEffectiveGroqKey(explicitKey);
+  const openAiKey = getEffectiveOpenAIKey(explicitKey);
+
+  const sysPrompt = `Você é o extrator financeiro estrito do KYRO Finance. Analise a seguinte mensagem falada por usuário brasileiro: "${text.trim()}".
+Extraia os dados com precisão cirúrgica e responda OBRIGATORIAMENTE em JSON puro no formato:
+{
+  "transcription": "${text.replace(/"/g, '\\"')}",
+  "amount": 0.00,
+  "type": "Saída" | "Entrada",
+  "method": "PIX" | "Crédito" | "Débito" | "Dinheiro" | "Transferência",
+  "cardName": "Nome do cartão" ou null,
+  "product": "Item específico (ex: Personal da academia, Combustível, Almoço)",
+  "description": "Descrição do gasto",
+  "category": "Saúde" | "Alimentação" | "Transporte" | "Moradia" | "Lazer" | "Compras" | "Educação" | "Receita" | "Outros",
+  "establishment": "Nome do prestador ou local" ou "",
+  "city": "Teresina, PI" ou outra cidade brasileira dita (ou ""),
+  "isRecurring": false,
+  "totalInstallments": 1
+}
+Regras cruciais:
+- Se disse "personal da academia", o produto é "Personal da academia" e a categoria é "Saúde".
+- Se disse "um pix de 300", o amount é 300 e NUNCA 1.
+- Retorne apenas o JSON puro, sem crases de markdown.`;
+
+  // 1. Tenta Gemini 1.5 Flash
+  if (geminiKey) {
+    try {
+      const gUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`;
+      const res = await fastAxios.post(gUrl, {
+        contents: [{ role: 'user', parts: [{ text: sysPrompt }] }],
+        generationConfig: { temperature: 0.1, responseMimeType: 'application/json' }
+      }, { timeout: 8000 });
+      const raw = res.data?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (raw) {
+        const parsed = JSON.parse(raw.trim());
+        if (parsed && parsed.amount > 0) return parsed;
+      }
+    } catch (e) {}
+  }
+
+  // 2. Tenta Groq Llama 3.3 70B
+  if (groqKey) {
+    try {
+      const res = await fastAxios.post('https://api.groq.com/openai/v1/chat/completions', {
+        model: 'llama-3.3-70b-versatile',
+        messages: [{ role: 'user', content: sysPrompt }],
+        response_format: { type: 'json_object' },
+        temperature: 0.1
+      }, {
+        headers: { 'Authorization': `Bearer ${groqKey}`, 'Content-Type': 'application/json' },
+        timeout: 8000
+      });
+      const raw = res.data?.choices?.[0]?.message?.content;
+      if (raw) {
+        const parsed = JSON.parse(raw.trim());
+        if (parsed && parsed.amount > 0) return parsed;
+      }
+    } catch (e) {}
+  }
+
+  // 3. Tenta OpenAI GPT-4o-mini
+  if (openAiKey) {
+    try {
+      const res = await fastAxios.post('https://api.openai.com/v1/chat/completions', {
+        model: 'gpt-4o-mini',
+        messages: [{ role: 'user', content: sysPrompt }],
+        response_format: { type: 'json_object' },
+        temperature: 0.1
+      }, {
+        headers: { 'Authorization': `Bearer ${openAiKey}`, 'Content-Type': 'application/json' },
+        timeout: 8000
+      });
+      const raw = res.data?.choices?.[0]?.message?.content;
+      if (raw) {
+        const parsed = JSON.parse(raw.trim());
+        if (parsed && parsed.amount > 0) return parsed;
+      }
+    } catch (e) {}
+  }
+
+  return null;
+}
+
 // Transcritor unificado de áudio em múltiplas camadas com garantia de fidelidade
 async function transcribeAudioBuffer(audioBuffer, explicitKey = '') {
   if (!audioBuffer || audioBuffer.length < 50) return '';
@@ -179,7 +418,7 @@ async function transcribeAudioBuffer(audioBuffer, explicitKey = '') {
   const base64Audio = audioBuffer.toString('base64');
   const geminiKey = getEffectiveGeminiKey(explicitKey);
 
-  // ESTRATÉGIA 1: GOOGLE GEMINI 1.5 FLASH MULTIMODAL AUDIO (Fidelidade Máxima com Entendimento Semântico de Voz)
+  // ESTRATÉGIA 1: GOOGLE GEMINI 1.5 FLASH MULTIMODAL AUDIO (Fidelidade Máxima)
   if (geminiKey) {
     try {
       const gUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`;
@@ -206,7 +445,15 @@ async function transcribeAudioBuffer(audioBuffer, explicitKey = '') {
     }
   }
 
-  // ESTRATÉGIA 2: Endpoint Central da Nuvem (/api/transcribe na Vercel)
+  // ESTRATÉGIA 2: Groq Whisper-large-v3 (com normalização Loudnorm)
+  const groqText = await transcribeWithGroqWhisper(audioBuffer, explicitKey);
+  if (groqText) return groqText;
+
+  // ESTRATÉGIA 3: OpenAI Whisper-1
+  const openAiText = await transcribeWithOpenAIWhisper(audioBuffer, explicitKey);
+  if (openAiText) return openAiText;
+
+  // ESTRATÉGIA 4: Endpoint Central da Nuvem (/api/transcribe na Vercel)
   try {
     const trRes = await fastAxios.post('https://kyro-finance.vercel.app/api/transcribe', {
       audioBase64,
@@ -219,7 +466,7 @@ async function transcribeAudioBuffer(audioBuffer, explicitKey = '') {
     }
   } catch (trErr) {}
 
-  // ESTRATÉGIA 3: Whisper Neural Local (com Vocabulário Contextualizado em Finanças)
+  // ESTRATÉGIA 5: Whisper Neural Local (com Loudnorm e Vocabulário Contextualizado em Finanças)
   try {
     const whisper = await getLocalWhisper();
     if (whisper) {
@@ -229,6 +476,7 @@ async function transcribeAudioBuffer(audioBuffer, explicitKey = '') {
         const res = await whisper(float32, { 
           language: 'portuguese', 
           task: 'transcribe',
+          temperature: 0.0,
           initial_prompt: 'Finanças pessoais, pagamentos, Pix, transferência, R$ 300, reais, personal da academia, mensalidade, Teresina, Oeiras, Piauí, compras, mercado, combustível.' 
         });
         const elapsed = Date.now() - start;
@@ -369,21 +617,35 @@ try {
 
 function saveSettingsToDisk() {
   fs.promises.writeFile(SETTINGS_FILE, JSON.stringify(localSettings, null, 2), 'utf-8').catch(() => {});
-  if (localSettings.geminiApiKey) {
-    try {
-      const envPath = path.join(__dirname, '.env');
-      let envContent = '';
-      if (fs.existsSync(envPath)) {
-        envContent = fs.readFileSync(envPath, 'utf8');
-      }
+  try {
+    const envPath = path.join(__dirname, '.env');
+    let envContent = '';
+    if (fs.existsSync(envPath)) {
+      envContent = fs.readFileSync(envPath, 'utf8');
+    }
+    if (localSettings.geminiApiKey) {
       if (/GEMINI_API_KEY=/i.test(envContent)) {
         envContent = envContent.replace(/GEMINI_API_KEY=.*/i, `GEMINI_API_KEY=${localSettings.geminiApiKey}`);
       } else {
         envContent += `\nGEMINI_API_KEY=${localSettings.geminiApiKey}\n`;
       }
-      fs.writeFileSync(envPath, envContent.trim() + '\n', 'utf8');
-    } catch (e) {}
-  }
+    }
+    if (localSettings.groqApiKey) {
+      if (/GROQ_API_KEY=/i.test(envContent)) {
+        envContent = envContent.replace(/GROQ_API_KEY=.*/i, `GROQ_API_KEY=${localSettings.groqApiKey}`);
+      } else {
+        envContent += `\nGROQ_API_KEY=${localSettings.groqApiKey}\n`;
+      }
+    }
+    if (localSettings.openaiApiKey) {
+      if (/OPENAI_API_KEY=/i.test(envContent)) {
+        envContent = envContent.replace(/OPENAI_API_KEY=.*/i, `OPENAI_API_KEY=${localSettings.openaiApiKey}`);
+      } else {
+        envContent += `\nOPENAI_API_KEY=${localSettings.openaiApiKey}\n`;
+      }
+    }
+    fs.writeFileSync(envPath, envContent.trim() + '\n', 'utf8');
+  } catch (e) {}
 }
 
 try {
@@ -1780,11 +2042,73 @@ async function startSocket() {
               };
             }
 
-            // ESTRATÉGIA B: Fallback de Transcrição + Parser Financeiro Estrito
+            // ESTRATÉGIA B: Fallback de Transcrição + Extração Inteligente via LLM (voicesummary / transcrevezap)
             if (!parsed) {
               const transcribedText = await transcribeAudioBuffer(audioBuffer);
               if (transcribedText) {
-                parsed = parseDynamicFinancialMessage(transcribedText, true);
+                // 1. Tenta extração estruturada de precisão via IA
+                const llmExtracted = await extractFinancialDataWithLLM(transcribedText);
+                if (llmExtracted && llmExtracted.amount > 0) {
+                  const amount = parseFloat(llmExtracted.amount) || 0;
+                  const type = llmExtracted.type === 'Entrada' ? 'Entrada' : 'Saída';
+                  const method = llmExtracted.method || 'PIX';
+                  const finalProduct = llmExtracted.product || llmExtracted.description || 'Despesa';
+                  const establishment = llmExtracted.establishment || '';
+                  const finalCity = llmExtracted.city || '';
+                  const detectedCategory = llmExtracted.category || 'Outros';
+                  const finalCardName = llmExtracted.cardName || (method === 'Crédito' ? 'Nubank' : undefined);
+                  const symbol = type === 'Entrada' ? '+' : '-';
+
+                  let methodDisplay = method === 'Crédito' && finalCardName ? `Crédito (${finalCardName})` : method;
+
+                  let reply = `⚡ Lançamento adicionado ao KYRO Finance!\n\n🎙️ [Áudio de Voz]: "${transcribedText}"\n\n` +
+                    `• *Tipo:* ${type === 'Entrada' ? '💰 Entrada (Receita)' : '💸 Saída (Despesa)'}\n` +
+                    `• *Descrição / Item:* ${finalProduct}\n` +
+                    `• *Categoria:* ${detectedCategory}\n` +
+                    (establishment ? `• *Estabelecimento:* ${establishment}\n` : '') +
+                    (finalCity ? `• *Local / Cidade:* ${finalCity}\n` : '') +
+                    `• *Valor:* ${symbol} R$ ${amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n` +
+                    `• *Forma de Pagamento:* ${methodDisplay}`;
+
+                  if (method === 'Crédito' && finalCardName) {
+                    reply += `\n• *Fatura:* Adicionado à fatura do cartão ${finalCardName}`;
+                  }
+                  reply += `\n\n✅ Sincronizado em tempo real no Dashboard, Entradas e Saídas!`;
+
+                  const savedTx = {
+                    id: `${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+                    product: finalProduct,
+                    establishment: establishment,
+                    description: finalProduct,
+                    amount,
+                    type,
+                    method,
+                    cardName: finalCardName,
+                    category: detectedCategory,
+                    subcategory: finalProduct,
+                    city: finalCity,
+                    date: new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }),
+                    status: 'Concluído',
+                    currentInstallment: 1,
+                    totalInstallments: llmExtracted.totalInstallments || 1,
+                    createdAt: new Date().toISOString()
+                  };
+
+                  parsed = {
+                    reply,
+                    savedTx,
+                    product: finalProduct,
+                    establishment,
+                    object: finalProduct,
+                    location: establishment,
+                    city: finalCity
+                  };
+                }
+
+                // 2. Fallback estrito via algoritmo local blindado (sem inventar R$ 1 nem R$ 20)
+                if (!parsed) {
+                  parsed = parseDynamicFinancialMessage(transcribedText, true);
+                }
               }
             }
 
@@ -2453,6 +2777,11 @@ const server = http.createServer(async (req, res) => {
             } else if (payload.chatConfig?.geminiApiKey !== undefined) {
               localSettings.geminiApiKey = payload.chatConfig.geminiApiKey;
             }
+            if (payload.groqApiKey !== undefined) {
+              localSettings.groqApiKey = payload.groqApiKey;
+            } else if (payload.chatConfig?.groqApiKey !== undefined) {
+              localSettings.groqApiKey = payload.chatConfig.groqApiKey;
+            }
             if (Array.isArray(payload.userAiRules)) {
               localSettings.userAiRules = payload.userAiRules;
             }
@@ -2460,11 +2789,17 @@ const server = http.createServer(async (req, res) => {
             fastAxios.post('https://kyro-finance.vercel.app/api/database', {
               action: 'save_chat_config',
               geminiApiKey: localSettings.geminiApiKey,
+              groqApiKey: localSettings.groqApiKey,
               chatConfig: localSettings.chatConfig,
               userAiRules: localSettings.userAiRules
             }).catch(() => {});
             res.writeHead(200, { 'Content-Type': 'application/json' });
-            return res.end(JSON.stringify({ success: true, chatConfig: localSettings.chatConfig, geminiApiKey: localSettings.geminiApiKey }));
+            return res.end(JSON.stringify({ 
+              success: true, 
+              chatConfig: localSettings.chatConfig, 
+              geminiApiKey: localSettings.geminiApiKey,
+              groqApiKey: localSettings.groqApiKey 
+            }));
           }
 
           if (action === 'save_whatsapp_config' && payload.whatsappConfig) {

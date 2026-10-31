@@ -1039,6 +1039,9 @@ export default function App() {
   const [geminiApiKey, setGeminiApiKey] = useState<string>(() => {
     return localStorage.getItem('kyro_gemini_api_key') || '';
   });
+  const [groqApiKey, setGroqApiKey] = useState<string>(() => {
+    return localStorage.getItem('kyro_groq_api_key') || '';
+  });
   const [geminiFormatStyle, setGeminiFormatStyle] = useState<string>(() => {
     return localStorage.getItem('kyro_gemini_format') || 'tabelas';
   });
@@ -1372,11 +1375,13 @@ export default function App() {
     setTimeout(() => setWhatsappSyncToast(null), 3000);
   };
 
-  const handleSaveGeminiConfig = (key: string, format: string, prompt: string) => {
+  const handleSaveGeminiConfig = (key: string, groqKey: string, format: string, prompt: string) => {
     setGeminiApiKey(key);
+    setGroqApiKey(groqKey);
     setGeminiFormatStyle(format);
     setGeminiCustomPrompt(prompt);
     localStorage.setItem('kyro_gemini_api_key', key);
+    localStorage.setItem('kyro_groq_api_key', groqKey);
     localStorage.setItem('kyro_gemini_format', format);
     localStorage.setItem('kyro_gemini_custom_prompt', prompt);
     fetch('/api/database', {
@@ -1385,13 +1390,14 @@ export default function App() {
       body: JSON.stringify({
         action: 'save_chat_config',
         geminiApiKey: key,
-        chatConfig: { formattingPreference: format, customPrompt: prompt, geminiApiKey: key },
+        groqApiKey: groqKey,
+        chatConfig: { formattingPreference: format, customPrompt: prompt, geminiApiKey: key, groqApiKey: groqKey },
         userAiRules
       })
     }).catch(() => {});
     setWhatsappSyncToast({
       show: true,
-      text: '⚡ Configurações do Google Gemini 1.5 Flash salvas e sincronizadas entre Desktop e Mobile!'
+      text: '⚡ Configurações de IA (Gemini & Groq Whisper) salvas com sucesso!'
     });
     setTimeout(() => setWhatsappSyncToast(null), 4000);
     setIsGeminiModalOpen(false);
@@ -1997,6 +2003,7 @@ export default function App() {
             recurringExpenses
           },
           geminiApiKey: geminiApiKey || undefined,
+          groqApiKey: groqApiKey || undefined,
           formattingPreference: geminiFormatStyle,
           customPrompt: geminiCustomPrompt,
           userAiRules: userAiRules
@@ -2644,7 +2651,7 @@ export default function App() {
             let res = await fetch('/api/transcribe', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ audioBase64, mimeType: mime, geminiApiKey: geminiApiKey || undefined })
+              body: JSON.stringify({ audioBase64, mimeType: mime, geminiApiKey: geminiApiKey || undefined, groqApiKey: groqApiKey || undefined })
             }).catch(() => null);
 
             // Tenta 2: Bot local direto na porta 3001 (se no desktop ou rede local)
@@ -2652,7 +2659,7 @@ export default function App() {
               res = await fetch('http://localhost:3001/api/transcribe', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ audioBase64, mimeType: mime, geminiApiKey: geminiApiKey || undefined })
+                body: JSON.stringify({ audioBase64, mimeType: mime, geminiApiKey: geminiApiKey || undefined, groqApiKey: groqApiKey || undefined })
               }).catch(() => null);
             }
 
@@ -2661,7 +2668,7 @@ export default function App() {
               res = await fetch('https://kyro-finance.vercel.app/api/transcribe', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ audioBase64, mimeType: mime, geminiApiKey: geminiApiKey || undefined })
+                body: JSON.stringify({ audioBase64, mimeType: mime, geminiApiKey: geminiApiKey || undefined, groqApiKey: groqApiKey || undefined })
               }).catch(() => null);
             }
 
@@ -6364,6 +6371,7 @@ export default function App() {
               const f = e.target as any;
               handleSaveGeminiConfig(
                 f.apiKey.value.trim(),
+                f.groqApiKey?.value?.trim() || '',
                 geminiFormatStyle,
                 f.customPrompt.value
               );
@@ -6421,6 +6429,35 @@ export default function App() {
                     <span>{geminiTestFeedback.text}</span>
                   </div>
                 )}
+              </div>
+
+              {/* 1.1 Chave de API da Groq (Whisper-large-v3 ultra rápido para voz) */}
+              <div className="p-3.5 rounded-xl bg-[#0E1322] border border-[#1E2740] space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-teal-300 flex items-center gap-1.5">
+                    <Key size={14} className="text-teal-400" />
+                    Chave Groq API - Whisper-large-v3 (Opcional / Super Rápido):
+                  </label>
+                  <a 
+                    href="https://console.groq.com/keys" 
+                    target="_blank" 
+                    rel="noreferrer"
+                    className="text-[10px] text-teal-400 hover:underline flex items-center gap-1"
+                  >
+                    <span>Pegar chave grátis</span>
+                    <ExternalLink size={10} />
+                  </a>
+                </div>
+                <input
+                  type="password"
+                  name="groqApiKey"
+                  defaultValue={groqApiKey}
+                  placeholder="gsk_... (transcrição instantânea em 400ms com whisper-large-v3)"
+                  className="w-full bg-[#161D32] border border-[#2A3554] px-3 py-2 rounded-lg text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-teal-500"
+                />
+                <p className="text-[10px] text-slate-400">
+                  A Groq disponibiliza gratuitamente o maior modelo Whisper (whisper-large-v3) com latência abaixo de 500ms e fidelidade máxima em português.
+                </p>
               </div>
 
               {/* 2. Estilo de Organização e Formatação das Respostas */}

@@ -80,7 +80,42 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    // ESTRATÉGIA 2: OPENAI WHISPER-1 (Se Whisper estiver configurado e Gemini não transcrito)
+    // ESTRATÉGIA 2: GROQ WHISPER-LARGE-V3 (Super Rápido & Ultra Preciso para Português)
+    const groqKey = (req.body && req.body.groqApiKey) || process.env.GROQ_API_KEY || process.env.VITE_GROQ_API_KEY;
+    if (!transcribedText && groqKey && groqKey !== 'dummy_key') {
+      try {
+        const ext = cleanMime.includes('mp4') || cleanMime.includes('m4a') ? 'm4a'
+          : cleanMime.includes('aac') ? 'aac'
+          : cleanMime.includes('ogg') ? 'ogg'
+          : cleanMime.includes('wav') ? 'wav'
+          : 'webm';
+        const file = await toFile(audioBuffer, `user_voice.${ext}`, {
+          type: cleanMime
+        });
+
+        const Groq = (await import('openai')).default;
+        const groqClient = new Groq({
+          apiKey: groqKey,
+          baseURL: 'https://api.groq.com/openai/v1'
+        });
+
+        const groqRes = await groqClient.audio.transcriptions.create({
+          file,
+          model: 'whisper-large-v3',
+          language: 'pt',
+          temperature: 0.0,
+          prompt: 'Finanças pessoais, pagamentos, Pix, transferência, R$ 300, reais, personal da academia, mensalidade, Teresina, Oeiras, Piauí, compras, mercado, combustível.'
+        });
+
+        if (groqRes?.text && groqRes.text.trim().length > 0) {
+          transcribedText = groqRes.text.trim();
+        }
+      } catch (groqErr: any) {
+        console.warn('[Groq Audio Transcribe Erro]:', groqErr?.message || groqErr);
+      }
+    }
+
+    // ESTRATÉGIA 3: OPENAI WHISPER-1 (Se Whisper estiver configurado e Gemini não transcrito)
     if (!transcribedText && process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== 'dummy_key') {
       try {
         const ext = cleanMime.includes('mp4') || cleanMime.includes('m4a') ? 'm4a'
@@ -118,7 +153,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({
       success: true,
       text: transcribedText,
-      engine: geminiKey ? 'gemini-1.5-flash' : 'whisper-1'
+      engine: geminiKey ? 'gemini-1.5-flash' : (groqKey ? 'groq-whisper-large-v3' : 'whisper-1')
     });
 
   } catch (error: any) {
