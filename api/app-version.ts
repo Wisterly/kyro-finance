@@ -31,8 +31,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // 1. Sempre lê o version.json do deploy atual da Vercel (garantia de frescor a cada requisição)
   let localVersionData: any = {
-    version: '1.39',
-    buildNumber: 39,
+    version: '1.40',
+    buildNumber: 40,
     releaseDate: new Date().toISOString().split('T')[0],
     changelog: []
   };

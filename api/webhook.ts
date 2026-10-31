@@ -245,16 +245,47 @@ function parseDynamicFinancialMessage(text: string, isAudio: boolean = false) {
 
   // 7. Cidade (Apenas se mencionada explicitamente)
   let city = '';
-  if (lower.includes('oeiras') || lower.includes('oeira') || lower.includes('ostras')) city = 'Oeiras, PI';
-  else if (lower.includes('caxias')) city = 'Caxias, MA';
-  else if (lower.includes('teresina')) city = 'Teresina, PI';
-  else if (lower.includes('são paulo') || lower.includes('sao paulo')) city = 'São Paulo, SP';
-  else if (lower.includes('fortaleza')) city = 'Fortaleza, CE';
-  else if (lower.includes('brasília') || lower.includes('brasilia')) city = 'Brasília, DF';
-  else if (lower.includes('timon')) city = 'Timon, MA';
-  else if (lower.includes('parnaíba') || lower.includes('parnaiba')) city = 'Parnaíba, PI';
-  else if (lower.includes('floriano')) city = 'Floriano, PI';
-  else if (lower.includes('rio de janeiro')) city = 'Rio de Janeiro, RJ';
+  const knownCities = [
+    { match: /\b(?:oeiras|oeira|ostras)\b/i, name: 'Oeiras, PI' },
+    { match: /\bteresina\b/i, name: 'Teresina, PI' },
+    { match: /\bpicos\b/i, name: 'Picos, PI' },
+    { match: /\bfloriano\b/i, name: 'Floriano, PI' },
+    { match: /\bparna[ií]ba\b/i, name: 'Parnaíba, PI' },
+    { match: /\bpiripiri\b/i, name: 'Piripiri, PI' },
+    { match: /\bcampo\s+maior\b/i, name: 'Campo Maior, PI' },
+    { match: /\bvalen[cç]a(?:\s+do\s+piau[ií])?\b/i, name: 'Valença do Piauí, PI' },
+    { match: /\bs[aã]o\s+raimundo\s+nonato\b/i, name: 'São Raimundo Nonato, PI' },
+    { match: /\bcorrente\b/i, name: 'Corrente, PI' },
+    { match: /\bbom\s+jesus\b/i, name: 'Bom Jesus, PI' },
+    { match: /\buru[cç]u[ií]\b/i, name: 'Uruçuí, PI' },
+    { match: /\b[aá]gua\s+branca\b/i, name: 'Água Branca, PI' },
+    { match: /\bbarras\b/i, name: 'Barras, PI' },
+    { match: /\besperantina\b/i, name: 'Esperantina, PI' },
+    { match: /\bpedro\s+(?:ii|segundo)\b/i, name: 'Pedro II, PI' },
+    { match: /\baltos\b/i, name: 'Altos, PI' },
+    { match: /\bjos[eé]\s+de\s+freitas\b/i, name: 'José de Freitas, PI' },
+    { match: /\blu[ií]s\s+correia\b/i, name: 'Luís Correia, PI' },
+    { match: /\bpaulistana\b/i, name: 'Paulistana, PI' },
+    { match: /\bcaxias\b/i, name: 'Caxias, MA' },
+    { match: /\btimon\b/i, name: 'Timon, MA' },
+    { match: /\bs[aã]o\s+lu[ií]s\b/i, name: 'São Luís, MA' },
+    { match: /\bimperatriz\b/i, name: 'Imperatriz, MA' },
+    { match: /\bfortaleza\b/i, name: 'Fortaleza, CE' },
+    { match: /\bsobral\b/i, name: 'Sobral, CE' },
+    { match: /\bjuazeiro(?:\s+do\s+norte)?\b/i, name: 'Juazeiro do Norte, CE' },
+    { match: /\brecife\b/i, name: 'Recife, PE' },
+    { match: /\bsalvador\b/i, name: 'Salvador, BA' },
+    { match: /\bbras[ií]lia\b/i, name: 'Brasília, DF' },
+    { match: /\bgoi[aâ]nia\b/i, name: 'Goiânia, GO' },
+    { match: /\bs[aã]o\s+paulo\b/i, name: 'São Paulo, SP' },
+    { match: /\brio\s+de\s+janeiro\b/i, name: 'Rio de Janeiro, RJ' }
+  ];
+  for (const c of knownCities) {
+    if (c.match.test(lower)) {
+      city = c.name;
+      break;
+    }
+  }
 
   // TRATAMENTO DEDICADO PARA DÍVIDAS RECORRENTES E PARCELAMENTOS
   if (isRecurring && amount > 0) {

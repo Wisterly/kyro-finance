@@ -23,10 +23,12 @@ const fs = require('fs');
 const { spawn } = require('child_process');
 
 // ==============================================================
-// MOTOR NEURAL WHISPER LOCAL (0ms de custo, 100% gratuito e offline)
+// MOTOR NEURAL WHISPER LOCAL & OCR TESSERACT (0ms de custo, 100% gratuito e offline)
 // ==============================================================
 let localWhisperPipeline = null;
 let isWhisperLoading = false;
+let localOcrWorker = null;
+let isOcrLoading = false;
 
 async function getLocalWhisper() {
   if (localWhisperPipeline) return localWhisperPipeline;
@@ -39,9 +41,15 @@ async function getLocalWhisper() {
   isWhisperLoading = true;
   try {
     const { pipeline } = require('@xenova/transformers');
-    console.log('🎙️ [Whisper Local] Pré-carregando modelo neural Whisper ultra-rápido...');
-    localWhisperPipeline = await pipeline('automatic-speech-recognition', 'Xenova/whisper-tiny', { quantized: true });
-    console.log('✅ [Whisper Local] Motor neural pronto para transcrição em alta velocidade!');
+    console.log('🎙️ [Whisper Local] Pré-carregando modelo neural Whisper-Small (alta precisão PT-BR)...');
+    try {
+      localWhisperPipeline = await pipeline('automatic-speech-recognition', 'Xenova/whisper-small', { quantized: true });
+      console.log('✅ [Whisper Local] Motor neural Whisper-Small pronto para transcrição de alta precisão!');
+    } catch (smallErr) {
+      console.warn('⚠️ [Whisper-Small Fallback para Base]:', smallErr.message);
+      localWhisperPipeline = await pipeline('automatic-speech-recognition', 'Xenova/whisper-base', { quantized: true });
+      console.log('✅ [Whisper Local] Motor neural Whisper-Base pronto!');
+    }
   } catch (err) {
     console.warn('⚠️ [Whisper Local Info]: Falha ao instanciar modelo local:', err.message);
   } finally {
@@ -50,17 +58,41 @@ async function getLocalWhisper() {
   return localWhisperPipeline;
 }
 
+async function getLocalOcrWorker() {
+  if (localOcrWorker) return localOcrWorker;
+  if (isOcrLoading) {
+    while (isOcrLoading) {
+      await new Promise(r => setTimeout(r, 80));
+    }
+    return localOcrWorker;
+  }
+  isOcrLoading = true;
+  try {
+    const Tesseract = require('tesseract.js');
+    console.log('📸 [OCR Local] Pré-carregando motor leitor de comprovantes (Português)...');
+    localOcrWorker = await Tesseract.createWorker('por');
+    console.log('✅ [OCR Local] Motor leitor de comprovantes pronto!');
+  } catch (err) {
+    console.warn('⚠️ [OCR Local Info]: Falha ao iniciar Tesseract:', err.message);
+  } finally {
+    isOcrLoading = false;
+  }
+  return localOcrWorker;
+}
+
 // Inicia pré-aquecimento em background sem bloquear
 setTimeout(() => {
   getLocalWhisper().catch(() => {});
+  getLocalOcrWorker().catch(() => {});
 }, 1000);
 
-// Converte qualquer buffer de áudio (OGG Opus do WhatsApp, WebM, AAC, MP3) para Float32Array 16kHz mono via FFmpeg com Loudnorm
+// Converte qualquer buffer de áudio (OGG Opus do WhatsApp, WebM, AAC, MP3) para Float32Array 16kHz mono
+// Utiliza filtro passa-banda vocal limpo + Trim de Silêncio + Normalização Matemática de Ganho de Pico (sem distorção temporal de loudnorm)
 function convertAudioBufferToFloat32(audioBuffer) {
   return new Promise((resolve, reject) => {
     const ffmpeg = spawn('ffmpeg', [
       '-i', 'pipe:0',
-      '-af', 'loudnorm=I=-16:TP=-1.5:LRA=11',
+      '-af', 'highpass=f=70,lowpass=f=7800',
       '-ar', '16000',
       '-ac', '1',
       '-f', 'f32le',
@@ -72,8 +104,38 @@ function convertAudioBufferToFloat32(audioBuffer) {
     ffmpeg.on('close', code => {
       if (code === 0) {
         const fullBuffer = Buffer.concat(chunks);
-        const float32Array = new Float32Array(fullBuffer.buffer, fullBuffer.byteOffset, fullBuffer.length / 4);
-        resolve(float32Array);
+        const rawFloat32 = new Float32Array(fullBuffer.buffer, fullBuffer.byteOffset, Math.floor(fullBuffer.length / 4));
+        if (rawFloat32.length === 0) return resolve(rawFloat32);
+
+        // 1. Calcula o pico real para normalização de ganho (permite ouvir sussurros ou áudios gravados longe do microfone)
+        let maxPeak = 0;
+        for (let i = 0; i < rawFloat32.length; i++) {
+          const abs = Math.abs(rawFloat32[i]);
+          if (abs > maxPeak) maxPeak = abs;
+        }
+
+        // 2. Aplica ganho linear seguro até 0.92 (-0.7 dBFS)
+        const gain = (maxPeak > 0.0015 && maxPeak < 0.88) ? Math.min(0.92 / maxPeak, 25.0) : 1.0;
+        const normalized = new Float32Array(rawFloat32.length);
+        for (let i = 0; i < rawFloat32.length; i++) {
+          normalized[i] = Math.max(-1.0, Math.min(1.0, rawFloat32[i] * gain));
+        }
+
+        // 3. Remove silêncio absoluto prolongado no início e no fim (mantendo margem de 200ms = 3200 samples)
+        const silenceThreshold = 0.015;
+        let startIdx = 0;
+        let endIdx = normalized.length - 1;
+        while (startIdx < normalized.length && Math.abs(normalized[startIdx]) < silenceThreshold) startIdx++;
+        while (endIdx > startIdx && Math.abs(normalized[endIdx]) < silenceThreshold) endIdx--;
+
+        startIdx = Math.max(0, startIdx - 3200);
+        endIdx = Math.min(normalized.length - 1, endIdx + 3200);
+
+        const trimmed = (endIdx > startIdx && (endIdx - startIdx) >= 4000)
+          ? normalized.subarray(startIdx, endIdx + 1)
+          : normalized;
+
+        resolve(trimmed);
       } else {
         reject(new Error(`FFmpeg falhou com código ${code}`));
       }
@@ -82,6 +144,51 @@ function convertAudioBufferToFloat32(audioBuffer) {
     ffmpeg.stdin.write(audioBuffer);
     ffmpeg.stdin.end();
   });
+}
+
+// Normalizador fonético pós-transcrição para corrigir junções da fala rápida em Português Brasileiro
+function normalizeTranscribedPortugueseText(rawText) {
+  if (!rawText || typeof rawText !== 'string') return '';
+  let clean = rawText.trim();
+
+  // Filtra alucinações clássicas do Whisper quando o áudio está mudo ou só tem ruído branco
+  const lower = clean.toLowerCase();
+  const hallucinations = [
+    'não sei o que é isso',
+    'nao sei o que e isso',
+    'legendas pela comunidade',
+    'obrigado por assistir',
+    'inscreva-se no canal',
+    'subtitles by',
+    'amara.org',
+    'transcrição por'
+  ];
+  if (hallucinations.some(h => lower.includes(h)) && !/\d/.test(lower)) {
+    return '';
+  }
+
+  // Correções fonéticas de cidades e termos financeiros frequentemente unidos na fala rápida
+  clean = clean
+    .replace(/\binter[eé]sina\b/gi, 'em Teresina')
+    .replace(/\bint[eé]resina\b/gi, 'em Teresina')
+    .replace(/\binoeiras\b/gi, 'em Oeiras')
+    .replace(/\bem\s+oeira\b/gi, 'em Oeiras')
+    .replace(/\bem\s+ostras\b/gi, 'em Oeiras')
+    .replace(/\bimpicos\b/gi, 'em Picos')
+    .replace(/\binfloriano\b/gi, 'em Floriano')
+    .replace(/\bimparna[ií]ba\b/gi, 'em Parnaíba')
+    .replace(/\bincaxias\b/gi, 'em Caxias')
+    .replace(/\bintimon\b/gi, 'em Timon')
+    .replace(/\bp[ií]x\b/gi, 'PIX')
+    .replace(/\bpiques\b/gi, 'PIX')
+    .replace(/\bno\s+pics\b/gi, 'no PIX')
+    .replace(/\bum\s+pics\b/gi, 'um PIX')
+    .replace(/\bd[eé]bito\b/gi, 'débito')
+    .replace(/\bcr[eé]dito\b/gi, 'crédito')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  return clean;
 }
 
 // Converte qualquer buffer de áudio para WAV 16kHz 16-bit mono normalizado (padrão de estúdio para APIs de IA Whisper)
@@ -114,21 +221,29 @@ function convertAudioBufferToNormalizedWav(audioBuffer) {
 // ==============================================================
 // GESTÃO INTELIGENTE DE CHAVES DE IA (GEMINI, GROQ WHISPER & OPENAI)
 // ==============================================================
+function isValidApiKey(val, prefix = '') {
+  if (!val || typeof val !== 'string') return false;
+  const clean = val.trim().replace(/^["']|["']$/g, '');
+  if (!clean || clean === 'dummy_key' || clean.startsWith('#') || clean.includes(' ')) return false;
+  if (prefix && !clean.startsWith(prefix)) return false;
+  return clean.length >= 15;
+}
+
 function getEffectiveGeminiKey(explicitKey = '') {
-  if (explicitKey && explicitKey !== 'dummy_key') return explicitKey;
-  if (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== 'dummy_key') return process.env.GEMINI_API_KEY;
-  if (process.env.GOOGLE_API_KEY && process.env.GOOGLE_API_KEY !== 'dummy_key') return process.env.GOOGLE_API_KEY;
+  if (isValidApiKey(explicitKey, 'AIza')) return explicitKey.trim();
+  if (isValidApiKey(process.env.GEMINI_API_KEY, 'AIza')) return process.env.GEMINI_API_KEY.trim();
+  if (isValidApiKey(process.env.GOOGLE_API_KEY, 'AIza')) return process.env.GOOGLE_API_KEY.trim();
   if (typeof localSettings !== 'undefined') {
-    if (localSettings.geminiApiKey && localSettings.geminiApiKey !== 'dummy_key') return localSettings.geminiApiKey;
-    if (localSettings.chatConfig && localSettings.chatConfig.geminiApiKey && localSettings.chatConfig.geminiApiKey !== 'dummy_key') return localSettings.chatConfig.geminiApiKey;
+    if (isValidApiKey(localSettings.geminiApiKey, 'AIza')) return localSettings.geminiApiKey.trim();
+    if (localSettings.chatConfig && isValidApiKey(localSettings.chatConfig.geminiApiKey, 'AIza')) return localSettings.chatConfig.geminiApiKey.trim();
   }
   
   try {
     const envPath = path.join(__dirname, '.env');
     if (fs.existsSync(envPath)) {
       const content = fs.readFileSync(envPath, 'utf8');
-      const m = content.match(/(?:GEMINI_API_KEY|GOOGLE_API_KEY|VITE_GEMINI_API_KEY)\s*=\s*([^\r\n]+)/);
-      if (m && m[1] && m[1].trim() && m[1].trim() !== 'dummy_key') {
+      const m = content.match(/^(?:GEMINI_API_KEY|GOOGLE_API_KEY|VITE_GEMINI_API_KEY)[ \t]*=[ \t]*([^\r\n#]+)/m);
+      if (m && m[1] && isValidApiKey(m[1], 'AIza')) {
         return m[1].trim().replace(/^["']|["']$/g, '');
       }
     }
@@ -138,19 +253,19 @@ function getEffectiveGeminiKey(explicitKey = '') {
 }
 
 function getEffectiveGroqKey(explicitKey = '') {
-  if (explicitKey && explicitKey !== 'dummy_key') return explicitKey;
-  if (process.env.GROQ_API_KEY && process.env.GROQ_API_KEY !== 'dummy_key') return process.env.GROQ_API_KEY;
+  if (isValidApiKey(explicitKey, 'gsk_')) return explicitKey.trim();
+  if (isValidApiKey(process.env.GROQ_API_KEY, 'gsk_')) return process.env.GROQ_API_KEY.trim();
   if (typeof localSettings !== 'undefined') {
-    if (localSettings.groqApiKey && localSettings.groqApiKey !== 'dummy_key') return localSettings.groqApiKey;
-    if (localSettings.chatConfig && localSettings.chatConfig.groqApiKey && localSettings.chatConfig.groqApiKey !== 'dummy_key') return localSettings.chatConfig.groqApiKey;
+    if (isValidApiKey(localSettings.groqApiKey, 'gsk_')) return localSettings.groqApiKey.trim();
+    if (localSettings.chatConfig && isValidApiKey(localSettings.chatConfig.groqApiKey, 'gsk_')) return localSettings.chatConfig.groqApiKey.trim();
   }
   
   try {
     const envPath = path.join(__dirname, '.env');
     if (fs.existsSync(envPath)) {
       const content = fs.readFileSync(envPath, 'utf8');
-      const m = content.match(/(?:GROQ_API_KEY|VITE_GROQ_API_KEY)\s*=\s*([^\r\n]+)/);
-      if (m && m[1] && m[1].trim() && m[1].trim() !== 'dummy_key') {
+      const m = content.match(/^(?:GROQ_API_KEY|VITE_GROQ_API_KEY)[ \t]*=[ \t]*([^\r\n#]+)/m);
+      if (m && m[1] && isValidApiKey(m[1], 'gsk_')) {
         return m[1].trim().replace(/^["']|["']$/g, '');
       }
     }
@@ -160,17 +275,17 @@ function getEffectiveGroqKey(explicitKey = '') {
 }
 
 function getEffectiveOpenAIKey(explicitKey = '') {
-  if (explicitKey && explicitKey !== 'dummy_key') return explicitKey;
-  if (process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== 'dummy_key') return process.env.OPENAI_API_KEY;
+  if (isValidApiKey(explicitKey, 'sk-')) return explicitKey.trim();
+  if (isValidApiKey(process.env.OPENAI_API_KEY, 'sk-')) return process.env.OPENAI_API_KEY.trim();
   if (typeof localSettings !== 'undefined') {
-    if (localSettings.openaiApiKey && localSettings.openaiApiKey !== 'dummy_key') return localSettings.openaiApiKey;
+    if (isValidApiKey(localSettings.openaiApiKey, 'sk-')) return localSettings.openaiApiKey.trim();
   }
   try {
     const envPath = path.join(__dirname, '.env');
     if (fs.existsSync(envPath)) {
       const content = fs.readFileSync(envPath, 'utf8');
-      const m = content.match(/(?:OPENAI_API_KEY)\s*=\s*([^\r\n]+)/);
-      if (m && m[1] && m[1].trim() && m[1].trim() !== 'dummy_key') {
+      const m = content.match(/^(?:OPENAI_API_KEY)[ \t]*=[ \t]*([^\r\n#]+)/m);
+      if (m && m[1] && isValidApiKey(m[1], 'sk-')) {
         return m[1].trim().replace(/^["']|["']$/g, '');
       }
     }
@@ -269,8 +384,8 @@ async function transcribeWithGroqWhisper(audioBuffer, explicitKey = '') {
       timeout: 12000
     });
 
-    const text = (res.data?.text || '').trim();
-    if (text.length >= 4) {
+    const text = normalizeTranscribedPortugueseText(res.data?.text || '');
+    if (text.length >= 3) {
       console.log(`🎙️ [WhatsApp Áudio Transcrito via Groq Whisper-large-v3]: "${text}"`);
       return text;
     }
@@ -309,8 +424,8 @@ async function transcribeWithOpenAIWhisper(audioBuffer, explicitKey = '') {
       timeout: 12000
     });
 
-    const text = (res.data?.text || '').trim();
-    if (text.length >= 4) {
+    const text = normalizeTranscribedPortugueseText(res.data?.text || '');
+    if (text.length >= 3) {
       console.log(`🎙️ [WhatsApp Áudio Transcrito via OpenAI Whisper-1]: "${text}"`);
       return text;
     }
@@ -330,6 +445,7 @@ async function extractFinancialDataWithLLM(text, explicitKey = '') {
   const geminiKey = getEffectiveGeminiKey(explicitKey);
   const groqKey = getEffectiveGroqKey(explicitKey);
   const openAiKey = getEffectiveOpenAIKey(explicitKey);
+  if (!geminiKey && !groqKey && !openAiKey) return null;
 
   const sysPrompt = `Você é o extrator financeiro estrito do KYRO Finance. Analise a seguinte mensagem falada por usuário brasileiro: "${text.trim()}".
 Extraia os dados com precisão cirúrgica e responda OBRIGATORIAMENTE em JSON puro no formato:
@@ -418,7 +534,7 @@ async function transcribeAudioBuffer(audioBuffer, explicitKey = '') {
   const base64Audio = audioBuffer.toString('base64');
   const geminiKey = getEffectiveGeminiKey(explicitKey);
 
-  // ESTRATÉGIA 1: GOOGLE GEMINI 1.5 FLASH MULTIMODAL AUDIO (Fidelidade Máxima)
+  // ESTRATÉGIA 1: GOOGLE GEMINI 1.5 FLASH MULTIMODAL AUDIO (Se chave Gemini configurada)
   if (geminiKey) {
     try {
       const gUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`;
@@ -427,7 +543,7 @@ async function transcribeAudioBuffer(audioBuffer, explicitKey = '') {
           parts: [
             { inline_data: { mime_type: 'audio/ogg', data: base64Audio } },
             { 
-              text: 'Você é o motor de transcrição financeira de alta fidelidade do KYRO Finance. Escute atentamente este áudio em português falado por usuário brasileiro sobre lançamentos, pagamentos, transferências PIX, contas, academia ou despesas. Identifique com 100% de precisão os valores numéricos falados (ex: R$ 300 e nunca 330), as formas de pagamento (Pix, transferência, débito, crédito), os produtos ou serviços (ex: Personal da academia, alimentação, combustível) e as cidades brasileiras (ex: Teresina, Oeiras). Retorne EXCLUSIVAMENTE o texto falado exatamente como foi dito, sem comentários, sem explicações e sem aspas.' 
+              text: 'Você é o motor de transcrição financeira de alta fidelidade do KYRO Finance. Escute atentamente este áudio em português falado por usuário brasileiro sobre lançamentos, pagamentos, transferências PIX, contas, academia ou despesas. Identifique com 100% de precisão os valores numéricos falados (ex: R$ 300 e nunca 330), as formas de pagamento (Pix, transferência, débito, crédito, dinheiro), os produtos ou serviços (ex: Personal da academia, alimentação, combustível) e as cidades brasileiras (ex: Teresina, Oeiras, Picos, Floriano). Retorne EXCLUSIVAMENTE o texto falado exatamente como foi dito, sem comentários, sem explicações e sem aspas.' 
             }
           ]
         }],
@@ -435,17 +551,17 @@ async function transcribeAudioBuffer(audioBuffer, explicitKey = '') {
           temperature: 0.1
         }
       }, { timeout: 10000 });
-      const gTxt = gRes.data?.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (gTxt && gTxt.trim().length > 0) {
-        console.log(`🎙️ [WhatsApp Áudio Transcrito via Gemini Multimodal]: "${gTxt.trim()}"`);
-        return gTxt.trim();
+      const gTxt = normalizeTranscribedPortugueseText(gRes.data?.candidates?.[0]?.content?.parts?.[0]?.text || '');
+      if (gTxt && gTxt.length > 0) {
+        console.log(`🎙️ [WhatsApp Áudio Transcrito via Gemini Multimodal]: "${gTxt}"`);
+        return gTxt;
       }
     } catch (gErr) {
       console.warn('[Gemini Multimodal Direct Warn]:', gErr?.response?.data || gErr?.message || gErr);
     }
   }
 
-  // ESTRATÉGIA 2: Groq Whisper-large-v3 (com normalização Loudnorm)
+  // ESTRATÉGIA 2: Groq Whisper-large-v3
   const groqText = await transcribeWithGroqWhisper(audioBuffer, explicitKey);
   if (groqText) return groqText;
 
@@ -453,20 +569,7 @@ async function transcribeAudioBuffer(audioBuffer, explicitKey = '') {
   const openAiText = await transcribeWithOpenAIWhisper(audioBuffer, explicitKey);
   if (openAiText) return openAiText;
 
-  // ESTRATÉGIA 4: Endpoint Central da Nuvem (/api/transcribe na Vercel)
-  try {
-    const trRes = await fastAxios.post('https://kyro-finance.vercel.app/api/transcribe', {
-      audioBase64,
-      mimeType: 'audio/ogg',
-      geminiApiKey: geminiKey
-    }, { timeout: 8000 });
-    if (trRes.data?.success && trRes.data?.text && trRes.data.text.trim().length > 0) {
-      console.log(`🎙️ [WhatsApp Áudio Transcrito via Nuvem Central]: "${trRes.data.text.trim()}"`);
-      return trRes.data.text.trim();
-    }
-  } catch (trErr) {}
-
-  // ESTRATÉGIA 5: Whisper Neural Local (com Loudnorm e Vocabulário Contextualizado em Finanças)
+  // ESTRATÉGIA 4: Whisper Neural Local de Alta Precisão (Xenova/whisper-small com Peak Normalization + Trim Acústico)
   try {
     const whisper = await getLocalWhisper();
     if (whisper) {
@@ -476,13 +579,13 @@ async function transcribeAudioBuffer(audioBuffer, explicitKey = '') {
         const res = await whisper(float32, { 
           language: 'portuguese', 
           task: 'transcribe',
-          temperature: 0.0,
-          initial_prompt: 'Finanças pessoais, pagamentos, Pix, transferência, R$ 300, reais, personal da academia, mensalidade, Teresina, Oeiras, Piauí, compras, mercado, combustível.' 
+          chunk_length_s: 30,
+          stride_length_s: 5
         });
         const elapsed = Date.now() - start;
-        const text = (res?.text || '').trim();
+        const text = normalizeTranscribedPortugueseText(res?.text || '');
         if (text.length > 0) {
-          console.log(`🎙️ [WhatsApp Áudio Transcrito via Whisper Local em ${elapsed}ms]: "${text}"`);
+          console.log(`🎙️ [WhatsApp Áudio Transcrito via Whisper-Small Local em ${elapsed}ms]: "${text}"`);
           return text;
         }
       }
@@ -491,7 +594,419 @@ async function transcribeAudioBuffer(audioBuffer, explicitKey = '') {
     console.warn('[Whisper Local Fallback]:', wErr.message);
   }
 
+  // ESTRATÉGIA 5: Endpoint Central da Nuvem (/api/transcribe na Vercel)
+  try {
+    const trRes = await fastAxios.post('https://kyro-finance.vercel.app/api/transcribe', {
+      audioBase64: base64Audio,
+      mimeType: 'audio/ogg',
+      geminiApiKey: geminiKey
+    }, { timeout: 8000 });
+    const cloudTxt = normalizeTranscribedPortugueseText(trRes.data?.text || '');
+    if (trRes.data?.success && cloudTxt.length > 0) {
+      console.log(`🎙️ [WhatsApp Áudio Transcrito via Nuvem Central]: "${cloudTxt}"`);
+      return cloudTxt;
+    }
+  } catch (trErr) {}
+
   return '';
+}
+
+// ==============================================================
+// MOTOR CHATBOT LEITOR DE COMPROVANTES (OCR + VISION AI + PARSER BANCÁRIO BRASILEIRO)
+// Suporta comprovantes de Pix (Nubank, Inter, Itaú, BB, Bradesco, Santander, Caixa, PicPay, Mercado Pago),
+// Maquininhas de Cartão (Débito / Crédito) e Recibos em Dinheiro!
+// ==============================================================
+function preprocessImageForOcr(imageBuffer) {
+  return new Promise((resolve) => {
+    const ff = spawn('ffmpeg', [
+      '-i', 'pipe:0',
+      '-vf', "scale='max(1400,iw)':-1,format=gray,eq=contrast=1.35:brightness=0.02",
+      '-f', 'image2pipe',
+      '-vcodec', 'png',
+      'pipe:1'
+    ], { stdio: ['pipe', 'pipe', 'ignore'] });
+
+    const chunks = [];
+    ff.stdout.on('data', c => chunks.push(c));
+    ff.on('close', code => {
+      if (code === 0 && chunks.length > 0) {
+        resolve(Buffer.concat(chunks));
+      } else {
+        resolve(imageBuffer);
+      }
+    });
+    ff.on('error', () => resolve(imageBuffer));
+    ff.stdin.write(imageBuffer);
+    ff.stdin.end();
+  });
+}
+
+function parseFinancialReceiptOcrText(rawOcrText, captionText = '') {
+  const combinedRaw = `${rawOcrText || ''}\n${captionText || ''}`.trim();
+  if (!combinedRaw || combinedRaw.length < 3) return null;
+
+  // 1. Correção óptica de caracteres que o OCR frequentemente confunde em comprovantes
+  const normalizedText = combinedRaw
+    .replace(/R\$\s*([0-9OIl.,]+)/gi, (m, p1) => {
+      const fixed = p1.replace(/O/gi, '0').replace(/[Il]/g, '1');
+      return `R$ ${fixed}`;
+    })
+    .replace(/\b([A-Za-zÀ-ÿ\s]{3,25})\s*[-/]\s*Pl\b/g, '$1 - PI')
+    .replace(/\bCidade\s*:\s*([^\r\n]+?)\s*[-/]\s*Pl\b/gi, 'Cidade: $1 - PI');
+
+  const lines = normalizedText
+    .split(/[\r\n]+/)
+    .map(l => l.replace(/\s+/g, ' ').trim())
+    .filter(l => l.length > 0);
+
+  const fullLower = normalizedText.toLowerCase();
+
+  // 2. Extração Cirúrgica do VALOR MONETÁRIO (amount) do Comprovante
+  let amount = 0;
+
+  // Prioridade A: Valor imediatamente após rótulos clássicos de comprovante ("Valor pago", "Valor da transferência", "Valor:", "Total:")
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const nextLine = lines[i + 1] || '';
+    if (/(?:valor\s*(?:pago|total|da\s*transfer[eê]ncia|enviado|do\s*pix|da\s*compra)?|total\s*(?:a\s*pagar|pago)?)\s*[:=-]?/i.test(line)) {
+      const sameLineMatch = line.match(/(?:r\$\s*|rs\s*|\$\s*)?(\d{1,3}(?:\.\d{3})*,\d{2}|\d+\.\d{2}|\d+,\d{1,2})/i);
+      if (sameLineMatch) {
+        const rawVal = sameLineMatch[1].includes(',')
+          ? sameLineMatch[1].replace(/\./g, '').replace(',', '.')
+          : sameLineMatch[1];
+        const parsedVal = parseFloat(rawVal);
+        if (!isNaN(parsedVal) && parsedVal > 0 && parsedVal < 10000000) {
+          amount = parsedVal;
+          break;
+        }
+      }
+      // Muitas vezes no Nubank / Inter a palavra "Valor" está em uma linha e "R$ 300,00" está na linha de baixo!
+      const nextLineMatch = nextLine.match(/(?:r\$\s*|rs\s*|\$\s*)?(\d{1,3}(?:\.\d{3})*,\d{2}|\d+\.\d{2}|\d+,\d{1,2})/i);
+      if (nextLineMatch && !/\d{2}\/\d{2}\/\d{2,4}|\d{2}:\d{2}/.test(nextLine)) {
+        const rawVal = nextLineMatch[1].includes(',')
+          ? nextLineMatch[1].replace(/\./g, '').replace(',', '.')
+          : nextLineMatch[1];
+        const parsedVal = parseFloat(rawVal);
+        if (!isNaN(parsedVal) && parsedVal > 0 && parsedVal < 10000000) {
+          amount = parsedVal;
+          break;
+        }
+      }
+    }
+  }
+
+  // Prioridade B: Qualquer padrão explícito com R$ no texto do comprovante (ex: "R$ 300,00", "R$ 45,50")
+  if (amount <= 0) {
+    const currencyMatch = normalizedText.match(/(?:r\$|rs)\s*(\d{1,3}(?:\.\d{3})*(?:,\d{1,2})?|\d+(?:[.,]\d{1,2})?)/i);
+    if (currencyMatch) {
+      const rawStr = currencyMatch[1];
+      const normNum = rawStr.includes(',') ? rawStr.replace(/\./g, '').replace(',', '.') : rawStr;
+      const val = parseFloat(normNum);
+      if (!isNaN(val) && val > 0 && val < 10000000) {
+        amount = val;
+      }
+    }
+  }
+
+  // Prioridade C: Valor decimal padrão brasileiro isolado (ex: 300,00 ou 45,50) ou na legenda
+  if (amount <= 0) {
+    const decMatch = normalizedText.match(/\b(\d{1,3}(?:\.\d{3})*,\d{2})\b/);
+    if (decMatch) {
+      const val = parseFloat(decMatch[1].replace(/\./g, '').replace(',', '.'));
+      if (!isNaN(val) && val > 0 && val < 10000000) {
+        amount = val;
+      }
+    }
+  }
+
+  // Prioridade D: Se ainda não achou e tem legenda com valor
+  if (amount <= 0 && captionText) {
+    amount = extractMonetaryValue(captionText);
+  }
+
+  if (!amount || amount <= 0) return null;
+
+  // 3. Extração do TIPO DE TRANSFERÊNCIA / FORMA DE PAGAMENTO (PIX, Dinheiro, Débito, Crédito, Transferência)
+  let method = 'PIX';
+  if (/(?:venda\s+a\s+d[eé]bito|cart[aã]o\s+de\s+d[eé]bito|maestro|visa\s+electron|elo\s+d[eé]bito|\bd[eé]bito\b)/i.test(normalizedText)) {
+    method = 'Débito';
+  } else if (/(?:dinheiro|em\s+esp[eé]cie|\besp[eé]cie\b|\btroco\b|pagamento\s+em\s+dinheiro)/i.test(normalizedText)) {
+    method = 'Dinheiro';
+  } else if (/(?:venda\s+a\s+cr[eé]dito|cart[aã]o\s+de\s+cr[eé]dito|parcelado\s+em|\bcr[eé]dito\b)/i.test(normalizedText) && !/pix/i.test(normalizedText)) {
+    method = 'Crédito';
+  } else if (/(?:\bpix\b|chave\s+pix|qr\s*code|id\s+da\s+transa[cç][aã]o|e\d{8}\d+)/i.test(normalizedText)) {
+    method = 'PIX';
+  } else if (/(?:\bted\b|\bdoc\b|transfer[eê]ncia\s+entre\s+contas|comprovante\s+de\s+transfer[eê]ncia)/i.test(normalizedText)) {
+    method = 'Transferência';
+  }
+
+  // 4. Extração do TIPO DE OPERAÇÃO (Saída vs Entrada)
+  let type = 'Saída';
+  if (/(?:pix\s+recebido|transfer[eê]ncia\s+recebida|voc[eê]\s+recebeu|dep[oó]sito\s+recebido|recebimento)/i.test(normalizedText)) {
+    type = 'Entrada';
+  }
+
+  // 5. Extração da CIDADE (city) do Comprovante
+  let city = '';
+  // 5a. Procura rótulos explícitos "Cidade:", "Município:", "Local:", "Localidade:"
+  for (const line of lines) {
+    const cityLabelMatch = line.match(/(?:cidade|munic[ií]pio|localidade|local)\s*[:=-]\s*([A-Za-zÀ-ÿ\s]+?)(?:\s*[-/,]\s*([A-Z]{2}))?$/i);
+    if (cityLabelMatch && cityLabelMatch[1]) {
+      const cName = cityLabelMatch[1].trim();
+      const uf = (cityLabelMatch[2] || '').toUpperCase();
+      if (cName.length >= 3 && !/pagamento|comprovante|transfer|valor/i.test(cName)) {
+        city = uf ? `${cName}, ${uf}` : cName;
+        break;
+      }
+    }
+  }
+
+  // 5b. Procura padrão de endereço/maquininha "<CIDADE> - <UF>" ou "<CIDADE>/<UF>" (ex: "OEIRAS - PI", "TERESINA - PI", "PICOS - PI")
+  if (!city) {
+    const validUfs = new Set(['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO']);
+    for (const line of lines) {
+      const ufMatch = line.match(/^([A-Za-zÀ-ÿ\s]{3,28}?)\s*[-/]\s*([A-Z]{2})$/);
+      if (ufMatch) {
+        const candidateCity = ufMatch[1].trim();
+        const candidateUf = ufMatch[2].toUpperCase();
+        if (validUfs.has(candidateUf) && !/rua|av|avenida|centro|bairro|cnpj|cpf|banco|pagamentos|ltda/i.test(candidateCity)) {
+          const formattedCity = candidateCity.toLowerCase().split(/\s+/).map(w => ['de','da','do','dos','das'].includes(w) ? w : w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+          city = `${formattedCity}, ${candidateUf}`;
+          break;
+        }
+      }
+    }
+  }
+
+  // 5c. Procura cidades conhecidas no texto completo
+  if (!city) {
+    city = extractCityFromText(normalizedText);
+  }
+
+  // 6. Extração do LOCAL / ESTABELECIMENTO / RECEBEDOR (establishment)
+  let establishment = '';
+  const ignoreEstWords = /^(?:comprovante|recibo|transfer[eê]ncia|pagamento|pix|venda|cart[aã]o|valor|data|hora|origem|destino|para|de|institui[cç][aã]o|banco|ag[eê]ncia|conta|cpf|cnpj|chave|id|autentica[cç][aã]o|aprovada|via\s+cliente|nu\s+pagamentos|mercado\s+pago|picpay|ita[uú]|bradesco|santander|caixa)$/i;
+
+  // 6a. Rótulos explícitos ("Nome:", "Favorecido:", "Recebedor:", "Destinatário:", "Beneficiário:", "Estabelecimento:", "Empresa:", "Para:")
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const labelMatch = line.match(/^(?:nome(?:\s+do\s+(?:recebedor|favorecido|destinat[aá]rio))?|favorecido|recebedor|destinat[aá]rio|benefici[aá]rio|estabelecimento|empresa|loja|local\s+da\s+compra|pago\s+para)\s*[:=-]\s*(.+)$/i);
+    if (labelMatch && labelMatch[1]) {
+      let cand = labelMatch[1].replace(/\b(?:LTDA|ME|EPP|EIRELI|S\/A|SA)\b/gi, '').trim();
+      if (cand.length >= 2 && !ignoreEstWords.test(cand) && !/^\d/.test(cand)) {
+        establishment = cand;
+        break;
+      }
+    }
+    // Bloco "Destino" ou "Para" ou "Dados do recebedor" onde o nome está na linha seguinte (padrão Nubank / Inter)
+    if (/^(?:destino|para|quem\s+recebeu|dados\s+do\s+recebedor)$/i.test(line) && lines[i + 1]) {
+      let nextCand = lines[i + 1].replace(/^nome\s*[:=-]\s*/i, '').replace(/\b(?:LTDA|ME|EPP|EIRELI|S\/A|SA)\b/gi, '').trim();
+      if (nextCand.length >= 3 && !ignoreEstWords.test(nextCand) && !/^\d|cpf|cnpj|institui/i.test(nextCand)) {
+        establishment = nextCand;
+        break;
+      }
+    }
+  }
+
+  // 6b. Se for cupom fiscal / comprovante de maquininha (primeira linha com nome comercial, ex: "PADARIA BELLA VISTA LTDA", "POSTO SAO CRISTOVAO")
+  if (!establishment) {
+    for (let i = 0; i < Math.min(4, lines.length); i++) {
+      const l = lines[i];
+      if (
+        /(?:ltda|me\b|eireli|supermercado|mercado|padaria|panificadora|posto|farm[aá]cia|drogaria|restaurante|lanchonete|pizzaria|churrascaria|academia|cl[ií]nica|hospital|oficina|loja|magazine|shopping|barbearia|sal[aá]o|pet\s*shop|espeto|atacad[aã]o|assa[ií])/i.test(l) &&
+        !/comprovante|recibo|transfer[eê]ncia|descri[cç][aã]o|referente|item/i.test(l)
+      ) {
+        let cleanHeader = l.replace(/\b(?:LTDA|ME|EPP|EIRELI|S\/A|SA)\b/gi, '').replace(/[-.,]+$/, '').trim();
+        if (cleanHeader === cleanHeader.toUpperCase()) {
+          cleanHeader = cleanHeader.toLowerCase().split(/\s+/).map(w => ['de','da','do','dos','das','e'].includes(w) ? w : w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+        }
+        establishment = cleanHeader;
+        break;
+      }
+    }
+  }
+
+  // 7. Extração da DESCRIÇÃO / ITEM (product)
+  let product = '';
+  // 7a. Rótulos explícitos no comprovante ("Descrição:", "Referente a:", "Item:", "Produto:", "Mensagem:", "Identificador:")
+  for (const line of lines) {
+    const descMatch = line.match(/^(?:descri[cç][aã]o|referente\s+a|item|produto|servi[cç]o|mensagem|finalidade|hist[oó]rico)\s*[:=-]\s*(.+)$/i);
+    if (descMatch && descMatch[1]) {
+      const d = descMatch[1].trim();
+      if (d.length >= 2 && !/^\d+$/.test(d)) {
+        product = d;
+        break;
+      }
+    }
+  }
+
+  // 7b. Se o usuário enviou legenda na foto, usa a legenda para refinar o item/local/cidade
+  if (captionText && captionText.trim().length > 1) {
+    const fromCaption = parseDynamicFinancialMessage(`${captionText} ${amount}`, false);
+    if (fromCaption && fromCaption.savedTx) {
+      if (!product && fromCaption.savedTx.product && !['PIX','Débito','Crédito','Dinheiro','Transferência','Pagamento'].includes(fromCaption.savedTx.product)) {
+        product = fromCaption.savedTx.product;
+      }
+      if (!establishment && fromCaption.savedTx.establishment) {
+        establishment = fromCaption.savedTx.establishment;
+      }
+      if (!city && fromCaption.savedTx.city) {
+        city = fromCaption.savedTx.city;
+      }
+    }
+  }
+
+  // 7c. Se ainda não tem produto explícito, infere pelo estabelecimento ou pelo texto do comprovante
+  let category = 'Outros';
+  const contextForRules = `${product} ${establishment} ${captionText}`.toLowerCase();
+
+  if (/personal|academia|treino|muscula|crossfit|pilates|studio\s*fit/i.test(contextForRules)) {
+    if (!product) product = 'Personal da academia';
+    category = 'Saúde / Atividade Física';
+  } else if (/padaria|panificadora|lanche|caf[eé]|p[aã]o|salgado|bolo|confeitaria/i.test(contextForRules)) {
+    if (!product) product = 'Lanche / Padaria';
+    category = 'Alimentação';
+  } else if (/restaurante|almo[cç]o|jantar|churrascaria|espeto|pizzaria|hamburgueria|sushi|marmita|refei[cç][aã]o/i.test(contextForRules)) {
+    if (!product) product = 'Refeição / Restaurante';
+    category = 'Alimentação';
+  } else if (/supermercado|mercado|atacad[aã]o|assa[ií]|compras/i.test(contextForRules)) {
+    if (!product) product = 'Compras de Supermercado';
+    category = 'Supermercado';
+  } else if (/posto|combust[ií]vel|gasolina|etanol|diesel|ipiranga|shell|petrobras/i.test(contextForRules)) {
+    if (!product) product = 'Combustível';
+    category = 'Transporte';
+  } else if (/uber|99pop|t[aá]xi|passagem|estacionamento/i.test(contextForRules)) {
+    if (!product) product = 'Transporte';
+    category = 'Transporte';
+  } else if (/farm[aá]cia|drogaria|drogasil|pague\s+menos|rem[eé]dio|medicamento|cl[ií]nica|hospital|consulta|exame/i.test(contextForRules)) {
+    if (!product) product = 'Farmácia / Saúde';
+    category = 'Saúde / Farmácia';
+  } else if (/energia|equatorial|enel|celpi|[aá]gua|agespisa|internet|fibra|aluguel|condom[ií]nio/i.test(contextForRules)) {
+    if (!product) product = 'Conta Residencial';
+    category = 'Moradia';
+  } else {
+    if (!product) {
+      product = establishment
+        ? `${method === 'PIX' ? 'Pix' : 'Pagamento'} - ${establishment}`
+        : (method === 'PIX' ? 'Transferência PIX' : `Comprovante (${method})`);
+    }
+    category = type === 'Entrada' ? 'Recebimento' : (method === 'PIX' || method === 'Transferência' ? 'Transferência' : 'Outros');
+  }
+
+  return {
+    amount,
+    type,
+    method,
+    product,
+    description: product,
+    category,
+    establishment: establishment || '',
+    city: city || '',
+    rawOcrExcerpt: lines.slice(0, 8).join(' | ')
+  };
+}
+
+async function extractReceiptFromImageBuffer(imageBuffer, mimeType = 'image/jpeg', captionText = '') {
+  if (!imageBuffer || imageBuffer.length < 100) return null;
+
+  const geminiKey = getEffectiveGeminiKey();
+  const openAiKey = getEffectiveOpenAIKey();
+  const base64Img = imageBuffer.toString('base64');
+
+  // ESTRATÉGIA 1: Gemini 1.5 Flash Vision (se chave configurada)
+  if (geminiKey) {
+    try {
+      const gUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`;
+      const prompt = `Analise esta imagem de comprovante financeiro ou nota fiscal brasileira.${captionText ? ` Legenda do usuário: "${captionText}".` : ''}
+Extraia todos os filtros com precisão cirúrgica e responda APENAS em JSON puro:
+{
+  "amount": 0.00,
+  "type": "Saída" | "Entrada",
+  "method": "PIX" | "Débito" | "Crédito" | "Dinheiro" | "Transferência",
+  "product": "Item ou descrição do pagamento",
+  "description": "Item ou descrição do pagamento",
+  "category": "Alimentação" | "Supermercado" | "Transporte" | "Saúde / Atividade Física" | "Saúde / Farmácia" | "Moradia" | "Lazer" | "Compras" | "Transferência" | "Outros",
+  "establishment": "Nome do recebedor, favorecido ou estabelecimento comercial",
+  "city": "Cidade e UF se aparecer no comprovante (ex: Teresina, PI ou Oeiras, PI) ou vazio"
+}`;
+      const gRes = await fastAxios.post(gUrl, {
+        contents: [{
+          parts: [
+            { inline_data: { mime_type: mimeType, data: base64Img } },
+            { text: prompt }
+          ]
+        }],
+        generationConfig: { temperature: 0.1, responseMimeType: 'application/json' }
+      }, { timeout: 12000 });
+      const rawTxt = gRes.data?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (rawTxt) {
+        const parsed = JSON.parse(rawTxt.trim());
+        if (parsed && Number(parsed.amount) > 0) {
+          console.log(`📸 [Comprovante Lido via Gemini Vision]: R$ ${parsed.amount} | ${parsed.method} | ${parsed.establishment} | ${parsed.city}`);
+          return parsed;
+        }
+      }
+    } catch (e) {
+      console.warn('[Gemini Vision Warn]:', e.message);
+    }
+  }
+
+  // ESTRATÉGIA 2: OpenAI GPT-4o-mini Vision (se chave configurada)
+  if (openAiKey) {
+    try {
+      const dataUrl = `data:${mimeType};base64,${base64Img}`;
+      const oRes = await fastAxios.post('https://api.openai.com/v1/chat/completions', {
+        model: 'gpt-4o-mini',
+        response_format: { type: 'json_object' },
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'text', text: `Extraia deste comprovante em JSON puro: {"amount": 0.00, "type": "Saída", "method": "PIX|Débito|Crédito|Dinheiro|Transferência", "product": "", "description": "", "category": "", "establishment": "", "city": ""}. Legenda: "${captionText}"` },
+            { type: 'image_url', image_url: { url: dataUrl } }
+          ]
+        }]
+      }, {
+        headers: { 'Authorization': `Bearer ${openAiKey}`, 'Content-Type': 'application/json' },
+        timeout: 12000
+      });
+      const rawTxt = oRes.data?.choices?.[0]?.message?.content;
+      if (rawTxt) {
+        const parsed = JSON.parse(rawTxt.trim());
+        if (parsed && Number(parsed.amount) > 0) {
+          console.log(`📸 [Comprovante Lido via OpenAI Vision]: R$ ${parsed.amount} | ${parsed.method}`);
+          return parsed;
+        }
+      }
+    } catch (e) {}
+  }
+
+  // ESTRATÉGIA 3: Motor OCR Neural Local (Tesseract.js 'por' Pré-Aquecido + Pré-processamento FFmpeg + Parser Bancário)
+  try {
+    const startOcr = Date.now();
+    const worker = await getLocalOcrWorker();
+    if (worker) {
+      // 1ª leitura direta na imagem original
+      const { data: { text: rawOcr1 } } = await worker.recognize(imageBuffer);
+      let parsedReceipt = parseFinancialReceiptOcrText(rawOcr1, captionText);
+
+      // Se a imagem tiver baixo contraste/fundo colorido e não extraiu valor ou recebedor completo, aplica filtro de contraste FFmpeg
+      if (!parsedReceipt || !parsedReceipt.amount) {
+        const enhancedBuffer = await preprocessImageForOcr(imageBuffer);
+        const { data: { text: rawOcr2 } } = await worker.recognize(enhancedBuffer);
+        parsedReceipt = parseFinancialReceiptOcrText(`${rawOcr1 || ''}\n${rawOcr2 || ''}`, captionText);
+      }
+
+      if (parsedReceipt && parsedReceipt.amount > 0) {
+        const elapsedOcr = Date.now() - startOcr;
+        console.log(`📸 [Comprovante Lido via OCR Local em ${elapsedOcr}ms]: Valor: R$ ${parsedReceipt.amount} | Método: ${parsedReceipt.method} | Local: "${parsedReceipt.establishment}" | Cidade: "${parsedReceipt.city}" | Item: "${parsedReceipt.product}"`);
+        return parsedReceipt;
+      }
+    }
+  } catch (ocrErr) {
+    console.warn('[OCR Local Erro]:', ocrErr.message);
+  }
+
+  return null;
 }
 
 const HTTP_PORT = process.env.PORT || process.env.BOT_PORT || 3001;
@@ -1152,6 +1667,80 @@ function extractInstallments(text) {
   return 1;
 }
 
+function extractCityFromText(text) {
+  if (!text) return '';
+  const lower = text.toLowerCase();
+
+  const knownCities = [
+    { match: /\b(?:oeiras|oeira|ostras)\b/i, name: 'Oeiras, PI' },
+    { match: /\bteresina\b/i, name: 'Teresina, PI' },
+    { match: /\bpicos\b/i, name: 'Picos, PI' },
+    { match: /\bfloriano\b/i, name: 'Floriano, PI' },
+    { match: /\bparna[ií]ba\b/i, name: 'Parnaíba, PI' },
+    { match: /\bpiripiri\b/i, name: 'Piripiri, PI' },
+    { match: /\bcampo\s+maior\b/i, name: 'Campo Maior, PI' },
+    { match: /\bvalen[cç]a(?:\s+do\s+piau[ií])?\b/i, name: 'Valença do Piauí, PI' },
+    { match: /\bs[aã]o\s+raimundo\s+nonato\b/i, name: 'São Raimundo Nonato, PI' },
+    { match: /\bcorrente\b/i, name: 'Corrente, PI' },
+    { match: /\bbom\s+jesus\b/i, name: 'Bom Jesus, PI' },
+    { match: /\buru[cç]u[ií]\b/i, name: 'Uruçuí, PI' },
+    { match: /\b[aá]gua\s+branca\b/i, name: 'Água Branca, PI' },
+    { match: /\bbarras\b/i, name: 'Barras, PI' },
+    { match: /\besperantina\b/i, name: 'Esperantina, PI' },
+    { match: /\bpedro\s+(?:ii|segundo)\b/i, name: 'Pedro II, PI' },
+    { match: /\baltos\b/i, name: 'Altos, PI' },
+    { match: /\bjos[eé]\s+de\s+freitas\b/i, name: 'José de Freitas, PI' },
+    { match: /\blu[ií]s\s+correia\b/i, name: 'Luís Correia, PI' },
+    { match: /\bpaulistana\b/i, name: 'Paulistana, PI' },
+    { match: /\bsimpl[ií]cio\s+mendes\b/i, name: 'Simplício Mendes, PI' },
+    { match: /\bregenera[cç][aã]o\b/i, name: 'Regeneração, PI' },
+    { match: /\bamarante\b/i, name: 'Amarante, PI' },
+    { match: /\binhuma\b/i, name: 'Inhuma, PI' },
+    { match: /\beliseu\s+martins\b/i, name: 'Eliseu Martins, PI' },
+    { match: /\bcaxias\b/i, name: 'Caxias, MA' },
+    { match: /\btimon\b/i, name: 'Timon, MA' },
+    { match: /\bs[aã]o\s+lu[ií]s\b/i, name: 'São Luís, MA' },
+    { match: /\bimperatriz\b/i, name: 'Imperatriz, MA' },
+    { match: /\bcod[oó]\b/i, name: 'Codó, MA' },
+    { match: /\bbacabal\b/i, name: 'Bacabal, MA' },
+    { match: /\bbalsas\b/i, name: 'Balsas, MA' },
+    { match: /\bbar[aã]o\s+de\s+graja[uú]\b/i, name: 'Barão de Grajaú, MA' },
+    { match: /\bs[aã]o\s+jo[aã]o\s+dos\s+patos\b/i, name: 'São João dos Patos, MA' },
+    { match: /\bfortaleza\b/i, name: 'Fortaleza, CE' },
+    { match: /\bsobral\b/i, name: 'Sobral, CE' },
+    { match: /\bjuazeiro(?:\s+do\s+norte)?\b/i, name: 'Juazeiro do Norte, CE' },
+    { match: /\bcrato\b/i, name: 'Crato, CE' },
+    { match: /\btiangu[aá]\b/i, name: 'Tianguá, CE' },
+    { match: /\brecife\b/i, name: 'Recife, PE' },
+    { match: /\bpetrolina\b/i, name: 'Petrolina, PE' },
+    { match: /\bsalvador\b/i, name: 'Salvador, BA' },
+    { match: /\bnatal\b/i, name: 'Natal, RN' },
+    { match: /\bjo[aã]o\s+pessoa\b/i, name: 'João Pessoa, PB' },
+    { match: /\bmacei[oó]\b/i, name: 'Maceió, AL' },
+    { match: /\baracaju\b/i, name: 'Aracaju, SE' },
+    { match: /\bbras[ií]lia\b/i, name: 'Brasília, DF' },
+    { match: /\bgoi[aâ]nia\b/i, name: 'Goiânia, GO' },
+    { match: /\bs[aã]o\s+paulo\b/i, name: 'São Paulo, SP' },
+    { match: /\bcampinas\b/i, name: 'Campinas, SP' },
+    { match: /\brio\s+de\s+janeiro\b/i, name: 'Rio de Janeiro, RJ' },
+    { match: /\bbelo\s+horizonte\b/i, name: 'Belo Horizonte, MG' },
+    { match: /\bcuritiba\b/i, name: 'Curitiba, PR' },
+    { match: /\bflorian[oó]polis\b/i, name: 'Florianópolis, SC' },
+    { match: /\bporto\s+alegre\b/i, name: 'Porto Alegre, RS' },
+    { match: /\bbel[eé]m\b/i, name: 'Belém, PA' },
+    { match: /\bmanaus\b/i, name: 'Manaus, AM' },
+    { match: /\bpalmas\b/i, name: 'Palmas, TO' }
+  ];
+
+  for (const c of knownCities) {
+    if (c.match.test(lower)) {
+      return c.name;
+    }
+  }
+
+  return '';
+}
+
 // Extrator Inteligente e Dinâmico do KYRO Finance (sem inventar cidades ou dados)
 function parseDynamicFinancialMessage(text, isAudio = false) {
   const clean = (text || '').trim();
@@ -1226,17 +1815,7 @@ function parseDynamicFinancialMessage(text, isAudio = false) {
   }
 
   // 7. Cidade (Apenas se mencionada explicitamente)
-  let city = '';
-  if (lower.includes('oeiras') || lower.includes('oeira') || lower.includes('ostras')) city = 'Oeiras, PI';
-  else if (lower.includes('caxias')) city = 'Caxias, MA';
-  else if (lower.includes('teresina')) city = 'Teresina, PI';
-  else if (lower.includes('são paulo') || lower.includes('sao paulo')) city = 'São Paulo, SP';
-  else if (lower.includes('fortaleza')) city = 'Fortaleza, CE';
-  else if (lower.includes('brasília') || lower.includes('brasilia')) city = 'Brasília, DF';
-  else if (lower.includes('timon')) city = 'Timon, MA';
-  else if (lower.includes('parnaíba') || lower.includes('parnaiba')) city = 'Parnaíba, PI';
-  else if (lower.includes('floriano')) city = 'Floriano, PI';
-  else if (lower.includes('rio de janeiro')) city = 'Rio de Janeiro, RJ';
+  let city = extractCityFromText(clean);
 
   // TRATAMENTO DEDICADO PARA DÍVIDAS RECORRENTES E PARCELAMENTOS
   if (isRecurring && amount > 0) {
@@ -1369,21 +1948,41 @@ function parseDynamicFinancialMessage(text, isAudio = false) {
     else if (lower.includes('shein')) location = 'Shein (Internet)';
     else location = 'Internet';
   } else {
-    const localMatch = lower.match(/(?:^|[\s,.\-!])(farm[aá]cia|drogaria|supermercado|mercado|posto(?:\s+de\s+combust[ií]vel)?|restaurante|pizzaria|hamburgueria|churrascaria|padaria|panificadora|lanchonete|cafeteria|bar|academia|oficina|loja|shopping|barbearia|sal[aá]o|a[cç]ougue|hospital|cl[ií]nica|escola|banco|pet\s*shop|veterin[aá]ri[ao])(?:$|[\s,.\-!])/i);
-    if (localMatch) {
-      const rawLocal = localMatch[1].toLowerCase();
-      if (rawLocal.includes('farm') || rawLocal.includes('drog')) location = 'Farmácia';
-      else if (rawLocal.includes('mercado')) location = 'Supermercado';
-      else if (rawLocal.includes('posto')) location = 'Posto de Combustível';
-      else if (rawLocal.includes('restaurante') || rawLocal.includes('pizzaria') || rawLocal.includes('hamburgueria') || rawLocal.includes('churrascaria')) location = 'Restaurante';
-      else if (rawLocal.includes('padaria') || rawLocal.includes('panificadora')) location = 'Padaria';
-      else if (rawLocal.includes('lanchonete') || rawLocal.includes('cafeteria')) location = 'Lanchonete';
-      else if (rawLocal.includes('academia')) location = 'Academia';
-      else if (rawLocal.includes('barbearia') || rawLocal.includes('sal')) location = 'Barbearia / Salão';
-      else if (rawLocal.includes('oficina')) location = 'Oficina';
-      else if (rawLocal.includes('shopping') || rawLocal.includes('loja')) location = 'Loja / Shopping';
-      else if (rawLocal.includes('pet') || rawLocal.includes('veterin')) location = 'Pet Shop';
-      else location = rawLocal.charAt(0).toUpperCase() + rawLocal.slice(1);
+    // 1a. Detecta estabelecimentos nomeados explícitos (ex: "no Chico do espeto", "na Padaria Bella Vista", "no Posto São Cristóvão")
+    let cleanWithoutCity = clean;
+    if (city) {
+      const citySimple = city.split(',')[0].trim();
+      cleanWithoutCity = cleanWithoutCity.replace(new RegExp(`\\s+em\\s+${citySimple}\\b.*$`, 'i'), '').trim();
+    }
+    const namedPlaceMatch = cleanWithoutCity.match(/\b(?:no|na)\s+((?:posto|padaria|panificadora|restaurante|churrascaria|pizzaria|lanchonete|supermercado|mercado|mercadinho|atacad[aã]o|farm[aá]cia|drogaria|academia|cl[ií]nica|hospital|oficina|loja|barbearia|sal[aá]o|shopping|chico|bar|hotel|pousada|escola|col[eé]gio|faculdade)\s+[A-Za-zÀ-ÿ0-9\s]{2,30}|[A-Za-zÀ-ÿ]+\s+do\s+[A-Za-zÀ-ÿ]+)$/i);
+    if (namedPlaceMatch && namedPlaceMatch[1]) {
+      const rawPlace = namedPlaceMatch[1]
+        .replace(/\b(?:no|na)\s+(?:pix|d[eé]bito|cr[eé]dito|dinheiro|cart[aã]o).*$/i, '')
+        .replace(/\b(?:por|de|no\s+valor)\s+r?\$\s*\d+.*$/i, '')
+        .trim();
+      if (rawPlace.length >= 3 && !/^(?:pix|d[eé]bito|cr[eé]dito|dinheiro|cart[aã]o|transfer[eê]ncia)$/i.test(rawPlace)) {
+        location = rawPlace.split(/\s+/).map(w => ['de','da','do','dos','das','e'].includes(w.toLowerCase()) ? w.toLowerCase() : w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+      }
+    }
+
+    // 1b. Se não houver nome próprio composto, detecta categoria de local mencionada
+    if (!location) {
+      const localMatch = lower.match(/(?:^|[\s,.\-!])(farm[aá]cia|drogaria|supermercado|mercado|posto(?:\s+de\s+combust[ií]vel)?|restaurante|pizzaria|hamburgueria|churrascaria|padaria|panificadora|lanchonete|cafeteria|bar|academia|oficina|loja|shopping|barbearia|sal[aá]o|a[cç]ougue|hospital|cl[ií]nica|escola|banco|pet\s*shop|veterin[aá]ri[ao])(?:$|[\s,.\-!])/i);
+      if (localMatch) {
+        const rawLocal = localMatch[1].toLowerCase();
+        if (rawLocal.includes('farm') || rawLocal.includes('drog')) location = 'Farmácia';
+        else if (rawLocal.includes('mercado')) location = 'Supermercado';
+        else if (rawLocal.includes('posto')) location = 'Posto de Combustível';
+        else if (rawLocal.includes('restaurante') || rawLocal.includes('pizzaria') || rawLocal.includes('hamburgueria') || rawLocal.includes('churrascaria')) location = 'Restaurante';
+        else if (rawLocal.includes('padaria') || rawLocal.includes('panificadora')) location = 'Padaria';
+        else if (rawLocal.includes('lanchonete') || rawLocal.includes('cafeteria')) location = 'Lanchonete';
+        else if (rawLocal.includes('academia')) location = 'Academia';
+        else if (rawLocal.includes('barbearia') || rawLocal.includes('sal')) location = 'Barbearia / Salão';
+        else if (rawLocal.includes('oficina')) location = 'Oficina';
+        else if (rawLocal.includes('shopping') || rawLocal.includes('loja')) location = 'Loja / Shopping';
+        else if (rawLocal.includes('pet') || rawLocal.includes('veterin')) location = 'Pet Shop';
+        else location = rawLocal.charAt(0).toUpperCase() + rawLocal.slice(1);
+      }
     }
   }
 
@@ -1524,8 +2123,11 @@ function parseDynamicFinancialMessage(text, isAudio = false) {
   // 8. REGRA ESTRITA MINIMALISTA DO USUÁRIO:
   // Se o usuário disser apenas o valor e o método (ex: "transferência de 300 reais", "300 no pix", "50 no débito"):
   // O produto é estritamente o que foi dito e NUNCA inventa estabelecimento comercial ou cidade!
+  // Porém, se o usuário mencionou o local (ex: "na padaria", "na farmácia") sem detalhar o subitem, usa o local como descrição!
   if (!detectedProduct) {
-    if (lower.includes('transferência') || lower.includes('transferencia') || method === 'Transferência') {
+    if (location) {
+      detectedProduct = location;
+    } else if (lower.includes('transferência') || lower.includes('transferencia') || method === 'Transferência') {
       detectedProduct = 'Transferência';
     } else if (lower.includes('pix') || method === 'PIX') {
       detectedProduct = 'PIX';
@@ -1882,10 +2484,19 @@ async function startSocket() {
           continue;
         }
 
+        // Desencapsula mensagens efêmeras, viewOnce ou documentos com legenda do WhatsApp
+        const innerMsg =
+          msg.message.ephemeralMessage?.message ||
+          msg.message.viewOnceMessage?.message ||
+          msg.message.viewOnceMessageV2?.message ||
+          msg.message.documentWithCaptionMessage?.message ||
+          msg.message;
+
         let messageText = 
-          msg.message.conversation ||
-          msg.message.extendedTextMessage?.text ||
-          msg.message.imageMessage?.caption ||
+          innerMsg.conversation ||
+          innerMsg.extendedTextMessage?.text ||
+          innerMsg.imageMessage?.caption ||
+          innerMsg.documentMessage?.caption ||
           '';
 
         // Evita processar as próprias mensagens automáticas de confirmação do robô
@@ -1900,8 +2511,9 @@ async function startSocket() {
           continue;
         }
 
-        const isAudio = !!(msg.message.audioMessage || msg.message.voiceMessage);
-        const isImage = !!msg.message.imageMessage;
+        const isAudio = !!(innerMsg.audioMessage || innerMsg.voiceMessage);
+        const docMime = innerMsg.documentMessage?.mimetype || '';
+        const isImage = !!(innerMsg.imageMessage || (innerMsg.documentMessage && docMime.startsWith('image/')));
 
         if (!messageText && !isAudio && !isImage) continue;
 
@@ -1923,12 +2535,12 @@ async function startSocket() {
           lowerMsg.includes('atualizar app')
         ) {
           const updateReply = `📲 *Atualização do Aplicativo Android — KYRO Finance*\n\n` +
-            `• *Versão Mais Recente:* v0.1.25 (Build 25)\n` +
+            `• *Versão Mais Recente:* v1.40 (Build 40)\n` +
             `• *Status:* 🟢 Nova versão pronta para instalação!\n\n` +
-            `• *Principais Novidades do Build 25:*\n` +
-            `  1. Transcritor neural Whisper integrado localmente com 100% de precisão de voz e custo zero\n` +
-            `  2. Filtragem estrita minimalista: registra somente o valor e o método (ex: 300 no pix, 50 no débito) sem inventar comida, lanche ou cidades\n` +
-            `  3. Detecção nativa da versão real do APK sem falso "Já atualizado"\n\n` +
+            `• *Principais Novidades do Build 40:*\n` +
+            `  1. Chatbot de Voz no WhatsApp com motor Whisper-Small de alta precisão e normalização acústica\n` +
+            `  2. Leitor Inteligente de Comprovantes (OCR + Vision AI): envie a foto de qualquer comprovante e o robô extrai Valor, Local, Cidade e Forma de Pagamento (Pix, Dinheiro, Débito, Crédito)\n` +
+            `  3. Sincronização instantânea em tempo real e Pull-to-Refresh no aplicativo\n\n` +
             `🚀 *Toque no link abaixo para baixar e atualizar:* \n` +
             `https://github.com/Wisterly/kyro-finance/releases/download/apk-latest/KYRO-Finance.apk\n\n` +
             `📌 *Como Instalar:* Basta baixar o arquivo e tocar em *Atualizar* no Android. Não é necessário desinstalar a versão anterior; todos os seus dados e configurações continuam 100% preservados!`;
@@ -1940,10 +2552,9 @@ async function startSocket() {
         let parsed = null;
 
         // ==============================================================
-        // FAST-PATH INSTANTÂNEO (< 1ms) PARA MENSAGENS DE TEXTO E LEGENDAS!
-        // Não bloqueia esperando chamadas HTTP externas antes de responder no WhatsApp!
+        // FAST-PATH INSTANTÂNEO (< 1ms) PARA MENSAGENS DE TEXTO PURO!
         // ==============================================================
-        if (!isAudio && (!isImage || messageText)) {
+        if (!isAudio && !isImage && messageText) {
           parsed = parseDynamicFinancialMessage(messageText, false);
         }
 
@@ -1978,11 +2589,11 @@ async function startSocket() {
             }
           }
 
-          // 1. PROCESSAMENTO DE ÁUDIO REAL DE VOZ COM GOOGLE GEMINI MULTIMODAL
+          // 1. PROCESSAMENTO DE ÁUDIO REAL DE VOZ COM CHATBOT DE TRANSCRIÇÃO E EXTRAÇÃO
           if (isAudio && audioBuffer && audioBuffer.length > 50) {
-            console.log(`🎙️ [WhatsApp] Áudio recebido no grupo (${audioBuffer.length} bytes). Processando com IA...`);
+            console.log(`🎙️ [WhatsApp] Áudio recebido no grupo (${audioBuffer.length} bytes). Processando com Chatbot de Voz...`);
 
-            // ESTRATÉGIA A: Gemini 1.5 Flash Multimodal Direto (Áudio -> JSON Estruturado com fidelidade máxima)
+            // ESTRATÉGIA A: Gemini 1.5 Flash Multimodal Direto (se chave configurada)
             const geminiExtracted = await interpretAudioDirectlyWithGemini(audioBuffer);
             if (geminiExtracted && geminiExtracted.amount > 0) {
               const amount = parseFloat(geminiExtracted.amount) || 0;
@@ -1998,14 +2609,14 @@ async function startSocket() {
 
               let methodDisplay = method === 'Crédito' && finalCardName ? `Crédito (${finalCardName})` : method;
 
-              let reply = `⚡ Lançamento adicionado ao KYRO Finance!\n\n🎙️ [Áudio de Voz]: "${cleanTranscription}"\n\n` +
+              let reply = `⚡ Lançamento adicionado ao KYRO Finance!\n\n🎙️ *Transcrição do Áudio:* "${cleanTranscription}"\n\n` +
                 `• *Tipo:* ${type === 'Entrada' ? '💰 Entrada (Receita)' : '💸 Saída (Despesa)'}\n` +
                 `• *Descrição / Item:* ${finalProduct}\n` +
                 `• *Categoria:* ${detectedCategory}\n` +
-                (establishment ? `• *Estabelecimento:* ${establishment}\n` : '') +
-                (finalCity ? `• *Local / Cidade:* ${finalCity}\n` : '') +
+                (establishment ? `• *Local / Estabelecimento:* ${establishment}\n` : '') +
+                (finalCity ? `• *Cidade:* ${finalCity}\n` : '') +
                 `• *Valor:* ${symbol} R$ ${amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n` +
-                `• *Forma de Pagamento:* ${methodDisplay}`;
+                `• *Tipo de Transferência:* ${methodDisplay}`;
 
               if (method === 'Crédito' && finalCardName) {
                 reply += `\n• *Fatura:* Adicionado à fatura do cartão ${finalCardName}`;
@@ -2042,11 +2653,11 @@ async function startSocket() {
               };
             }
 
-            // ESTRATÉGIA B: Fallback de Transcrição + Extração Inteligente via LLM (voicesummary / transcrevezap)
+            // ESTRATÉGIA B: Transcrição de Alta Precisão (Whisper-Small / Groq / OpenAI) + Extração Inteligente de Filtros
             if (!parsed) {
               const transcribedText = await transcribeAudioBuffer(audioBuffer);
               if (transcribedText) {
-                // 1. Tenta extração estruturada de precisão via IA
+                // 1. Tenta extração estruturada via LLM (se chave configurada)
                 const llmExtracted = await extractFinancialDataWithLLM(transcribedText);
                 if (llmExtracted && llmExtracted.amount > 0) {
                   const amount = parseFloat(llmExtracted.amount) || 0;
@@ -2061,14 +2672,14 @@ async function startSocket() {
 
                   let methodDisplay = method === 'Crédito' && finalCardName ? `Crédito (${finalCardName})` : method;
 
-                  let reply = `⚡ Lançamento adicionado ao KYRO Finance!\n\n🎙️ [Áudio de Voz]: "${transcribedText}"\n\n` +
+                  let reply = `⚡ Lançamento adicionado ao KYRO Finance!\n\n🎙️ *Transcrição do Áudio:* "${transcribedText}"\n\n` +
                     `• *Tipo:* ${type === 'Entrada' ? '💰 Entrada (Receita)' : '💸 Saída (Despesa)'}\n` +
                     `• *Descrição / Item:* ${finalProduct}\n` +
                     `• *Categoria:* ${detectedCategory}\n` +
-                    (establishment ? `• *Estabelecimento:* ${establishment}\n` : '') +
-                    (finalCity ? `• *Local / Cidade:* ${finalCity}\n` : '') +
+                    (establishment ? `• *Local / Estabelecimento:* ${establishment}\n` : '') +
+                    (finalCity ? `• *Cidade:* ${finalCity}\n` : '') +
                     `• *Valor:* ${symbol} R$ ${amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n` +
-                    `• *Forma de Pagamento:* ${methodDisplay}`;
+                    `• *Tipo de Transferência:* ${methodDisplay}`;
 
                   if (method === 'Crédito' && finalCardName) {
                     reply += `\n• *Fatura:* Adicionado à fatura do cartão ${finalCardName}`;
@@ -2105,7 +2716,7 @@ async function startSocket() {
                   };
                 }
 
-                // 2. Fallback estrito via algoritmo local blindado (sem inventar R$ 1 nem R$ 20)
+                // 2. Motor Determinístico de Filtros Financeiros do Chatbot (extrai Valor, Local, Cidade, Forma de Pagamento e Item)
                 if (!parsed) {
                   parsed = parseDynamicFinancialMessage(transcribedText, true);
                 }
@@ -2121,68 +2732,67 @@ async function startSocket() {
             }
           }
 
-          // 2. PROCESSAMENTO DE IMAGEM / COMPROVANTE
+          // 2. PROCESSAMENTO DE IMAGEM / FOTO DE COMPROVANTE COM OCR + VISION CHATBOT
           if (!parsed && isImage && imageBuffer) {
-            try {
-              const mime = msg.message.imageMessage?.mimetype || 'image/jpeg';
-              const dataUrl = `data:${mime};base64,${imageBuffer.toString('base64')}`;
-              const visionRes = await fastAxios.post('https://text.pollinations.ai/openai', {
-                model: 'openai',
-                messages: [
-                  {
-                    role: 'system',
-                    content: 'Extraia os dados do comprovante/nota fiscal e responda APENAS em JSON puro: {"description": "item", "product": "item", "establishment": "loja", "category": "Alimentação|Transporte|Saúde|Moradia|Lazer|Compras|Receita|Outros", "amount": 0.00, "type": "Saída" ou "Entrada", "method": "PIX|Crédito|Débito|Dinheiro|Transferência", "city": ""}'
-                  },
-                  {
-                    role: 'user',
-                    content: [
-                      { type: 'text', text: messageText ? `Legenda: "${messageText}". Extraia os dados em JSON.` : 'Extraia valor, estabelecimento e item deste comprovante em JSON.' },
-                      { type: 'image_url', image_url: { url: dataUrl } }
-                    ]
-                  }
-                ],
-                jsonMode: true
-              }, { timeout: 8000 });
+            console.log(`📸 [WhatsApp] Imagem de comprovante recebida no grupo (${imageBuffer.length} bytes). Lendo filtros com OCR + IA...`);
+            const mime = innerMsg.imageMessage?.mimetype || docMime || 'image/jpeg';
+            const receiptData = await extractReceiptFromImageBuffer(imageBuffer, mime, messageText);
 
-              const rawJson = visionRes.data?.choices?.[0]?.message?.content;
-              if (rawJson) {
-                const cleanJ = rawJson.replace(/```json/gi, '').replace(/```/g, '').trim();
-                const vData = JSON.parse(cleanJ);
-                const val = Number(vData.amount || vData.valor || 0);
-                if (val > 0) {
-                  const isInc = vData.type === 'Entrada';
-                  const savedTx = {
-                    id: msgId || Date.now().toString(),
-                    description: vData.product || vData.description || 'Comprovante via Foto',
-                    product: vData.product || vData.description || 'Comprovante',
-                    establishment: vData.establishment || '',
-                    category: vData.category || 'Outros',
-                    city: vData.city || 'Não informada',
-                    date: new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }),
-                    amount: val,
-                    type: isInc ? 'Entrada' : 'Saída',
-                    method: vData.method || 'PIX',
-                    status: 'Concluído',
-                    source: 'whatsapp-image',
-                    createdAt: new Date().toISOString()
-                  };
-                  const reply = `✅ *Comprovante Lido por IA — KYRO Finance*\n\n` +
-                    `• *Tipo:* ${isInc ? '💰 Entrada (Receita)' : '💸 Saída (Despesa)'}\n` +
-                    `• *Descrição / Produto:* ${savedTx.description}\n` +
-                    `• *Categoria:* ${savedTx.category}\n` +
-                    (savedTx.establishment ? `• *Estabelecimento:* ${savedTx.establishment}\n` : '') +
-                    `• *Valor:* ${isInc ? '+' : '-'} R$ ${val.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n` +
-                    `• *Forma de Pagamento:* ${savedTx.method}\n\n` +
-                    `📊 _Sincronizado em tempo real no Dashboard, Entradas e Saídas!_`;
-                  parsed = { savedTx, reply };
-                }
-              }
-            } catch (vErr) {}
+            if (receiptData && Number(receiptData.amount) > 0) {
+              const val = Number(receiptData.amount);
+              const isInc = receiptData.type === 'Entrada';
+              const method = receiptData.method || 'PIX';
+              const finalProduct = receiptData.product || receiptData.description || 'Comprovante';
+              const establishment = receiptData.establishment || '';
+              const finalCity = receiptData.city || '';
+              const category = receiptData.category || 'Outros';
 
-            // Se não conseguiu ler a imagem, avisa sem inventar valor falso
+              const savedTx = {
+                id: msgId || `${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+                description: finalProduct,
+                product: finalProduct,
+                establishment: establishment,
+                category: category,
+                subcategory: finalProduct,
+                city: finalCity,
+                date: new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }),
+                amount: val,
+                type: isInc ? 'Entrada' : 'Saída',
+                method: method,
+                status: 'Concluído',
+                source: 'whatsapp-image',
+                createdAt: new Date().toISOString()
+              };
+
+              const reply = `✅ *Comprovante Lido e Filtrado pelo Chatbot — KYRO Finance*\n\n` +
+                `• *Tipo:* ${isInc ? '💰 Entrada (Receita)' : '💸 Saída (Despesa)'}\n` +
+                `• *Descrição / Item:* ${finalProduct}\n` +
+                `• *Categoria:* ${category}\n` +
+                (establishment ? `• *Local / Estabelecimento:* ${establishment}\n` : '') +
+                (finalCity ? `• *Cidade:* ${finalCity}\n` : '') +
+                `• *Valor:* ${isInc ? '+' : '-'} R$ ${val.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n` +
+                `• *Tipo de Transferência:* ${method}\n\n` +
+                `📊 _Sincronizado em tempo real no Dashboard, Entradas e Saídas!_`;
+
+              parsed = {
+                savedTx,
+                reply,
+                product: finalProduct,
+                establishment,
+                object: finalProduct,
+                location: establishment,
+                city: finalCity
+              };
+            }
+
+            // Se não havia imagem legível de comprovante mas o usuário digitou os dados na legenda da foto
+            if (!parsed && messageText) {
+              parsed = parseDynamicFinancialMessage(messageText, false);
+            }
+
             if (!parsed) {
               await sock.sendMessage(remoteJid, {
-                text: '📸 *Foto/Comprovante recebido, mas não foi possível ler os valores.*\n\nPor favor, envie uma foto com melhor iluminação e nitidez, ou digite o valor no grupo.'
+                text: '📸 *Foto/Comprovante recebido, mas não foi possível ler os valores.*\n\nPor favor, envie uma foto com melhor iluminação e nitidez mostrando o valor (R$), ou digite o lançamento na legenda.'
               });
               continue;
             }
@@ -2373,7 +2983,7 @@ const server = http.createServer(async (req, res) => {
     }));
   }
 
-  // Endpoint 1.2: Webhook POST (Simulação ou Ingestão Direta)
+  // Endpoint 1.2: Webhook POST (Simulação ou Ingestão Direta de Texto, Áudio ou Imagem de Comprovante)
   if (url.pathname === '/api/webhook' && req.method === 'POST') {
     let body = '';
     req.on('data', chunk => { body += chunk; });
@@ -2396,10 +3006,76 @@ const server = http.createServer(async (req, res) => {
         }
 
         const msgText = payload?.Body || payload?.message || payload?.text || '';
+
+        // Suporte a Áudio via Webhook POST (dryRun opcional para testes sem sujar banco)
+        if (payload?.audioBase64) {
+          const cleanA = payload.audioBase64.replace(/^data:[^;]+;base64,/, '');
+          const audioBuf = Buffer.from(cleanA, 'base64');
+          const transcribed = await transcribeAudioBuffer(audioBuf);
+          if (transcribed) {
+            const parsedAudio = parseDynamicFinancialMessage(transcribed, true);
+            if (parsedAudio && parsedAudio.savedTx) {
+              if (!payload.dryRun) recordTransaction(parsedAudio.savedTx);
+              res.writeHead(200, { 'Content-Type': 'application/json' });
+              return res.end(JSON.stringify({
+                status: 'success',
+                transcribedText: transcribed,
+                replySent: parsedAudio.reply,
+                savedTx: parsedAudio.savedTx
+              }));
+            }
+          }
+        }
+
+        // Suporte a Imagem de Comprovante via Webhook POST
+        if (payload?.imageBase64) {
+          const cleanI = payload.imageBase64.replace(/^data:[^;]+;base64,/, '');
+          const imgBuf = Buffer.from(cleanI, 'base64');
+          const receiptData = await extractReceiptFromImageBuffer(imgBuf, payload.mimeType || 'image/png', msgText);
+          if (receiptData && Number(receiptData.amount) > 0) {
+            const val = Number(receiptData.amount);
+            const isInc = receiptData.type === 'Entrada';
+            const savedTx = {
+              id: `${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+              description: receiptData.product || receiptData.description || 'Comprovante',
+              product: receiptData.product || receiptData.description || 'Comprovante',
+              establishment: receiptData.establishment || '',
+              category: receiptData.category || 'Outros',
+              subcategory: receiptData.product || 'Comprovante',
+              city: receiptData.city || '',
+              date: new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }),
+              amount: val,
+              type: isInc ? 'Entrada' : 'Saída',
+              method: receiptData.method || 'PIX',
+              status: 'Concluído',
+              source: 'whatsapp-image',
+              createdAt: new Date().toISOString()
+            };
+            const reply = `✅ *Comprovante Lido e Filtrado pelo Chatbot — KYRO Finance*\n\n` +
+              `• *Tipo:* ${isInc ? '💰 Entrada (Receita)' : '💸 Saída (Despesa)'}\n` +
+              `• *Descrição / Item:* ${savedTx.product}\n` +
+              `• *Categoria:* ${savedTx.category}\n` +
+              (savedTx.establishment ? `• *Local / Estabelecimento:* ${savedTx.establishment}\n` : '') +
+              (savedTx.city ? `• *Cidade:* ${savedTx.city}\n` : '') +
+              `• *Valor:* ${isInc ? '+' : '-'} R$ ${val.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n` +
+              `• *Tipo de Transferência:* ${savedTx.method}\n\n` +
+              `📊 _Sincronizado em tempo real no Dashboard, Entradas e Saídas!_`;
+
+            if (!payload.dryRun) recordTransaction(savedTx);
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            return res.end(JSON.stringify({
+              status: 'success',
+              replySent: reply,
+              savedTx,
+              receiptData
+            }));
+          }
+        }
+
         if (msgText) {
           const parsed = parseDynamicFinancialMessage(msgText, false);
           if (parsed && parsed.savedTx) {
-            recordTransaction(parsed.savedTx);
+            if (!payload.dryRun) recordTransaction(parsed.savedTx);
             res.writeHead(200, { 'Content-Type': 'application/json' });
             return res.end(JSON.stringify({
               status: 'success',
@@ -2981,11 +3657,15 @@ if (require.main === module) {
 }
 
 module.exports = {
+  transcribeAudioBuffer,
+  extractReceiptFromImageBuffer,
+  parseFinancialReceiptOcrText,
   parseDynamicFinancialMessage,
   extractMonetaryValue,
+  extractCityFromText,
+  normalizeTranscribedPortugueseText,
   extractCreditCardName,
   extractInstallments,
-  transcribeAudioBuffer,
   interpretAudioDirectlyWithGemini,
   getEffectiveGeminiKey
 };
