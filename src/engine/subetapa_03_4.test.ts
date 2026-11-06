@@ -700,16 +700,18 @@ export async function runSubetapa034Tests() {
     const jsonReacquireB: any = await respReacquireB.json();
     assert(respReacquireB.status === 200, 'Processo B readquire o mesmo recurso via HTTP 200');
     assert(jsonReacquireB.lease?.fencingToken === 3, 'HTTP: Fencing token incrementado monotonicamente de 2 para 3 para o mesmo titular');
+    assert(jsonReacquireB.lease?.fencingToken > 2, 'HTTP: Segundo token (3) comprovadamente maior que o token anterior (2)');
     assert(jsonReacquireB.lease?.holderId === `pid_${serverB.pid}_processB`, 'HTTP: Titular readquirente permanece Processo B');
 
-    // Tentativa de gravação pelo Processo B usando o token 2 antigo
+    // Tentativa de gravação pelo Processo B: Nova mutação com outro requestId usando o token antigo (2)
+    const reqOldTokenB = `req_other_id_old_tok_${Date.now()}`;
     const txOldTokenB = `tx_old_tok_b_${Date.now()}`;
     const respOldTokenB = await fetch(`http://127.0.0.1:${PORT_B}/api/database`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${officialAuth.idToken}`,
-        'X-Request-ID': `req_old_tok_b_${Date.now()}`
+        'X-Request-ID': reqOldTokenB
       },
       body: JSON.stringify({
         action: 'save_transaction',
@@ -724,33 +726,69 @@ export async function runSubetapa034Tests() {
         }
       })
     });
-    assert(respOldTokenB.status === 412, 'Mutação de B com token 2 antigo pós-liberação rejeitada com HTTP 412');
+    assert(respOldTokenB.status === 412, 'Nova mutação de B com token 2 antigo pós-liberação rejeitada com HTTP 412');
+    
+    // Leitura direta no Firestore: saldo intacto, ausência de lançamento e ausência de recibo
+    const snapAccOldTok = await rawDb.doc(`users/${testUid}/accounts/${sharedResource}`).get();
+    assert(snapAccOldTok.data()?.balanceCents === 25000, 'Leitura direta no Firestore: Saldo permanece intacto em R$ 250,00 após rejeição');
+    const snapTxOldTok = await rawDb.doc(`users/${testUid}/transactions/${txOldTokenB}`).get();
+    assert(!snapTxOldTok.exists, 'Leitura direta no Firestore: Ausência de lançamento contábil (transação não foi gravada)');
+    const snapRecOldTok = await rawDb.doc(`users/${testUid}/idempotency/${reqOldTokenB}`).get();
+    assert(!snapRecOldTok.exists, 'Leitura direta no Firestore: Ausência de recibo de idempotência no storage');
 
     // Gravação legítima pelo Processo B com o token 3 vigente
+    const reqValidTokenB = `req_valid_tok_b_${Date.now()}`;
     const txValidTokenB = `tx_valid_tok_b_${Date.now()}`;
+    const validPayloadB = {
+      action: 'save_transaction',
+      accountId: sharedResource,
+      holderId: `pid_${serverB.pid}_processB`,
+      fencingToken: 3, // Token novo vigente
+      transaction: {
+        id: txValidTokenB,
+        type: 'INCOME',
+        amountCents: 5000,
+        description: 'Mutação legítima sob token 3'
+      }
+    };
     const respValidTokenB = await fetch(`http://127.0.0.1:${PORT_B}/api/database`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${officialAuth.idToken}`,
-        'X-Request-ID': `req_valid_tok_b_${Date.now()}`
+        'X-Request-ID': reqValidTokenB
       },
-      body: JSON.stringify({
-        action: 'save_transaction',
-        accountId: sharedResource,
-        holderId: `pid_${serverB.pid}_processB`,
-        fencingToken: 3, // Token vigente
-        transaction: {
-          id: txValidTokenB,
-          type: 'INCOME',
-          amountCents: 5000,
-          description: 'Mutação legítima sob token 3'
-        }
-      })
+      body: JSON.stringify(validPayloadB)
     });
-    assert(respValidTokenB.status === 200, 'Mutação de B com token 3 vigente aprovada com HTTP 200 OK');
+    const jsonValidTokenB: any = await respValidTokenB.json();
+    assert(respValidTokenB.status === 200, 'Mutação de B com token 3 novo aprovada com HTTP 200 OK');
+    assert(jsonValidTokenB.receipt?.status === 'APPLIED', 'Recibo de mutação emitido com status APPLIED sob token 3');
+    
+    // Leitura direta no Firestore Emulator após gravação legítima
     const snapAccToken3 = await rawDb.doc(`users/${testUid}/accounts/${sharedResource}`).get();
-    assert(snapAccToken3.data()?.balanceCents === 30000, 'Saldo no Firestore atualizado de R$ 250,00 para R$ 300,00 sob token 3');
+    assert(snapAccToken3.data()?.balanceCents === 30000, 'Leitura direta no Firestore: Saldo atualizado de R$ 250,00 para R$ 300,00 sob token 3');
+    const snapTxValid = await rawDb.doc(`users/${testUid}/transactions/${txValidTokenB}`).get();
+    assert(snapTxValid.exists, 'Leitura direta no Firestore: Lançamento contábil comitado com sucesso');
+    const snapRecValid = await rawDb.doc(`users/${testUid}/idempotency/${reqValidTokenB}`).get();
+    assert(snapRecValid.exists && snapRecValid.data()?.status === 'APPLIED', 'Leitura direta no Firestore: Recibo persistido atomicamente');
+
+    // Replay idêntico da operação já confirmada (mesmo requestId e mesmo payload)
+    console.log('  -> Testando replay idêntico de operação confirmada pós-readquisição...');
+    const respReplayTokenB = await fetch(`http://127.0.0.1:${PORT_B}/api/database`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${officialAuth.idToken}`,
+        'X-Request-ID': reqValidTokenB
+      },
+      body: JSON.stringify(validPayloadB)
+    });
+    const jsonReplayTokenB: any = await respReplayTokenB.json();
+    assert(respReplayTokenB.status === 200, 'Replay idêntico de operação confirmada responde com HTTP 200 OK');
+    assert(jsonReplayTokenB.receipt?.replay === true, 'Recibo prévio recuperado com replay = true');
+    assert(jsonReplayTokenB.receipt?.status === 'APPLIED', 'Recibo recuperado mantém status APPLIED');
+    const snapAccReplayB = await rawDb.doc(`users/${testUid}/accounts/${sharedResource}`).get();
+    assert(snapAccReplayB.data()?.balanceCents === 30000, 'Leitura direta no Firestore: Saldo permanece rigorosamente R$ 300,00 (Zero reaplicação de efeito)');
 
     // 2.8 Proteção contra Replay de Webhook entre Instâncias (Processo A na porta 4101 vs Processo B na 4102)
     console.log('  -> Testando proteção contra replay de Webhook entre instâncias independentes (Porta 4101 vs 4102)...');
