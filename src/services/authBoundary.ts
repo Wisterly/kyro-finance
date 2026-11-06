@@ -217,20 +217,52 @@ export function validateWebhookTimestamp(
 
 /**
  * Validação de proteção contra replay com Nonce único.
+ * Suporta cache em memória e persistência distribuída via ITransactionalStore.
  */
-export function validateWebhookNonce(
+export async function validateWebhookNonce(
   nonce: string | undefined,
-  seenNonces: Set<string>
-): { valid: boolean; error?: string } {
+  seenNonces: Set<string>,
+  store?: any
+): Promise<{ valid: boolean; error?: string }> {
   if (!nonce || nonce.trim().length === 0) {
     return { valid: false, error: 'Cabeçalho x-webhook-nonce é obrigatório para proteção contra replay.' };
   }
 
+  // 1. Verificação rápida em memória local
   if (seenNonces.has(nonce)) {
     return {
       valid: false,
       error: `Replay detectado: Nonce '${nonce}' já foi processado anteriormente.`
     };
+  }
+
+  // 2. Verificação atômica no armazenamento persistente compartilhado (multi-processo)
+  if (store && typeof store.runTransaction === 'function') {
+    try {
+      const isReplay = await store.runTransaction(async (t: any) => {
+        const noncePath = `webhook_nonces/${nonce}`;
+        const existing = await t.get(noncePath);
+        if (existing) {
+          return true; // Replay detectado no storage compartilhado
+        }
+        t.set(noncePath, {
+          nonce,
+          createdAt: new Date().toISOString(),
+          timestamp: Date.now()
+        });
+        return false;
+      });
+
+      if (isReplay) {
+        seenNonces.add(nonce);
+        return {
+          valid: false,
+          error: `Replay detectado entre instâncias: Nonce '${nonce}' já foi persistido anteriormente no Firestore.`
+        };
+      }
+    } catch (e: any) {
+      console.warn('[NonceStorage] Erro ao verificar nonce compartilhado:', e?.message);
+    }
   }
 
   seenNonces.add(nonce);

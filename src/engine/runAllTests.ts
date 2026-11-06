@@ -3,9 +3,9 @@
  * Executa em sequência:
  * 1. Núcleo Contábil (src/engine/engine.test.ts) - 51 testes
  * 2. Homologação da Subetapa 03.3 (src/engine/subetapa_03_3.test.ts) - 53 testes
- * 3. Homologação da Subetapa 03.4 (src/engine/subetapa_03_4.test.ts) - 64 testes
+ * 3. Homologação da Subetapa 03.4 (src/engine/subetapa_03_4.test.ts) - 94 testes
  * 
- * Total Consolidado: 168 testes
+ * Total Consolidado: 198 testes
  */
 
 import { spawn } from 'child_process';
@@ -48,7 +48,7 @@ async function main() {
     process.exit(res2.exitCode);
   }
 
-  console.log('\n>>> [3/3] EXECUTANDO BATERIA DA SUBETAPA 03.4 (64 CASOS)...');
+  console.log('\n>>> [3/3] EXECUTANDO BATERIA DA SUBETAPA 03.4 (94 CASOS)...');
   const res3 = await runCommand('npx.cmd', ['tsx', 'src/engine/subetapa_03_4.test.ts']);
   if (res3.exitCode !== 0) {
     console.error('Falha na suíte da subetapa 03.4!');
@@ -59,9 +59,9 @@ async function main() {
   console.log('HOMOLOGAÇÃO CONSOLIDADA CONCLUÍDA COM SUCESSO:');
   console.log('1. Núcleo Contábil:     51 / 51 APROVADOS (100%)');
   console.log('2. Subetapa 03.3:       53 / 53 APROVADOS (100%)');
-  console.log('3. Subetapa 03.4:       64 / 64 APROVADOS (100%)');
+  console.log('3. Subetapa 03.4:       94 / 94 APROVADOS (100%)');
   console.log('----------------------------------------------------------------');
-  console.log('TOTAL CONSOLIDADO:     168 / 168 APROVADOS (100%)');
+  console.log('TOTAL CONSOLIDADO:     198 / 198 APROVADOS (100%)');
   console.log('STATUS FINAL:          HOMOLOGADO PARA PRODUÇÃO (PR.045)');
   console.log('================================================================\n');
 

@@ -56,6 +56,7 @@ import {
 } from '../services/firestoreAdapter';
 import { LeaseManager } from './concurrency';
 import { TransactionalStoreMock } from '../services/storeClient';
+import { SafeMoneySerializer } from '../services/SafeMoneySerializer';
 import { 
   validateWebhookHmac, 
   validateWebhookTimestamp, 
@@ -434,6 +435,18 @@ export async function runSubetapa034Tests() {
     });
     assert(respRenewObsolete.status === 412, 'Renovação concorrente com token obsoleto rejeitada com HTTP 412');
 
+    // Leitura Direta no Firestore Emulator pós-tentativa de renovação do Processo A
+    const snapLeaseAfterRenew = await rawDb.doc(`users/${testUid}/leases/${sharedResource}`).get();
+    const leaseDataAfterRenew = snapLeaseAfterRenew.data();
+    assert(
+      leaseDataAfterRenew?.holderId === `pid_${serverB.pid}_processB`,
+      'Leitura direta no Firestore: Titular continua sendo Processo B após tentativa rejeitada de renovação de A'
+    );
+    assert(
+      leaseDataAfterRenew?.fencingToken === 2,
+      'Leitura direta no Firestore: Fencing token permanece estritamente 2 (Token de B preservado)'
+    );
+
     const respReleaseObsolete = await fetch(`http://127.0.0.1:${PORT_A}/api/database`, {
       method: 'POST',
       headers: {
@@ -449,6 +462,74 @@ export async function runSubetapa034Tests() {
       })
     });
     assert(respReleaseObsolete.status === 412, 'Liberação concorrente com token obsoleto rejeitada com HTTP 412');
+
+    // Leitura Direta no Firestore Emulator pós-tentativa de liberação do Processo A
+    const snapLeaseAfterRelease = await rawDb.doc(`users/${testUid}/leases/${sharedResource}`).get();
+    assert(
+      snapLeaseAfterRelease.exists === true,
+      'Leitura direta no Firestore: Documento de lease NÃO foi deletado pelo Processo A'
+    );
+    assert(
+      snapLeaseAfterRelease.data()?.holderId === `pid_${serverB.pid}_processB`,
+      'Leitura direta no Firestore: Titular continua sendo Processo B após tentativa rejeitada de liberação de A'
+    );
+    assert(
+      snapLeaseAfterRelease.data()?.fencingToken === 2,
+      'Leitura direta no Firestore: Fencing token continua 2 (validade de B intacta no storage)'
+    );
+
+    // 2.8 Proteção contra Replay de Webhook entre Instâncias (Processo A na porta 4101 vs Processo B na 4102)
+    console.log('  -> Testando proteção contra replay de Webhook entre instâncias independentes (Porta 4101 vs 4102)...');
+    const crossInstNonce = `nonce_cross_inst_${Date.now()}`;
+    const crossInstTxId = `tx_cross_inst_${Date.now()}`;
+    const crossInstPayload = {
+      action: 'sync_transactions',
+      senderPhone: '558695368780',
+      transaction: {
+        id: crossInstTxId,
+        amount: 110.00,
+        description: 'Transação Webhook Multi-Instância'
+      }
+    };
+    const crossInstRaw = JSON.stringify(crossInstPayload);
+    const crossInstSig = crypto.createHmac('sha256', 'kyro_webhook_secret_dev').update(crossInstRaw).digest('hex');
+    const crossInstTs = String(Date.now());
+
+    // Disparo para o Processo A (Porta 4101)
+    const respCross1 = await fetch(`http://127.0.0.1:${PORT_A}/api/webhook`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-webhook-signature': crossInstSig,
+        'x-webhook-timestamp': crossInstTs,
+        'x-webhook-nonce': crossInstNonce
+      },
+      body: crossInstRaw
+    });
+    assert(respCross1.status === 200, 'Primeira instância (Porta 4101) processa o evento de webhook com sucesso (HTTP 200)');
+
+    // Disparo do MESMO evento para o Processo B (Porta 4102) com PID diferente sobre o mesmo Firestore Emulator
+    const respCross2 = await fetch(`http://127.0.0.1:${PORT_B}/api/webhook`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-webhook-signature': crossInstSig,
+        'x-webhook-timestamp': crossInstTs,
+        'x-webhook-nonce': crossInstNonce // Replay entre processos!
+      },
+      body: crossInstRaw
+    });
+    const jsonCross2: any = await respCross2.json();
+    assert(respCross2.status === 409, 'Segunda instância (Porta 4102) BLOQUEIA replay entre processos com HTTP 409');
+    assert(
+      jsonCross2.code === 'WEBHOOK_NONCE_REPLAY',
+      'Código WEBHOOK_NONCE_REPLAY confirma proteção contra replay distribuído'
+    );
+
+    // Leitura direta no Firestore: exatamente 1 efeito persistido
+    const snapCrossTx = await rawDb.doc(`users/usr_default/transactions/${crossInstTxId}`).get();
+    assert(snapCrossTx.exists === true, 'Leitura direta no Firestore: Transação comitada exatamente uma vez');
+    assert(snapCrossTx.data()?.amountCents === 11000, 'Valor contábil exato verificado no Firestore (R$ 110,00 = 11000 cents)');
 
     // =========================================================================
     // BLOCO 3: SOBREVIVÊNCIA A REINÍCIO DE PROCESSO, RETRY E IDEMPOTÊNCIA
@@ -583,11 +664,12 @@ export async function runSubetapa034Tests() {
     const webhookSecret = 'kyro_webhook_secret_dev';
 
     // 4.1 Webhook Legítimo com HMAC SHA-256 sobre bytes originais
+    const validWebhookTxId = `tx_hmac_valid_${Date.now()}`;
     const validBodyObj = {
       action: 'sync_transactions',
       senderPhone: '558695368780',
       transaction: {
-        id: `tx_hmac_valid_${Date.now()}`,
+        id: validWebhookTxId,
         amount: 85.00,
         description: 'Lançamento via HMAC Criptográfico'
       }
@@ -612,6 +694,17 @@ export async function runSubetapa034Tests() {
     assert(respValidHmac.status === 200, 'Webhook com HMAC, timestamp e nonce válidos aprovado com HTTP 200 OK');
     assert(jsonValidHmac.status === 'synced', 'Transação sincronizada com sucesso via webhook seguro');
 
+    // Leitura direta no Firestore Emulator: Apenas a transação válida gerou persistência física
+    const snapValidWebhookTx = await rawDb.doc(`users/usr_default/transactions/${validWebhookTxId}`).get();
+    assert(
+      snapValidWebhookTx.exists === true,
+      'Leitura direta no Firestore: Transação legítima do Webhook persistida com sucesso'
+    );
+    assert(
+      snapValidWebhookTx.data()?.amountCents === 8500,
+      'Valor contábil exato verificado no Firestore: R$ 85,00 (8500 cents)'
+    );
+
     // 4.2 Webhook com Corpo Adulterado (1 byte alterado após assinatura)
     console.log('  -> Enviando Webhook com corpo adulterado após assinatura...');
     const tamperedRawBody = validRawBody.replace('85', '95'); // Adulteração do payload!
@@ -631,6 +724,10 @@ export async function runSubetapa034Tests() {
       jsonTampered.code === 'WEBHOOK_HMAC_INVALID',
       'Código WEBHOOK_HMAC_INVALID confirma proteção contra adulteração de bytes'
     );
+
+    // Leitura direta no Firestore: Comprovação de ausência de escrita para corpo adulterado
+    const snapTamperedCheck = await rawDb.doc(`users/usr_default/transactions/${validWebhookTxId}_tampered`).get();
+    assert(!snapTamperedCheck.exists, 'Leitura direta no Firestore: Zero mutações registradas para corpo adulterado');
 
     // 4.3 Webhook com Timestamp Expirado (> 5 minutos no passado)
     console.log('  -> Enviando Webhook com timestamp expirado (10 minutos atrás)...');
@@ -735,6 +832,10 @@ export async function runSubetapa034Tests() {
       'Código UNBOUND_PROVIDER_IDENTITY emitido'
     );
 
+    // Leitura direta no Firestore Emulator: Ausência de escrita para identidade sem vínculo
+    const snapUnboundCheck = await rawDb.doc('users/5511999999999').get();
+    assert(!snapUnboundCheck.exists, 'Leitura direta no Firestore: Zero documentos criados para número de telefone não vinculado');
+
     // 4.7 Provedor com Vínculo Ambíguo (AMBIGUOUS) - Teste de Contrato Isolado
     const ambiguousBindings: ProviderBinding[] = [
       { providerPhone: '558699991111', userId: 'usr_user_1', status: 'ACTIVE', boundAt: new Date().toISOString() },
@@ -746,6 +847,170 @@ export async function runSubetapa034Tests() {
       (ambigRes.error || '').includes('ambígua'),
       'Mensagem atesta bloqueio de escrita sob ambiguidade de provedor'
     );
+
+    // =========================================================================
+    // BLOCO 5: PROTOCOLO E ENSAIO DE REVERSÃO PARA PR.044 COM DADOS SINTÉTICOS
+    // =========================================================================
+    console.log('\n[5/5] Protocolo e Ensaio de Reversão para PR.044 com Dados Sintéticos...');
+
+    // 5.1 Estado Pré-Reversão: Mutação sob o regime 03.4 (com fencingToken)
+    const rollbackAccId = `acc_rollback_${Date.now()}`;
+    const rollbackHolderId = `pid_${serverC.pid}_rollback_holder`;
+    const rollbackReqIdPre = `req_rollback_pre_${Date.now()}`;
+    const rollbackTxIdPre = `tx_rollback_pre_${Date.now()}`;
+
+    console.log('  -> [5.1] Registrando operação contábil sintética sob o regime 03.4 com fencing token...');
+    
+    // Processo C adquire lease no recurso
+    const respAcquirePre = await fetch(`http://127.0.0.1:${PORT_C}/api/database`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${officialAuth.idToken}`,
+        'X-Request-ID': `req_acq_roll_${Date.now()}`
+      },
+      body: JSON.stringify({
+        action: 'acquire_lease',
+        resourceId: rollbackAccId,
+        holderId: rollbackHolderId,
+        ttlMs: 4000
+      })
+    });
+    const jsonAcquirePre: any = await respAcquirePre.json();
+    assert(respAcquirePre.status === 200, 'Lease pré-reversão adquirido com sucesso pelo Processo C');
+    const tokenPre = jsonAcquirePre.lease?.fencingToken || 1;
+
+    // Mutação contábil com fencingToken = tokenPre
+    const respTxPre = await fetch(`http://127.0.0.1:${PORT_C}/api/database`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${officialAuth.idToken}`,
+        'X-Request-ID': rollbackReqIdPre
+      },
+      body: JSON.stringify({
+        action: 'save_transaction',
+        accountId: rollbackAccId,
+        resourceId: rollbackAccId,
+        holderId: rollbackHolderId,
+        fencingToken: tokenPre,
+        transaction: {
+          id: rollbackTxIdPre,
+          type: 'INCOME',
+          amountCents: 30000, // R$ 300,00
+          description: 'Lançamento Pré-Reversão Regime 03.4'
+        }
+      })
+    });
+    const jsonTxPre: any = await respTxPre.json();
+    assert(respTxPre.status === 200, 'Operação pré-reversão aplicada com HTTP 200 OK');
+    assert(jsonTxPre.receipt?.status === 'APPLIED', 'Recibo pré-reversão gerado com status APPLIED');
+
+    // Leitura direta no Firestore: saldo R$ 300,00 e recibo persistido
+    const snapAccPre = await rawDb.doc(`users/${testUid}/accounts/${rollbackAccId}`).get();
+    assert(snapAccPre.data()?.balanceCents === 30000, 'Saldo no Firestore: R$ 300,00 (30000 cents) confirmado');
+
+    // 5.2 Protocolo de Drenagem e Liberação de Leases Ativos (Drain Phase)
+    console.log('  -> [5.2] Executando protocolo de drenagem: liberação atômica de leases antes do retorno à PR.044...');
+    const respReleaseRollback = await fetch(`http://127.0.0.1:${PORT_C}/api/database`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${officialAuth.idToken}`,
+        'X-Request-ID': `req_rel_roll_${Date.now()}`
+      },
+      body: JSON.stringify({
+        action: 'release_lease',
+        resourceId: rollbackAccId,
+        holderId: rollbackHolderId,
+        fencingToken: tokenPre
+      })
+    });
+    assert(respReleaseRollback.status === 200, 'Lease ativo liberado voluntariamente no drain de reversão');
+
+    // Leitura direta no Firestore: lease liberado (documento deletado)
+    const snapLeaseDrained = await rawDb.doc(`users/${testUid}/leases/${rollbackAccId}`).get();
+    assert(!snapLeaseDrained.exists, 'Leitura direta no Firestore: Recurso desimpedido para camada PR.044');
+
+    // 5.3 Simulação da Camada PR.044: Replay de Operação Confirmada Anteriormente (Zero Duplo Débito)
+    console.log('  -> [5.3] Simulando requisição PR.044 recuperando recibo anterior sem cabeçalhos de lease...');
+    const respReplayRollback = await fetch(`http://127.0.0.1:${PORT_C}/api/database`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${officialAuth.idToken}`,
+        'X-Request-ID': rollbackReqIdPre
+      },
+      body: JSON.stringify({
+        action: 'save_transaction',
+        accountId: rollbackAccId,
+        // SEM holderId, SEM fencingToken (Padrão canônico da PR.044)
+        transaction: {
+          id: rollbackTxIdPre,
+          type: 'INCOME',
+          amountCents: 30000,
+          description: 'Lançamento Pré-Reversão Regime 03.4'
+        }
+      })
+    });
+    const jsonReplayRollback: any = await respReplayRollback.json();
+    assert(respReplayRollback.status === 200, 'Recuperação de recibo na interface PR.044 responde com HTTP 200 OK');
+    assert(jsonReplayRollback.receipt?.replay === true, 'Recibo prévio retornado com replay = true');
+    assert(jsonReplayRollback.receipt?.status === 'APPLIED', 'Status do recibo mantido como APPLIED');
+
+    // Leitura direta no Firestore: saldo rigorosamente intacto em R$ 300,00 (sem duplicação)
+    const snapAccAfterReplay = await rawDb.doc(`users/${testUid}/accounts/${rollbackAccId}`).get();
+    assert(
+      snapAccAfterReplay.data()?.balanceCents === 30000,
+      'Consistência pós-reversão: Saldo permanece estritamente R$ 300,00 (Sem duplicidade)'
+    );
+
+    // 5.4 Nova Mutação Pós-Reversão no Padrão PR.044
+    console.log('  -> [5.4] Executando nova mutação financeira no padrão PR.044 (sem lease/fencing)...');
+    const rollbackReqIdPost = `req_rollback_post_${Date.now()}`;
+    const rollbackTxIdPost = `tx_rollback_post_${Date.now()}`;
+    const respTxPost = await fetch(`http://127.0.0.1:${PORT_C}/api/database`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${officialAuth.idToken}`,
+        'X-Request-ID': rollbackReqIdPost
+      },
+      body: JSON.stringify({
+        action: 'save_transaction',
+        accountId: rollbackAccId,
+        // Sem parâmetros de lease/fencing
+        transaction: {
+          id: rollbackTxIdPost,
+          type: 'INCOME',
+          amountCents: 5000, // + R$ 50,00
+          description: 'Nova Mutação sob Regime Revertido PR.044'
+        }
+      })
+    });
+    const jsonTxPost: any = await respTxPost.json();
+    assert(respTxPost.status === 200, 'Nova transação pós-reversão confirmada com HTTP 200 OK');
+    assert(jsonTxPost.receipt?.status === 'APPLIED', 'Nova transação comitada com status APPLIED');
+
+    // Leitura direta no Firestore: saldo atualizado de 30000 para 35000 cents
+    const snapAccFinal = await rawDb.doc(`users/${testUid}/accounts/${rollbackAccId}`).get();
+    assert(
+      snapAccFinal.data()?.balanceCents === 35000,
+      'Saldo no Firestore atualizado exatamente para R$ 350,00 (35000 cents) no regime PR.044'
+    );
+
+    // 5.5 Validação de Integridade Bidirecional via SafeMoneySerializer
+    console.log('  -> [5.5] Conferindo fidelidade contábil e compatibilidade via SafeMoneySerializer...');
+    const rawPreTx = await rawDb.doc(`users/${testUid}/transactions/${rollbackTxIdPre}`).get();
+    const rawPostTx = await rawDb.doc(`users/${testUid}/transactions/${rollbackTxIdPost}`).get();
+    
+    const centsPre = SafeMoneySerializer.fromFirestoreCents(rawPreTx.data()?.amountCents);
+    const centsPost = SafeMoneySerializer.fromFirestoreCents(rawPostTx.data()?.amountCents);
+    const centsTotal = SafeMoneySerializer.fromFirestoreCents(snapAccFinal.data()?.balanceCents);
+
+    assert(centsPre === 30000n, 'Transação pré-reversão desserializada com exatidão como 30000n');
+    assert(centsPost === 5000n, 'Transação pós-reversão desserializada com exatidão como 5000n');
+    assert(centsTotal === (centsPre + centsPost), 'Soma contábil exata no Ledger: 30000n + 5000n = 35000n');
 
   } finally {
     console.log('\n  -> Finalizando processos em segundo plano...');

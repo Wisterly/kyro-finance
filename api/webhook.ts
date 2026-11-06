@@ -13,6 +13,19 @@ import {
 } from '../src/services/authBoundary';
 import { SafeMoneySerializer } from '../src/services/SafeMoneySerializer';
 import { parseToCents } from '../src/engine/money';
+import { FirestoreAdminStore } from '../src/services/firestoreAdminStore';
+
+let webhookAdminStore: FirestoreAdminStore | null = null;
+function getWebhookStore(): FirestoreAdminStore | null {
+  if (!webhookAdminStore) {
+    try {
+      webhookAdminStore = new FirestoreAdminStore();
+    } catch {
+      webhookAdminStore = null;
+    }
+  }
+  return webhookAdminStore;
+}
 
 // 1. Firebase Firestore Setup
 const firebaseConfig = {
@@ -711,6 +724,17 @@ async function saveTransaction(tx: any, userId: string = 'usr_default') {
     }
   }
 
+  const adminStore = getWebhookStore();
+  if (adminStore) {
+    try {
+      await adminStore.runTransaction(async (t: any) => {
+        t.set(`users/${userId}/transactions/${txId}`, payload);
+      });
+    } catch (err: any) {
+      console.warn('[WebhookStore] Erro ao salvar transação no AdminStore:', err?.message);
+    }
+  }
+
   globalAny.__KYRO_WEBHOOK_TRANSACTIONS__.unshift(payload);
   if (globalAny.__KYRO_WEBHOOK_TRANSACTIONS__.length > 100) {
     globalAny.__KYRO_WEBHOOK_TRANSACTIONS__ = globalAny.__KYRO_WEBHOOK_TRANSACTIONS__.slice(0, 100);
@@ -984,8 +1008,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         });
       }
 
-      // C. Validação de Replay Attack via Nonce Único
-      const nonceResult = validateWebhookNonce(nonceHeader, globalAny.__KYRO_SEEN_NONCES__);
+      // C. Validação de Replay Attack via Nonce Único (com persistência distribuída no Firestore)
+      const nonceResult = await validateWebhookNonce(nonceHeader, globalAny.__KYRO_SEEN_NONCES__, getWebhookStore());
       if (!nonceResult.valid) {
         return res.status(409).json({
           success: false,
