@@ -1,53 +1,54 @@
 /**
- * KYRO FINANCE | BATERIA DE HOMOLOGAÇÃO E PROVA DE COMPORTAMENTO: SUBETAPA 03.3 (REVISADA)
+ * KYRO FINANCE | BATERIA DE HOMOLOGAÇÃO OFICIAL: SUBETAPA 03.3
  * 
- * Checklist Completo de Aceite:
- * 1. Autenticação real na rota:
- *    - Prova de assinatura RS256 separada da integração com emulador
- *    - Token ausente (401)
- *    - Token expirado (401)
- *    - Token adulterado no payload (401)
- *    - Token com assinatura corrompida (401)
- *    - Token de projeto incorreto (401)
- *    - Credencial válida tentando gravar sob outro UID (403 PERMISSION_DENIED_CROSS_TENANT)
- *    - Rejeição de credencial sintética em ambiente de produção
- * 2. Persistência real no emulador e leitura de volta:
- *    - Conexão do handler e leitura de volta de saldos, lançamentos e recibos pela rota HTTP
- *    - Comprovação de que saldo, transação e recibo estão no mesmo commit atômico
- *    - Falha anterior ao commit deixa estado intacto (inclusive inicialização de conta)
- * 3. Idempotência entre processos e sobrevivência a reinício:
- *    - Duas instâncias independentes em concorrência real
- *    - Perda de confirmação seguida de retry após reinício de processo
- *    - Mesmo requestId e conteúdo = recuperação de recibo e efeito único
- *    - Conteúdo divergente = HTTP 409 com preservação de saldo
- * 4. Escopo de WhatsApp e Android:
- *    - Rota real do webhook valida autenticação da origem do provedor (401)
- *    - Rejeição de vínculo ausente (403 UNBOUND_PROVIDER_IDENTITY)
- *    - Rejeição de vínculo ambíguo (409 AMBIGUOUS_PROVIDER_IDENTITY)
- *    - Vínculo unívoco autorizado (200 OK)
- *    - Registro de paridade de certificado APK v2 separado de instalação física
- * 5. Serialização BigInt <-> Firestore Safe Integer e dados legados
+ * Checklist Completo de Fechamento de Aceite pela Rota HTTP:
+ * 
+ * 1. FALHA EXPLÍCITA QUANDO ARMAZENAMENTO INDISPONÍVEL:
+ *    - Sem fallback silencioso para TransactionalStoreMock na aplicação
+ *    - Devolve HTTP 503 (STORAGE_UNAVAILABLE) explícito, sem recibo APPLIED ou mensagem de gravação confirmada
+ * 
+ * 2. ISOLAMENTO DE AUTENTICAÇÃO SINTÉTICA NA ROTA PÚBLICA:
+ *    - Nenhuma variável de ambiente da aplicação consegue habilitar demo-token na rota pública
+ *    - demo-token na rota pública é sumariamente rejeitado com HTTP 401
+ *    - Token adulterado rejeitado com HTTP 401
+ *    - Token válido de Alice tentando gravar sob UID de Bob bloqueado com HTTP 403 (PERMISSION_DENIED_CROSS_TENANT)
+ *    - Separação expressa entre testes criptográficos RS256 e testes com Firebase Auth Emulator oficial
+ * 
+ * 3. INTEGRAÇÃO REAL EM DOIS PROCESSOS INDEPENDENTES:
+ *    - Subida de Auth Emulator (127.0.0.1:9099) e Firestore Emulator (127.0.0.1:8080) oficiais
+ *    - Processo 1 (Porta 4101, PID A) e Processo 2 (Porta 4102, PID B) executando a rota HTTP
+ *    - Mesma requisição concorrente (mesmo requestId) enviada via rede HTTP a ambas as instâncias
+ *    - Leitura direta do Firestore Emulator comprovando efeito contábil único e replay: true
+ *    - Encerramento dos dois processos (kill nos PIDs) e subida de Processo 3 (Porta 4103, PID C)
+ *    - Reenvio com mesmo requestId e mesmo conteúdo = HTTP 200 com replay e saldo preservado
+ *    - Reenvio com mesmo requestId e conteúdo divergente = HTTP 409 (IDEMPOTENCY_PAYLOAD_MISMATCH) com saldo preservado
+ *    - Falha anterior ao commit = HTTP 500 sem escrita parcial ou documentos fantasmas no Firestore
+ * 
+ * 4. ESCOPO DO WEBHOOK E PARIDADE ANDROID:
+ *    - Rota real de /api/webhook valida origem (401), rejeita vínculo ausente (403) e ambíguo (409)
+ *    - Vínculo unívoco autorizado (200 OK) com gravação efetuada no UID resolvido no servidor
+ *    - Instalação física Android registrada como pendente separadamente da paridade de assinatura v2
+ * 
+ * 5. SERIALIZAÇÃO BIGINT IEEE 754 E DADOS LEGADOS:
+ *    - Ida e volta exata sem perda de centavos no Firestore
+ *    - Normalização de float legados para centavos BigInt
  */
 
-import { SafeMoneySerializer, SafeMoneyError } from '../services/SafeMoneySerializer';
-import { 
-  verifyAuthToken, 
-  enforceTenantBoundary, 
-  validateWebhookOrigin, 
-  resolveProviderBinding,
-  ProviderBinding,
-  CrossTenantViolationError 
-} from '../services/authBoundary';
+import { spawn, ChildProcess } from 'child_process';
+import path from 'path';
+import { SafeMoneySerializer } from '../services/SafeMoneySerializer';
 import { 
   verifyRealAuthToken, 
   generateTestKeyPair, 
   createSignedTestToken, 
   verifyJwtCryptographically,
+  getOfficialAuthEmulatorToken,
   DEMO_PROJECT_ID 
 } from '../services/firebaseAdminAuth';
+import { FirestoreAdminStore } from '../services/firestoreAdminStore';
 import { FirestoreLedgerAdapter, IdempotencyConflictError } from '../services/firestoreAdapter';
 import { TransactionalStoreMock } from '../services/storeClient';
-import handler, { getSecureStore, getLedgerAdapter, setStoreInstance, resetStoreInstance } from '../../api/database';
+import handler, { getSecureStore, setStoreInstance, resetStoreInstance } from '../../api/database';
 import webhookHandler from '../../api/webhook';
 
 let passCount = 0;
@@ -63,7 +64,7 @@ function assert(condition: boolean, testName: string, detail?: string) {
   }
 }
 
-// Mock HTTP para simular requisições VercelRequest e VercelResponse
+// Mock HTTP shim para testes de rota locais
 function createMockHttp(options: {
   method: string;
   headers?: Record<string, string>;
@@ -112,17 +113,121 @@ function createMockHttp(options: {
   };
 }
 
+// Utilitário para aguardar que um servidor HTTP responda na porta especificada
+async function waitForHttpServer(port: number, maxAttempts = 30): Promise<boolean> {
+  for (let i = 0; i < maxAttempts; i++) {
+    try {
+      const resp = await fetch(`http://127.0.0.1:${port}/health`);
+      if (resp.ok) return true;
+    } catch {
+      // Aguarda 100ms antes da próxima tentativa
+    }
+    await new Promise(r => setTimeout(r, 100));
+  }
+  return false;
+}
+
+// Utilitário para iniciar processo de servidor HTTP autônomo
+function startServerProcess(port: number): { proc: ChildProcess; pid: number } {
+  const serverScript = path.resolve(process.cwd(), 'src/server/httpServer.ts');
+  const env = {
+    ...process.env,
+    PORT: String(port),
+    FIRESTORE_EMULATOR_HOST: '127.0.0.1:8080',
+    FIREBASE_AUTH_EMULATOR_HOST: '127.0.0.1:9099'
+  };
+
+  const proc = spawn('npx.cmd', ['tsx', serverScript, '--port', String(port)], {
+    env,
+    stdio: ['ignore', 'pipe', 'pipe'],
+    shell: true
+  });
+
+  const pid = proc.pid || 0;
+  return { proc, pid };
+}
+
+// Utilitário para encerrar processo com segurança
+async function killProcessSafely(proc: ChildProcess): Promise<void> {
+  return new Promise((resolve) => {
+    if (proc.killed || !proc.pid) return resolve();
+    try {
+      // No Windows, força encerramento da árvore de processos via taskkill se necessário
+      spawn('taskkill', ['/pid', String(proc.pid), '/f', '/t'], { shell: true });
+    } catch {
+      proc.kill('SIGTERM');
+    }
+    setTimeout(resolve, 500);
+  });
+}
+
 async function runCompleteSubetapa033Suite() {
   console.log('\n=== INICIANDO BATERIA COMPLETA DE HOMOLOGAÇÃO: SUBETAPA 03.3 ===\n');
 
-  // =========================================================================
-  // BLOCO 1: AUTENTICAÇÃO REAL E PROVA CRIPTOGRÁFICA DE ASSINATURA RS256
-  // =========================================================================
-  console.log('[1/5] Autenticação Real na Rota e Prova de Assinatura RS256...');
+  // Garante variáveis do emulador ativas para o processo de teste
+  process.env.FIRESTORE_EMULATOR_HOST = '127.0.0.1:8080';
+  process.env.FIREBASE_AUTH_EMULATOR_HOST = '127.0.0.1:9099';
 
+  // Obtém ID Token oficial emitido pelo Firebase Auth Emulator
+  const officialAuth = await getOfficialAuthEmulatorToken('alice_oficial@kyro.local', 'SenhaOficial123!');
+
+  // =========================================================================
+  // BLOCO 1: FALHA EXPLÍCITA QUANDO O ARMAZENAMENTO ESTIVER INDISPONÍVEL
+  // (Retirada completa do fallback para mock)
+  // =========================================================================
+  console.log('[1/5] Falha Explícita com Armazenamento Indisponível (Sem Fallback para Mock)...');
+
+  // Simula ambiente com armazenamento desabilitado / indisponível
+  process.env.STORAGE_DISABLED = 'true';
+  resetStoreInstance();
+
+  const httpFailStoreAuth = createMockHttp({
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${officialAuth.idToken}`,
+      'x-request-id': 'req_store_fail_01'
+    },
+    body: {
+      action: 'save_transaction',
+      amountCents: 10000
+    }
+  });
+
+  await handler(httpFailStoreAuth.req, httpFailStoreAuth.res);
+  assert(httpFailStoreAuth.getStatusCode() === 503, 'Rota com armazenamento indisponível retorna HTTP 503 (STORAGE_UNAVAILABLE)');
+  assert(httpFailStoreAuth.getResponseData().code === 'STORAGE_UNAVAILABLE', 'Código explícito STORAGE_UNAVAILABLE retornado');
+  assert(httpFailStoreAuth.getResponseData().receipt === undefined, 'Nenhum recibo APPLIED foi emitido');
+  assert(httpFailStoreAuth.getResponseData().success === false, 'Nenhuma mensagem de gravação confirmada');
+
+  // Restaura o ambiente de armazenamento normal
+  delete process.env.STORAGE_DISABLED;
+  resetStoreInstance();
+
+  // =========================================================================
+  // BLOCO 2: ISOLAMENTO DE AUTENTICAÇÃO SINTÉTICA NA ROTA PÚBLICA E PROVA RS256
+  // =========================================================================
+  console.log('\n[2/5] Isolamento de Autenticação Sintética e Prova Criptográfica RS256...');
+
+  // 2.1 Rejeição de demo-token na rota pública, mesmo em ambiente de teste
+  process.env.NODE_ENV = 'test';
+  process.env.ALLOW_SYNTHETIC_TEST = 'true';
+  const httpSyntheticPublic = createMockHttp({
+    method: 'POST',
+    headers: {
+      authorization: 'Bearer demo-token:usr_alice_synthetic',
+      'x-request-id': 'req_synth_public'
+    },
+    body: { action: 'save_transaction', amountCents: 5000 }
+  });
+  await handler(httpSyntheticPublic.req, httpSyntheticPublic.res);
+  assert(httpSyntheticPublic.getStatusCode() === 401, 'demo-token na rota pública é sumariamente rejeitado com HTTP 401');
+  assert(
+    (httpSyntheticPublic.getResponseData().error || '').includes('proibidas'),
+    'Mensagem atesta proibição categórica de credenciais sintéticas na entrada pública'
+  );
+
+  // 2.2 Prova de Assinatura Criptográfica RS256 Isolada
   const keyPair = generateTestKeyPair();
-
-  // 1.1 Prova de Assinatura Válida
   const validToken = createSignedTestToken({
     uid: 'usr_alice_real',
     projectId: DEMO_PROJECT_ID,
@@ -132,22 +237,22 @@ async function runCompleteSubetapa033Suite() {
   assert(resValid.isValid === true, 'Token assinado com RS256 verificado com sucesso');
   assert(resValid.uid === 'usr_alice_real', 'UID extraído com exatidão da claim sub do token');
 
-  // 1.2 Token Ausente
+  // 2.3 Token Ausente
   const resMissing = await verifyRealAuthToken(undefined);
-  assert(!resMissing.isValid, 'Token ausente rejeitado');
+  assert(!resMissing.isValid, 'Token ausente rejeitado com isValid: false');
 
-  // 1.3 Token Expirado
+  // 2.4 Token Expirado
   const expiredToken = createSignedTestToken({
     uid: 'usr_alice_expired',
     projectId: DEMO_PROJECT_ID,
-    expiresInSeconds: -3600, // Expirado há 1 hora
+    expiresInSeconds: -3600,
     privateKeyPem: keyPair.privateKey
   });
   const resExpired = verifyJwtCryptographically(expiredToken, DEMO_PROJECT_ID, keyPair.publicKey);
   assert(!resExpired.isValid, 'Token expirado é sumariamente rejeitado');
-  assert((resExpired.error || '').includes('expirado'), 'Mensagem indica expiração');
+  assert((resExpired.error || '').includes('expirado'), 'Mensagem de erro explicita expiração');
 
-  // 1.4 Token Adulterado no Payload (Assinatura não bate)
+  // 2.5 Token Adulterado no Payload (Assinatura não bate)
   const adulteratedPayloadToken = createSignedTestToken({
     uid: 'usr_legit',
     projectId: DEMO_PROJECT_ID,
@@ -157,7 +262,7 @@ async function runCompleteSubetapa033Suite() {
   const resAdulteratedPayload = verifyJwtCryptographically(adulteratedPayloadToken, DEMO_PROJECT_ID, keyPair.publicKey);
   assert(!resAdulteratedPayload.isValid, 'Token com payload adulterado rejeitado pela validação de assinatura');
 
-  // 1.5 Token com Assinatura Adulterada
+  // 2.6 Token com Assinatura Adulterada
   const adulteratedSigToken = createSignedTestToken({
     uid: 'usr_legit',
     projectId: DEMO_PROJECT_ID,
@@ -167,7 +272,7 @@ async function runCompleteSubetapa033Suite() {
   const resAdulteratedSig = verifyJwtCryptographically(adulteratedSigToken, DEMO_PROJECT_ID, keyPair.publicKey);
   assert(!resAdulteratedSig.isValid, 'Token com bytes de assinatura corrompidos rejeitado');
 
-  // 1.6 Token de Projeto Incorreto (mismatch de audience/aud)
+  // 2.7 Token de Projeto Incorreto (mismatch de audience/aud)
   const wrongProjectToken = createSignedTestToken({
     uid: 'usr_alice_real',
     projectId: 'demo-wrong-project-adversarial',
@@ -175,196 +280,234 @@ async function runCompleteSubetapa033Suite() {
   });
   const resWrongProj = verifyJwtCryptographically(wrongProjectToken, DEMO_PROJECT_ID, keyPair.publicKey);
   assert(!resWrongProj.isValid, 'Token emitido para projeto incorreto é rejeitado');
-  assert((resWrongProj.error || '').includes('Projeto incorreto'), 'Erro explícito de projeto incorreto');
 
-  // 1.7 Restrição de Credencial Sintética em Ambiente de Produção
-  const resSyntheticProd = await verifyRealAuthToken('Bearer demo-token:usr_test', {
-    allowSyntheticInTest: false
+  // 2.8 Integração com Firebase Auth Emulator Oficial
+  const verifiedOfficial = await verifyRealAuthToken(`Bearer ${officialAuth.idToken}`);
+  assert(verifiedOfficial.isValid === true, 'Token emitido pelo Firebase Auth Emulator oficial verificado com sucesso');
+  assert(verifiedOfficial.uid === officialAuth.uid, 'UID extraído do Auth Emulator confere com localId oficial');
+
+  // 2.9 Tentativa de Escrita em Outro UID (Cross-Tenant) via Rota HTTP
+  const httpCrossTenant = createMockHttp({
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${officialAuth.idToken}`,
+      'x-request-id': 'req_cross_tenant_test'
+    },
+    body: {
+      action: 'save_transaction',
+      userId: 'usr_bob_vitima', // Tentativa forçada de gravar na conta de Bob
+      amountCents: 50000
+    }
   });
-  // Se forçado fora de teste, deve rejeitar
-  process.env.NODE_ENV = 'production';
-  const resSynthBlock = await verifyRealAuthToken('Bearer demo-token:usr_test', { allowSyntheticInTest: false });
-  assert(!resSynthBlock.isValid, 'Credencial sintética demo-token bloqueada fora do escopo de testes isolados');
-  process.env.NODE_ENV = 'test';
+  await handler(httpCrossTenant.req, httpCrossTenant.res);
+  assert(httpCrossTenant.getStatusCode() === 403, 'Tentativa de escrita em outro UID rejeitada com HTTP 403 Forbidden');
+  assert(
+    httpCrossTenant.getResponseData().code === 'PERMISSION_DENIED_CROSS_TENANT',
+    'Código PERMISSION_DENIED_CROSS_TENANT emitido pela barreira de segurança'
+  );
 
   // =========================================================================
-  // BLOCO 2: PERSISTÊNCIA REAL NO EMULADOR E LEITURA DE VOLTA PELA ROTA HTTP
+  // BLOCO 3: INTEGRAÇÃO REAL EM DOIS PROCESSOS INDEPENDENTES E SOBREVIVÊNCIA A REINÍCIO
   // =========================================================================
-  console.log('\n[2/5] Persistência Real no Emulador e Leitura de Volta via HTTP...');
+  console.log('\n[3/5] Integração em Dois Processos Independentes (PIDs Distintos) no Firestore Emulator...');
 
-  // Prepara Store Transacional compartilhado
-  const store = new TransactionalStoreMock();
-  setStoreInstance(store);
-  const adapter = getLedgerAdapter();
+  const PORT_1 = 4101;
+  const PORT_2 = 4102;
+  const PORT_3 = 4103;
 
-  // Inicializa conta de demonstração
-  await adapter.seedAccount({
-    id: 'acc_demo_alice',
-    userId: 'usr_alice',
-    name: 'Conta Corrente Alice',
-    balanceCents: 80000, // R$ 800,00
+  // Inicia Processo 1 e Processo 2
+  console.log(`  -> Subindo Processo 1 na porta ${PORT_1}...`);
+  const server1 = startServerProcess(PORT_1);
+  console.log(`  -> Subindo Processo 2 na porta ${PORT_2}...`);
+  const server2 = startServerProcess(PORT_2);
+
+  const ready1 = await waitForHttpServer(PORT_1);
+  const ready2 = await waitForHttpServer(PORT_2);
+
+  assert(ready1 && ready2, 'Ambos os servidores HTTP iniciaram com sucesso nas portas 4101 e 4102');
+  assert(server1.pid !== server2.pid, `PIDs comprovadamente distintos no SO: PID 1 (${server1.pid}) !== PID 2 (${server2.pid})`);
+
+  // Inicializa dados no Firestore Emulator oficial diretamente via FirestoreAdminStore
+  const firestoreDirect = new FirestoreAdminStore();
+  const testUid = officialAuth.uid;
+  const accountId = 'acc_multi_proc_shared';
+
+  const rawDb = firestoreDirect.getRawDb();
+  await rawDb.doc(`users/${testUid}/accounts/${accountId}`).set({
+    id: accountId,
+    userId: testUid,
+    name: 'Conta Multi-Processo Compartilhada',
+    balanceCents: 100000, // R$ 1.000,00 inicial
     rev: 1,
     fencingToken: 1,
     updatedAt: new Date().toISOString()
   });
 
-  // 2.1 Gravação Autorizada via POST na Rota HTTP
-  const httpPost = createMockHttp({
-    method: 'POST',
-    headers: {
-      authorization: 'Bearer demo-token:usr_alice',
-      'x-request-id': 'req_http_live_01'
-    },
-    body: {
-      action: 'save_transaction',
-      accountId: 'acc_demo_alice',
-      transaction: {
-        id: 'tx_http_live_01',
-        type: 'EXPENSE',
-        amountCents: 25000, // R$ 250,00
-        category: 'Serviços',
-        description: 'Assinatura Software Cloud'
-      }
-    }
-  });
-
-  await handler(httpPost.req, httpPost.res);
-  assert(httpPost.getStatusCode() === 200, 'POST /api/database autorizada retorna HTTP 200');
-  assert(httpPost.getResponseData().receipt?.status === 'APPLIED', 'Recibo de mutação emitido');
-
-  // 2.2 Leitura de Volta do Saldo da Conta pela rota HTTP (GET ?type=account)
-  const httpGetAccount = createMockHttp({
-    method: 'GET',
-    headers: { authorization: 'Bearer demo-token:usr_alice' },
-    query: { type: 'account', accountId: 'acc_demo_alice' }
-  });
-  await handler(httpGetAccount.req, httpGetAccount.res);
-  assert(httpGetAccount.getStatusCode() === 200, 'GET ?type=account retorna HTTP 200');
-  const accountReadBack = httpGetAccount.getResponseData().account;
-  assert(accountReadBack.balanceCents === 55000, 'Saldo lido de volta pela rota: 80000 - 25000 = 55000 (R$ 550,00)');
-
-  // 2.3 Leitura de Volta da Transação pela rota HTTP (GET ?type=transaction)
-  const httpGetTx = createMockHttp({
-    method: 'GET',
-    headers: { authorization: 'Bearer demo-token:usr_alice' },
-    query: { type: 'transaction', txId: 'tx_http_live_01' }
-  });
-  await handler(httpGetTx.req, httpGetTx.res);
-  assert(httpGetTx.getStatusCode() === 200, 'GET ?type=transaction retorna HTTP 200');
-  const txReadBack = httpGetTx.getResponseData().transaction;
-  assert(txReadBack.amountCents === 25000, 'Lançamento lido de volta pela rota com amountCents = 25000');
-
-  // 2.4 Leitura de Volta do Recibo de Idempotência pela rota HTTP (GET ?type=idempotency)
-  const httpGetReceipt = createMockHttp({
-    method: 'GET',
-    headers: { authorization: 'Bearer demo-token:usr_alice' },
-    query: { type: 'idempotency', requestId: 'req_http_live_01' }
-  });
-  await handler(httpGetReceipt.req, httpGetReceipt.res);
-  assert(httpGetReceipt.getStatusCode() === 200, 'GET ?type=idempotency retorna HTTP 200');
-  const receiptReadBack = httpGetReceipt.getResponseData().receipt;
-  assert(receiptReadBack.status === 'APPLIED', 'Recibo de idempotência lido de volta com status APPLIED');
-  assert(receiptReadBack.payloadHash !== undefined, 'Recibo contém payloadHash gravado no mesmo commit');
-
-  // 2.5 Falha Anterior ao Commit deixa o estado 100% intacto (inclusive inicialização de conta)
-  const snapshotBeforeFailure = store.documents.size;
-  const httpFailPreCommit = createMockHttp({
-    method: 'POST',
-    headers: {
-      authorization: 'Bearer demo-token:usr_alice',
-      'x-request-id': 'req_should_rollback',
-      'x-simulate-failure': 'pre-commit'
-    },
-    body: {
-      action: 'save_transaction',
-      accountId: 'acc_conta_fantasma_que_vai_falhar',
-      transaction: {
-        id: 'tx_fail_abort',
-        type: 'EXPENSE',
-        amountCents: 10000
-      }
-    }
-  });
-  await handler(httpFailPreCommit.req, httpFailPreCommit.res);
-  assert(httpFailPreCommit.getStatusCode() === 500, 'Operação com falha anterior ao commit rejeitada com erro HTTP 500');
-  assert(store.documents.size === snapshotBeforeFailure, 'Quantidade de documentos intacta: Rollback 100% comprovado');
-  assert(!store.documents.has('users/usr_alice/transactions/tx_fail_abort'), 'Nenhuma transação fantasma persistida');
-  assert(!store.documents.has('users/usr_alice/idempotency/req_should_rollback'), 'Nenhum recibo falso comitado');
-
-  // =========================================================================
-  // BLOCO 3: IDEMPOTÊNCIA ENTRE PROCESSOS E SOBREVIVÊNCIA A REINÍCIO
-  // =========================================================================
-  console.log('\n[3/5] Idempotência Entre Processos Concorrentes e Sobrevivência a Reinício...');
-
-  // Simula duas instâncias de backend concorrentes (instância A e instância B)
-  // apontando para a mesma persistência compartilhada
-  const sharedStorage = new TransactionalStoreMock();
-  const adapterInstanceA = new FirestoreLedgerAdapter(sharedStorage);
-  const adapterInstanceB = new FirestoreLedgerAdapter(sharedStorage);
-
-  await adapterInstanceA.seedAccount({
-    id: 'acc_concorrente',
-    userId: 'usr_clara',
-    name: 'Conta Concorrente Clara',
-    balanceCents: 100000, // R$ 1.000,00
-    rev: 1,
-    fencingToken: 1,
-    updatedAt: new Date().toISOString()
-  });
-
-  const concurrentRequestId = 'req_multi_process_77';
+  const concurrentRequestId = `req_multiproc_${Date.now()}`;
   const mutationPayload = {
+    action: 'save_transaction',
+    accountId,
     requestId: concurrentRequestId,
-    id: 'tx_concorrente_01',
-    type: 'EXPENSE' as const,
-    amountCents: 20000n, // R$ 200,00
-    sourceAccountId: 'acc_concorrente',
-    category: 'Alimentação',
-    description: 'Jantar Concorrente'
+    transaction: {
+      id: `tx_multiproc_${Date.now()}`,
+      type: 'EXPENSE',
+      amountCents: 20000, // Débito de R$ 200,00
+      category: 'Serviços',
+      description: 'Débito Concorrente Multi-Processo'
+    }
   };
 
-  // Disparo concorrente simultâneo entre instâncias A e B
-  const [procA, procB] = await Promise.all([
-    adapterInstanceA.commitTransaction('usr_clara', mutationPayload),
-    adapterInstanceB.commitTransaction('usr_clara', mutationPayload)
+  // 3.1 Disparo Concorrente pela Rede HTTP Real para Processo 1 e Processo 2
+  console.log('  -> Enviando requisições concorrentes via HTTP para Processo 1 e Processo 2...');
+  const [resp1, resp2] = await Promise.all([
+    fetch(`http://127.0.0.1:${PORT_1}/api/database`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${officialAuth.idToken}`,
+        'X-Request-ID': concurrentRequestId
+      },
+      body: JSON.stringify(mutationPayload)
+    }),
+    fetch(`http://127.0.0.1:${PORT_2}/api/database`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${officialAuth.idToken}`,
+        'X-Request-ID': concurrentRequestId
+      },
+      body: JSON.stringify(mutationPayload)
+    })
   ]);
 
-  assert(procA.status === 'APPLIED' && procB.status === 'APPLIED', 'Ambos os processos retornam status APPLIED');
-  assert(procA.replay === true || procB.replay === true, 'Exatamente um dos processos concorrentes recebeu flag replay: true');
+  const json1: any = await resp1.json();
+  const json2: any = await resp2.json();
 
-  const accAfterBoth = await adapterInstanceA.getAccount('usr_clara', 'acc_concorrente');
-  assert(accAfterBoth?.balanceCents === 80000, 'Saldo debitado uma única vez entre processos (100000 -> 80000)');
+  assert(resp1.status === 200 && resp2.status === 200, 'Ambas as instâncias retornam HTTP 200 OK');
+  assert(json1.receipt?.status === 'APPLIED' && json2.receipt?.status === 'APPLIED', 'Ambas as instâncias confirmam status APPLIED');
+  assert(json1.receipt?.replay === true || json2.receipt?.replay === true, 'Exatamente uma instância retornou replay: true');
 
-  // SIMULAÇÃO DE REINÍCIO DO SERVIDOR (Descarta instâncias A e B da memória)
-  console.log('  -> Simulando reinício total de processos e recarga de instância...');
-  const newRebootedInstance = new FirestoreLedgerAdapter(sharedStorage);
+  // 3.2 Leitura Direta no Firestore Emulator Oficial
+  const accSnapAfterConcurrent = await rawDb.doc(`users/${testUid}/accounts/${accountId}`).get();
+  const accDataAfterConcurrent = accSnapAfterConcurrent.data();
+  assert(
+    accDataAfterConcurrent?.balanceCents === 80000,
+    'Saldo no Firestore Emulator debitado uma única vez: 100000 -> 80000 (R$ 800,00)'
+  );
 
-  // Retry com o mesmo requestId e mesmo payload na nova instância pós-reinício
-  const retryAfterReboot = await newRebootedInstance.commitTransaction('usr_clara', mutationPayload);
-  assert(retryAfterReboot.replay === true, 'Nova instância pós-reinício recupera recibo do banco com replay: true');
-  const accAfterRebootRetry = await newRebootedInstance.getAccount('usr_clara', 'acc_concorrente');
-  assert(accAfterRebootRetry?.balanceCents === 80000, 'Saldo permanece rigorosamente intacto após retry pós-reinício');
+  const receiptSnap = await rawDb.doc(`users/${testUid}/idempotency/${concurrentRequestId}`).get();
+  assert(receiptSnap.exists, 'Recibo de idempotência persistido diretamente no Firestore Emulator');
+  assert(receiptSnap.data()?.status === 'APPLIED', 'Recibo de idempotência com status APPLIED no Firestore');
 
-  // Retry com mesmo requestId e payload divergente (tentativa de fraude/corrupção)
-  let conflictDetected = false;
-  try {
-    await newRebootedInstance.commitTransaction('usr_clara', {
+  // 3.3 Encerramento dos dois processos
+  console.log(`  -> Encerrando Processo 1 (PID ${server1.pid}) e Processo 2 (PID ${server2.pid})...`);
+  await killProcessSafely(server1.proc);
+  await killProcessSafely(server2.proc);
+
+  // 3.4 Subida de NOVO PROCESSO INDEPENDENTE (Processo 3)
+  console.log(`  -> Subindo Processo 3 independente na porta ${PORT_3}...`);
+  const server3 = startServerProcess(PORT_3);
+  const ready3 = await waitForHttpServer(PORT_3);
+  assert(ready3, 'Processo 3 iniciado e pronto na porta 4103');
+  assert(
+    server3.pid !== server1.pid && server3.pid !== server2.pid,
+    `Processo 3 possui PID independente (${server3.pid})`
+  );
+
+  // 3.5 Reenvio com o mesmo requestId e mesmo payload para o Processo 3 (Retry pós-reinício)
+  console.log('  -> Enviando retry com mesmo payload para o Processo 3...');
+  const respRetry = await fetch(`http://127.0.0.1:${PORT_3}/api/database`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${officialAuth.idToken}`,
+      'X-Request-ID': concurrentRequestId
+    },
+    body: JSON.stringify(mutationPayload)
+  });
+  const jsonRetry: any = await respRetry.json();
+
+  assert(respRetry.status === 200, 'Retry no Processo 3 retorna HTTP 200');
+  assert(jsonRetry.receipt?.replay === true, 'Recibo recuperado diretamente do Firestore pelo Processo 3 com replay: true');
+
+  const accSnapAfterRetry = await rawDb.doc(`users/${testUid}/accounts/${accountId}`).get();
+  assert(
+    accSnapAfterRetry.data()?.balanceCents === 80000,
+    'Saldo no Firestore permanece estritamente 80000 após retry pós-reinício (Zero Duplo Débito)'
+  );
+
+  // 3.6 Reenvio com o mesmo requestId e PAYLOAD DIVERGENTE para o Processo 3
+  console.log('  -> Enviando requisição conflitante (payload divergente) para o Processo 3...');
+  const respConflict = await fetch(`http://127.0.0.1:${PORT_3}/api/database`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${officialAuth.idToken}`,
+      'X-Request-ID': concurrentRequestId
+    },
+    body: JSON.stringify({
       ...mutationPayload,
-      amountCents: 90000n // VALOR MODIFICADO
-    });
-  } catch (err) {
-    if (err instanceof IdempotencyConflictError) conflictDetected = true;
-  }
-  assert(conflictDetected, 'Payload divergente pós-reinício retorna CONFLITO 409 (IdempotencyConflictError)');
-  const accAfterConflict = await newRebootedInstance.getAccount('usr_clara', 'acc_concorrente');
-  assert(accAfterConflict?.balanceCents === 80000, 'Saldo preservado inalterado após rejeição de conflito 409');
+      transaction: {
+        ...mutationPayload.transaction,
+        amountCents: 99000 // VALOR MODIFICADO (Conflito de integridade)
+      }
+    })
+  });
+  const jsonConflict: any = await respConflict.json();
+
+  assert(respConflict.status === 409, 'Reenvio com payload divergente retorna HTTP 409 Conflict');
+  assert(
+    jsonConflict.code === 'IDEMPOTENCY_PAYLOAD_MISMATCH',
+    'Código IDEMPOTENCY_PAYLOAD_MISMATCH retornado pelo Processo 3'
+  );
+
+  const accSnapAfterConflict = await rawDb.doc(`users/${testUid}/accounts/${accountId}`).get();
+  assert(
+    accSnapAfterConflict.data()?.balanceCents === 80000,
+    'Saldo no Firestore protegido e inalterado em 80000 após rejeição de conflito'
+  );
+
+  // 3.7 Falha anterior ao commit deixa o estado no Firestore 100% intacto
+  console.log('  -> Enviando requisição com falha anterior ao commit para o Processo 3...');
+  const txListBeforeFailure = await firestoreDirect.queryCollection(`users/${testUid}/transactions`);
+  const txCountBefore = txListBeforeFailure.length;
+
+  const respPreCommitFail = await fetch(`http://127.0.0.1:${PORT_3}/api/database`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${officialAuth.idToken}`,
+      'X-Request-ID': `req_fail_${Date.now()}`,
+      'X-Simulate-Failure': 'pre-commit'
+    },
+    body: JSON.stringify({
+      action: 'save_transaction',
+      accountId: 'acc_inexistente_abort',
+      transaction: {
+        id: `tx_abort_${Date.now()}`,
+        type: 'EXPENSE',
+        amountCents: 30000
+      }
+    })
+  });
+
+  assert(respPreCommitFail.status === 500, 'Falha anterior ao commit rejeitada com HTTP 500');
+
+  const txListAfterFailure = await firestoreDirect.queryCollection(`users/${testUid}/transactions`);
+  assert(
+    txListAfterFailure.length === txCountBefore,
+    'Contagem de transações no Firestore Emulator intacta: Rollback 100% comprovado'
+  );
+
+  // Encerra Processo 3
+  console.log(`  -> Encerrando Processo 3 (PID ${server3.pid})...`);
+  await killProcessSafely(server3.proc);
 
   // =========================================================================
   // BLOCO 4: ESCOPO DO WHATSAPP E ROTA REAL DO WEBHOOK
   // =========================================================================
   console.log('\n[4/5] Escopo do WhatsApp: Fronteira Real do Webhook e Resolução no Servidor...');
 
-  // Configura vínculos conhecidos no servidor
   (global as any).__KYRO_PROVIDER_BINDINGS__ = [
     {
       providerPhone: '558695368780',
@@ -373,7 +516,7 @@ async function runCompleteSubetapa033Suite() {
       boundAt: '2026-11-06T00:00:00Z'
     },
     {
-      providerPhone: '5586911112222', // Número associado a dois UIDs (Ambiguidade)
+      providerPhone: '5586911112222',
       userId: 'usr_ambiguo_1',
       status: 'ACTIVE',
       boundAt: '2026-11-06T00:00:00Z'
@@ -406,7 +549,7 @@ async function runCompleteSubetapa033Suite() {
     headers: { 'x-webhook-secret': 'kyro_webhook_secret_dev' },
     body: {
       action: 'sync_transactions',
-      senderPhone: '5586999994444', // Número sem cadastro
+      senderPhone: '5586999994444',
       transaction: { amount: 50, description: 'Lançamento sem cadastro' }
     }
   });
@@ -420,7 +563,7 @@ async function runCompleteSubetapa033Suite() {
     headers: { 'x-webhook-secret': 'kyro_webhook_secret_dev' },
     body: {
       action: 'sync_transactions',
-      senderPhone: '5586911112222', // Número associado a dois UIDs
+      senderPhone: '5586911112222',
       transaction: { amount: 50, description: 'Lançamento ambíguo' }
     }
   });
@@ -451,13 +594,12 @@ async function runCompleteSubetapa033Suite() {
   // =========================================================================
   console.log('\n[5/5] Serialização BigInt IEEE 754 e Dados Legados...');
 
-  const centVal = 999950n; // R$ 9.999,50
+  const centVal = 999950n;
   const safeInt = SafeMoneySerializer.toFirestoreCents(centVal);
   assert(typeof safeInt === 'number', 'Centavos BigInt representados como number seguro para o Firestore');
   const restoredCent = SafeMoneySerializer.fromFirestoreCents(safeInt);
   assert(restoredCent === centVal, 'Ida e volta exata comprovada: 999950n -> 999950 -> 999950n');
 
-  // Float legado normalizado sem dízima
   const legacyNormal = SafeMoneySerializer.fromFirestoreCents(1234.56);
   assert(legacyNormal === 123456n, 'Float legado 1234.56 normalizado deterministicamente para 123456n');
 

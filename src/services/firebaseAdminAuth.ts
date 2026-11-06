@@ -54,10 +54,14 @@ export async function verifyRealAuthToken(
 
   const token = parts[1];
 
-  // 1. Tratamento Restrito de Tokens Sintéticos: Apenas com flag explícita de teste
+  // 1. Tratamento Restrito de Tokens Sintéticos: Apenas com flag explícita de teste no código interno
   if (token.startsWith('demo-token:')) {
-    if (!options.allowSyntheticInTest && process.env.NODE_ENV === 'production') {
-      return { uid: '', isValid: false, error: 'Credenciais sintéticas são estritamente proibidas em ambiente de produção.' };
+    if (options.allowSyntheticInTest !== true) {
+      return {
+        uid: '',
+        isValid: false,
+        error: 'Credenciais sintéticas (demo-token) são terminantemente proibidas na entrada pública do produto.'
+      };
     }
     const uid = token.replace('demo-token:', '').trim();
     if (!uid) return { uid: '', isValid: false, error: 'Token sintético com UID vazio.' };
@@ -251,4 +255,37 @@ export function createSignedTestToken(params: {
   }
 
   return `${headerB64}.${finalPayloadB64}.${signatureB64}`;
+}
+
+/**
+ * Emite um ID Token oficial a partir do Firebase Auth Emulator para testes de rota.
+ * Cria o usuário ou faz login via API REST do Auth Emulator oficial.
+ */
+export async function getOfficialAuthEmulatorToken(
+  email: string = 'alice_emulated@kyro.local',
+  password: string = 'SenhaSegura123!'
+): Promise<{ idToken: string; uid: string }> {
+  const host = process.env.FIREBASE_AUTH_EMULATOR_HOST || '127.0.0.1:9099';
+  
+  let resp = await fetch(`http://${host}/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=fake-api-key`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password, returnSecureToken: true })
+  });
+
+  if (!resp.ok) {
+    resp = await fetch(`http://${host}/identitytoolkit.googleapis.com/v1/accounts:signUp?key=fake-api-key`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password, returnSecureToken: true })
+    });
+  }
+
+  if (!resp.ok) {
+    const errText = await resp.text();
+    throw new Error(`Falha ao emitir token no Auth Emulator: ${resp.status} ${errText}`);
+  }
+
+  const data: any = await resp.json();
+  return { idToken: data.idToken, uid: data.localId };
 }

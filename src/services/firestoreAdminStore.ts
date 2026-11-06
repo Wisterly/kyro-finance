@@ -17,6 +17,10 @@ export class FirestoreAdminStore implements ITransactionalStore {
   constructor(customDb?: Firestore) {
     if (customDb) {
       this.db = customDb;
+    } else if (process.env.FIRESTORE_EMULATOR_HOST) {
+      this.db = new Firestore({
+        projectId: process.env.FIREBASE_PROJECT_ID || 'demo-kyro-synthetic'
+      });
     } else {
       const app = getAdminApp();
       this.db = getFirestore(app);

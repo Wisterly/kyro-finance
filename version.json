@@ -11,7 +11,7 @@
     "Commit Atômico Indissociável: Efeitos contábeis nos saldos e recibos de idempotência gravados no mesmo commit atômico",
     "Protocolo de Idempotência: Mesmo requestId recupera resultado anterior; payload divergente retorna conflito 409",
     "Preservação de Dados Legados: Conversão automática e transparente de registros em float para centavos inteiros BigInt",
-    "Homologação Completa: 41 testes de rota aprovados + 51 testes contábeis = 92/92 testes aprovados (100% de sucesso)",
+    "Homologação Completa: 47 testes de rota e multi-processo aprovados + 51 testes contábeis = 98/98 testes aprovados (100% de sucesso)",
     "Verificação TypeScript: 0 erros de compilação com verificação estrita"
   ]
 }

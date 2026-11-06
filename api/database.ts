@@ -9,29 +9,55 @@ import { parseToCents } from '../src/engine/money';
 // Armazenamento Central Transacional no Servidor (Singleton com semântica de isolamento por Tenant)
 const globalStore: any = global;
 
-function createDefaultStore(): ITransactionalStore {
-  if (process.env.USE_FIRESTORE_ADMIN === 'true' || process.env.FIRESTORE_EMULATOR_HOST) {
-    try {
-      return new FirestoreAdminStore();
-    } catch {
-      return new TransactionalStoreMock();
-    }
+export class StorageUnavailableError extends Error {
+  public readonly code = 'STORAGE_UNAVAILABLE';
+  public readonly statusCode = 503;
+  constructor(message: string = 'Armazenamento transacional indisponível. Gravação não confirmada.') {
+    super(`[StorageUnavailable] ${message}`);
+    this.name = 'StorageUnavailableError';
   }
-  return new TransactionalStoreMock();
+}
+
+function createDefaultStore(): ITransactionalStore {
+  // A rota pública da aplicação usa exclusivamente o Firestore oficial.
+  // Nenhum fallback silencioso para mock é permitido no caminho da aplicação.
+  if (process.env.STORAGE_DISABLED === 'true') {
+    throw new StorageUnavailableError('Armazenamento Firestore explicitamente desabilitado ou indisponível.');
+  }
+
+  try {
+    return new FirestoreAdminStore();
+  } catch (err: any) {
+    throw new StorageUnavailableError(`Falha ao conectar com o Firestore oficial: ${err?.message || err}`);
+  }
 }
 
 if (!globalStore.__KYRO_SECURE_STORE__) {
-  globalStore.__KYRO_SECURE_STORE__ = createDefaultStore();
+  try {
+    globalStore.__KYRO_SECURE_STORE__ = createDefaultStore();
+  } catch {
+    // Inicialização sob demanda com tratamento de indisponibilidade
+    globalStore.__KYRO_SECURE_STORE__ = null;
+  }
 }
 
-export const getSecureStore = (): ITransactionalStore => globalStore.__KYRO_SECURE_STORE__;
+export const getSecureStore = (): ITransactionalStore => {
+  if (!globalStore.__KYRO_SECURE_STORE__) {
+    globalStore.__KYRO_SECURE_STORE__ = createDefaultStore();
+  }
+  return globalStore.__KYRO_SECURE_STORE__;
+};
 
 export const setStoreInstance = (store: ITransactionalStore): void => {
   globalStore.__KYRO_SECURE_STORE__ = store;
 };
 
 export const resetStoreInstance = (): void => {
-  globalStore.__KYRO_SECURE_STORE__ = createDefaultStore();
+  try {
+    globalStore.__KYRO_SECURE_STORE__ = createDefaultStore();
+  } catch {
+    globalStore.__KYRO_SECURE_STORE__ = null;
+  }
 };
 
 export const getLedgerAdapter = (): FirestoreLedgerAdapter => new FirestoreLedgerAdapter(getSecureStore());
@@ -47,10 +73,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).end();
   }
 
-  // 1. Verificação da Fronteira de Autenticação Real
+  // 1. Verificação da Fronteira de Autenticação Real na Entrada Pública
+  // A entrada pública NUNCA permite tokens sintéticos (demo-token), sob nenhuma variável de ambiente.
   const authHeader = req.headers.authorization;
-  const allowSyntheticInTest = process.env.NODE_ENV !== 'production' || process.env.ALLOW_SYNTHETIC_TEST === 'true';
-  const authContext = await verifyAuthToken(authHeader, { allowSyntheticInTest });
+  const authContext = await verifyAuthToken(authHeader, { allowSyntheticInTest: false });
 
   if (!authContext.isValid || !authContext.uid) {
     return res.status(401).json({
@@ -81,8 +107,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
   }
 
-  const adapter = getLedgerAdapter();
-  const store = getSecureStore();
+  // 3. Obtenção do Armazenamento Persistente Oficial
+  let adapter: FirestoreLedgerAdapter;
+  let store: ITransactionalStore;
+  try {
+    store = getSecureStore();
+    adapter = getLedgerAdapter();
+  } catch (err: any) {
+    return res.status(503).json({
+      success: false,
+      error: 'Armazenamento transacional indisponível. Gravação não confirmada.',
+      code: 'STORAGE_UNAVAILABLE',
+      details: err?.message
+    });
+  }
 
   // ==========================================================
   // GET: RECUPERA RECURSOS DELIMITADOS ESTREITAMENTE POR AUTH UID
@@ -269,9 +307,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
 
     } catch (e: any) {
-      return res.status(500).json({
+      if (e instanceof IdempotencyConflictError) {
+        return res.status(409).json({
+          success: false,
+          error: e.message,
+          code: e.code
+        });
+      }
+
+      const isStorageFailure = 
+        e instanceof StorageUnavailableError ||
+        e?.code === 'STORAGE_UNAVAILABLE' ||
+        e?.code === 'UNAVAILABLE' ||
+        e?.code === 14 ||
+        e?.message?.includes('UNAVAILABLE') ||
+        e?.message?.includes('ECONNREFUSED') ||
+        e?.message?.includes('Armazenamento transacional indisponível') ||
+        e?.message?.includes('Could not reach Cloud Firestore');
+
+      return res.status(isStorageFailure ? 503 : 500).json({
         success: false,
-        error: 'Erro no processamento transacional',
+        error: isStorageFailure 
+          ? 'Armazenamento transacional indisponível. Gravação não confirmada.' 
+          : (e?.message || 'Erro no processamento transacional.'),
+        code: isStorageFailure ? 'STORAGE_UNAVAILABLE' : (e?.code || 'INTERNAL_ERROR'),
         details: e?.message
       });
     }
