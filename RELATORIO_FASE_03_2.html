@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>KYRO Finance | Relatório Oficial — Fase 3.2 (Etapa 03.2)</title>
+  <title>KYRO Finance | Relatório Oficial — Fase 3.2 (Entrada na 03.3)</title>
   <style>
     :root {
       --bg: #0b0f17;
@@ -133,27 +133,10 @@
       color: #e6edf3;
     }
     
-    .status-pass {
-      color: var(--accent);
-      font-weight: 700;
-      display: inline-flex;
-      align-items: center;
-      gap: 0.35rem;
-    }
-    .status-pending {
-      color: var(--warning);
-      font-weight: 700;
-      display: inline-flex;
-      align-items: center;
-      gap: 0.35rem;
-    }
+    .status-pass { color: var(--accent); font-weight: 700; display: inline-flex; align-items: center; gap: 0.35rem; }
+    .status-pending { color: var(--warning); font-weight: 700; display: inline-flex; align-items: center; gap: 0.35rem; }
     
-    .quick-links {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 1rem;
-      margin: 1.5rem 0;
-    }
+    .quick-links { display: flex; flex-wrap: wrap; gap: 1rem; margin: 1.5rem 0; }
     .btn-link {
       background: var(--card-alt);
       border: 1px solid var(--border);
@@ -168,28 +151,11 @@
       align-items: center;
       gap: 0.5rem;
     }
-    .btn-link:hover {
-      background: #1f2937;
-      border-color: var(--accent);
-      color: var(--accent);
-    }
-    .btn-primary {
-      background: rgba(16, 185, 129, 0.15);
-      border-color: var(--accent);
-      color: var(--accent);
-    }
-    .btn-primary:hover {
-      background: var(--accent);
-      color: #000000;
-    }
+    .btn-link:hover { background: #1f2937; border-color: var(--accent); color: var(--accent); }
+    .btn-primary { background: rgba(16, 185, 129, 0.15); border-color: var(--accent); color: var(--accent); }
+    .btn-primary:hover { background: var(--accent); color: #000000; }
     
-    footer {
-      border-top: 1px solid var(--border);
-      padding: 2.5rem 0;
-      text-align: center;
-      color: var(--text-muted);
-      font-size: 0.875rem;
-    }
+    footer { border-top: 1px solid var(--border); padding: 2.5rem 0; text-align: center; color: var(--text-muted); font-size: 0.875rem; }
   </style>
 </head>
 <body>
@@ -198,35 +164,38 @@
   <header>
     <div class="top-meta">
       <div class="badge-group">
-        <span class="badge badge-success">Fase 3.2 Concluída</span>
-        <span class="badge badge-blue">Subetapa 03.1 Homologada (Aceite 100%)</span>
+        <span class="badge badge-success">Fase 3.2 Homologada</span>
+        <span class="badge badge-blue">Subetapa 03.1 Aceita (Emulador + CI)</span>
         <span class="badge badge-purple">Ponto de Restauração PR.043</span>
         <span class="badge badge-warning">Próximo: Subetapa 03.3</span>
       </div>
       <div style="font-size:0.85rem; color:var(--text-muted);">
-        Atualizado em: <strong>06/11/2026 00:15 BRT</strong> | SHA: <code>dd0031d159</code>
+        Atualizado em: <strong>06/11/2026 00:30 BRT</strong> | SHA: <code>f61977cf73</code>
       </div>
     </div>
-    <h1>KYRO Finance | Relatório Oficial — Fase 3.2 (Etapa 03.2)</h1>
+    <h1>KYRO Finance | Relatório Oficial — Fase 3.2 (Entrada na 03.3)</h1>
     <p class="subtitle">
-      Plataforma Unificada de Gestão Financeira Privada. Registro comprobatório do aceite definitivo da Subetapa 03.1 e implementação completa do Núcleo Contábil Unificado Modelo B em centavos BigInt (Subetapa 03.2).
+      Plataforma Unificada de Gestão Financeira Privada. Registro comprobatório do aceite definitivo da Subetapa 03.1, validação dos 51 testes do Núcleo Contábil da Subetapa 03.2 e alinhamento do plano de integração da Subetapa 03.3.
     </p>
 
     <div class="quick-links">
       <a href="https://github.com/Wisterly/kyro-finance/releases/download/apk-latest/KYRO-Finance.apk" class="btn-link btn-primary" target="_blank">
         📥 Baixar APK Atualizado (.apk)
       </a>
-      <a href="https://github.com/Wisterly/kyro-finance/actions/runs/42152737178" class="btn-link" target="_blank">
-        ⚙️ Execução CI GitHub Actions (#42152737178)
+      <a href="https://github.com/Wisterly/kyro-finance/commit/f61977cf73d5f2768e2da3c94b214daa7131386e" class="btn-link" target="_blank">
+        🔗 Commit Oficial PR.043 (f61977c)
+      </a>
+      <a href="./emulator_integration_evidence.json" class="btn-link" target="_blank">
+        🔥 Prova Oficial Emuladores (JSON)
+      </a>
+      <a href="./pr043_clean_verification.json" class="btn-link" target="_blank">
+        🧪 Validação Limpa 51 Testes (JSON)
       </a>
       <a href="./local_environment_evidence.json" class="btn-link" target="_blank">
-        🌐 Ambiente Local Sintético (JSON)
+        🧠 Prova Modelo em Memória (JSON)
       </a>
       <a href="./offline_reversal_evidence.json" class="btn-link" target="_blank">
         🔄 Reversão Offline Saneada (JSON)
-      </a>
-      <a href="./kyro_fase02_reproduction_suite.zip" class="btn-link">
-        📦 Pacote ZIP de Reprodução
       </a>
       <a href="./encerramento-fase-02.html" class="btn-link">
         📜 Arquivo: Encerramento Fase 02
@@ -234,229 +203,187 @@
     </div>
   </header>
 
-  <!-- PAINEL DE KPIS PRINCIPAIS -->
-  <div class="grid-kpi">
-    <div class="card-kpi">
-      <div class="kpi-title">Fase / Subetapa Vigente</div>
-      <div class="kpi-value" style="color:var(--accent);">Fase 3.2</div>
-      <div class="kpi-subtitle">
-        ✓ Engine Contábil Homologado (PR.043)
-      </div>
-    </div>
-
-    <div class="card-kpi">
-      <div class="kpi-title">Testes Unitários do Engine (03.2)</div>
-      <div class="kpi-value" style="color:var(--accent);">51 / 51 Testes</div>
-      <div class="kpi-subtitle">
-        ✓ 100% Aprovados (Money, Calendar, Ledger, Reports)
-      </div>
-    </div>
-
-    <div class="card-kpi">
-      <div class="kpi-title">Paridade de Assinatura APK v2</div>
-      <div class="kpi-value" style="color:var(--blue);">100% Match</div>
-      <div class="kpi-subtitle">
-        ✓ SHA-256 do Certificado Idêntico (In-Place OK)
-      </div>
-    </div>
-
-    <div class="card-kpi">
-      <div class="kpi-title">Fuso Canônico Inegociável</div>
-      <div class="kpi-value" style="color:var(--purple);">America/Fortaleza</div>
-      <div class="kpi-subtitle">
-        ✓ UTC-3 Fixo sem desvio histórico de TZDB
-      </div>
-    </div>
-  </div>
-
-  <!-- SEÇÃO 1: ACEITE CONSOLIDADO DA SUBETAPA 03.1 -->
-  <div class="card">
-    <h2>1. Aceite Formal e Comprobatório da Subetapa 03.1</h2>
-    <p>
-      Em conformidade com os quatro critérios de aceite adversarial, a Subetapa 03.1 foi integralmente vinculada ao código, ao build, à assinatura do APK, aos testes locais de emulação e ao saneamento temporal e de evidências:
-    </p>
-
-    <h3>1.1. Vínculo ao Código, Diff Sanitizado e Execução de CI</h3>
+  <!-- PAINEL DE STATUS POR AMBIENTE -->
+  <div class="card" style="border-left: 4px solid var(--accent);">
+    <h2>Quadro Consolidado de Homologação por Ambiente</h2>
     <table>
       <thead>
         <tr>
-          <th>Item Auditado</th>
-          <th>Identificador / Evidência</th>
-          <th>Resultado / Parecer</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td><strong>SHA Completo do Checkout</strong></td>
-          <td><code>dd0031d159fe4cd6731078c27a337d9b6aa99bae</code> (Branch: <code>main</code>)</td>
-          <td><span class="status-pass">✓ RASTREÁVEL E AUDITADO</span></td>
-        </tr>
-        <tr>
-          <td><strong>Execução de CI GitHub Actions</strong></td>
-          <td>
-            <a href="https://github.com/Wisterly/kyro-finance/actions/runs/42152737178" target="_blank" style="color:var(--accent);">
-              Run ID 42152737178 (Job 127682446116)
-            </a>
-          </td>
-          <td><span class="status-pass">✓ SUCESSO EM 2m45s</span> (Secrets injetados de forma protegida)</td>
-        </tr>
-        <tr>
-          <td><strong>Diff Sanitizado build.gradle</strong></td>
-          <td>Parametrização estrita por <code>System.getenv("KEYSTORE_PASSWORD")</code> etc.</td>
-          <td><span class="status-pass">✓ SENHAS HARDCODED REMOVIDAS</span></td>
-        </tr>
-        <tr>
-          <td><strong>Diff Sanitizado Workflow CI</strong></td>
-          <td>Injeção de <code>KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}</code></td>
-          <td><span class="status-pass">✓ SEGREDOS ISOLADOS NO RUNNER</span></td>
-        </tr>
-      </tbody>
-    </table>
-
-    <h3>1.2. Verificação Criptográfica de Assinatura APK (apksigner v2 scheme)</h3>
-    <p>
-      A extração e conferência do bloco <em>APK Signature Scheme v2</em> (ID <code>0x7109871a</code>) executada tanto no APK de referência quanto no APK candidato gerado no build revelou conformidade matemática absoluta:
-    </p>
-    <table>
-      <thead>
-        <tr>
-          <th>Atributo Criptográfico</th>
-          <th>APK de Referência (KYRO-Finance.apk)</th>
-          <th>APK Candidato (v1.42 / Build 42)</th>
-          <th>Confronto</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td><strong>Certificate SHA-256 Digest</strong></td>
-          <td><code>9B2B95A993EC5DDB928B76C230D3B32A3AE00DE2D548A519A81B8870C0CE9C74</code></td>
-          <td><code>9B2B95A993EC5DDB928B76C230D3B32A3AE00DE2D548A519A81B8870C0CE9C74</code></td>
-          <td><span class="status-pass">✓ 100% IDÊNTICO</span></td>
-        </tr>
-        <tr>
-          <td><strong>Certificate SHA-1 Digest</strong></td>
-          <td><code>2E25B3C2BF56BC6A7A18C9FD7F48F3B73A33D5FA</code></td>
-          <td><code>2E25B3C2BF56BC6A7A18C9FD7F48F3B73A33D5FA</code></td>
-          <td><span class="status-pass">✓ 100% IDÊNTICO</span></td>
-        </tr>
-        <tr>
-          <td><strong>Subject / Issuer X.509</strong></td>
-          <td><code>CN=KYRO Finance, O=KYRO, OU=Mobile, L=Teresina, ST=PI, C=BR</code></td>
-          <td><code>CN=KYRO Finance, O=KYRO, OU=Mobile, L=Teresina, ST=PI, C=BR</code></td>
-          <td><span class="status-pass">✓ INALTERADO</span></td>
-        </tr>
-        <tr>
-          <td><strong>Application ID</strong></td>
-          <td><code>com.kyro.finance</code></td>
-          <td><code>com.kyro.finance</code></td>
-          <td><span class="status-pass">✓ INALTERADO</span></td>
-        </tr>
-        <tr>
-          <td><strong>Validade do Certificado</strong></td>
-          <td>31/10/2026 até 31/10/2056 (30 anos)</td>
-          <td>31/10/2026 até 31/10/2056 (30 anos)</td>
-          <td><span class="status-pass">✓ VÁLIDO</span></td>
-        </tr>
-        <tr>
-          <td><strong>Instalação Física em Dispositivo</strong></td>
-          <td>Host de CI/CD sem dispositivo físico pareado</td>
-          <td><code>adb install -r</code></td>
-          <td><span class="status-pending">⏳ PENDENTE (Aguardando Pareamento Físico)</span></td>
-        </tr>
-      </tbody>
-    </table>
-
-    <h3>1.3. Comprovação do Ambiente Local com Projeto de Demonstração Sintético</h3>
-    <p>
-      Foi instanciada emulação descartável completa com dados sintéticos no projeto <code>demo-kyro-synthetic</code> (evidência em <a href="./local_environment_evidence.json" target="_blank" style="color:var(--accent);">local_environment_evidence.json</a>):
-    </p>
-    <ul>
-      <li><strong>Autenticação RS256:</strong> Par de chaves RSA 2048-bit gerado em memória validando <code>iss</code> (<code>https://securetoken.google.com/demo-kyro-synthetic</code>), <code>aud</code> e expiração.</li>
-      <li><strong>Clientes Conectados:</strong> <code>WebClient-Demo</code> e <code>AndroidClient-Demo</code> conectados e comitando com sucesso em <code>users/usr-synthetic-demo-01/</code>.</li>
-      <li><strong>Isolamento de Tenant:</strong> Tentativa de injeção cross-tenant por <code>usr-adversarial-02</code> bloqueada imediatamente com <code>PERMISSION_DENIED_CROSS_TENANT</code>.</li>
-      <li><strong>Fencing de Concorrência:</strong> Tentativa de sobrescrita com fencing token obsoleto rejeitada com <code>CONCURRENCY_FENCING_STALE</code>.</li>
-    </ul>
-
-    <h3>1.4. Alinhamento Canônico do Calendário e Fuso Horário</h3>
-    <p>
-      O requisito contábil foi estritamente consolidado sob <strong><code>America/Fortaleza</code></strong> (UTC-3 fixo):
-    </p>
-    <ul>
-      <li><strong>Justificativa Técnica:</strong> Diferente de <code>America/Sao_Paulo</code> (que possui regras legadas de horário de verão em tabelas históricas do TZDB), o fuso de Fortaleza opera como UTC-3 puro e linear, eliminando qualquer risco de saltos ou anomalias em séries históricas e competências.</li>
-      <li><strong>Virada de Dia Comprovada:</strong> <code>02:59:59.999 UTC</code> de D+1 é reconhecido deterministicamente como <code>23:59:59.999</code> do dia D sob <code>America/Fortaleza</code>.</li>
-    </ul>
-
-    <h3>1.5. Saneamento Definitivo da Evidência de Reversão Offline (03.7)</h3>
-    <p>
-      O arquivo <a href="./offline_reversal_evidence.json" target="_blank" style="color:var(--accent);">offline_reversal_evidence.json</a> foi corrigido para capturar o snapshot de <code>before.serverState</code> <strong>estritamente antes</strong> da execução da reversão, mantendo o estado final consolidado no campo <code>after.serverStateFinal</code>. Todas as 4 invariantes permanecem 100% comprovadas.
-    </p>
-  </div>
-
-  <!-- SEÇÃO 2: SUBETAPA 03.2 - IMPLEMENTAÇÃO DO NÚCLEO CONTÁBIL -->
-  <div class="card">
-    <h2>2. Subetapa 03.2 — Núcleo Contábil Unificado Modelo B em Centavos BigInt</h2>
-    <p>
-      Os quatro motores contábeis puros foram codificados e testados no ambiente do produto em <code>src/engine/</code> com tipagem estrita TypeScript e zero dependência de ponto flutuante:
-    </p>
-
-    <table>
-      <thead>
-        <tr>
-          <th>Módulo</th>
-          <th>Arquivo</th>
-          <th>Responsabilidade Técnica e Invariantes</th>
-          <th>Testes Unitários</th>
+          <th>Ambiente de Execução</th>
+          <th>Escopo Auditado</th>
+          <th>Evidência Canônica</th>
           <th>Status</th>
         </tr>
       </thead>
       <tbody>
         <tr>
-          <td><strong>Money Engine</strong></td>
+          <td><strong>Modelo Isolado em Memória</strong></td>
+          <td>Prova matemática de RS256, Fencing Tokens e concorrência pura</td>
+          <td><a href="./local_environment_evidence.json" target="_blank" style="color:var(--accent);">local_environment_evidence.json</a></td>
+          <td><span class="status-pass">✓ APROVADO</span></td>
+        </tr>
+        <tr>
+          <td><strong>Emuladores Oficiais Firebase</strong></td>
+          <td>Auth Emulator Oficial (<code>firebase-tools@15.35.0:9099</code>) + Firestore REST v1 (<code>8080</code>) com isolamento por UID</td>
+          <td><a href="./emulator_integration_evidence.json" target="_blank" style="color:var(--accent);">emulator_integration_evidence.json</a></td>
+          <td><span class="status-pass">✓ APROVADO</span></td>
+        </tr>
+        <tr>
+          <td><strong>CI / CD GitHub Actions</strong></td>
+          <td>Build de Release Android APK v1.42 (#42152737178) e v1.43 (#42154867494) com secrets seguros e paridade v2 scheme</td>
+          <td><a href="https://github.com/Wisterly/kyro-finance/actions" target="_blank" style="color:var(--accent);">GitHub Actions Workflow</a></td>
+          <td><span class="status-pass">✓ APROVADO</span></td>
+        </tr>
+        <tr>
+          <td><strong>Dispositivo Físico de Teste</strong></td>
+          <td>Comando <code>adb install -r</code> em aparelho conectado localmente</td>
+          <td>Aguardando pareamento de hardware ou emulador AVD</td>
+          <td><span class="status-pending">⏳ PENDENTE</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- SEÇÃO 1: COMPROVAÇÃO DA INTEGRAÇÃO LOCAL COM EMULADORES (PONTO 1) -->
+  <div class="card">
+    <h2>1. Comprovação da Integração com Emuladores Oficiais (03.1)</h2>
+    <p>
+      O ecossistema local de emuladores foi inicializado no projeto <code>demo-kyro-synthetic</code> demonstrando gravação autorizada e bloqueio estrito de acesso cross-tenant:
+    </p>
+    <ul>
+      <li><strong>Firebase Tools:</strong> Versão <code>15.35.0</code>.</li>
+      <li><strong>Auth Emulator Oficial:</strong> Host <code>127.0.0.1</code> na porta <code>9099</code>.</li>
+      <li><strong>Firestore Emulator Service:</strong> Host <code>127.0.0.1</code> na porta <code>8080</code>.</li>
+      <li><strong>Regra de Segurança Avaliada:</strong> <code>allow read, write: if request.auth.uid == userId;</code> no caminho Modelo B <code>users/{userId}/...</code>.</li>
+    </ul>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Operação Executada</th>
+          <th>Usuário Sintético</th>
+          <th>Caminho do Documento</th>
+          <th>HTTP Status</th>
+          <th>Resultado Observado</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Gravação Autorizada (Caminho da 03.3)</strong></td>
+          <td><code>alpha.user@kyro.synthetic</code><br>(UID: <code>PX6h3KfwRkwAlSwmXpbESospMUIi</code>)</td>
+          <td><code>users/PX6h3KfwRkwAlSwmXpbESospMUIi/transactions/tx-salario-01</code></td>
+          <td><code>200 OK</code></td>
+          <td><span class="status-pass">✓ AUTORIZADO</span> (Gravado R$ 5.000,00 em centavos BigInt)</td>
+        </tr>
+        <tr>
+          <td><strong>Tentativa Bloqueada (Cross-Tenant)</strong></td>
+          <td><code>beta.user@kyro.synthetic</code><br>(UID: <code>CN4rwKgcNdGgZFEDepJlvnRKgWxt</code>)</td>
+          <td><code>users/PX6h3KfwRkwAlSwmXpbESospMUIi/transactions/tx-ataque-02</code></td>
+          <td><code>403 FORBIDDEN</code></td>
+          <td><span class="status-pass">✓ BLOQUEADO</span> (<code>PERMISSION_DENIED</code>: UID divergente)</td>
+        </tr>
+      </tbody>
+    </table>
+    <p>
+      <em>Nota Técnica:</em> O arquivo <a href="./local_environment_evidence.json" target="_blank" style="color:var(--accent);">local_environment_evidence.json</a> permanece preservado como prova do modelo em memória isolado, enquanto o <a href="./emulator_integration_evidence.json" target="_blank" style="color:var(--accent);">emulator_integration_evidence.json</a> documenta a integração viva com as portas de serviço.
+    </p>
+  </div>
+
+  <!-- SEÇÃO 2: VÍNCULO DOS 51 TESTES À PR.043 (PONTO 2) -->
+  <div class="card">
+    <h2>2. Vínculo Rastreável dos 51 Testes ao Código da PR.043</h2>
+    <p>
+      O Ponto de Restauração <strong>PR.043</strong> corresponde ao commit <code>f61977cf73d5f2768e2da3c94b214daa7131386e</code>, verificado de forma limpa via <code>npm run test:engine</code> (duracão: 629ms, exit code: 0) e <code>npx tsc --noEmit</code> (0 erros):
+    </p>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Arquivo Canônico</th>
+          <th>Tamanho</th>
+          <th>Digest Criptográfico (SHA-256)</th>
+          <th>Cobertura de Testes</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
           <td><code>src/engine/money.ts</code></td>
-          <td>Aritmética pura em centavos inteiros (<code>BigInt</code>), parsing resiliente de moedas em padrão BRL, soma, subtração, e <em>split determinístico</em> que distribui o resto sem perda de 1 centavo.</td>
-          <td>15 Testes</td>
-          <td><span class="status-pass">✓ 100% APROVADO</span></td>
+          <td>4.796 bytes</td>
+          <td><code>0ce40f3e64e8a47ea3707e572c76857fcb9baf04fa587801a8be485cfcbef123</code></td>
+          <td>15 Testes (Parsing BRL, Float safety, Split justo, Wire)</td>
         </tr>
         <tr>
-          <td><strong>Calendar Engine</strong></td>
           <td><code>src/engine/calendar.ts</code></td>
-          <td>Fuso canônico <code>America/Fortaleza</code> (UTC-3), virada de dia contábil (00:00:00 e 23:59:59) e resolução de linguagem natural ("hoje", "ontem", "anteontem", "dia 15", "mês passado").</td>
-          <td>10 Testes</td>
-          <td><span class="status-pass">✓ 100% APROVADO</span></td>
+          <td>5.587 bytes</td>
+          <td><code>5536fa5f76cd28cf2e3972ec1b2c17e3f2c8219ffb87bb4c3749ef1dd372169d</code></td>
+          <td>10 Testes (Virada de dia, fuso UTC-3, linguagem natural)</td>
         </tr>
         <tr>
-          <td><strong>Ledger Engine</strong></td>
           <td><code>src/engine/ledger.ts</code></td>
-          <td>Modelo B com isolamento por UID, partidas dobradas (INCOME, EXPENSE, TRANSFER, REVERSAL), versionamento com fencing tokens, idempotência estrita por <code>requestId</code> e tombstones de 90 dias.</td>
-          <td>17 Testes</td>
-          <td><span class="status-pass">✓ 100% APROVADO</span></td>
+          <td>9.967 bytes</td>
+          <td><code>9616577a8d34d7788ce6034965b98d117cf14e7abd533a2af985063ec7a5c99e</code></td>
+          <td>17 Testes (Modelo B, partidas dobradas, idempotência, tombstones)</td>
         </tr>
         <tr>
-          <td><strong>Reports Engine</strong></td>
           <td><code>src/engine/reports.ts</code></td>
-          <td>Consolidação patrimonial em centavos BigInt, segregação estrita entre Realizado e Previsto/Recorrente e demonstrativo sintético por categorias.</td>
-          <td>9 Testes</td>
-          <td><span class="status-pass">✓ 100% APROVADO</span></td>
+          <td>5.186 bytes</td>
+          <td><code>020c9cb8ebce06d5064b062e7f4ff9036bb49f5e31b9a4cb21e6c6f75140a60e</code></td>
+          <td>9 Testes (Patrimônio líquido, segregação Realizado vs Previsto)</td>
+        </tr>
+        <tr>
+          <td><code>src/engine/engine.test.ts</code></td>
+          <td>12.443 bytes</td>
+          <td><code>b5e807e48c7dd0d4e93dc2be4059f76958bac1dae294772500be6c8f8bc67258</code></td>
+          <td>Suíte determinística completa (51 asserções)</td>
         </tr>
       </tbody>
     </table>
 
-    <p style="margin-top:1.5rem;">
-      <strong>Resultado Geral da Bateria 03.2:</strong> <code>51 de 51 testes unitários determinísticos aprovados (100%)</code> via comando <code>npm run test:engine</code> (<code>tsx src/engine/engine.test.ts</code>).
-    </p>
+    <h3>Política do Fuso Horário America/Fortaleza</h3>
+    <ul>
+      <li><strong>Definição da Política:</strong> Deslocamento estrito e linear de <strong>UTC−3 fixo</strong>, sem aplicação de horário de verão.</li>
+      <li><strong>Faixa de Datas Aplicável:</strong> Válido para toda a base operacional a partir de <strong>2019 em diante</strong> (ano de extinção do horário de verão no Brasil pelo Decreto Federal nº 9.772/2019), estendendo-se por todo o horizonte de projeções contínuas.</li>
+      <li><strong>Virada de Dia Comprovada:</strong> <code>02:59:59.999 UTC</code> em D+1 pertence à competência contábil do dia D (23:59:59.999 em Fortaleza).</li>
+    </ul>
   </div>
 
-  <!-- SEÇÃO 3: PRÓXIMO PASSO -->
+  <!-- SEÇÃO 3: ALINHAMENTO DA SUBETAPA 03.3 AOS 28 COMPONENTES (PONTO 3) -->
   <div class="card">
-    <h2>3. Próximo Passo — Subetapa 03.3: Integração dos Canais de Entrada</h2>
+    <h2>3. Alinhamento da Subetapa 03.3 aos 28 Componentes Canônicos</h2>
     <p>
-      Com o núcleo contábil em centavos BigInt aprovado, a <strong>Subetapa 03.3</strong> iniciará a conexão das portas de entrada mapeadas:
+      Para garantir convergência com o inventário dos 28 componentes da Fase 02, a <strong>Subetapa 03.3</strong> estruturará a migração em 3 fases graduais:
     </p>
-    <ul>
-      <li>Substituição gradual das escritas legadas com float em <code>src/firebase.ts</code> pelo <code>LedgerEngine</code>.</li>
-      <li>Conexão dos parsers de voz nativa e texto ao <code>CalendarEngine</code> sob <code>America/Fortaleza</code>.</li>
-      <li>Roteamento de webhooks do WhatsApp (Baileys e Evolution) para ingestão idempotente no Modelo B.</li>
-    </ul>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Fase de Integração</th>
+          <th>Componente Alvo</th>
+          <th>Ação Arquitetural</th>
+          <th>Critério de Reversão / Fallback</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Passo 1: Autenticação por UID</strong></td>
+          <td><code>api/chat.ts</code><br><code>api/webhook.ts</code></td>
+          <td>Exigência do cabeçalho <code>Authorization: Bearer</code> com verificação do token e extração do <code>uid</code> para autorização do Modelo B.</td>
+          <td>Se o token for inválido, rejeição fechada (401/403). Sem fallback inseguro.</td>
+        </tr>
+        <tr>
+          <td><strong>Passo 2: Encapsulamento de api/database.ts</strong></td>
+          <td><code>api/database.ts</code><br><code>src/engine/persistenceAdapter.ts</code></td>
+          <td>Substituição do mapa em memória solto por persistência transacional com o <code>LedgerEngine</code> no Firestore (<code>users/{uid}/...</code> em centavos BigInt).</td>
+          <td>Fallback temporário de leitura para <code>schemaVersion: 2</code> se o documento ainda não tiver sido migrado para centavos BigInt.</td>
+        </tr>
+        <tr>
+          <td><strong>Passo 3: Persistência Transacional</strong></td>
+          <td><code>src/firebase.ts</code><br><code>bot.cjs</code></td>
+          <td>Roteamento de transações de Web, APK e WhatsApp exclusivamente através do <code>LedgerEngine</code> com idempotência por <code>requestId</code>.</td>
+          <td>Fila de quarentena local (IndexedDB / SQLite) com retry idempotente em caso de falha de conexão.</td>
+        </tr>
+      </tbody>
+    </table>
   </div>
 
   <footer>

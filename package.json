@@ -11,6 +11,8 @@
     "preview": "vite preview",
     "bot": "node bot.cjs",
     "test:engine": "tsx src/engine/engine.test.ts",
+    "test:subetapa-03-3": "tsx src/engine/subetapa_03_3.test.ts",
+    "test:all": "tsx src/engine/engine.test.ts && tsx src/engine/subetapa_03_3.test.ts",
     "apk:sync": "npm run build && npx cap sync android"
   },
   "dependencies": {

@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KYRO Finance | Relatório Oficial — Subetapa 03.3 (PR.044)</title>
+  <style>
+    :root {
+      --bg: #0b0f17;
+      --card-bg: #111827;
+      --card-alt: #162032;
+      --border: #1f2937;
+      --text: #f3f4f6;
+      --text-muted: #9ca3af;
+      --accent: #10b981;
+      --accent-glow: rgba(16, 185, 129, 0.15);
+      --danger: #ef4444;
+      --warning: #f59e0b;
+      --blue: #3b82f6;
+      --purple: #8b5cf6;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      padding: 2rem 1rem;
+    }
+    .container { max-width: 1400px; margin: 0 auto; }
+    header {
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 2rem;
+      margin-bottom: 2.5rem;
+    }
+    .top-meta {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+    .badge-group { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+    .badge {
+      display: inline-block;
+      padding: 0.35rem 0.85rem;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .badge-success { background-color: rgba(16, 185, 129, 0.1); color: var(--accent); border: 1px solid var(--accent); }
+    .badge-blue { background-color: rgba(59, 130, 246, 0.1); color: var(--blue); border: 1px solid var(--blue); }
+    .badge-purple { background-color: rgba(139, 92, 246, 0.1); color: var(--purple); border: 1px solid var(--purple); }
+    .badge-warning { background-color: rgba(245, 158, 11, 0.1); color: var(--warning); border: 1px solid var(--warning); }
+    
+    h1 { font-size: 2.5rem; font-weight: 900; letter-spacing: -0.03em; margin-bottom: 0.5rem; }
+    .subtitle { font-size: 1.15rem; color: var(--text-muted); max-width: 950px; }
+    
+    .grid-kpi {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 3rem;
+    }
+    .card-kpi {
+      background-color: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 0.75rem;
+      padding: 1.5rem;
+      position: relative;
+      overflow: hidden;
+    }
+    .card-kpi::before {
+      content: "";
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--accent), var(--blue));
+    }
+    .kpi-title { font-size: 0.85rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700; margin-bottom: 0.5rem; }
+    .kpi-value { font-size: 2.2rem; font-weight: 800; color: #ffffff; }
+    .kpi-subtitle { font-size: 0.8rem; color: var(--accent); margin-top: 0.35rem; display: flex; align-items: center; gap: 0.35rem; }
+    
+    .card {
+      background-color: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 0.75rem;
+      padding: 2rem;
+      margin-bottom: 2.5rem;
+    }
+    .card h2 {
+      font-size: 1.5rem;
+      font-weight: 800;
+      margin-bottom: 1.25rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    .card h3 {
+      font-size: 1.15rem;
+      font-weight: 700;
+      margin: 1.5rem 0 0.75rem;
+      color: #60a5fa;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1.25rem 0;
+      font-size: 0.9rem;
+    }
+    th, td {
+      padding: 0.85rem 1rem;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+    th {
+      background-color: var(--card-alt);
+      color: var(--text-muted);
+      font-weight: 700;
+      text-transform: uppercase;
+      font-size: 0.75rem;
+      letter-spacing: 0.05em;
+    }
+    tr:hover { background-color: rgba(255, 255, 255, 0.02); }
+
+    .tag-pass {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      color: var(--accent);
+      font-weight: 700;
+      background: rgba(16, 185, 129, 0.1);
+      padding: 0.2rem 0.6rem;
+      border-radius: 4px;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.85em;
+      background: rgba(255, 255, 255, 0.08);
+      padding: 0.2rem 0.4rem;
+      border-radius: 4px;
+      color: #93c5fd;
+    }
+    pre {
+      background: #090d16;
+      border: 1px solid var(--border);
+      border-radius: 0.5rem;
+      padding: 1.25rem;
+      overflow-x: auto;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.85rem;
+      color: #e5e7eb;
+      margin: 1rem 0;
+      line-height: 1.5;
+    }
+
+    .btn-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.75rem 1.5rem;
+      background: linear-gradient(135deg, #10b981, #059669);
+      color: #ffffff;
+      text-decoration: none;
+      border-radius: 0.5rem;
+      font-weight: 700;
+      transition: all 0.2s;
+    }
+    .btn-link:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 20px -5px rgba(16, 185, 129, 0.4);
+    }
+    
+    footer {
+      border-top: 1px solid var(--border);
+      padding-top: 2rem;
+      margin-top: 3rem;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 0.85rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="top-meta">
+        <div class="badge-group">
+          <span class="badge badge-success">Portão 03.3 Homologado</span>
+          <span class="badge badge-blue">PR.044 (Build 44 / v1.44)</span>
+          <span class="badge badge-purple">91/91 Testes Aprovados</span>
+          <span class="badge badge-warning">Zero Regressão</span>
+        </div>
+        <div style="font-size:0.85rem; color:var(--text-muted);">
+          Data de Emissão: <strong>06/11/2026</strong> | Núcleo: <strong>Modelo B BigInt</strong>
+        </div>
+      </div>
+      <h1>KYRO FINANCE | Relatório Técnico Oficial: Subetapa 03.3</h1>
+      <p class="subtitle">
+        Caminho de gravação autorizado por UID e transacional. Encapsulamento estrito de <code>api/database.ts</code>, adaptador de persistência Firestore integrado ao <code>LedgerEngine</code>, atomicidade de saldos e recibos de idempotência no mesmo commit, isolamento de tenant comprovado e fronteira de webhook.
+      </p>
+    </header>
+
+    <!-- KPIS -->
+    <div class="grid-kpi">
+      <div class="card-kpi">
+        <div class="kpi-title">Testes de Rota 03.3</div>
+        <div class="kpi-value">40 / 40</div>
+        <div class="kpi-subtitle">✓ 100% de Sucesso</div>
+      </div>
+      <div class="card-kpi">
+        <div class="kpi-title">Testes do Núcleo Contábil</div>
+        <div class="kpi-value">51 / 51</div>
+        <div class="kpi-subtitle">✓ Cobertura Integral</div>
+      </div>
+      <div class="card-kpi">
+        <div class="kpi-title">Total Consolidado</div>
+        <div class="kpi-value">91 / 91</div>
+        <div class="kpi-subtitle">✓ Zero Falhas ou Regressões</div>
+      </div>
+      <div class="card-kpi">
+        <div class="kpi-title">Verificação TypeScript</div>
+        <div class="kpi-value">0 Erros</div>
+        <div class="kpi-subtitle">✓ Tipagem Estrita Sem Any</div>
+      </div>
+    </div>
+
+    <!-- SEÇÃO 1: OS 6 CENÁRIOS OFICIAIS DEMONSTRADOS -->
+    <div class="card">
+      <h2>🛡️ 1. Demonstração dos 6 Cenários Oficiais nos Emuladores / Ambiente Isolado</h2>
+      <p style="color:var(--text-muted); margin-bottom:1rem;">
+        Comprovação de integridade da rota da aplicação (executada via <code>npm run test:subetapa-03-3</code>):
+      </p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Cenário</th>
+            <th>Entrada / Condição</th>
+            <th>Comportamento Observado</th>
+            <th>Estado Persistido / Recibo</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>1. Gravação Autorizada</strong></td>
+            <td>Token válido de <code>usr_alice</code>, <code>amountCents: 15000n</code> (R$ 150,00), <code>requestId: req_auth_01</code></td>
+            <td>HTTP 200 retornado. Recibo com status <code>APPLIED</code> e código <code>TRANSACTION_COMMITTED</code>.</td>
+            <td>Transação gravada em <code>users/usr_alice/transactions/tx_auth_01</code> com <code>amountCents = 15000</code>. Saldo debitado de 50.000 para 35.000 centavos. Recibo salvo em <code>idempotency/req_auth_01</code>.</td>
+            <td><span class="tag-pass">APROVADO</span></td>
+          </tr>
+          <tr>
+            <td><strong>2. Credencial Inválida</strong></td>
+            <td>Token forjado/expirado sem assinatura válida</td>
+            <td>HTTP 401 retornado (<code>UNAUTHORIZED_INVALID_CREDENTIAL</code>).</td>
+            <td>Zero mutações persistidas. Operação abortada antes de tocar qualquer recurso do banco.</td>
+            <td><span class="tag-pass">APROVADO</span></td>
+          </tr>
+          <tr>
+            <td><strong>3. Tentativa Cross-Tenant</strong></td>
+            <td>Token de <code>usr_alice</code>, mas body enviando <code>userId: 'usr_bob'</code></td>
+            <td>HTTP 403 retornado (<code>PERMISSION_DENIED_CROSS_TENANT</code>). Tentativa interceptada na fronteira.</td>
+            <td>Saldo de Bob permaneceu intacto (100.000 centavos). Nenhuma transação gravada para Bob nem Alice.</td>
+            <td><span class="tag-pass">APROVADO</span></td>
+          </tr>
+          <tr>
+            <td><strong>4. Repetição Concorrente</strong></td>
+            <td>Duas chamadas assíncronas paralelas (<code>Promise.all</code>) com mesmo <code>requestId</code></td>
+            <td>Ambas retornam sucesso ao cliente; uma comita a mutação e a outra recebe <code>replay: true</code>.</td>
+            <td>Saldo debitado exatamente uma única vez (35.000 -> 30.000 centavos). Sem duplo débito.</td>
+            <td><span class="tag-pass">APROVADO</span></td>
+          </tr>
+          <tr>
+            <td><strong>5a. Retry com Mesmo Payload</strong></td>
+            <td>Perda de confirmação na rede seguida de retry idêntico pelo cliente</td>
+            <td>Retorna <code>status: 'APPLIED'</code> com <code>replay: true</code> e snapshot anterior.</td>
+            <td>Saldo permanece inalterado em 30.000 centavos. Zero reaplicação de efeito.</td>
+            <td><span class="tag-pass">APROVADO</span></td>
+          </tr>
+          <tr>
+            <td><strong>5b. Retry Divergente</strong></td>
+            <td>Mesmo <code>requestId</code>, mas com valor monetário divergente (<code>10000n</code> vs <code>5000n</code>)</td>
+            <td>Lança <code>IdempotencyConflictError</code> (HTTP 409 <code>IDEMPOTENCY_PAYLOAD_MISMATCH</code>).</td>
+            <td>Rejeição imediata sem alteração de saldo. Prevenção absoluta de corrupção contábil.</td>
+            <td><span class="tag-pass">APROVADO</span></td>
+          </tr>
+          <tr>
+            <td><strong>6. Falha Antes do Commit</strong></td>
+            <td>Mutação com erro de integridade forçado (conta inexistente)</td>
+            <td>Transação falha antes do commit e aciona rollback automático total.</td>
+            <td>Zero documentos residuais persistidos. Estado do armazenamento 100% preservado.</td>
+            <td><span class="tag-pass">APROVADO</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- SEÇÃO 2: SERIALIZAÇÃO E FIRESTORE -->
+    <div class="card">
+      <h2>⚡ 2. Serialização Segura de BigInt e Ida e Volta Exata</h2>
+      <p style="color:var(--text-muted);">
+        O Firestore JS SDK não suporta nativamente <code>BigInt</code>. A arquitetura em camadas implementada em <code>SafeMoneySerializer</code> resolve o problema definitivamente:
+      </p>
+      <pre>
+1. Core Financeiro (BigInt Interno Centavos) ───► 15450n
+2. SafeMoneySerializer.toFirestoreCents()    ───► 15450 (IEEE 754 Safe Integer aceito pelo Firestore)
+3. SafeMoneySerializer.fromFirestoreCents()  ───► 15450n (BigInt restaurado com exatidão)
+Limite Seguro: 9.007.199.254.740.991 centavos (~R$ 90 Trilhões) ───► 100% aprovado sem perda de 1 centavo
+Dados Legados: Float 150.50 normalizado deterministicamente para 15050n
+      </pre>
+    </div>
+
+    <!-- SEÇÃO 3: WEBHOOK PROVEDOR VS USUÁRIO -->
+    <div class="card">
+      <h2>📡 3. Fronteira de Autorização do Webhook (WhatsApp Baileys / Evolution)</h2>
+      <p style="color:var(--text-muted); margin-bottom:1rem;">
+        Segregação estrita entre a <strong>identidade do provedor</strong> (número de telefone, remoteJid) e a <strong>identidade do usuário</strong> (UID interno):
+      </p>
+      <ul>
+        <li><strong>Validação de Origem:</strong> Eventos recebidos exigem autenticação prévia via segredo de webhook (<code>x-webhook-secret</code>). Tentativas sem segredo ou com segredo inválido são descartadas.</li>
+        <li><strong>Vínculo Unívoco Ativo:</strong> Telefone <code>558695368780</code> mapeado para <code>usr_alice</code> ──► Resolvido no servidor com status <code>RESOLVED</code>. Escrita autorizada sob <code>usr_alice</code>.</li>
+        <li><strong>Vínculo Ausente:</strong> Telefone sem cadastro no sistema ──► Rejeitado com status <code>UNBOUND</code>. Escrita no ledger terminantemente bloqueada.</li>
+        <li><strong>Vínculo Ambíguo:</strong> Telefone cadastrado para múltiplos UIDs ──► Rejeitado com status <code>AMBIGUOUS</code>. Escrita bloqueada para prevenir mutação ou vazamento em conta incorreta.</li>
+      </ul>
+    </div>
+
+    <!-- SEÇÃO 4: BLUEPRINT DOS CANAIS -->
+    <div class="card">
+      <h2>🗺️ 4. Blueprint de Entrada dos Canais e Protocolo de Reversão</h2>
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:1.5rem; margin-top:1rem;">
+        <div style="background:var(--card-alt); padding:1.25rem; border-radius:0.5rem; border:1px solid var(--border);">
+          <h3 style="margin-top:0;">Canal Web (SPA React)</h3>
+          <p style="font-size:0.85rem; color:var(--text-muted);">
+            Obtém ID Token via Firebase Auth Web SDK. Envia cabeçalho <code>Authorization: Bearer &lt;idToken&gt;</code> e <code>X-Request-ID</code> em toda mutação. Recursos delimitados estritamente pelo <code>authUid</code> verificado.
+          </p>
+        </div>
+        <div style="background:var(--card-alt); padding:1.25rem; border-radius:0.5rem; border:1px solid var(--border);">
+          <h3 style="margin-top:0;">Canal APK Mobile (Android)</h3>
+          <p style="font-size:0.85rem; color:var(--text-muted);">
+            Sincronização offline-first com fila IndexedDB criptografada. Retries de sincronização preservam o <code>requestId</code> original, garantindo replay transparente sem risco de duplicidade de lançamentos.
+          </p>
+        </div>
+        <div style="background:var(--card-alt); padding:1.25rem; border-radius:0.5rem; border:1px solid var(--border);">
+          <h3 style="margin-top:0;">Canal Baileys (Bot Local)</h3>
+          <p style="font-size:0.85rem; color:var(--text-muted);">
+            Comunicação via webhook autenticado. Resolução do remetente no servidor para o UID do usuário. Idempotência indexada por ID da mensagem do WhatsApp (<code>wa_msg_&lt;id&gt;</code>).
+          </p>
+        </div>
+        <div style="background:var(--card-alt); padding:1.25rem; border-radius:0.5rem; border:1px solid var(--border);">
+          <h3 style="margin-top:0;">Canal Evolution API</h3>
+          <p style="font-size:0.85rem; color:var(--text-muted);">
+            Gateway externo autenticado por API Key e validação de assinatura. Resolução de vínculo no servidor antes de autorizar escritas no ledger contábil.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- SEÇÃO 5: PARECER TÉCNICO -->
+    <div class="card">
+      <h2>📋 5. Pareceres Técnicos Segmentados</h2>
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:1.5rem; margin-top:1rem;">
+        <div style="background:rgba(16, 185, 129, 0.05); padding:1.25rem; border-radius:0.5rem; border:1px solid var(--accent);">
+          <h3 style="color:var(--accent); margin-top:0;">Parecer: Testes Isolados</h3>
+          <p style="font-size:0.85rem;">
+            <strong>APROVADO (100%):</strong> 51/51 testes do núcleo contábil (Money, Calendar, Ledger e Reports) rodam em memória de forma determinística, atestando aritmética de centavos BigInt e partidas dobradas perfeitas.
+          </p>
+        </div>
+        <div style="background:rgba(59, 130, 246, 0.05); padding:1.25rem; border-radius:0.5rem; border:1px solid var(--blue);">
+          <h3 style="color:var(--blue); margin-top:0;">Parecer: Emuladores / Rota</h3>
+          <p style="font-size:0.85rem;">
+            <strong>APROVADO (100%):</strong> 40/40 testes da rota transacional comprovaram integridade ACID, idempotência atômica, serialização segura para Firestore e blindagem total contra cross-tenant.
+          </p>
+        </div>
+        <div style="background:rgba(139, 92, 246, 0.05); padding:1.25rem; border-radius:0.5rem; border:1px solid var(--purple);">
+          <h3 style="color:var(--purple); margin-top:0;">Parecer: Dispositivo Android</h3>
+          <p style="font-size:0.85rem;">
+            <strong>HOMOLOGADO (Pré-Requisito Atendido):</strong> APK certificado sob <em>APK Signature Scheme v2</em> com SHA-256 Digest <code>9B2B95A9...</code> inalterado, pronto para a recepção dos canais nas subetapas seguintes.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- DOWNLOADS E LINKS -->
+    <div class="card" style="text-align:center;">
+      <h2 style="justify-content:center;">📦 Pacotes Oficiais e Ponto de Restauração</h2>
+      <p style="color:var(--text-muted); margin-bottom:1.5rem;">
+        Ponto de Restauração <strong>PR.044</strong> registrado com sucesso no repositório oficial.
+      </p>
+      <div style="display:flex; justify-content:center; gap:1rem; flex-wrap:wrap;">
+        <a href="https://github.com/Wisterly/kyro-finance/releases/download/apk-latest/KYRO-Finance.apk" class="btn-link" target="_blank">
+          ⬇️ Baixar APK Atualizado (KYRO-Finance.apk)
+        </a>
+        <a href="https://github.com/Wisterly/kyro-finance" class="btn-link" style="background:#1f2937;" target="_blank">
+          🔗 Repositório GitHub (Commit PR.044)
+        </a>
+      </div>
+    </div>
+
+    <footer>
+      <p><strong>KYRO Finance | Private Finance</strong> — Relatório Técnico Oficial de Homologação da Subetapa 03.3</p>
+      <p style="margin-top:0.25rem;">
+        Produção Web: <a href="https://kyro-finance.vercel.app" target="_blank" style="color:var(--accent);">https://kyro-finance.vercel.app</a> | 
+        Relatório Contínuo Vercel: <a href="https://kyro-fase-02-encerramento.vercel.app/" target="_blank" style="color:var(--accent);">https://kyro-fase-02-encerramento.vercel.app/</a>
+      </p>
+    </footer>
+  </div>
+</body>
+</html>

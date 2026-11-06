@@ -7,3 +7,7 @@ export * from './money';
 export * from './calendar';
 export * from './ledger';
 export * from './reports';
+export * from '../services/SafeMoneySerializer';
+export * from '../services/authBoundary';
+export * from '../services/firestoreAdapter';
+export * from '../services/storeClient';

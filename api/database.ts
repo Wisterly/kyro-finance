@@ -1,660 +1,193 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { initializeApp, getApps, getApp } from 'firebase/app';
-import { 
-  getFirestore, 
-  collection, 
-  getDocs, 
-  getDoc,
-  doc, 
-  setDoc, 
-  deleteDoc, 
-  query, 
-  orderBy, 
-  limit 
-} from 'firebase/firestore';
+import { verifyAuthToken, enforceTenantBoundary, CrossTenantViolationError, AuthenticationError } from '../src/services/authBoundary';
+import { FirestoreLedgerAdapter, IdempotencyConflictError } from '../src/services/firestoreAdapter';
+import { TransactionalStoreMock } from '../src/services/storeClient';
+import { SafeMoneySerializer } from '../src/services/SafeMoneySerializer';
+import { parseToCents } from '../src/engine/money';
 
-// ==============================================================
-// BANCO DE DADOS CENTRALIZADO E UNIVERSAL DO KYRO FINANCE (24H)
-// Compartilhado automaticamente entre todos os Celulares, PCs e IPs
-// ==============================================================
-
-// Inicialização do Firebase Firestore no Backend da Vercel
-let db: any = null;
-const firebaseConfig = {
-  apiKey: process.env.VITE_FIREBASE_API_KEY || process.env.FIREBASE_API_KEY,
-  authDomain: process.env.VITE_FIREBASE_AUTH_DOMAIN || process.env.FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.VITE_FIREBASE_PROJECT_ID || process.env.FIREBASE_PROJECT_ID,
-  storageBucket: process.env.VITE_FIREBASE_STORAGE_BUCKET || process.env.FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.VITE_FIREBASE_MESSAGING_SENDER_ID || process.env.FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.VITE_FIREBASE_APP_ID || process.env.FIREBASE_APP_ID
-};
-
-if (firebaseConfig.apiKey && firebaseConfig.projectId) {
-  try {
-    const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
-    db = getFirestore(app);
-  } catch (e) {
-    console.warn('[Central Database] Firestore init warning:', e);
-  }
-}
-
-// Memória Global em Nuvem compartilhada no Edge
-const DEFAULT_AI_RULES = [
-  'Na descrição de lançamentos, registrar apenas o item específico mencionado (ex: Lanche) e nunca mesclar com barras a categoria (ex: Alimentação / Lanche). A categoria fica no campo Categoria.'
-];
-
-const DEFAULT_WHATSAPP_CONFIG = {
-  inviteLink: 'https://chat.whatsapp.com/DQNscf09vX5DljtvTnx6YK',
-  groupJid: '120363411839303797@g.us',
-  groupName: 'Finanças KYRO',
-  lockedByUser: true,
-  phoneNumber: '558695368780',
-  connected: true
-};
-
-const DEFAULT_CHAT_CONFIG = {
-  formattingPreference: 'tabelas',
-  customPrompt: ''
-};
-
+// Armazenamento Central Transacional no Servidor (Singleton com semântica de isolamento por Tenant)
 const globalStore: any = global;
-if (!globalStore.__KYRO_CENTRAL_DB__) {
-  globalStore.__KYRO_CENTRAL_DB__ = {
-    transactions: [],
-    deletedIds: new Set<string>(),
-    recurringExpenses: [],
-    creditCards: [],
-    userAiRules: [...DEFAULT_AI_RULES],
-    whatsappConfig: { ...DEFAULT_WHATSAPP_CONFIG },
-    chatConfig: { ...DEFAULT_CHAT_CONFIG },
-    botServerUrl: '',
-    baileysCreds: null,
-    initialized: false,
-    lastUpdated: new Date().toISOString()
-  };
-} else {
-  if (!globalStore.__KYRO_CENTRAL_DB__.deletedIds) {
-    globalStore.__KYRO_CENTRAL_DB__.deletedIds = new Set<string>();
-  }
-  if (!globalStore.__KYRO_CENTRAL_DB__.userAiRules || globalStore.__KYRO_CENTRAL_DB__.userAiRules.length === 0) {
-    globalStore.__KYRO_CENTRAL_DB__.userAiRules = [...DEFAULT_AI_RULES];
-  }
-  if (!globalStore.__KYRO_CENTRAL_DB__.whatsappConfig) {
-    globalStore.__KYRO_CENTRAL_DB__.whatsappConfig = { ...DEFAULT_WHATSAPP_CONFIG };
-  }
-  if (!globalStore.__KYRO_CENTRAL_DB__.chatConfig) {
-    globalStore.__KYRO_CENTRAL_DB__.chatConfig = { ...DEFAULT_CHAT_CONFIG };
-  }
-  if (globalStore.__KYRO_CENTRAL_DB__.botServerUrl === undefined) {
-    globalStore.__KYRO_CENTRAL_DB__.botServerUrl = 'https://kyro-finance-bot.onrender.com';
-  }
+if (!globalStore.__KYRO_SECURE_STORE__) {
+  globalStore.__KYRO_SECURE_STORE__ = new TransactionalStoreMock();
 }
-
-// Espelhamento assíncrono para o robô com disco persistente no Render
-const syncToRenderBot = (payload: any) => {
-  const botUrl = globalStore.__KYRO_CENTRAL_DB__?.botServerUrl || 'https://kyro-finance-bot.onrender.com';
-  if (!botUrl) return;
-  fetch(`${botUrl.replace(/\/$/, '')}/api/database`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
-  }).catch(() => {});
-};
+export const getSecureStore = (): TransactionalStoreMock => globalStore.__KYRO_SECURE_STORE__;
+export const getLedgerAdapter = (): FirestoreLedgerAdapter => new FirestoreLedgerAdapter(getSecureStore());
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  // Configuração de cabeçalhos de segurança e CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, proxy-revalidate');
-  res.setHeader('Pragma', 'no-cache');
-  res.setHeader('Expires', '0');
-  res.setHeader('Surrogate-Control', 'no-store');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Request-ID');
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
 
+  // 1. Verificação da Fronteira de Autenticação
+  const authHeader = req.headers.authorization;
+  const authContext = await verifyAuthToken(authHeader);
+
+  if (!authContext.isValid || !authContext.uid) {
+    return res.status(401).json({
+      success: false,
+      error: authContext.error || 'Acesso não autorizado: credencial inválida ou ausente.',
+      code: 'UNAUTHORIZED_INVALID_CREDENTIAL'
+    });
+  }
+
+  const authUid = authContext.uid;
+
+  // 2. Verificação de Tentativa de Cross-Tenant (Segurança contra personificação)
+  const incomingUid = (req.body?.userId || req.query?.userId) as string | undefined;
+  try {
+    enforceTenantBoundary(authContext, incomingUid);
+  } catch (err: any) {
+    if (err instanceof CrossTenantViolationError) {
+      return res.status(403).json({
+        success: false,
+        error: err.message,
+        code: err.code
+      });
+    }
+    return res.status(401).json({
+      success: false,
+      error: err.message,
+      code: 'UNAUTHORIZED'
+    });
+  }
+
   // ==========================================================
-  // GET: RECUPERA O BANCO CENTRAL COMPARTILHADO
+  // GET: RECUPERA RECURSOS DELIMITADOS ESTREITAMENTE POR AUTH UID
   // ==========================================================
   if (req.method === 'GET') {
     try {
-      let transactions: any[] = [...(globalStore.__KYRO_CENTRAL_DB__.transactions || [])];
-      const deletedSet: Set<string> = globalStore.__KYRO_CENTRAL_DB__.deletedIds || new Set();
-
-      // Se o Firestore estiver ativo, busca a coleção oficial 'kyro_transactions'
-      if (db) {
-        try {
-          const q = query(collection(db, 'kyro_transactions'), orderBy('date', 'desc'), limit(200));
-          const snapshot = await getDocs(q);
-          if (!snapshot.empty) {
-            const firestoreTxs: any[] = [];
-            snapshot.forEach(d => {
-              const data = d.data();
-              const id = String(d.id || data.id);
-              // SE O ID ESTIVER NA LISTA DE EXCLUÍDOS, IGNORA SUMARIAMENTE
-              if (!deletedSet.has(id)) {
-                firestoreTxs.push({ id, ...data });
-              }
-            });
-            transactions = firestoreTxs;
-            globalStore.__KYRO_CENTRAL_DB__.transactions = firestoreTxs;
-          } else if (globalStore.__KYRO_CENTRAL_DB__.initialized) {
-            // Se o Firestore está vazio e o banco já foi inicializado, mantém vazio!
-            transactions = [];
-            globalStore.__KYRO_CENTRAL_DB__.transactions = [];
-          }
-
-          // Busca cartões de crédito e despesas recorrentes persistidas no Firestore
-          try {
-            const cardsSnap = await getDoc(doc(db, 'kyro_settings', 'credit_cards'));
-            if (cardsSnap.exists() && Array.isArray(cardsSnap.data()?.cards)) {
-              globalStore.__KYRO_CENTRAL_DB__.creditCards = cardsSnap.data().cards;
-            }
-            const recSnap = await getDoc(doc(db, 'kyro_settings', 'recurring_expenses'));
-            if (recSnap.exists() && Array.isArray(recSnap.data()?.expenses)) {
-              globalStore.__KYRO_CENTRAL_DB__.recurringExpenses = recSnap.data().expenses;
-            }
-          } catch (settingsErr) {}
-        } catch (err) {
-          console.warn('[Central DB GET Firestore]:', err);
-        }
-      }
-
-      // Se o Firestore ou memória local estiverem vazios, sincroniza com o banco persistente do Render
-      if (transactions.length === 0) {
-        try {
-          const cloudBotUrl = globalStore.__KYRO_CENTRAL_DB__.botServerUrl || 'https://kyro-finance-bot.onrender.com';
-          const botRes = await fetch(`${cloudBotUrl.replace(/\/$/, '')}/api/database`, {
-            signal: AbortSignal.timeout(3000)
-          });
-          if (botRes.ok) {
-            const botData: any = await botRes.json();
-            if (Array.isArray(botData.transactions) && botData.transactions.length > 0) {
-              const cleanBotTxs = botData.transactions.filter((t: any) => !deletedSet.has(String(t.id)));
-              if (cleanBotTxs.length > 0) {
-                transactions = cleanBotTxs;
-                globalStore.__KYRO_CENTRAL_DB__.transactions = cleanBotTxs;
-                globalStore.__KYRO_CENTRAL_DB__.initialized = true;
-              }
-            }
-            if (Array.isArray(botData.creditCards)) {
-              globalStore.__KYRO_CENTRAL_DB__.creditCards = botData.creditCards;
-            }
-            if (Array.isArray(botData.recurringExpenses)) {
-              globalStore.__KYRO_CENTRAL_DB__.recurringExpenses = botData.recurringExpenses;
-            }
-          }
-        } catch (botErr) {
-          console.warn('[Central DB GET Render sync]:', botErr);
-        }
-      }
-
-      // Filtra transações deletadas
-      transactions = transactions.filter((t: any) => !deletedSet.has(String(t.id)));
+      const adapter = getLedgerAdapter();
+      const transactions = await adapter.listUserTransactions(authUid);
 
       return res.status(200).json({
         success: true,
-        transactions,
-        deletedIds: Array.from(deletedSet),
-        userAiRules: globalStore.__KYRO_CENTRAL_DB__.userAiRules || DEFAULT_AI_RULES,
-        whatsappConfig: globalStore.__KYRO_CENTRAL_DB__.whatsappConfig || DEFAULT_WHATSAPP_CONFIG,
-        chatConfig: globalStore.__KYRO_CENTRAL_DB__.chatConfig || DEFAULT_CHAT_CONFIG,
-        botServerUrl: globalStore.__KYRO_CENTRAL_DB__.botServerUrl || '',
-        hasBaileysCreds: !!globalStore.__KYRO_CENTRAL_DB__.baileysCreds,
-        recurringExpenses: globalStore.__KYRO_CENTRAL_DB__.recurringExpenses || [],
-        creditCards: globalStore.__KYRO_CENTRAL_DB__.creditCards || [],
-        lastUpdated: globalStore.__KYRO_CENTRAL_DB__.lastUpdated,
-        source: db ? 'firestore_central' : 'cloud_global_memory'
+        userId: authUid,
+        count: transactions.length,
+        transactions: transactions.map(tx => ({
+          ...tx,
+          amountCents: tx.amountCents.toString(), // Wire string segura
+          amount: Number(tx.amountCents) / 100 // Compatibilidade legada
+        })),
+        source: 'firestore_tenant_isolated'
       });
     } catch (e: any) {
-      return res.status(500).json({ error: 'Falha ao buscar banco central', details: e?.message });
+      return res.status(500).json({
+        success: false,
+        error: 'Falha ao recuperar dados do tenant',
+        details: e?.message
+      });
     }
   }
 
   // ==========================================================
-  // POST: SALVA, AJUSTA OU REMOVE NO BANCO CENTRAL
+  // POST: OPERAÇÕES CONTÁBEIS AUTORIZADAS E TRANSACIONAIS
   // ==========================================================
   if (req.method === 'POST') {
     try {
       const payload = req.body || {};
       const action = payload.action;
+      const requestId = (req.headers['x-request-id'] as string) || payload.requestId;
 
-      // 0. Limpeza Total de Transações (clear_all / delete_all_transactions)
-      if (action === 'clear_all' || action === 'delete_all_transactions') {
-        const currentList = globalStore.__KYRO_CENTRAL_DB__.transactions || [];
-        for (const t of currentList) {
-          if (t?.id) globalStore.__KYRO_CENTRAL_DB__.deletedIds.add(String(t.id));
-        }
-        globalStore.__KYRO_CENTRAL_DB__.transactions = [];
-        globalStore.__KYRO_CENTRAL_DB__.initialized = true;
-        globalStore.__KYRO_CENTRAL_DB__.lastUpdated = new Date().toISOString();
-
-        if (db) {
-          try {
-            const q = query(collection(db, 'kyro_transactions'), limit(300));
-            const snap = await getDocs(q);
-            for (const d of snap.docs) {
-              await deleteDoc(d.ref);
-            }
-          } catch (e) {
-            console.warn('[Central DB clear Firestore]:', e);
-          }
-        }
-
-        return res.status(200).json({
-          success: true,
-          message: 'Todas as transações foram excluídas permanentemente do banco central.',
-          transactions: []
+      if (!requestId) {
+        return res.status(400).json({
+          success: false,
+          error: 'Cabeçalho X-Request-ID ou campo requestId no corpo é obrigatório para garantir idempotência.',
+          code: 'MISSING_REQUEST_ID'
         });
       }
 
-      // 1. Sincronização Completa de Transações (sync_transactions / sync_all)
-      if (action === 'sync_all' || action === 'sync_transactions') {
-        const incoming = Array.isArray(payload.transactions) ? payload.transactions : [];
-        const deletedSet: Set<string> = globalStore.__KYRO_CENTRAL_DB__.deletedIds || new Set();
-
-        if (Array.isArray(payload.deletedIds)) {
-          payload.deletedIds.forEach((id: string) => deletedSet.add(String(id)));
-        }
-
-        // Filtra os que já foram marcados como deletados
-        const cleanIncoming = incoming.filter((t: any) => !deletedSet.has(String(t.id)));
-
-        globalStore.__KYRO_CENTRAL_DB__.transactions = cleanIncoming;
-        globalStore.__KYRO_CENTRAL_DB__.initialized = true;
-        globalStore.__KYRO_CENTRAL_DB__.lastUpdated = new Date().toISOString();
-
-        if (db) {
-          if (cleanIncoming.length === 0 && incoming.length === 0) {
-            try {
-              const q = query(collection(db, 'kyro_transactions'), limit(300));
-              const snap = await getDocs(q);
-              for (const d of snap.docs) await deleteDoc(d.ref);
-            } catch (e) {}
-          } else {
-            for (const tx of cleanIncoming) {
-              if (tx?.id) {
-                try {
-                  await setDoc(doc(db, 'kyro_transactions', String(tx.id)), tx, { merge: true });
-                } catch (e) {}
-              }
-            }
-          }
-        }
-
-        if (Array.isArray(payload.recurringExpenses)) {
-          globalStore.__KYRO_CENTRAL_DB__.recurringExpenses = payload.recurringExpenses;
-          if (db) {
-            try {
-              await setDoc(doc(db, 'kyro_settings', 'recurring_expenses'), {
-                expenses: payload.recurringExpenses,
-                updatedAt: new Date().toISOString()
-              }, { merge: true });
-            } catch (e) {}
-          }
-        }
-        if (Array.isArray(payload.creditCards)) {
-          globalStore.__KYRO_CENTRAL_DB__.creditCards = payload.creditCards;
-          if (db) {
-            try {
-              await setDoc(doc(db, 'kyro_settings', 'credit_cards'), {
-                cards: payload.creditCards,
-                updatedAt: new Date().toISOString()
-              }, { merge: true });
-            } catch (e) {}
-          }
-        }
-        if (Array.isArray(payload.userAiRules)) {
-          globalStore.__KYRO_CENTRAL_DB__.userAiRules = payload.userAiRules;
-        }
-
-        // Espelha no robô com disco persistente no Render
-        syncToRenderBot(payload);
-
-        return res.status(200).json({
-          success: true,
-          message: 'Banco central sincronizado.',
-          count: globalStore.__KYRO_CENTRAL_DB__.transactions.length,
-          lastUpdated: globalStore.__KYRO_CENTRAL_DB__.lastUpdated
+      // Garante conta padrão se ainda não existir
+      const adapter = getLedgerAdapter();
+      const accountId = payload.accountId || 'acc_default';
+      const existingAcc = await adapter.getAccount(authUid, accountId);
+      if (!existingAcc) {
+        await adapter.seedAccount({
+          id: accountId,
+          userId: authUid,
+          name: 'Conta Principal',
+          balanceCents: 0,
+          rev: 1,
+          fencingToken: 1,
+          updatedAt: new Date().toISOString()
         });
       }
 
-      // 2. Salvar ou Ajustar Transação Individual (save_transaction)
+      // Ação: Gravar Transação Individual (save_transaction)
       if (action === 'save_transaction') {
-        const tx = payload.transaction;
-        if (!tx || !tx.id) {
-          return res.status(400).json({ error: 'Transação inválida ou sem id.' });
-        }
-
-        const txId = String(tx.id);
-        // Se a transação foi recriada/salva, remove da lista de deletados
-        globalStore.__KYRO_CENTRAL_DB__.deletedIds.delete(txId);
-
-        const list = globalStore.__KYRO_CENTRAL_DB__.transactions || [];
-        const index = list.findIndex((t: any) => String(t.id) === txId);
-
-        if (index >= 0) {
-          list[index] = { ...list[index], ...tx };
-        } else {
-          list.unshift(tx);
-        }
-
-        globalStore.__KYRO_CENTRAL_DB__.transactions = list;
-        globalStore.__KYRO_CENTRAL_DB__.initialized = true;
-        globalStore.__KYRO_CENTRAL_DB__.lastUpdated = new Date().toISOString();
-
-        if (db) {
-          try {
-            await setDoc(doc(db, 'kyro_transactions', txId), tx, { merge: true });
-          } catch (e) {}
-        }
-
-        syncToRenderBot({ action: 'save_transaction', transaction: tx });
-
-        return res.status(200).json({
-          success: true,
-          message: 'Transação salva no banco central.',
-          transaction: tx
-        });
-      }
-
-      // 3. Excluir Transação Individual (delete_transaction)
-      if (action === 'delete_transaction') {
-        const txId = String(payload.id);
-        if (!txId) return res.status(400).json({ error: 'Id obrigatório' });
-
-        globalStore.__KYRO_CENTRAL_DB__.deletedIds.add(txId);
-        globalStore.__KYRO_CENTRAL_DB__.transactions = (globalStore.__KYRO_CENTRAL_DB__.transactions || [])
-          .filter((t: any) => String(t.id) !== txId);
-        globalStore.__KYRO_CENTRAL_DB__.lastUpdated = new Date().toISOString();
-
-        if (db) {
-          try {
-            await deleteDoc(doc(db, 'kyro_transactions', txId));
-          } catch (e) {}
-        }
-
-        syncToRenderBot({ action: 'delete_transaction', id: txId });
-
-        return res.status(200).json({
-          success: true,
-          message: `Transação ${txId} removida do banco central permanentemente.`
-        });
-      }
-
-      // 4. Excluir Múltiplas Transações em Lote (delete_transactions)
-      if (action === 'delete_transactions') {
-        const ids = Array.isArray(payload.ids) ? payload.ids.map(String) : [];
-        if (ids.length === 0) return res.status(400).json({ error: 'Lista de ids obrigatória' });
-
-        for (const id of ids) {
-          globalStore.__KYRO_CENTRAL_DB__.deletedIds.add(id);
-        }
-
-        globalStore.__KYRO_CENTRAL_DB__.transactions = (globalStore.__KYRO_CENTRAL_DB__.transactions || [])
-          .filter((t: any) => !ids.includes(String(t.id)));
-        globalStore.__KYRO_CENTRAL_DB__.lastUpdated = new Date().toISOString();
-
-        if (db) {
-          for (const id of ids) {
-            try {
-              await deleteDoc(doc(db, 'kyro_transactions', id));
-            } catch (e) {}
-          }
-        }
-
-        syncToRenderBot({ action: 'delete_transactions', ids });
-
-        return res.status(200).json({
-          success: true,
-          message: `${ids.length} transações removidas do banco central permanentemente.`
-        });
-      }
-
-      // 5. Salvar Nova Regra de IA Aprendida (save_ai_rule)
-      if (action === 'save_ai_rule') {
-        const rule = typeof payload.rule === 'string' ? payload.rule.trim() : '';
-        if (!rule) return res.status(400).json({ error: 'Regra obrigatória' });
-
-        const currentRules: string[] = globalStore.__KYRO_CENTRAL_DB__.userAiRules || [];
-        if (!currentRules.includes(rule)) {
-          currentRules.push(rule);
-        }
-        globalStore.__KYRO_CENTRAL_DB__.userAiRules = currentRules;
-        globalStore.__KYRO_CENTRAL_DB__.lastUpdated = new Date().toISOString();
-
-        if (db) {
-          try {
-            await setDoc(doc(db, 'kyro_settings', 'ai_rules'), {
-              rules: currentRules,
-              updatedAt: new Date().toISOString()
-            }, { merge: true });
-          } catch (e) {}
-        }
-
-        return res.status(200).json({
-          success: true,
-          message: 'Regra de IA memorizada no banco central.',
-          userAiRules: currentRules
-        });
-      }
-
-      // 6. Sincronizar / Atualizar Todas as Regras de IA (sync_ai_rules)
-      if (action === 'sync_ai_rules') {
-        const rules = Array.isArray(payload.rules) ? payload.rules.map((r: any) => String(r).trim()).filter(Boolean) : [];
-        globalStore.__KYRO_CENTRAL_DB__.userAiRules = rules;
-        globalStore.__KYRO_CENTRAL_DB__.lastUpdated = new Date().toISOString();
-
-        if (db) {
-          try {
-            await setDoc(doc(db, 'kyro_settings', 'ai_rules'), {
-              rules,
-              updatedAt: new Date().toISOString()
-            }, { merge: true });
-          } catch (e) {}
-        }
-
-        return res.status(200).json({
-          success: true,
-          message: 'Regras de IA sincronizadas no banco central.',
-          userAiRules: rules
-        });
-      }
-
-      // 7. Remover Regra de IA (delete_ai_rule)
-      if (action === 'delete_ai_rule') {
-        const ruleToDelete = typeof payload.rule === 'string' ? payload.rule.trim() : '';
-        const currentRules: string[] = (globalStore.__KYRO_CENTRAL_DB__.userAiRules || [])
-          .filter((r: string) => r !== ruleToDelete);
+        const rawTx = payload.transaction || payload;
+        const txId = String(rawTx.id || `tx_${Date.now()}`);
         
-        globalStore.__KYRO_CENTRAL_DB__.userAiRules = currentRules;
-        globalStore.__KYRO_CENTRAL_DB__.lastUpdated = new Date().toISOString();
-
-        if (db) {
-          try {
-            await setDoc(doc(db, 'kyro_settings', 'ai_rules'), {
-              rules: currentRules,
-              updatedAt: new Date().toISOString()
-            }, { merge: true });
-          } catch (e) {}
+        let amountCents: bigint;
+        if (rawTx.amountCents !== undefined && rawTx.amountCents !== null) {
+          amountCents = SafeMoneySerializer.fromWire(rawTx.amountCents);
+        } else if (rawTx.amount !== undefined && rawTx.amount !== null) {
+          amountCents = parseToCents(rawTx.amount);
+        } else {
+          return res.status(400).json({
+            success: false,
+            error: 'Valor monetário (amountCents ou amount) é obrigatório.',
+            code: 'INVALID_AMOUNT'
+          });
         }
 
-        return res.status(200).json({
-          success: true,
-          message: 'Regra removida do banco central.',
-          userAiRules: currentRules
-        });
-      }
+        const type = (rawTx.type === 'Receita' || rawTx.type === 'INCOME') ? 'INCOME' : 'EXPENSE';
 
-      // 8. Salvar e Sincronizar Configuração do WhatsApp entre Desktop e Mobile (save_whatsapp_config)
-      if (action === 'save_whatsapp_config') {
-        const nextWa = {
-          ...(globalStore.__KYRO_CENTRAL_DB__.whatsappConfig || DEFAULT_WHATSAPP_CONFIG),
-          ...(payload.whatsappConfig || {}),
-          updatedAt: new Date().toISOString()
-        };
-        globalStore.__KYRO_CENTRAL_DB__.whatsappConfig = nextWa;
-        globalStore.__KYRO_CENTRAL_DB__.lastUpdated = new Date().toISOString();
+        try {
+          const receipt = await adapter.commitTransaction(authUid, {
+            requestId,
+            id: txId,
+            type,
+            amountCents,
+            sourceAccountId: type === 'EXPENSE' ? accountId : undefined,
+            targetAccountId: type === 'INCOME' ? accountId : undefined,
+            category: rawTx.category || 'Geral',
+            description: rawTx.description || 'Lançamento via API Segura',
+            date: rawTx.date,
+            isEstimated: !!rawTx.isEstimated,
+            fencingToken: payload.fencingToken || 1
+          });
 
-        if (db) {
-          try {
-            await setDoc(doc(db, 'kyro_settings', 'whatsapp_config'), nextWa, { merge: true });
-          } catch (e) {}
-        }
-
-        return res.status(200).json({
-          success: true,
-          message: 'Configuração do WhatsApp salva e sincronizada entre Desktop e Mobile.',
-          whatsappConfig: nextWa
-        });
-      }
-
-      // 9. Salvar e Sincronizar Configuração do Chat Gemini entre Desktop e Mobile (save_chat_config)
-      if (action === 'save_chat_config') {
-        const nextChat = {
-          ...(globalStore.__KYRO_CENTRAL_DB__.chatConfig || DEFAULT_CHAT_CONFIG),
-          ...(payload.chatConfig || {}),
-          updatedAt: new Date().toISOString()
-        };
-        globalStore.__KYRO_CENTRAL_DB__.chatConfig = nextChat;
-        if (Array.isArray(payload.userAiRules)) {
-          globalStore.__KYRO_CENTRAL_DB__.userAiRules = payload.userAiRules;
-        }
-        globalStore.__KYRO_CENTRAL_DB__.lastUpdated = new Date().toISOString();
-
-        if (db) {
-          try {
-            await setDoc(doc(db, 'kyro_settings', 'chat_config'), {
-              ...nextChat,
-              userAiRules: globalStore.__KYRO_CENTRAL_DB__.userAiRules
-            }, { merge: true });
-          } catch (e) {}
-        }
-
-        return res.status(200).json({
-          success: true,
-          message: 'Configuração do Chat Gemini salva e sincronizada entre Desktop e Mobile.',
-          chatConfig: nextChat,
-          userAiRules: globalStore.__KYRO_CENTRAL_DB__.userAiRules
-        });
-      }
-
-      // 10. Salvar Credenciais do Baileys para Persistência Cloud 24h (save_baileys_creds)
-      if (action === 'save_baileys_creds' && payload.creds) {
-        globalStore.__KYRO_CENTRAL_DB__.baileysCreds = payload.creds;
-        globalStore.__KYRO_CENTRAL_DB__.lastUpdated = new Date().toISOString();
-
-        if (db) {
-          try {
-            await setDoc(doc(db, 'kyro_settings', 'baileys_auth'), {
-              creds: typeof payload.creds === 'string' ? payload.creds : JSON.stringify(payload.creds),
-              updatedAt: new Date().toISOString()
-            }, { merge: true });
-          } catch (e) {}
-        }
-
-        return res.status(200).json({
-          success: true,
-          message: 'Credenciais do Baileys salvas na nuvem com sucesso.'
-        });
-      }
-
-      // 11. Recuperar Credenciais do Baileys na Nuvem (get_baileys_creds)
-      if (action === 'get_baileys_creds') {
-        let creds = globalStore.__KYRO_CENTRAL_DB__.baileysCreds || null;
-        if (!creds && db) {
-          try {
-            const snap = await getDocs(query(collection(db, 'kyro_settings')));
-            snap.forEach(d => {
-              if (d.id === 'baileys_auth' && d.data()?.creds) {
-                creds = d.data().creds;
-              }
+          return res.status(200).json({
+            success: true,
+            receipt,
+            userId: authUid,
+            transactionId: txId
+          });
+        } catch (commitErr: any) {
+          if (commitErr instanceof IdempotencyConflictError) {
+            return res.status(409).json({
+              success: false,
+              error: commitErr.message,
+              code: commitErr.code
             });
-          } catch (e) {}
+          }
+          throw commitErr;
         }
-
-        return res.status(200).json({
-          success: true,
-          hasCreds: !!creds,
-          creds
-        });
       }
 
-      // 12. Salvar URL Pública do Robô na Nuvem (save_bot_url)
-      if (action === 'save_bot_url' && payload.botServerUrl) {
-        const cleanUrl = String(payload.botServerUrl).trim().replace(/\/$/, '');
-        globalStore.__KYRO_CENTRAL_DB__.botServerUrl = cleanUrl;
-        globalStore.__KYRO_CENTRAL_DB__.lastUpdated = new Date().toISOString();
-
-        if (db) {
-          try {
-            await setDoc(doc(db, 'kyro_settings', 'bot_url'), {
-              botServerUrl: cleanUrl,
-              updatedAt: new Date().toISOString()
-            }, { merge: true });
-          } catch (e) {}
-        }
-
-        return res.status(200).json({
-          success: true,
-          message: 'URL do Robô na Nuvem salva com sucesso.',
-          botServerUrl: cleanUrl
-        });
-      }
-
-      // 13. Salvar Cartões de Crédito (save_credit_cards)
-      if (action === 'save_credit_cards' && Array.isArray(payload.creditCards)) {
-        globalStore.__KYRO_CENTRAL_DB__.creditCards = payload.creditCards;
-        globalStore.__KYRO_CENTRAL_DB__.lastUpdated = new Date().toISOString();
-
-        if (db) {
-          try {
-            await setDoc(doc(db, 'kyro_settings', 'credit_cards'), {
-              cards: payload.creditCards,
-              updatedAt: new Date().toISOString()
-            }, { merge: true });
-          } catch (e) {}
-        }
-
-        syncToRenderBot({ action: 'save_credit_cards', creditCards: payload.creditCards });
-
-        return res.status(200).json({
-          success: true,
-          message: 'Cartões de crédito sincronizados com sucesso.',
-          creditCards: payload.creditCards
-        });
-      }
-
-      // 14. Salvar Dívidas Recorrentes / Parcelamentos (save_recurring_expenses)
-      if (action === 'save_recurring_expenses' && Array.isArray(payload.recurringExpenses)) {
-        globalStore.__KYRO_CENTRAL_DB__.recurringExpenses = payload.recurringExpenses;
-        globalStore.__KYRO_CENTRAL_DB__.lastUpdated = new Date().toISOString();
-
-        if (db) {
-          try {
-            await setDoc(doc(db, 'kyro_settings', 'recurring_expenses'), {
-              expenses: payload.recurringExpenses,
-              updatedAt: new Date().toISOString()
-            }, { merge: true });
-          } catch (e) {}
-        }
-
-        syncToRenderBot({ action: 'save_recurring_expenses', recurringExpenses: payload.recurringExpenses });
-
-        return res.status(200).json({
-          success: true,
-          message: 'Dívidas recorrentes sincronizadas com sucesso.',
-          recurringExpenses: payload.recurringExpenses
-        });
-      }
-
-      return res.status(400).json({ error: 'Ação não reconhecida no banco central.' });
+      return res.status(400).json({
+        success: false,
+        error: `Ação desconhecida: '${action}'`,
+        code: 'UNKNOWN_ACTION'
+      });
 
     } catch (e: any) {
-      return res.status(500).json({ error: 'Erro ao processar banco central', details: e?.message });
+      return res.status(500).json({
+        success: false,
+        error: 'Erro no processamento transacional',
+        details: e?.message
+      });
     }
   }
 
-  return res.status(405).json({ error: 'Método não permitido.' });
+  return res.status(405).json({
+    success: false,
+    error: 'Método HTTP não permitido'
+  });
 }

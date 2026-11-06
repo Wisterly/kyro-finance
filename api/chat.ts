@@ -2,6 +2,9 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import axios from 'axios';
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore, collection, doc, setDoc } from 'firebase/firestore';
+import { verifyAuthToken, enforceTenantBoundary, CrossTenantViolationError } from '../src/services/authBoundary';
+import { SafeMoneySerializer } from '../src/services/SafeMoneySerializer';
+import { parseToCents } from '../src/engine/money';
 
 const firebaseConfig = {
   apiKey: process.env.VITE_FIREBASE_API_KEY || process.env.FIREBASE_API_KEY,
@@ -22,10 +25,18 @@ if (firebaseConfig.apiKey && firebaseConfig.projectId) {
   }
 }
 
-async function saveTransaction(tx: any) {
+async function saveTransaction(tx: any, userId: string = 'usr_default', requestId?: string) {
+  const txId = tx.id || `tx_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+  const amountCents = tx.amountCents ? SafeMoneySerializer.fromFirestoreCents(tx.amountCents) : parseToCents(tx.amount);
+  const safeCents = SafeMoneySerializer.toFirestoreCents(amountCents);
+
   const payload = {
     ...tx,
-    id: tx.id || `tx_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+    id: txId,
+    userId,
+    requestId: requestId || `req_chat_${Date.now()}`,
+    amountCents: safeCents,
+    amount: safeCents / 100,
     date: tx.date || new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }),
     status: tx.status || 'Concluído',
     createdAt: new Date().toISOString()
@@ -35,6 +46,9 @@ async function saveTransaction(tx: any) {
 
   try {
     const docId = String(payload.id);
+    // Gravação delimitada estritamente por UID sob users/{userId}/transactions/{docId}
+    await setDoc(doc(db, 'users', userId, 'transactions', docId), payload, { merge: true });
+    // Espelho legado com tenant garantido
     await setDoc(doc(db, 'kyro_transactions', docId), payload, { merge: true });
     return payload;
   } catch (err) {
@@ -471,10 +485,41 @@ function fallbackCognitiveProcess(text: string, context: any, userAiRules: strin
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Request-ID');
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
+  }
+
+  // 1. Verificação da Fronteira de Autorização do Chat
+  const authHeader = req.headers.authorization;
+  let authUid = 'usr_default';
+  
+  if (authHeader) {
+    const authContext = await verifyAuthToken(authHeader);
+    if (!authContext.isValid || !authContext.uid) {
+      return res.status(401).json({
+        error: authContext.error || 'Acesso não autorizado ao Copiloto',
+        code: 'UNAUTHORIZED_INVALID_CREDENTIAL'
+      });
+    }
+
+    // Validação Cross-Tenant
+    const requestedUid = (req.body?.userId || req.query?.userId) as string | undefined;
+    try {
+      authUid = enforceTenantBoundary(authContext, requestedUid);
+    } catch (err: any) {
+      if (err instanceof CrossTenantViolationError) {
+        return res.status(403).json({
+          error: err.message,
+          code: err.code
+        });
+      }
+      return res.status(401).json({
+        error: err.message,
+        code: 'UNAUTHORIZED'
+      });
+    }
   }
 
   if (req.method === 'GET') {
@@ -701,8 +746,9 @@ ${JSON.stringify(compactContext)}`;
 
         if (parsedResult && parsedResult.reply) {
           let savedTx = null;
+          const reqId = (req.headers['x-request-id'] as string) || `req_chat_${Date.now()}`;
           if (parsedResult.action?.type === 'create_transaction' && parsedResult.action.transaction) {
-            savedTx = await saveTransaction(parsedResult.action.transaction);
+            savedTx = await saveTransaction(parsedResult.action.transaction, authUid, reqId);
             parsedResult.action.transaction = savedTx;
           }
 
@@ -710,6 +756,7 @@ ${JSON.stringify(compactContext)}`;
             reply: parsedResult.reply,
             action: parsedResult.action || { type: 'none' },
             savedTx,
+            userId: authUid,
             engine: 'gemini-1.5-flash',
             transcribedText: message
           });
@@ -723,8 +770,9 @@ ${JSON.stringify(compactContext)}`;
   // 2. FALLBACK COGNITIVO NATIVO RESILIENTE (Garante 100% de disponibilidade)
   const fallback = fallbackCognitiveProcess(message, context, userAiRules);
   let localSavedTx = null;
+  const fallbackReqId = (req.headers['x-request-id'] as string) || `req_chat_${Date.now()}`;
   if (fallback.action?.type === 'create_transaction' && fallback.action.transaction) {
-    localSavedTx = await saveTransaction(fallback.action.transaction);
+    localSavedTx = await saveTransaction(fallback.action.transaction, authUid, fallbackReqId);
     fallback.action.transaction = localSavedTx;
   }
 
@@ -732,6 +780,7 @@ ${JSON.stringify(compactContext)}`;
     reply: fallback.reply,
     action: fallback.action || { type: 'none' },
     savedTx: localSavedTx,
+    userId: authUid,
     engine: 'kyro-cognitive-engine',
     transcribedText: message
   });

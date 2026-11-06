@@ -1,14 +1,17 @@
 {
-  "version": "1.43",
-  "buildNumber": 43,
+  "version": "1.44",
+  "buildNumber": 44,
   "releaseDate": "2026-11-06",
   "changelog": [
-    "Etapa 03.2 - Núcleo Contábil Unificado Modelo B em Centavos BigInt",
-    "Money Engine (src/engine/money.ts): Aritmética pura em centavos inteiros (BigInt), parsing resiliente BRL e rateio justo (split) com preservação de centavos residuais",
-    "Calendar Engine (src/engine/calendar.ts): Fuso canônico estrito America/Fortaleza (UTC-3), virada de dia contábil e resolução de termos relativos em linguagem natural",
-    "Ledger Engine (src/engine/ledger.ts): Escrituração em partidas dobradas, isolamento por UID, versionamento de concorrência com fencing tokens, idempotência estrita por requestId e tombstones de 90 dias",
-    "Reports Engine (src/engine/reports.ts): Segregação estrita entre Realizado e Previsto/Recorrente, consolidação de patrimônio líquido e demonstrativo por categorias",
-    "Bateria de Testes Unitários 03.2: 51 de 51 testes aprovados (100% de cobertura determinística)",
-    "Aceite Formal 03.1 Consolidado: CI GitHub Actions (#42152737178) aprovada, certificado APK v2 validado com SHA-256 idêntico e ambiente local sintético comprovado"
+    "Subetapa 03.3 - Caminho de Gravação Autorizado por UID e Transacional (PR.044)",
+    "Encapsulamento de api/database.ts: Fronteira de autorização com derivação estrita de UID a partir de token verificado",
+    "Isolamento Cross-Tenant: Bloqueio estrito de acesso a outras contas mesmo quando o backend possui privilégios elevados",
+    "Fronteira de Webhook: Segregação entre identidade de provedor (WhatsApp) e identidade de usuário com resolução autorizada no servidor",
+    "Adaptador de Persistência Firestore (src/services/firestoreAdapter.ts): Serialização exata de BigInt em Safe Integers IEEE 754",
+    "Commit Atômico Indissociável: Efeitos contábeis nos saldos e recibos de idempotência gravados no mesmo commit atômico",
+    "Protocolo de Idempotência: Mesmo requestId recupera resultado anterior; payload divergente retorna conflito 409",
+    "Preservação de Dados Legados: Conversão automática e transparente de registros em float para centavos inteiros BigInt",
+    "Homologação Completa: 40 testes de rota aprovados + 51 testes contábeis = 91/91 testes aprovados (100% de sucesso)",
+    "Verificação TypeScript: 0 erros de compilação com verificação estrita"
   ]
 }
