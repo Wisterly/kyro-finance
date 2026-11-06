@@ -178,7 +178,7 @@
           <span class="badge badge-success">Subetapa 03.4 Homologada</span>
           <span class="badge badge-blue">PR.045 / v1.45 (Build 45)</span>
           <span class="badge badge-purple">Motor de Concorrência e Leases</span>
-          <span class="badge badge-warning">198/198 Testes Aprovados</span>
+          <span class="badge badge-warning">221/221 Testes Aprovados</span>
         </div>
         <div style="font-size: 0.85rem; color: var(--text-muted);">
           Data da Homologação: <strong>06 de Novembro de 2026</strong>
@@ -186,8 +186,8 @@
       </div>
       <h1>KYRO Finance — Relatório de Homologação da Subetapa 03.4</h1>
       <p class="subtitle">
-        Comprovação de Concorrência Distribuída, Leases Monotônicos com Fencing Tokens Atômicos,
-        Resiliência Pós-Crash/Restart, Replay de Webhook Multi-Processo e Protocolo Formal de Reversão para PR.044.
+        Exigência Estrita de Prova de Posse sob Lease Ativo, Derivação de Recurso no Servidor,
+        Replay de Webhook Distribuído e Rollback com a Revisão Real da PR.044 (commit <code>1fe397de12de565002e0bec6976634c9c166bedb</code>).
       </p>
     </header>
 
@@ -195,23 +195,23 @@
     <div class="grid-kpi">
       <div class="card-kpi">
         <div class="kpi-title">Testes Totais da Subetapa 03.4</div>
-        <div class="kpi-value">94 / 94</div>
+        <div class="kpi-value">117 / 117</div>
         <div class="kpi-subtitle">✓ 100% de Aprovação sem Regressões</div>
       </div>
       <div class="card-kpi">
         <div class="kpi-title">Bateria Consolidada (Geral)</div>
-        <div class="kpi-value">198 / 198</div>
-        <div class="kpi-subtitle">✓ 51 Núcleo + 53 03.3 + 94 03.4</div>
+        <div class="kpi-value">221 / 221</div>
+        <div class="kpi-subtitle">✓ 51 Núcleo + 53 03.3 + 117 03.4</div>
       </div>
       <div class="card-kpi">
-        <div class="kpi-title">Isolamento Multi-Processo</div>
-        <div class="kpi-value">2 PIDs Reais</div>
-        <div class="kpi-subtitle">✓ Processos A e B Concorrentes (HTTP 412)</div>
+        <div class="kpi-title">Prova de Posse Obrigatória</div>
+        <div class="kpi-value">HTTP 412</div>
+        <div class="kpi-subtitle">✓ Bloqueio de Token/Titular Ausentes ou Divergentes</div>
       </div>
       <div class="card-kpi">
-        <div class="kpi-title">Fronteira Criptográfica Webhook</div>
-        <div class="kpi-value">HMAC SHA-256</div>
-        <div class="kpi-subtitle">✓ timingSafeEqual + Nonce Anti-Replay</div>
+        <div class="kpi-title">Rollback Real com PR.044</div>
+        <div class="kpi-value">1fe397d</div>
+        <div class="kpi-subtitle">✓ Servidor Real PR.044 Standalone Validado</div>
       </div>
     </div>
 
@@ -228,81 +228,74 @@
         </thead>
         <tbody>
           <tr>
-            <td><strong>Lease e Fencing no Caminho de Gravação</strong></td>
-            <td>Componente 04 (<code>src/engine/concurrency.ts</code>) com tokens monotônicos validados no mesmo commit do Firestore (linhas 214-228 de <code>firestoreAdapter.ts</code>). Processo com lease vencido ou substituído falha com HTTP 412 sem tocar em saldos ou recibos.</td>
+            <td><strong>Prova de Posse Obrigatória</strong></td>
+            <td>Em recursos com lease ativo, novas mutações exigem obrigatoriamente fencingToken vigente e holderId correspondente. Chamadas com token ausente, titular ausente, ambos ausentes ou recurso divergente falham com HTTP 412 sem tocar no storage.</td>
             <td><span class="status-pill success">CONCLUÍDO</span></td>
           </tr>
           <tr>
-            <td><strong>Disputa Real Entre Processos e Leitura Direta</strong></td>
-            <td>Dois processos com PIDs distintos (Processo A na porta 4101 e Processo B na 4102). Processo B assume com token 2. Processo A tenta comitar, renovar e liberar com token 1 e é sumariamente rejeitado (HTTP 412). Leitura direta no Firestore confirma que B segue titular ininterrupto.</td>
+            <td><strong>Derivação de Recurso no Servidor</strong></td>
+            <td>Recurso protegido derivado no backend a partir das contas autorizadas da transação (targetAccountId/sourceAccountId). Alterar ou omitir resourceId na requisição não desvia a validação.</td>
             <td><span class="status-pill success">CONCLUÍDO</span></td>
           </tr>
           <tr>
-            <td><strong>Retry Após Perda de Confirmação</strong></td>
-            <td>Processos A e B encerrados com crash forçado (kill). Subida de Processo C na porta 4103. Reenvio do mesmo requestId recupera recibo com replay: true sem duplicar saldo. Payload divergente recebe HTTP 409.</td>
+            <td><strong>Preservação de Replay Confirmado</strong></td>
+            <td>Operação legítima já comitada recupera o recibo existente via passo 1 de idempotência com replay: true sem reaplicar efeito no saldo (zero duplo crédito).</td>
             <td><span class="status-pill success">CONCLUÍDO</span></td>
           </tr>
           <tr>
-            <td><strong>Fronteira Criptográfica do Webhook e Leituras no Firestore</strong></td>
-            <td>Validação de assinatura HMAC SHA-256 sobre rawBody (timingSafeEqual), tolerância de timestamp (5 min), barreira contra replay distribuído entre instâncias com Nonce no Firestore (HTTP 409), bloqueio de origem não autorizada (401), telefone sem vínculo (403) e ambiguidade (409). Leitura direta confirma que apenas a requisição legítima gravou transação.</td>
+            <td><strong>Disputa Real Entre Processos</strong></td>
+            <td>Dois processos com PIDs distintos (Processo A na porta 4101 e Processo B na 4102). Processo B assume com token 2. Processo A tenta comitar, renovar e liberar com token 1 e é sumariamente rejeitado (HTTP 412). Leitura direta no Firestore confirma titular B ininterrupto.</td>
             <td><span class="status-pill success">CONCLUÍDO</span></td>
           </tr>
           <tr>
-            <td><strong>Protocolo e Ensaio de Reversão para PR.044</strong></td>
-            <td>Definido protocolo operacional em 4 fases (suspensão, drain, preservação e chaveamento). Ensaio com dados sintéticos no Firestore demonstrou recuperação de recibo pré-reversão com replay: true sem duplicar saldo e aceitação de novas mutações contábeis no padrão PR.044.</td>
+            <td><strong>Rollback com Revisão Real PR.044</strong></td>
+            <td>Cópia isolada do commit autêntico <code>1fe397de12de565002e0bec6976634c9c166bedb</code> executada em processo standalone na porta 4104 sobre o mesmo Firestore Emulator. Recuperação de recibo com replay: true e novas mutações aprovadas no padrão PR.044.</td>
             <td><span class="status-pill success">CONCLUÍDO</span></td>
           </tr>
           <tr>
             <td><strong>Regressão Geral</strong></td>
-            <td>198 testes automatizados aprovados (51 núcleo + 53 03.3 + 94 03.4 = 100%). TypeScript estrito sem erros (`npx tsc --noEmit`).</td>
+            <td>221 testes automatizados aprovados (51 núcleo + 53 03.3 + 117 03.4 = 100%). TypeScript estrito sem erros (`npx tsc --noEmit`).</td>
             <td><span class="status-pill success">CONCLUÍDO</span></td>
           </tr>
         </tbody>
       </table>
     </div>
 
-    <!-- Seção 2: Cenário de Disputa Concorrente -->
+    <!-- Seção 2: Cenário de Prova de Posse e Disputa -->
     <div class="card">
-      <h2>2. Demonstração Observável da Disputa Concorrente e Leituras Diretas no Firestore</h2>
-      <p style="color: var(--text-muted); margin-bottom: 1rem;">
-        Dois servidores HTTP autônomos com PIDs independentes foram iniciados no sistema operacional sobre o mesmo Firestore Emulator (porta 8080):
-      </p>
+      <h2>2. Demonstração de Prova de Posse e Leituras Diretas no Firestore Emulator</h2>
       <div class="code-box">
-[Processo A | PID 37580 | Porta 4101] -> Adquire Lease de 'acc_fencing' com TTL=1200ms -> FencingToken = 1
-[Relógio de Sistema]                  -> Avança 1400ms (Lease de A expirou temporalmente)
-[Processo B | PID 13980 | Porta 4102] -> Assume Lease de 'acc_fencing' -> FencingToken = 2 (Monotônico Crescente)
-[Processo A | PID 37580 | Porta 4101] -> Tenta comitar transação de R$ 500,00 com FencingToken = 1 (Obsoleto)
->>> RESPOSTA DA ROTA PARA PROCESSO A : HTTP 412 Precondition Failed | code: FENCING_TOKEN_OBSOLETE
->>> LEITURA DIRETA NO FIRESTORE EMULATOR: Saldo = R$ 0,00 | Transação de A = NÃO EXISTE | Recibos de A = 0
-[Processo B | PID 13980 | Porta 4102] -> Comita transação legítima de R$ 250,00 com FencingToken = 2
->>> RESPOSTA DA ROTA PARA PROCESSO B : HTTP 200 OK | status: APPLIED | resultingRev: 2 | fencingToken: 2
->>> LEITURA DIRETA NO FIRESTORE EMULATOR: Saldo = R$ 250,00 | Recibo de B = PERSISTIDO COM SUCESSO
-[Processo A | PID 37580 | Porta 4101] -> Tenta renovar lease com FencingToken = 1 (Obsoleto)
->>> RESPOSTA DA ROTA PARA PROCESSO A : HTTP 412 Precondition Failed
->>> LEITURA DIRETA NO FIRESTORE EMULATOR: Titular continua Processo B | FencingToken = 2 preservado
-[Processo A | PID 37580 | Porta 4101] -> Tenta liberar lease com FencingToken = 1 (Obsoleto)
->>> RESPOSTA DA ROTA PARA PROCESSO A : HTTP 412 Precondition Failed
->>> LEITURA DIRETA NO FIRESTORE EMULATOR: Documento de lease NÃO foi excluído | Processo B segue titular
+[Processo B | PID 38864 | Porta 4102] -> Titular legítimo de 'acc_fencing' com FencingToken = 2
+>>> Tentativa A: Nova mutação com TOKEN AUSENTE (sem fencingToken)
+>>> RESPOSTA: HTTP 412 Precondition Failed | code: FENCING_TOKEN_OBSOLETE
+>>> LEITURA FIRESTORE: Saldo R$ 250,00 intacto | Transação = NÃO EXISTE | Recibos = 0
+>>> Tentativa B: Nova mutação com TITULAR AUSENTE (sem holderId)
+>>> RESPOSTA: HTTP 412 Precondition Failed | code: LEASE_HOLDER_MISMATCH
+>>> LEITURA FIRESTORE: Saldo R$ 250,00 intacto | Transação = NÃO EXISTE | Recibos = 0
+>>> Tentativa C: Nova mutação com AMBOS AUSENTES
+>>> RESPOSTA: HTTP 412 Precondition Failed
+>>> LEITURA FIRESTORE: Saldo R$ 250,00 intacto | Transação = NÃO EXISTE | Recibos = 0
+>>> Tentativa D: Recurso divergente (resourceId: 'outro_livre' mas conta é 'acc_fencing')
+>>> RESPOSTA: HTTP 412 Precondition Failed (Servidor deriva proteção da conta alvo)
+>>> LEITURA FIRESTORE: Saldo R$ 250,00 intacto | Zero mutações
+>>> Tentativa E: Replay idêntico da operação confirmada de B
+>>> RESPOSTA: HTTP 200 OK | status: APPLIED | replay: true
+>>> LEITURA FIRESTORE: Saldo permanece exatamente R$ 250,00 (ZERO REAPLICAÇÃO DE SALDO)
       </div>
     </div>
 
-    <!-- Seção 3: Resiliência Pós-Crash e Retry -->
+    <!-- Seção 3: Rollback com a Revisão Real da PR.044 -->
     <div class="card">
-      <h2>3. Resiliência a Falhas de Processo, Replay Distribuído e Idempotência Estrita</h2>
+      <h2>3. Ensaio de Rollback com o Servidor Real da PR.044 (commit <code>1fe397de12de565002e0bec6976634c9c166bedb</code>)</h2>
       <div class="code-box">
-[Processo B | Porta 4102] -> Grava requisição inicial 'req_reboot_1' (R$ 150,00) -> HTTP 200 | replay: false
-[Evento de Desastre]      -> CRASH FORÇADO : taskkill /f /t nos PIDs 37580 e 13980 (Servidores Encerrados)
-[Recuperação]             -> Subida de NOVO Processo C na Porta 4103 (Novo PID) conectado ao Firestore ativo
-[Cliente]                 -> Reenvia 'req_reboot_1' com payload idêntico para a porta 4103
->>> RESPOSTA DA ROTA PARA PROCESSO C : HTTP 200 OK | status: APPLIED | replay: true
->>> LEITURA DIRETA NO FIRESTORE EMULATOR: Saldo = R$ 400,00 exato (ZERO DUPLO CRÉDITO)
-[Cliente]                 -> Envia 'req_reboot_1' com payload divergente (R$ 999,00)
->>> RESPOSTA DA ROTA PARA PROCESSO C : HTTP 409 Conflict | code: IDEMPOTENCY_PAYLOAD_MISMATCH
->>> LEITURA DIRETA NO FIRESTORE EMULATOR: Saldo permanece R$ 400,00 rigorosamente intacto
-[Disputa Webhook Replay]  -> Disparo do mesmo evento de webhook para Processo A (:4101) e Processo B (:4102)
->>> RESPOSTA INSTÂNCIA A  : HTTP 200 OK (Processado com sucesso)
->>> RESPOSTA INSTÂNCIA B  : HTTP 409 Conflict (code: WEBHOOK_NONCE_REPLAY)
->>> LEITURA DIRETA NO FIRESTORE EMULATOR: Exatamente 1 transação de R$ 110,00 gravada no storage compartilhado
+[03.4 | Porta 4103]  -> Grava operação pré-reversão de R$ 300,00 -> HTTP 200 | status: APPLIED
+[03.4 | Drenagem]    -> Libera lease ativo (release_lease) e encerra servidor 03.4
+[PR.044 | Porta 4104]-> Sobe processo isolado da PR.044 real (commit 1fe397de12de565002e0bec6976634c9c166bedb)
+[PR.044 | Retry]     -> Envia mesmo requestId à rota da PR.044 -> HTTP 200 OK | replay: true
+>>> LEITURA DIRETA NO FIRESTORE: Saldo permanece R$ 300,00 rigorosamente intacto (Sem duplicidade)
+[PR.044 | Nova Tx]   -> Envia nova transação de R$ 50,00 no padrão PR.044 -> HTTP 200 OK | status: APPLIED
+>>> LEITURA DIRETA NO FIRESTORE: Saldo atualizado com precisão para R$ 350,00 (35000 cents)
+>>> SafeMoneySerializer: 30000n (pré) + 5000n (pós) === 35000n (saldo final exato)
       </div>
     </div>
 
@@ -314,13 +307,13 @@
           <strong>Ambiente Oficial Subetapa 03.4</strong>
           <span>https://kyro-fase-03-4.vercel.app/ (PR.045 / v1.45)</span>
         </a>
+        <a href="https://kyro-fase-03-5.vercel.app/" class="link-item" target="_blank">
+          <strong>Ambiente Oficial Subetapa 03.5 (Próxima)</strong>
+          <span>https://kyro-fase-03-5.vercel.app/ (Bridge Nativo Android / Speech)</span>
+        </a>
         <a href="https://kyro-fase-03-3.vercel.app/" class="link-item" target="_blank">
           <strong>Ambiente Oficial Subetapa 03.3</strong>
           <span>https://kyro-fase-03-3.vercel.app/ (PR.044 / v1.44)</span>
-        </a>
-        <a href="https://kyro-fase-02-encerramento.vercel.app/" class="link-item" target="_blank">
-          <strong>Ambiente Histórico Fase 02</strong>
-          <span>https://kyro-fase-02-encerramento.vercel.app/ (PR.042)</span>
         </a>
         <a href="https://github.com/Wisterly/kyro-finance/releases/download/apk-latest/KYRO-Finance.apk" class="link-item" target="_blank">
           <strong>Download Direto do APK Android Atualizado</strong>

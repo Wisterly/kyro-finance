@@ -1,0 +1,91 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    background-color: #090D16;
+    color: #F1F5F9;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #090D16;
+}
+::-webkit-scrollbar-thumb {
+  background: #1E293B;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #334155;
+}
+
+/* ==============================================================
+   ISOLAMENTO TÉCNICO: DESKTOP vs MOBILE (DIRETRIZ ARQUITETURAL)
+   ============================================================== */
+
+/* Utilitários de Visibilidade Estrita */
+@media (max-width: 768px) {
+  .desktop-only {
+    display: none !important;
+  }
+  .mobile-only {
+    display: block !important;
+  }
+  .mobile-only-flex {
+    display: flex !important;
+  }
+}
+
+@media (min-width: 769px) {
+  .mobile-only,
+  .mobile-only-flex {
+    display: none !important;
+  }
+  .desktop-only {
+    display: block !important;
+  }
+  .desktop-only-flex {
+    display: flex !important;
+  }
+}
+
+/* ==============================================================
+   REGRAS EXCLUSIVAS DE CELULAR (<= 768px)
+   ============================================================== */
+@media (max-width: 768px) {
+  html, body {
+    overflow-x: hidden;
+    max-width: 100vw;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Previne zoom excessivo no iOS Safari em campos de texto */
+  input[type="text"],
+  input[type="number"],
+  textarea {
+    font-size: 14px;
+  }
+
+  /* Otimização de toque e safe areas para navegação mobile */
+  .mobile-safe-bottom {
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  }
+
+  /* Transição e elevação da gaveta de chat mobile */
+  aside {
+    box-shadow: -4px 0 25px rgba(0, 0, 0, 0.7);
+  }
+}
+
+/* ==============================================================
+   REGRAS EXCLUSIVAS DE COMPUTADOR (>= 769px)
+   ============================================================== */
+@media (min-width: 769px) {
+  /* Layout desktop preservado com estabilidade de grid e viewport ampla */
+}

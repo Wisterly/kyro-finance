@@ -81,8 +81,8 @@ function assert(condition: boolean, testName: string, detail?: string) {
 // Inicializador de processos do servidor HTTP standalone
 const spawnedProcesses: ChildProcess[] = [];
 
-function startServerProcess(port: number): { proc: ChildProcess; pid: number } {
-  const serverScript = path.resolve(process.cwd(), 'src/server/httpServer.ts');
+function startServerProcess(port: number, scriptPath?: string): { proc: ChildProcess; pid: number } {
+  const serverScript = scriptPath || path.resolve(process.cwd(), 'src/server/httpServer.ts');
   const env = {
     ...process.env,
     PORT: String(port),
@@ -417,6 +417,167 @@ export async function runSubetapa034Tests() {
     const snapReceiptB = await rawDb.doc(`users/${testUid}/idempotency/${reqIdProcessB}`).get();
     assert(snapReceiptB.exists && snapReceiptB.data()?.status === 'APPLIED', 'Recibo de B persistido atomicamente no Firestore');
 
+    // 2.6.1 Exigência Estrita de Prova de Posse sob Lease Ativo
+    console.log('  -> Testando exigência estrita de prova de posse sob lease ativo do Processo B...');
+
+    // A. Nova mutação com Token Ausente
+    console.log('    [A] Nova mutação com token ausente...');
+    const reqMissingToken = `req_no_tok_${Date.now()}`;
+    const txMissingToken = `tx_no_tok_${Date.now()}`;
+    const respMissingTok = await fetch(`http://127.0.0.1:${PORT_B}/api/database`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${officialAuth.idToken}`,
+        'X-Request-ID': reqMissingToken
+      },
+      body: JSON.stringify({
+        action: 'save_transaction',
+        accountId: sharedResource,
+        holderId: `pid_${serverB.pid}_processB`,
+        // fencingToken AUSENTE
+        transaction: {
+          id: txMissingToken,
+          type: 'INCOME',
+          amountCents: 5000,
+          description: 'Tentativa sem Fencing Token'
+        }
+      })
+    });
+    assert(respMissingTok.status === 412, 'Mutação sem fencing token rejeitada com HTTP 412');
+    const snapAccNoTok = await rawDb.doc(`users/${testUid}/accounts/${sharedResource}`).get();
+    assert(snapAccNoTok.data()?.balanceCents === 25000, 'Leitura direta no Firestore: Saldo permanece R$ 250,00 intacto (Zero efeito)');
+    const snapTxNoTok = await rawDb.doc(`users/${testUid}/transactions/${txMissingToken}`).get();
+    assert(!snapTxNoTok.exists, 'Leitura direta no Firestore: Transação sem token não foi gravada');
+    const snapRecNoTok = await rawDb.doc(`users/${testUid}/idempotency/${reqMissingToken}`).get();
+    assert(!snapRecNoTok.exists, 'Leitura direta no Firestore: Zero recibos comitados');
+
+    // B. Nova mutação com Titular Ausente
+    console.log('    [B] Nova mutação com titular ausente...');
+    const reqMissingHolder = `req_no_hld_${Date.now()}`;
+    const txMissingHolder = `tx_no_hld_${Date.now()}`;
+    const respMissingHld = await fetch(`http://127.0.0.1:${PORT_B}/api/database`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${officialAuth.idToken}`,
+        'X-Request-ID': reqMissingHolder
+      },
+      body: JSON.stringify({
+        action: 'save_transaction',
+        accountId: sharedResource,
+        fencingToken: 2,
+        // holderId AUSENTE
+        transaction: {
+          id: txMissingHolder,
+          type: 'INCOME',
+          amountCents: 5000,
+          description: 'Tentativa sem Titular'
+        }
+      })
+    });
+    assert(respMissingHld.status === 412, 'Mutação sem titular rejeitada com HTTP 412');
+    const snapAccNoHld = await rawDb.doc(`users/${testUid}/accounts/${sharedResource}`).get();
+    assert(snapAccNoHld.data()?.balanceCents === 25000, 'Leitura direta no Firestore: Saldo permanece R$ 250,00 intacto');
+    const snapTxNoHld = await rawDb.doc(`users/${testUid}/transactions/${txMissingHolder}`).get();
+    assert(!snapTxNoHld.exists, 'Leitura direta no Firestore: Transação sem titular não foi gravada');
+    const snapRecNoHld = await rawDb.doc(`users/${testUid}/idempotency/${reqMissingHolder}`).get();
+    assert(!snapRecNoHld.exists, 'Leitura direta no Firestore: Zero recibos comitados');
+
+    // C. Nova mutação com Ambos Ausentes
+    console.log('    [C] Nova mutação com ambos ausentes...');
+    const reqMissingBoth = `req_no_both_${Date.now()}`;
+    const txMissingBoth = `tx_no_both_${Date.now()}`;
+    const respMissingBoth = await fetch(`http://127.0.0.1:${PORT_B}/api/database`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${officialAuth.idToken}`,
+        'X-Request-ID': reqMissingBoth
+      },
+      body: JSON.stringify({
+        action: 'save_transaction',
+        accountId: sharedResource,
+        // Ambos ausentes!
+        transaction: {
+          id: txMissingBoth,
+          type: 'INCOME',
+          amountCents: 5000,
+          description: 'Tentativa sem Credenciais de Lease'
+        }
+      })
+    });
+    assert(respMissingBoth.status === 412, 'Mutação com ambos ausentes rejeitada com HTTP 412');
+    const snapAccNoBoth = await rawDb.doc(`users/${testUid}/accounts/${sharedResource}`).get();
+    assert(snapAccNoBoth.data()?.balanceCents === 25000, 'Leitura direta no Firestore: Saldo permanece R$ 250,00 intacto');
+    const snapTxNoBoth = await rawDb.doc(`users/${testUid}/transactions/${txMissingBoth}`).get();
+    assert(!snapTxNoBoth.exists, 'Leitura direta no Firestore: Transação sem credenciais não foi gravada');
+    const snapRecNoBoth = await rawDb.doc(`users/${testUid}/idempotency/${reqMissingBoth}`).get();
+    assert(!snapRecNoBoth.exists, 'Leitura direta no Firestore: Zero recibos comitados');
+
+    // D. Nova mutação com Recurso Divergente (tentativa de burlar passando resourceId falso)
+    console.log('    [D] Nova mutação com recurso divergente...');
+    const reqDivergentRes = `req_div_res_${Date.now()}`;
+    const txDivergentRes = `tx_div_res_${Date.now()}`;
+    const respDivergentRes = await fetch(`http://127.0.0.1:${PORT_B}/api/database`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${officialAuth.idToken}`,
+        'X-Request-ID': reqDivergentRes
+      },
+      body: JSON.stringify({
+        action: 'save_transaction',
+        accountId: sharedResource, // A conta real protegida por lease
+        resourceId: 'outro_recurso_livre_sem_lease', // Tentativa de desvio
+        fencingToken: 1, // Token inválido para sharedResource
+        holderId: 'hacker_process',
+        transaction: {
+          id: txDivergentRes,
+          type: 'INCOME',
+          amountCents: 5000,
+          description: 'Tentativa de Desvio de Recurso'
+        }
+      })
+    });
+    assert(respDivergentRes.status === 412, 'Desvio de recurso bloqueado com HTTP 412 (recurso derivado da conta)');
+    const snapAccDiv = await rawDb.doc(`users/${testUid}/accounts/${sharedResource}`).get();
+    assert(snapAccDiv.data()?.balanceCents === 25000, 'Leitura direta no Firestore: Saldo permanece R$ 250,00 inalterado');
+    const snapTxDiv = await rawDb.doc(`users/${testUid}/transactions/${txDivergentRes}`).get();
+    assert(!snapTxDiv.exists, 'Leitura direta no Firestore: Transação desviada não foi gravada');
+    const snapRecDiv = await rawDb.doc(`users/${testUid}/idempotency/${reqDivergentRes}`).get();
+    assert(!snapRecDiv.exists, 'Leitura direta no Firestore: Zero recibos comitados');
+
+    // E. Preservação do Replay Idêntico de Operação Confirmada
+    console.log('    [E] Replay idêntico de operação confirmada sem reaplicar efeito financeiro...');
+    const respReplayConfirmed = await fetch(`http://127.0.0.1:${PORT_B}/api/database`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${officialAuth.idToken}`,
+        'X-Request-ID': reqIdProcessB
+      },
+      body: JSON.stringify({
+        action: 'save_transaction',
+        accountId: sharedResource,
+        transaction: {
+          id: txIdProcessB,
+          type: 'INCOME',
+          amountCents: 25000,
+          description: 'Lançamento Autorizado do Processo B'
+        }
+      })
+    });
+    const jsonReplayB: any = await respReplayConfirmed.json();
+    assert(respReplayConfirmed.status === 200, 'Replay idêntico responde com HTTP 200 OK');
+    assert(jsonReplayB.receipt?.replay === true, 'Recibo prévio recuperado com replay = true');
+    assert(jsonReplayB.receipt?.status === 'APPLIED', 'Status permanece APPLIED');
+    const snapAccAfterReplayB = await rawDb.doc(`users/${testUid}/accounts/${sharedResource}`).get();
+    assert(
+      snapAccAfterReplayB.data()?.balanceCents === 25000,
+      'Leitura direta no Firestore: Saldo permanece estritamente R$ 250,00 (Zero duplo crédito / sem reaplicação)'
+    );
+
     // 2.7 Processo A tenta renovar e liberar o lease com token 1 obsoleto
     console.log('  -> Processo A tentando renovar lease com token 1 obsoleto...');
     const respRenewObsolete = await fetch(`http://127.0.0.1:${PORT_A}/api/database`, {
@@ -538,9 +699,10 @@ export async function runSubetapa034Tests() {
 
     const rebootRequestId = `req_reboot_resilience_${Date.now()}`;
     const rebootTxId = `tx_reboot_${Date.now()}`;
+    const rebootAccountId = `acc_reboot_resilience_${Date.now()}`;
     const rebootPayload = {
       action: 'save_transaction',
-      accountId: sharedResource,
+      accountId: rebootAccountId,
       requestId: rebootRequestId,
       transaction: {
         id: rebootTxId,
@@ -594,11 +756,10 @@ export async function runSubetapa034Tests() {
     assert(jsonRetry.receipt?.status === 'APPLIED', 'Status permanece APPLIED');
 
     // 3.5 Verificação Direta: Saldo no Firestore NÃO foi duplicado (Zero Duplo Crédito)
-    const snapAccAfterRetry = await rawDb.doc(`users/${testUid}/accounts/${sharedResource}`).get();
-    // Saldo anterior era 25000 + 15000 = 40000
+    const snapAccAfterRetry = await rawDb.doc(`users/${testUid}/accounts/${rebootAccountId}`).get();
     assert(
-      snapAccAfterRetry.data()?.balanceCents === 40000,
-      'Saldo verificado no Firestore Emulator: R$ 400,00 exato (Sem duplicidade pós-reinício)'
+      snapAccAfterRetry.data()?.balanceCents === 15000,
+      'Saldo verificado no Firestore Emulator: R$ 150,00 exato (Sem duplicidade pós-reinício)'
     );
 
     // 3.6 Reenvio com o mesmo requestId mas payload divergente -> CONFLITO 409
@@ -626,9 +787,9 @@ export async function runSubetapa034Tests() {
       'Código de erro IDEMPOTENCY_PAYLOAD_MISMATCH emitido com sucesso'
     );
 
-    // Saldo permanece rigorosamente inalterado em 40000
-    const snapAccAfterDivergent = await rawDb.doc(`users/${testUid}/accounts/${sharedResource}`).get();
-    assert(snapAccAfterDivergent.data()?.balanceCents === 40000, 'Saldo no Firestore permanece R$ 400,00 intacto após conflito');
+    // Saldo permanece rigorosamente inalterado em 15000
+    const snapAccAfterDivergent = await rawDb.doc(`users/${testUid}/accounts/${rebootAccountId}`).get();
+    assert(snapAccAfterDivergent.data()?.balanceCents === 15000, 'Saldo no Firestore permanece R$ 150,00 intacto após conflito');
 
     // 3.7 Ausência de escrita parcial em falha de validação antes do commit
     console.log('  -> Enviando requisição com falha pré-commit (valor negativo)...');
@@ -642,7 +803,7 @@ export async function runSubetapa034Tests() {
       },
       body: JSON.stringify({
         action: 'save_transaction',
-        accountId: sharedResource,
+        accountId: rebootAccountId,
         requestId: invalidReqId,
         transaction: {
           id: `tx_invalid_${Date.now()}`,
@@ -911,7 +1072,7 @@ export async function runSubetapa034Tests() {
     assert(snapAccPre.data()?.balanceCents === 30000, 'Saldo no Firestore: R$ 300,00 (30000 cents) confirmado');
 
     // 5.2 Protocolo de Drenagem e Liberação de Leases Ativos (Drain Phase)
-    console.log('  -> [5.2] Executando protocolo de drenagem: liberação atômica de leases antes do retorno à PR.044...');
+    console.log('  -> [5.2] Executando protocolo de drenagem: suspensão de mutações e liberação atômica de leases...');
     const respReleaseRollback = await fetch(`http://127.0.0.1:${PORT_C}/api/database`, {
       method: 'POST',
       headers: {
@@ -930,11 +1091,22 @@ export async function runSubetapa034Tests() {
 
     // Leitura direta no Firestore: lease liberado (documento deletado)
     const snapLeaseDrained = await rawDb.doc(`users/${testUid}/leases/${rollbackAccId}`).get();
-    assert(!snapLeaseDrained.exists, 'Leitura direta no Firestore: Recurso desimpedido para camada PR.044');
+    assert(!snapLeaseDrained.exists, 'Leitura direta no Firestore: Recurso desimpedido para retorno à PR.044');
 
-    // 5.3 Simulação da Camada PR.044: Replay de Operação Confirmada Anteriormente (Zero Duplo Débito)
-    console.log('  -> [5.3] Simulando requisição PR.044 recuperando recibo anterior sem cabeçalhos de lease...');
-    const respReplayRollback = await fetch(`http://127.0.0.1:${PORT_C}/api/database`, {
+    // 5.3 Troca de Processo: Encerramento da 03.4 e Subida do Servidor Real da PR.044
+    console.log('  -> [5.3] Encerrando processo 03.4 e iniciando processo da revisão real PR.044 (commit 1fe397de12de565002e0bec6976634c9c166bedb)...');
+    await killProcessSafely(serverC.proc);
+
+    const PORT_PR044 = 4104;
+    const pr044Script = path.resolve(process.cwd(), 'isolated_pr044/src/server/httpServer.ts');
+    const serverPR044 = startServerProcess(PORT_PR044, pr044Script);
+    const readyPR044 = await waitForHttpServer(PORT_PR044);
+    assert(readyPR044, 'Servidor standalone da revisão real PR.044 (1fe397de12de565002e0bec6976634c9c166bedb) ativo na porta 4104');
+    assert(serverPR044.pid !== serverC.pid, 'Processo da PR.044 opera sob PID independente');
+
+    // 5.4 Execução na Rota Real da PR.044: Replay de Operação Confirmada Anteriormente (Zero Duplo Débito)
+    console.log('  -> [5.4] Enviando requisição de retry à rota real da PR.044 para recuperar recibo da 03.4...');
+    const respReplayRollback = await fetch(`http://127.0.0.1:${PORT_PR044}/api/database`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -944,7 +1116,7 @@ export async function runSubetapa034Tests() {
       body: JSON.stringify({
         action: 'save_transaction',
         accountId: rollbackAccId,
-        // SEM holderId, SEM fencingToken (Padrão canônico da PR.044)
+        // Formato nativo da PR.044: sem parâmetros de fencing ou lease
         transaction: {
           id: rollbackTxIdPre,
           type: 'INCOME',
@@ -954,22 +1126,22 @@ export async function runSubetapa034Tests() {
       })
     });
     const jsonReplayRollback: any = await respReplayRollback.json();
-    assert(respReplayRollback.status === 200, 'Recuperação de recibo na interface PR.044 responde com HTTP 200 OK');
-    assert(jsonReplayRollback.receipt?.replay === true, 'Recibo prévio retornado com replay = true');
+    assert(respReplayRollback.status === 200, 'Rota real da PR.044 recupera recibo anterior com HTTP 200 OK');
+    assert(jsonReplayRollback.receipt?.replay === true, 'Recibo prévio retornado pela PR.044 com replay = true');
     assert(jsonReplayRollback.receipt?.status === 'APPLIED', 'Status do recibo mantido como APPLIED');
 
     // Leitura direta no Firestore: saldo rigorosamente intacto em R$ 300,00 (sem duplicação)
     const snapAccAfterReplay = await rawDb.doc(`users/${testUid}/accounts/${rollbackAccId}`).get();
     assert(
       snapAccAfterReplay.data()?.balanceCents === 30000,
-      'Consistência pós-reversão: Saldo permanece estritamente R$ 300,00 (Sem duplicidade)'
+      'Consistência pós-reversão: Saldo no Firestore permanece estritamente R$ 300,00 (Zero duplo crédito na PR.044)'
     );
 
-    // 5.4 Nova Mutação Pós-Reversão no Padrão PR.044
-    console.log('  -> [5.4] Executando nova mutação financeira no padrão PR.044 (sem lease/fencing)...');
+    // 5.5 Nova Mutação Contábil Válida na Rota Real da PR.044
+    console.log('  -> [5.5] Executando nova mutação contábil na rota real da PR.044...');
     const rollbackReqIdPost = `req_rollback_post_${Date.now()}`;
     const rollbackTxIdPost = `tx_rollback_post_${Date.now()}`;
-    const respTxPost = await fetch(`http://127.0.0.1:${PORT_C}/api/database`, {
+    const respTxPost = await fetch(`http://127.0.0.1:${PORT_PR044}/api/database`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -979,28 +1151,28 @@ export async function runSubetapa034Tests() {
       body: JSON.stringify({
         action: 'save_transaction',
         accountId: rollbackAccId,
-        // Sem parâmetros de lease/fencing
         transaction: {
           id: rollbackTxIdPost,
           type: 'INCOME',
           amountCents: 5000, // + R$ 50,00
-          description: 'Nova Mutação sob Regime Revertido PR.044'
+          description: 'Nova Mutação sob Revisão Real PR.044'
         }
       })
     });
     const jsonTxPost: any = await respTxPost.json();
-    assert(respTxPost.status === 200, 'Nova transação pós-reversão confirmada com HTTP 200 OK');
-    assert(jsonTxPost.receipt?.status === 'APPLIED', 'Nova transação comitada com status APPLIED');
+    assert(respTxPost.status === 200, 'Nova transação comitada na rota da PR.044 com HTTP 200 OK');
+    assert(jsonTxPost.receipt?.status === 'APPLIED', 'Nova transação gravada com status APPLIED');
+    assert(jsonTxPost.receipt?.replay !== true, 'Primeira execução da nova transação com replay = false');
 
     // Leitura direta no Firestore: saldo atualizado de 30000 para 35000 cents
     const snapAccFinal = await rawDb.doc(`users/${testUid}/accounts/${rollbackAccId}`).get();
     assert(
       snapAccFinal.data()?.balanceCents === 35000,
-      'Saldo no Firestore atualizado exatamente para R$ 350,00 (35000 cents) no regime PR.044'
+      'Saldo no Firestore atualizado exatamente para R$ 350,00 (35000 cents) pela rota da PR.044'
     );
 
-    // 5.5 Validação de Integridade Bidirecional via SafeMoneySerializer
-    console.log('  -> [5.5] Conferindo fidelidade contábil e compatibilidade via SafeMoneySerializer...');
+    // 5.6 Validação de Integridade Bidirecional via SafeMoneySerializer
+    console.log('  -> [5.6] Conferindo fidelidade contábil e compatibilidade via SafeMoneySerializer...');
     const rawPreTx = await rawDb.doc(`users/${testUid}/transactions/${rollbackTxIdPre}`).get();
     const rawPostTx = await rawDb.doc(`users/${testUid}/transactions/${rollbackTxIdPost}`).get();
     
@@ -1009,8 +1181,11 @@ export async function runSubetapa034Tests() {
     const centsTotal = SafeMoneySerializer.fromFirestoreCents(snapAccFinal.data()?.balanceCents);
 
     assert(centsPre === 30000n, 'Transação pré-reversão desserializada com exatidão como 30000n');
-    assert(centsPost === 5000n, 'Transação pós-reversão desserializada com exatidão como 5000n');
+    assert(centsPost === 5000n, 'Transação pós-reversão da PR.044 desserializada com exatidão como 5000n');
     assert(centsTotal === (centsPre + centsPost), 'Soma contábil exata no Ledger: 30000n + 5000n = 35000n');
+
+    // 5.7 Encerramento do Processo da PR.044
+    await killProcessSafely(serverPR044.proc);
 
   } finally {
     console.log('\n  -> Finalizando processos em segundo plano...');

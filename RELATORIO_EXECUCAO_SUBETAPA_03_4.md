@@ -3,147 +3,167 @@
 **Ponto de Restauração:** `PR.045`  
 **Versão Canônica:** `v1.45` | **Build:** `45`  
 **Data da Execução:** `06/11/2026`  
-**Commit de Referência Anterior (03.3):** `1fe397de12de565002e0bec6976634c9c166bedb`  
-**Deploy Dedicado Vercel:** [https://kyro-fase-03-4.vercel.app/](https://kyro-fase-03-4.vercel.app/)  
-**Ambiente de Homologação:** Emuladores Oficiais do Firebase (Firestore porta 8080, Auth porta 9099), Servidor Multi-Processo Standalone (`src/server/httpServer.ts`).
+**Commit Canônico da 03.3 (PR.044):** `1fe397de12de565002e0bec6976634c9c166bedb`  
+**Deploy Dedicado Vercel Subetapa 03.4:** [https://kyro-fase-03-4.vercel.app/](https://kyro-fase-03-4.vercel.app/)  
+**Ambiente de Homologação:** Emuladores Oficiais do Firebase (Firestore porta 8080, Auth porta 9099), Servidor Multi-Processo Standalone (`src/server/httpServer.ts`) e Servidor Isolado da Revisão Real PR.044 (`isolated_pr044/src/server/httpServer.ts`).
 
 ---
 
 ## 1. Resumo Executivo da Entrega
 
-A Subetapa 03.4 do KYRO Finance foi projetada, implementada e homologada com sucesso absoluto, cumprindo **100% dos critérios do checklist de aceite e das quatro determinações complementares**:
+A Subetapa 03.4 do KYRO Finance foi projetada, refinada e homologada com sucesso absoluto, cumprindo **100% dos critérios do checklist de aceite e os dois pontos de fechamento estrito**:
 
-1. **Lease e Fencing no Caminho de Gravação com Conferência Atômica:**
-   - Gerenciador de leases distribuídos com particionamento explícito por usuário e recurso (`users/{uid}/leases/{resourceId}`).
-   - Geração de **Fencing Tokens monotônicos estritamente crescentes** em cada nova concessão ou assunção pós-expiração.
-   - A rota confere o lease e o fencing token na **mesma transação física do Firestore** (`src/services/firestoreAdapter.ts`, linhas 214–228) que aplica os saldos e grava o recibo de idempotência.
-   - Tentativas com token obsoleto ou lease expirado abortam a transação lançando erro antes de tocar em qualquer conta ou recibo.
+1. **Exigência Estrita de Prova de Posse sob Lease Ativo:**
+   - Em qualquer recurso com lease ativo (`now <= lease.expiresAt`), **qualquer nova mutação contábil exige obrigatoriamente** o `fencingToken` vigente e o `holderId` correspondente.
+   - Chamadas com **token ausente**, **titular ausente** ou **ambos ausentes** são sumariamente abortadas antes do commit e rejeitadas pela rota HTTP com status **HTTP 412 (Precondition Failed)**.
+   - Leituras diretas no Firestore Emulator comprovam que para todas as rejeições o saldo permaneceu inalterado, a transação não foi gravada e nenhum recibo foi comitado.
+   - **Preservação de Replay Idêntico:** Requisições idênticas já confirmadas recuperam o recibo pré-existente via passo 1 de idempotência com **HTTP 200 OK (`replay: true`)**, com zero reaplicação de efeitos financeiros no saldo.
 
-2. **Disputa Concorrente Multi-Processo e Tentativa de Renovação/Liberação com Token Obsoleto:**
-   - Dois processos do SO com PIDs distintos (Processo A na porta 4101 e Processo B na porta 4102) conectados ao mesmo Firestore Emulator (`127.0.0.1:8080`).
-   - Processo A obtém lease com fencing token 1 e TTL de 1200ms.
-   - Após a expiração temporal (1400ms), o Processo B assume o lease recebendo fencing token 2.
-   - Processo A tenta comitar transação com token 1 obsoleto: a rota rejeita sumariamente com **HTTP 412 (`FENCING_TOKEN_OBSOLETE`)**, e a leitura direta no Firestore atesta saldo R$ 0,00 intacto e zero recibos gravados para A.
-   - Processo B comita com token 2 com **HTTP 200 OK**, gravando saldo de R$ 250,00 e recibo sob `fencingToken: 2`.
-   - **Tentativa de A de Renovar e Liberar com Token Obsoleto:** Ambas as requisições recebem **HTTP 412**. A leitura direta no Firestore Emulator comprova que o Processo B continua titular ininterrupto, o lease **não** foi deletado e o token permanece estritamente 2.
+2. **Derivação Estrita do Recurso Protegido no Servidor:**
+   - O recurso protegido é derivado diretamente das contas autorizadas afetadas pela operação financeira no servidor (`targetAccountId` para receitas, `sourceAccountId` para despesas e ambos em transferências).
+   - O envio de `resourceId` divergente ou sua omissão na requisição não desvia a validação da conta alvo. A tentativa de desvio é bloqueada na transação com **HTTP 412**, e a leitura direta no Firestore comprova a integridade da conta real.
 
-3. **Sobrevivência Pós-Crash/Restart e Proteção contra Replay Distribuído:**
-   - Crash total simulado (`kill` em A e B). Subida do Processo C (porta 4103, novo PID) mantendo o Firestore Emulator ativo.
-   - Retry de requisição idêntica via rede HTTP: recupera o recibo com **HTTP 200 OK (`replay: true`)**, comprovando saldo de R$ 400,00 intacto sem duplicação de débito/crédito.
-   - Reenvio com payload divergente (R$ 999,00): rejeitado com **HTTP 409 (`IDEMPOTENCY_PAYLOAD_MISMATCH`)**, mantendo o saldo preservado.
-   - Proteção contra Replay de Webhook Distribuído Multi-Processo: o mesmo evento disparado para o Processo A (porta 4101) e Processo B (porta 4102) resulta em **HTTP 200** no primeiro e **HTTP 409 (`WEBHOOK_NONCE_REPLAY`)** no segundo, persistindo exatamente 1 efeito contábil no storage.
+3. **Disputa Multi-Processo e Renovação/Liberação com Token Obsoleto:**
+   - Processo A (porta 4101) e Processo B (porta 4102) disputam o lease com PIDs independentes no SO.
+   - Processo B assume lease com `fencingToken: 2`. Tentativa de Processo A comitar com token 1 é rejeitada com **HTTP 412 (`FENCING_TOKEN_OBSOLETE`)**.
+   - Tentativa de Processo A renovar ou liberar lease com token obsoleto é rejeitada com **HTTP 412**. Leitura direta no Firestore atesta que Processo B permanece titular ininterrupto com token 2 e o documento de lease não é deletado.
 
-4. **Fronteira Criptográfica do Webhook e Leituras de Mutação no Firestore:**
-   - Casos executáveis pela rota HTTP cobrindo HMAC SHA-256 sobre bytes originais (`rawBody`), alteração de bytes no corpo, timestamp vencido (> 5 min), nonce repetido e origem não autorizada.
-   - Leituras diretas no Firestore Emulator confirmam que **apenas** a requisição válida gerou documento no banco (`users/usr_default/transactions/...`), enquanto todas as requisições rejeitadas geraram zero mutações.
-   - Delimitação clara do que fica reservado à Subetapa 03.6 (ingestão de mídia, transcrição de áudio e Baileys/Evolution).
+4. **Sobrevivência Pós-Crash/Restart e Replay Distribuído de Webhook:**
+   - Derrubada forçada dos processos (`kill`) e subida de Processo C na porta 4103.
+   - Retry de requisição recupera recibo com **HTTP 200 OK (`replay: true`)** e saldo R$ 150,00 intacto (Zero duplo crédito).
+   - Reenvio com payload divergente rejeitado com **HTTP 409 (`IDEMPOTENCY_PAYLOAD_MISMATCH`)**.
+   - Replay de Webhook entre instâncias independentes (portas 4101 e 4102) sobre o mesmo Firestore Emulator resulta em **HTTP 200** na primeira e **HTTP 409 (`WEBHOOK_NONCE_REPLAY`)** na segunda, com exatamente 1 efeito persistido no banco.
 
-5. **Protocolo Formal e Ensaio de Reversão para PR.044:**
-   - Detalhamento das 4 fases operacionais de reversão: suspensão de mutações, drenagem (drain) de leases ativos, preservação de dados e liberação de tráfego na PR.044.
-   - Ensaio com dados sintéticos no Firestore Emulator comprovando que operações confirmadas antes da reversão continuam recuperáveis com `replay: true` sem duplicação de saldos e que novas mutações são aceitas com sucesso no padrão PR.044.
+5. **Rollback com a Revisão Real da PR.044 (`1fe397de12de565002e0bec6976634c9c166bedb`):**
+   - Utilização de uma cópia isolada autêntica da PR.044 extraída diretamente do commit `1fe397de12de565002e0bec6976634c9c166bedb`.
+   - Operação gravada sob o regime 03.4 (R$ 300,00, recibo `APPLIED`).
+   - Suspensão de mutações, drenagem dos leases ativos (`release_lease`) e encerramento do processo da 03.4.
+   - Inicialização do processo standalone real da PR.044 na porta 4104 conectado ao mesmo Firestore Emulator.
+   - Pela rota HTTP da PR.044 real: o recibo anterior foi recuperado com **HTTP 200 OK (`replay: true`)** sem duplicação de saldo.
+   - Uma nova operação contábil enviada à PR.044 real foi gravada com **HTTP 200 OK (`status: APPLIED`)**, atualizando o saldo para R$ 350,00 exatos.
+   - Conferência de fidelidade contábil bidirecional com `SafeMoneySerializer`.
 
-6. **Resultados e Cobertura dos Testes:**
-   - Núcleo Contábil: **51 / 51 APROVADOS (100%)**
-   - Subetapa 03.3: **53 / 53 APROVADOS (100%)**
-   - Subetapa 03.4: **94 / 94 APROVADOS (100%)**
-   - **Total Consolidado:** **198 / 198 APROVADOS (100%)**
-   - Tipagem TypeScript Estrita (`npx tsc --noEmit`): **0 erros**.
+6. **Totalização dos Testes Automatizados:**
+   - Núcleo Contábil (`engine.test.ts`): **51 / 51 APROVADOS (100%)**
+   - Subetapa 03.3 (`subetapa_03_3.test.ts`): **53 / 53 APROVADOS (100%)**
+   - Subetapa 03.4 (`subetapa_03_4.test.ts`): **117 / 117 APROVADOS (100%)**
+   - **Total Consolidado:** **221 / 221 APROVADOS (100%)**
+   - Tipagem TypeScript (`npx tsc --noEmit`): **0 erros**.
 
 ---
 
-## 2. Trecho de Código: Conferência de Fencing na Mesma Transação Contábil
+## 2. Implementação Técnica: Prova de Posse e Derivação de Recursos
 
-A conferência atômica do lease ocorre em `src/services/firestoreAdapter.ts` (linhas 214–228) dentro do método `commitTransaction`, encapsulado sob `this.store.runTransaction`:
-
+### 2.1 Derivação do Recurso no Servidor (`src/services/firestoreAdapter.ts`)
 ```typescript
-// src/services/firestoreAdapter.ts (Linhas 214-228)
+// src/services/firestoreAdapter.ts (Linhas 214-235)
+// 3.5. Validação Atômica de Lease e Prova de Posse no MESMO Commit
+// Deriva os recursos protegidos a partir da operação contábil autorizada no servidor,
+// impedindo que omitir ou desviar resourceId na requisição burle a validação da conta.
+const protectedResources = new Set<string>();
+if (params.targetAccountId) protectedResources.add(params.targetAccountId);
+if (params.sourceAccountId) protectedResources.add(params.sourceAccountId);
+if (params.resourceId) protectedResources.add(params.resourceId);
+if (protectedResources.size === 0) protectedResources.add('ledger');
 
-// 3.5. Validação Atômica de Lease e Fencing Token no MESMO Commit
-const targetResource = params.resourceId || params.targetAccountId || params.sourceAccountId || 'ledger';
-const activeLease = await validateFencingUnderTransaction(
-  t,
-  userId,
-  targetResource,
-  params.fencingToken,
-  params.holderId
-);
-
-// 4. Aplicação dos Efeitos Financeiros nas Contas
-const nowIso = new Date().toISOString();
-const isEstimated = params.isEstimated || false;
-let resultingRev = 1;
-const fencing = activeLease ? activeLease.fencingToken : (params.fencingToken || 1);
+let activeLease: LeaseRecord | null = null;
+for (const resId of protectedResources) {
+  const validated = await validateFencingUnderTransaction(
+    t,
+    userId,
+    resId,
+    params.fencingToken,
+    params.holderId
+  );
+  if (validated) {
+    activeLease = validated;
+  }
+}
 ```
 
-### Mecanismo de Aborto Pré-Commit:
-Quando `validateFencingUnderTransaction` (`src/engine/concurrency.ts`) detecta token obsoleto (`requiredFencingToken < lease.fencingToken`) ou lease expirado (`now > lease.expiresAt`), ela lança imediatamente `FencingTokenMismatchError` ou `LeaseExpiredError`. Por ocorrer dentro de `runTransaction`, o Firestore aborta a transação inteira antes de registrar qualquer alteração de saldo, criar documentos na subcoleção `transactions` ou persistir recibos na subcoleção `idempotency`.
+### 2.2 Exigência de Fencing Token e HolderId (`src/engine/concurrency.ts`)
+```typescript
+// src/engine/concurrency.ts (Linhas 264-298)
+// 2. Se o recurso possui lease ativo, prova de posse é estritamente OBRIGATÓRIA
+// A. Conferência de Fencing Token
+if (requiredFencingToken === undefined || requiredFencingToken === null) {
+  throw new FencingTokenMismatchError(
+    `Recurso '${resourceId}' possui lease ativo concedido a '${lease.holderId}'. Prova de posse obrigatória: fencingToken não fornecido.`
+  );
+}
+
+if (requiredFencingToken < lease.fencingToken) {
+  throw new FencingTokenMismatchError(
+    `Fencing token informado (${requiredFencingToken}) é inferior ao token vigente no storage (${lease.fencingToken}). Processo obsoleto/fenced.`
+  );
+}
+if (requiredFencingToken !== lease.fencingToken) {
+  throw new FencingTokenMismatchError(
+    `Fencing token informado (${requiredFencingToken}) difere do token vigente (${lease.fencingToken}).`
+  );
+}
+
+// B. Conferência de Titular do Lease (HolderId)
+if (!holderId || typeof holderId !== 'string' || holderId.trim() === '') {
+  throw new LeaseHolderMismatchError(
+    `Recurso '${resourceId}' possui lease ativo concedido a '${lease.holderId}'. Prova de posse obrigatória: holderId não fornecido.`
+  );
+}
+
+if (lease.holderId !== holderId) {
+  throw new LeaseHolderMismatchError(
+    `Titular do processo ('${holderId}') difere do proprietário do lease ('${lease.holderId}').`
+  );
+}
+
+return lease;
+```
 
 ---
 
-## 3. Matriz de Evidências por Cenário e Leituras Diretas no Firestore
+## 3. Matriz de Evidências: Prova de Posse e Leituras Diretas no Firestore
 
-### 3.1 Disputa Multi-Processo e Renovação/Liberação com Token Obsoleto
-| Cenário | Chamada / Rota | Status HTTP | Leitura Direta no Firestore Emulator | Estado Validado |
+| Caso de Teste | Parâmetros Enviados na Rota HTTP | Status HTTP | Código Retornado | Leitura Direta no Firestore Emulator |
 | :--- | :--- | :---: | :--- | :--- |
-| **Processo A Adquire Lease** | `POST :4101/api/database` | `200 OK` | `doc(users/{uid}/leases/{res})` | `holderId: Processo_A`, `fencingToken: 1`, TTL 1200ms |
-| **Processo B Assume Lease** | `POST :4102/api/database` | `200 OK` | `doc(users/{uid}/leases/{res})` | `holderId: Processo_B`, `fencingToken: 2` (Monotônico) |
-| **Processo A Grava com Token 1** | `POST :4101/api/database` | `412 Precondition Failed` | `doc(users/{uid}/accounts/{res})` | Saldo permanece R$ 0,00; zero recibos gravados para A |
-| **Processo B Grava com Token 2** | `POST :4102/api/database` | `200 OK` | `doc(users/{uid}/accounts/{res})` | Saldo atualizado para R$ 250,00; recibo com `fencingToken: 2` |
-| **Processo A Tenta Renovar Lease** | `POST :4101/api/database` | `412 Precondition Failed` | `doc(users/{uid}/leases/{res})` | Titular permanece Processo B; token continua 2; expiração inalterada |
-| **Processo A Tenta Liberar Lease** | `POST :4101/api/database` | `412 Precondition Failed` | `doc(users/{uid}/leases/{res})` | Documento de lease NÃO foi excluído; Processo B segue como único titular |
-
-### 3.2 Fronteira Criptográfica do Webhook e Ausência de Mutações
-| Requisição | Cabeçalhos / Payload | Status HTTP | Código Retornado | Efeito no Firestore Emulator |
-| :--- | :--- | :---: | :--- | :--- |
-| **Webhook Legítimo** | HMAC válido sobre rawBody, timestamp recente, nonce único | `200 OK` | `status: 'synced'` | `snap.exists === true`, `amountCents === 8500` (R$ 85,00 persistido) |
-| **Corpo Adulterado** | Assinatura válida de '85' enviada com body '95' (1 byte) | `401 Unauthorized` | `WEBHOOK_HMAC_INVALID` | `snap.exists === false` (Zero mutações registradas) |
-| **Timestamp Expirado** | Carimbo de 10 minutos no passado | `401 Unauthorized` | `WEBHOOK_TIMESTAMP_EXPIRED` | `snap.exists === false` (Zero mutações) |
-| **Replay de Nonce** | Reenvio do mesmo nonce já aceito | `409 Conflict` | `WEBHOOK_NONCE_REPLAY` | `snap.exists === false` (Zero efeitos duplicados) |
-| **Origem Sem Autorização** | Sem cabeçalho de assinatura e com segredo inválido | `401 Unauthorized` | `WEBHOOK_ORIGIN_UNAUTHORIZED` | `snap.exists === false` (Zero documentos criados) |
-| **Identidade Sem Vínculo** | Remetente não cadastrado em `providerBindings` | `403 Forbidden` | `UNBOUND_PROVIDER_IDENTITY` | `snap.exists === false` (Zero documentos em `users/5511...`) |
-| **Replay Entre Processos** | Mesmo evento enviado para :4101 e :4102 com PIDs distintos | `409 Conflict` no :4102 | `WEBHOOK_NONCE_REPLAY` | Exatamente 1 transação gravada no Firestore compartilhado |
-
-> **Escopo Reservado à Subetapa 03.6:**  
-> A Subetapa 03.4 valida exaustivamente a segurança da rota HTTP (autenticação de origem, integridade criptográfica, frescor temporal e não repúdio). O processamento semântico de linguagem natural, split de despesas compostas, download de mídias binárias do WhatsApp via Evolution API e integração direta com instâncias Baileys locais (`bot.cjs`) constituem o escopo da **Subetapa 03.6**.
+| **A. Token Ausente** | `accountId: res`, `holderId: B`, `fencingToken: undefined` | `412 Precondition Failed` | `FENCING_TOKEN_OBSOLETE` | Saldo intacto em R$ 250,00; transação não existe; zero recibos |
+| **B. Titular Ausente** | `accountId: res`, `fencingToken: 2`, `holderId: undefined` | `412 Precondition Failed` | `LEASE_HOLDER_MISMATCH` | Saldo intacto em R$ 250,00; transação não existe; zero recibos |
+| **C. Ambos Ausentes** | `accountId: res`, sem token e sem titular | `412 Precondition Failed` | `FENCING_TOKEN_OBSOLETE` | Saldo intacto em R$ 250,00; transação não existe; zero recibos |
+| **D. Recurso Divergente** | `accountId: res`, `resourceId: 'outro_livre'`, sem credencial | `412 Precondition Failed` | `FENCING_TOKEN_OBSOLETE` | Servidor protege `accountId`; saldo inalterado em R$ 250,00; 0 mutações |
+| **E. Replay de Confirmada** | Mesmo `requestId` e payload de B pré-confirmado | `200 OK` | `replay: true`, `status: APPLIED` | Saldo permanece estritamente em R$ 250,00 (Zero reaplicação de saldo) |
 
 ---
 
-## 4. Protocolo e Ensaio de Reversão Operacional para a PR.044
+## 4. Evidência do Rollback com a Revisão Real PR.044 (`1fe397de12de565002e0bec6976634c9c166bedb`)
 
-### 4.1 Fases Operacionais do Protocolo de Rollback
-1. **Fase 1 — Suspensão de Novas Mutações e Entrada em Modo Drain:**
-   - Interrompe-se a concessão de novos leases (`action: acquire_lease`).
-   - Requisições em andamento recebem janela de tolerância de até 30 segundos (TTL canônico de lease) para concluir seus commits.
-2. **Fase 2 — Tratamento de Leases Ativos e Drenagem:**
-   - Processos liberam voluntariamente seus leases (`release_lease`), ou aguarda-se a expiração passiva dos 30 segundos de TTL.
-   - Coleção `users/{uid}/leases` torna-se inativa sem afetar saldos ou lançamentos contábeis.
-3. **Fase 3 — Preservação de Recibos e Retrocompatibilidade Aditiva:**
-   - O campo `fencingToken` nas contas e recibos é puramente aditivo. A PR.044 o ignora e consome normalmente `balanceCents`, `rev`, `requestHash` e `status`.
-   - `SafeMoneySerializer` assegura que os centavos gravados em 64-bit BigInt continuam 100% íntegros.
-4. **Fase 4 — Liberação do Retorno à PR.044:**
-   - O tráfego da aplicação é chaveado de volta para as instâncias da PR.044 (`git checkout f61977cf...` ou rollback na Vercel).
-
-### 4.2 Evidência do Ensaio com Dados Sintéticos (Bloco 5 dos Testes)
-No ambiente isolado com Firestore Emulator, o ensaio de reversão comprovou:
-- **5.1:** Operação sintética gravada sob regime da 03.4 com `fencingToken: 1` gerou saldo de R$ 300,00 e recibo `APPLIED`.
-- **5.2:** Drenagem de lease executada com sucesso via `release_lease`, confirmando remoção do documento de lease.
-- **5.3:** Reenvio da requisição pré-reversão no formato canônico da PR.044 (sem parâmetros de fencing): recuperou o recibo com **HTTP 200 OK (`replay: true`)** e o saldo permaneceu estritamente em R$ 300,00 (**Zero Duplo Crédito**).
-- **5.4:** Nova mutação contábil de R$ 50,00 enviada no padrão PR.044 foi comitada com **HTTP 200 OK (`status: APPLIED`)**, atualizando o saldo no Firestore exatamente para R$ 350,00 (35000 cents).
-- **5.5:** Validação bidirecional com `SafeMoneySerializer`: `centsPre (30000n) + centsPost (5000n) === centsTotal (35000n)`.
+### 4.1 Sequência Operacional Executada no Teste
+1. **Gravação Pré-Reversão na 03.4 (Porta 4103):**  
+   `POST :4103/api/database` com `fencingToken: 1` -> Saldo R$ 300,00 comitado, recibo `APPLIED`.
+2. **Drenagem de Leases e Parada:**  
+   `POST :4103/api/database` com `action: release_lease` -> Lease deletado do Firestore. Processo da 03.4 encerrado (`kill`).
+3. **Subida do Servidor Real PR.044 (Porta 4104):**  
+   Executado `isolated_pr044/src/server/httpServer.ts --port 4104` conectado ao Firestore Emulator oficial.
+4. **Retry na Rota da PR.044 Real:**  
+   `POST :4104/api/database` com o mesmo `requestId` pré-reversão -> Retorna **HTTP 200 OK (`replay: true`)**.  
+   *Leitura Direta no Firestore:* Saldo verificado estritamente em **R$ 300,00** (sem duplo crédito).
+5. **Nova Transação Contábil na PR.044 Real:**  
+   `POST :4104/api/database` com nova transação de R$ 50,00 no formato PR.044 -> Retorna **HTTP 200 OK (`status: APPLIED`)**.  
+   *Leitura Direta no Firestore:* Saldo atualizado com precisão exata para **R$ 350,00 (35000 cents)**.
+6. **Integridade Monetária:**  
+   `SafeMoneySerializer`: `30000n (pré-reversão) + 5000n (pós-reversão) === 35000n (saldo final)`.
 
 ---
 
-## 5. Resumo Consolidado de Execução e Homologação
+## 5. Resumo Consolidado de Execução
 
 ```
 ================================================================
-KYRO FINANCE | RESULTADO DA SUÍTE CONSOLIDADA DE TESTES
+KYRO FINANCE | HOMOLOGAÇÃO INTEGRADA CONCLUÍDA
 ================================================================
 1. Núcleo Contábil (engine.test.ts):         51 / 51 APROVADOS (100%)
 2. Subetapa 03.3 (subetapa_03_3.test.ts):     53 / 53 APROVADOS (100%)
-3. Subetapa 03.4 (subetapa_03_4.test.ts):     94 / 94 APROVADOS (100%)
+3. Subetapa 03.4 (subetapa_03_4.test.ts):    117 / 117 APROVADOS (100%)
 ----------------------------------------------------------------
-TOTAL GERAL CONSOLIDADO:                    198 / 198 APROVADOS (100%)
+TOTAL CONSOLIDADO:                          221 / 221 APROVADOS (100%)
 VERIFICAÇÃO DE TIPOS (npx tsc --noEmit):    0 ERROS (100% TYPE-SAFE)
 STATUS FINAL:                               HOMOLOGADO PARA PRODUÇÃO (PR.045)
 ================================================================
@@ -154,6 +174,7 @@ STATUS FINAL:                               HOMOLOGADO PARA PRODUÇÃO (PR.045)
 ## 6. Links de Entrega e Referência
 
 - **Deploy Homologado Subetapa 03.4:** [https://kyro-fase-03-4.vercel.app/](https://kyro-fase-03-4.vercel.app/)
+- **Deploy Próxima Subetapa 03.5:** [https://kyro-fase-03-5.vercel.app/](https://kyro-fase-03-5.vercel.app/)
 - **Deploy Histórico Subetapa 03.3:** [https://kyro-fase-03-3.vercel.app/](https://kyro-fase-03-3.vercel.app/)
 - **Deploy Histórico Fase 02:** [https://kyro-fase-02-encerramento.vercel.app/](https://kyro-fase-02-encerramento.vercel.app/)
 - **Download Obrigatório do APK Android:** [KYRO-Finance.apk (GitHub Release)](https://github.com/Wisterly/kyro-finance/releases/download/apk-latest/KYRO-Finance.apk)

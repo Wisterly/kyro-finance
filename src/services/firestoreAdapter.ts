@@ -211,15 +211,28 @@ export class FirestoreLedgerAdapter {
         );
       }
 
-      // 3.5. Validação Atômica de Lease e Fencing Token no MESMO Commit
-      const targetResource = params.resourceId || params.targetAccountId || params.sourceAccountId || 'ledger';
-      const activeLease = await validateFencingUnderTransaction(
-        t,
-        userId,
-        targetResource,
-        params.fencingToken,
-        params.holderId
-      );
+      // 3.5. Validação Atômica de Lease e Prova de Posse no MESMO Commit
+      // Deriva os recursos protegidos a partir da operação contábil autorizada no servidor,
+      // impedindo que omitir ou desviar resourceId na requisição burle a validação da conta.
+      const protectedResources = new Set<string>();
+      if (params.targetAccountId) protectedResources.add(params.targetAccountId);
+      if (params.sourceAccountId) protectedResources.add(params.sourceAccountId);
+      if (params.resourceId) protectedResources.add(params.resourceId);
+      if (protectedResources.size === 0) protectedResources.add('ledger');
+
+      let activeLease: LeaseRecord | null = null;
+      for (const resId of protectedResources) {
+        const validated = await validateFencingUnderTransaction(
+          t,
+          userId,
+          resId,
+          params.fencingToken,
+          params.holderId
+        );
+        if (validated) {
+          activeLease = validated;
+        }
+      }
 
       // 4. Aplicação dos Efeitos Financeiros nas Contas
       const nowIso = new Date().toISOString();

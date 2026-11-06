@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KYRO Finance | Relatório e Especificação Oficial — Subetapa 03.5 (PR.046)</title>
+  <style>
+    :root {
+      --bg: #0b0f17;
+      --card-bg: #111827;
+      --card-alt: #162032;
+      --border: #1f2937;
+      --text: #f3f4f6;
+      --text-muted: #9ca3af;
+      --accent: #10b981;
+      --accent-glow: rgba(16, 185, 129, 0.15);
+      --blue: #3b82f6;
+      --purple: #8b5cf6;
+      --warning: #f59e0b;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      padding: 2rem 1rem;
+    }
+    .container { max-width: 1400px; margin: 0 auto; }
+    header {
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 2rem;
+      margin-bottom: 2.5rem;
+    }
+    .top-meta {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+    .badge-group { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+    .badge {
+      display: inline-block;
+      padding: 0.35rem 0.85rem;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .badge-success { background-color: rgba(16, 185, 129, 0.1); color: var(--accent); border: 1px solid var(--accent); }
+    .badge-blue { background-color: rgba(59, 130, 246, 0.1); color: var(--blue); border: 1px solid var(--blue); }
+    .badge-purple { background-color: rgba(139, 92, 246, 0.1); color: var(--purple); border: 1px solid var(--purple); }
+    .badge-warning { background-color: rgba(245, 158, 11, 0.1); color: var(--warning); border: 1px solid var(--warning); }
+    
+    h1 { font-size: 2.5rem; font-weight: 900; letter-spacing: -0.03em; margin-bottom: 0.5rem; }
+    .subtitle { font-size: 1.15rem; color: var(--text-muted); max-width: 950px; }
+    
+    .grid-kpi {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 3rem;
+    }
+    .card-kpi {
+      background-color: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 0.75rem;
+      padding: 1.5rem;
+      position: relative;
+      overflow: hidden;
+    }
+    .card-kpi::before {
+      content: "";
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--blue), var(--purple));
+    }
+    .kpi-title { font-size: 0.85rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700; margin-bottom: 0.5rem; }
+    .kpi-value { font-size: 2.2rem; font-weight: 800; color: #ffffff; }
+    .kpi-subtitle { font-size: 0.8rem; color: var(--blue); margin-top: 0.35rem; display: flex; align-items: center; gap: 0.35rem; }
+    
+    .card {
+      background-color: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 0.75rem;
+      padding: 2rem;
+      margin-bottom: 2.5rem;
+    }
+    .card h2 {
+      font-size: 1.5rem;
+      font-weight: 800;
+      margin-bottom: 1.25rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.75rem;
+    }
+    
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 1rem;
+      font-size: 0.9rem;
+    }
+    th, td {
+      padding: 0.85rem 1rem;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+    th {
+      background-color: var(--card-alt);
+      color: var(--text-muted);
+      font-weight: 700;
+      text-transform: uppercase;
+      font-size: 0.75rem;
+      letter-spacing: 0.05em;
+    }
+    tr:hover td { background-color: rgba(255, 255, 255, 0.02); }
+    
+    .status-pill {
+      display: inline-block;
+      padding: 0.2rem 0.6rem;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 700;
+    }
+    .status-pill.success { background: rgba(16, 185, 129, 0.2); color: var(--accent); }
+    .status-pill.warning { background: rgba(245, 158, 11, 0.2); color: var(--warning); }
+    .status-pill.info { background: rgba(59, 130, 246, 0.2); color: var(--blue); }
+    
+    .code-box {
+      background-color: #05070a;
+      border: 1px solid var(--border);
+      border-radius: 0.5rem;
+      padding: 1rem;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.85rem;
+      color: #38bdf8;
+      overflow-x: auto;
+      margin: 1rem 0;
+    }
+    
+    .links-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+    .link-item {
+      display: block;
+      background: var(--card-alt);
+      border: 1px solid var(--border);
+      padding: 1rem 1.25rem;
+      border-radius: 0.5rem;
+      color: var(--text);
+      text-decoration: none;
+      transition: all 0.2s;
+    }
+    .link-item:hover {
+      border-color: var(--blue);
+      transform: translateY(-2px);
+    }
+    .link-item strong { display: block; color: var(--blue); margin-bottom: 0.25rem; }
+    .link-item span { font-size: 0.8rem; color: var(--text-muted); }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="top-meta">
+        <div class="badge-group">
+          <span class="badge badge-blue">Subetapa 03.5 Em Homologação</span>
+          <span class="badge badge-purple">PR.046 / v1.46 (Build 46)</span>
+          <span class="badge badge-success">03.4 Aprovada com 221 Testes</span>
+          <span class="badge badge-warning">Bridge Nativo & Speech Android</span>
+        </div>
+        <div style="font-size: 0.85rem; color: var(--text-muted);">
+          Data da Publicação: <strong>06 de Novembro de 2026</strong>
+        </div>
+      </div>
+      <h1>KYRO Finance — Portal Oficial da Subetapa 03.5</h1>
+      <p class="subtitle">
+        Integração de Reconhecimento Contínuo de Voz Android (SpeechRecognizer Nativo),
+        Bridge Bidirecional de Eventos (partialResult / finalResult) e Saneamento de Segurança Capacitor.
+      </p>
+    </header>
+
+    <!-- KPIs -->
+    <div class="grid-kpi">
+      <div class="card-kpi">
+        <div class="kpi-title">Componente 10</div>
+        <div class="kpi-value">Bridge Nativo</div>
+        <div class="kpi-subtitle">✓ Eventos Streaming de Voz (partial / final)</div>
+      </div>
+      <div class="card-kpi">
+        <div class="kpi-title">Componente 23</div>
+        <div class="kpi-value">Java Speech</div>
+        <div class="kpi-subtitle">✓ Plugin Nativo Android SpeechRecognizer</div>
+      </div>
+      <div class="card-kpi">
+        <div class="kpi-title">Componente 24</div>
+        <div class="kpi-value">Capacitor Seguro</div>
+        <div class="kpi-subtitle">✓ Zero Cleartext e Mixed Content Bloqueado</div>
+      </div>
+      <div class="card-kpi">
+        <div class="kpi-title">Base Homologada (03.4)</div>
+        <div class="kpi-value">221 / 221</div>
+        <div class="kpi-subtitle">✓ 100% de Aprovação no Núcleo e Rotas</div>
+      </div>
+    </div>
+
+    <!-- Seção 1: Escopo e Objetivos da Subetapa 03.5 -->
+    <div class="card">
+      <h2>1. Escopo Arquitetural da Subetapa 03.5</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Componente</th>
+            <th>Caminho no Código</th>
+            <th>Objetivo Observável</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Componente 10 — Bridge Nativo Android</strong></td>
+            <td><code>src/nativeBridge.ts</code></td>
+            <td>Comunicação bidirecional contínua de reconhecimento de voz com despacho de eventos <code>partialResult</code> e <code>finalResult</code> em tempo real para o chat.</td>
+            <td><span class="status-pill info">EM INTEGRAÇÃO</span></td>
+          </tr>
+          <tr>
+            <td><strong>Componente 23 — Plugin Java Speech</strong></td>
+            <td><code>android/app/src/main/java/.../NativeSpeechRecognizerPlugin.java</code></td>
+            <td>Plugin Capacitor em Java invocando <code>android.speech.SpeechRecognizer</code> com suporte a pontuação e streaming de transcrição.</td>
+            <td><span class="status-pill info">EM INTEGRAÇÃO</span></td>
+          </tr>
+          <tr>
+            <td><strong>Componente 24 — Configuração Capacitor Saneada</strong></td>
+            <td><code>android/app/capacitor.config.json</code></td>
+            <td>Desativação estrita de tráfego cleartext não criptografado e bloqueio de allowMixedContent (comunicação 100% segura HTTPS/WSS).</td>
+            <td><span class="status-pill success">PRONTO</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Seção 2: Especificação de Eventos da Bridge -->
+    <div class="card">
+      <h2>2. Arquitetura do Speech Streaming (Event Loop Nativo)</h2>
+      <div class="code-box">
+[Usuário Pressiona Microfone] -> nativeBridge.startListening({ language: 'pt-BR', continuous: true })
+[Android SpeechRecognizer]   -> Emite onPartialResults: "gastei cinquenta..." -> Evento 'partialResult'
+[Interface React KYRO]       -> Atualiza campo de input com texto em cinza transparente em tempo real
+[Android SpeechRecognizer]   -> Emite onResults: "Gastei R$ 50 no almoço hoje" -> Evento 'finalResult'
+[Pipeline de Processamento]  -> Despacho para Parser Semântico e Ingestão Contábil do LedgerEngine
+      </div>
+    </div>
+
+    <!-- Seção 3: Links de Acesso e Deploys -->
+    <div class="card">
+      <h2>3. Ambientes e Artefatos Homologados</h2>
+      <div class="links-grid">
+        <a href="https://kyro-fase-03-5.vercel.app/" class="link-item" target="_blank">
+          <strong>Ambiente Oficial Subetapa 03.5</strong>
+          <span>https://kyro-fase-03-5.vercel.app/ (PR.046 / v1.46)</span>
+        </a>
+        <a href="https://kyro-fase-03-4.vercel.app/" class="link-item" target="_blank">
+          <strong>Ambiente Oficial Subetapa 03.4</strong>
+          <span>https://kyro-fase-03-4.vercel.app/ (PR.045 / v1.45)</span>
+        </a>
+        <a href="https://kyro-fase-03-3.vercel.app/" class="link-item" target="_blank">
+          <strong>Ambiente Oficial Subetapa 03.3</strong>
+          <span>https://kyro-fase-03-3.vercel.app/ (PR.044 / v1.44)</span>
+        </a>
+        <a href="https://github.com/Wisterly/kyro-finance/releases/download/apk-latest/KYRO-Finance.apk" class="link-item" target="_blank">
+          <strong>Download Direto do APK Android Atualizado</strong>
+          <span>KYRO-Finance.apk (Release Oficial GitHub apk-latest)</span>
+        </a>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

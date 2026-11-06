@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KYRO Finance | Relatório Oficial — Fechamento Subetapa 03.3 (PR.044)</title>
+  <style>
+    :root {
+      --bg: #0b0f17;
+      --card-bg: #111827;
+      --card-alt: #162032;
+      --border: #1f2937;
+      --text: #f3f4f6;
+      --text-muted: #9ca3af;
+      --accent: #10b981;
+      --accent-glow: rgba(16, 185, 129, 0.15);
+      --danger: #ef4444;
+      --warning: #f59e0b;
+      --blue: #3b82f6;
+      --purple: #8b5cf6;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      padding: 2rem 1rem;
+    }
+    .container { max-width: 1400px; margin: 0 auto; }
+    header {
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 2rem;
+      margin-bottom: 2.5rem;
+    }
+    .top-meta {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+    .badge-group { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+    .badge {
+      display: inline-block;
+      padding: 0.35rem 0.85rem;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .badge-success { background-color: rgba(16, 185, 129, 0.1); color: var(--accent); border: 1px solid var(--accent); }
+    .badge-blue { background-color: rgba(59, 130, 246, 0.1); color: var(--blue); border: 1px solid var(--blue); }
+    .badge-purple { background-color: rgba(139, 92, 246, 0.1); color: var(--purple); border: 1px solid var(--purple); }
+    .badge-warning { background-color: rgba(245, 158, 11, 0.1); color: var(--warning); border: 1px solid var(--warning); }
+    
+    h1 { font-size: 2.5rem; font-weight: 900; letter-spacing: -0.03em; margin-bottom: 0.5rem; }
+    .subtitle { font-size: 1.15rem; color: var(--text-muted); max-width: 950px; }
+    
+    .grid-kpi {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 3rem;
+    }
+    .card-kpi {
+      background-color: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 0.75rem;
+      padding: 1.5rem;
+      position: relative;
+      overflow: hidden;
+    }
+    .card-kpi::before {
+      content: "";
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--accent), var(--blue));
+    }
+    .kpi-title { font-size: 0.85rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700; margin-bottom: 0.5rem; }
+    .kpi-value { font-size: 2.2rem; font-weight: 800; color: #ffffff; }
+    .kpi-subtitle { font-size: 0.8rem; color: var(--accent); margin-top: 0.35rem; display: flex; align-items: center; gap: 0.35rem; }
+    
+    .card {
+      background-color: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 0.75rem;
+      padding: 2rem;
+      margin-bottom: 2.5rem;
+    }
+    .card h2 {
+      font-size: 1.5rem;
+      font-weight: 800;
+      margin-bottom: 1.25rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 1rem;
+      font-size: 0.9rem;
+    }
+    th, td {
+      padding: 0.85rem 1rem;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+    th {
+      background-color: var(--card-alt);
+      color: var(--text-muted);
+      font-weight: 700;
+      text-transform: uppercase;
+      font-size: 0.75rem;
+      letter-spacing: 0.05em;
+    }
+    tr:hover { background-color: rgba(255, 255, 255, 0.02); }
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.85em;
+      background-color: rgba(255, 255, 255, 0.07);
+      padding: 0.2rem 0.4rem;
+      border-radius: 0.25rem;
+      color: #e5e7eb;
+    }
+    .code-block {
+      background-color: #060911;
+      border: 1px solid var(--border);
+      border-radius: 0.5rem;
+      padding: 1.25rem;
+      font-family: monospace;
+      font-size: 0.85rem;
+      color: #93c5fd;
+      overflow-x: auto;
+      margin-top: 1rem;
+      line-height: 1.5;
+    }
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.2rem 0.6rem;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 700;
+    }
+    .status-applied { background-color: rgba(16, 185, 129, 0.15); color: var(--accent); }
+    .status-rejected { background-color: rgba(239, 68, 68, 0.15); color: var(--danger); }
+    .status-replay { background-color: rgba(59, 130, 246, 0.15); color: var(--blue); }
+    .status-pending { background-color: rgba(245, 158, 11, 0.15); color: var(--warning); }
+    
+    .btn-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background-color: var(--accent);
+      color: #042f2e;
+      font-weight: 700;
+      padding: 0.75rem 1.5rem;
+      border-radius: 0.5rem;
+      text-decoration: none;
+      transition: opacity 0.2s;
+    }
+    .btn-link:hover { opacity: 0.9; }
+    footer {
+      border-top: 1px solid var(--border);
+      padding-top: 2rem;
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="top-meta">
+        <div class="badge-group">
+          <span class="badge badge-success">Portão 03.3 Homologado</span>
+          <span class="badge badge-blue">PR.044 (Build 44)</span>
+          <span class="badge badge-purple">Multi-Processo HTTP Real</span>
+          <span class="badge badge-warning">Zero Regressão</span>
+        </div>
+        <div style="font-size:0.85rem; color:var(--text-muted);">
+          Data de Emissão: <strong>06/11/2026</strong> | Emuladores: <strong>Firestore 8080 & Auth 9099</strong>
+        </div>
+      </div>
+      <h1>KYRO FINANCE | Relatório Técnico Oficial: Fechamento Subetapa 03.3</h1>
+      <p class="subtitle">
+        Caminho de gravação autorizado por UID e transacional comprovado pela rota HTTP real em múltiplos processos independentes. Verificador oficial Firebase Admin em todos os ramos (com e sem emulador), ausência de chave falhando explicitamente, eliminação de fallback para mock, tolerância a falhas de armazenamento (503), persistência atômica no Firestore Emulator oficial e resiliência com sobrevivência a reinício.
+      </p>
+    </header>
+
+    <!-- KPIS -->
+    <div class="grid-kpi">
+      <div class="card-kpi">
+        <div class="kpi-title">Testes do Núcleo Contábil</div>
+        <div class="kpi-value">51 / 51</div>
+        <div class="kpi-subtitle">✓ Cobertura Integral</div>
+      </div>
+      <div class="card-kpi">
+        <div class="kpi-title">Testes de Contrato Isolados</div>
+        <div class="kpi-value">16 / 16</div>
+        <div class="kpi-subtitle">✓ Provas Criptográficas e Mocks</div>
+      </div>
+      <div class="card-kpi">
+        <div class="kpi-title">Testes de Integração HTTP Real</div>
+        <div class="kpi-value">37 / 37</div>
+        <div class="kpi-subtitle">✓ PIDs Distintos & Emuladores</div>
+      </div>
+      <div class="card-kpi">
+        <div class="kpi-title">Total Consolidado</div>
+        <div class="kpi-value">104 / 104</div>
+        <div class="kpi-subtitle">✓ 100% de Sucesso (0 Falhas)</div>
+      </div>
+    </div>
+
+    <!-- SEÇÃO 1: FALHA EXPLÍCITA DE ARMAZENAMENTO -->
+    <div class="card">
+      <h2>🛑 1. Falha Explícita Quando Armazenamento Indisponível (Sem Fallback para Mock)</h2>
+      <p style="color:var(--text-muted); margin-bottom:1rem;">
+        O fallback automático para <code>TransactionalStoreMock</code> foi <strong>completamente removido</strong> do caminho de execução da aplicação. Em caso de configuração ausente ou banco inacessível, a rota falha de forma estrita e imediata:
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>Condição de Armazenamento</th>
+            <th>Comportamento Observado</th>
+            <th>Código HTTP / Resposta</th>
+            <th>Garantia de Integridade</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Armazenamento Indisponível / Desabilitado</strong></td>
+            <td>Lança <code>StorageUnavailableError</code> sem recorrer a mock em memória</td>
+            <td><code>HTTP 503 (STORAGE_UNAVAILABLE)</code></td>
+            <td><span class="status-pill status-rejected">Zero Recibo APPLIED</span> Zero gravação confirmada</td>
+          </tr>
+          <tr>
+            <td><strong>Falha no Commit da Transação</strong></td>
+            <td>Rollback total e imediato no Firestore</td>
+            <td><code>HTTP 500 / 503</code></td>
+            <td><span class="status-pill status-rejected">Zero Escrita Parcial</span> Saldo original rigorosamente preservado</td>
+          </tr>
+          <tr>
+            <td><strong>Uso de Mock</strong></td>
+            <td>Restrito exclusivamente à injeção controlada via <code>setStoreInstance()</code> em testes isolados de contrato</td>
+            <td>N/A</td>
+            <td><span class="status-pill status-applied">Isolamento Absoluto</span> Proibido na rota pública do produto</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- SEÇÃO 2: VERIFICAÇÃO DE ASSINATURA E RAMOS DE AUTENTICAÇÃO -->
+    <div class="card">
+      <h2>🔐 2. Verificação de Assinatura Firebase Admin e Ramos de Autenticação</h2>
+      <p style="color:var(--text-muted); margin-bottom:1rem;">
+        A aplicação utiliza exclusivamente o verificador oficial Firebase Admin (<code>auth.verifyIdToken</code>) em todos os ramos de execução da rota. O fallback inseguro que aceitava claims sem chave pública foi completamente extirpado:
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>Ramo / Cenário</th>
+            <th>Condição de Execução</th>
+            <th>Resultado Observado</th>
+            <th>Código HTTP</th>
+            <th>Classificação</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Ramo Fora do Emulador (Sem Host)</strong></td>
+            <td><code>FIREBASE_AUTH_EMULATOR_HOST</code> ausente + JWT com claims plausíveis e assinatura forjada</td>
+            <td>Verificador oficial rejeita a assinatura perante certificados do Google</td>
+            <td><code>HTTP 401 (UNAUTHORIZED_INVALID_CREDENTIAL)</code></td>
+            <td><span class="status-pill status-rejected">Integração HTTP</span></td>
+          </tr>
+          <tr>
+            <td><strong>Ramo com Emulador Oficial</strong></td>
+            <td><code>FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099</code> + ID Token legítimo via REST do Auth Emulator</td>
+            <td>UID extraído diretamente do <code>localId</code> oficial</td>
+            <td><code>HTTP 200 (Autenticado)</code></td>
+            <td><span class="status-pill status-applied">Integração HTTP</span></td>
+          </tr>
+          <tr>
+            <td><strong>Credencial Sintética na Rota Pública</strong></td>
+            <td><code>Authorization: Bearer demo-token:usr_alice</code></td>
+            <td>Rejeição categórica independente de variáveis de ambiente</td>
+            <td><code>HTTP 401 (Proibido)</code></td>
+            <td><span class="status-pill status-rejected">Integração HTTP</span></td>
+          </tr>
+          <tr>
+            <td><strong>Tentativa de Injeção de Falha Externa</strong></td>
+            <td>Cabeçalho <code>x-simulate-failure</code> ou body <code>simulatePreCommitFailure</code></td>
+            <td>Rota ignora tentativa de injeção e conclui transação legítima</td>
+            <td><code>HTTP 200 (Ignorado)</code></td>
+            <td><span class="status-pill status-applied">Integração HTTP</span></td>
+          </tr>
+          <tr>
+            <td><strong>Tentativa Cross-Tenant</strong></td>
+            <td>Token válido de Alice enviando <code>userId: 'usr_bob'</code></td>
+            <td>Barreira de segurança intercepta a personificação</td>
+            <td><code>HTTP 403 (PERMISSION_DENIED_CROSS_TENANT)</code></td>
+            <td><span class="status-pill status-rejected">Integração HTTP</span></td>
+          </tr>
+          <tr>
+            <td><strong>Ausência de Chave Pública na Prova</strong></td>
+            <td>Chamada a <code>verifyJwtCryptographically</code> com <code>publicKeyPem: ''</code></td>
+            <td>Falha explicitamente exigindo a chave pública</td>
+            <td><code>isValid: false</code></td>
+            <td><span class="status-pill status-rejected">Contrato Isolado</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- SEÇÃO 3: INTEGRAÇÃO REAL EM DOIS PROCESSOS INDEPENDENTES -->
+    <div class="card">
+      <h2>⚡ 3. Integração em Dois Processos Independentes no Firestore Emulator</h2>
+      <p style="color:var(--text-muted); margin-bottom:1rem;">
+        Comprovado o comportamento da rota pública executando em <strong>dois processos Node.js independentes no SO</strong> (PIDs e portas distintos), conectados ao mesmo Firestore Emulator oficial (127.0.0.1:8080):
+      </p>
+      <div class="code-block">
+[TESTE MULTI-PROCESSO CONCORRENTE REAL]
+- Processo 1: PID 17360 | Porta 4101 | Firestore Emulator: 127.0.0.1:8080
+- Processo 2: PID 42540 | Porta 4102 | Firestore Emulator: 127.0.0.1:8080
+- Saldo Inicial no Firestore: R$ 1.000,00 (100000 centavos)
+- Disparo Simultâneo via HTTP: Promise.all([fetch(Porta 4101), fetch(Porta 4102)])
+  -> Ambas instâncias respondem HTTP 200 OK com status APPLIED
+  -> Exatamente uma instância retorna replay: true
+  -> Leitura Direta do Firestore: Saldo = R$ 800,00 (80000 centavos) [Efeito Único]
+- Integração de Webhook via Rede: POST http://127.0.0.1:4101/api/webhook -> HTTP 200 (Synced) e HTTP 401 (Segredo Inválido)
+- Encerramento dos Processos: kill(PID 17360) e kill(PID 42540)
+- Subida de Novo Processo (Processo 3): PID 14632 | Porta 4103
+- Retry Idêntico: HTTP 200 com replay: true recuperado do Firestore | Saldo = R$ 800,00 (Zero Duplo Débito)
+- Retry Divergente: HTTP 409 Conflict (IDEMPOTENCY_PAYLOAD_MISMATCH) | Saldo preservado
+- Falha na Transação: HTTP 500 | Rollback 100% comprovado no Firestore
+      </div>
+    </div>
+
+    <!-- SEÇÃO 4: ESCOPO DE WHATSAPP E ANDROID -->
+    <div class="card">
+      <h2>📱 4. Escopo do Webhook e Paridade Android</h2>
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:1.5rem; margin-top:1rem;">
+        <div style="background:var(--card-alt); padding:1.25rem; border-radius:0.5rem; border:1px solid var(--border);">
+          <h3 style="margin-top:0;">Rota Real do Webhook (/api/webhook)</h3>
+          <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:0.75rem;">
+            A camada de autorização e resolução de identidade no servidor foi 100% comprovada por contratos e pela rede:
+          </p>
+          <ul style="font-size:0.85rem;">
+            <li>Origem não autenticada rejeitada com <strong>HTTP 401 (<code>WEBHOOK_ORIGIN_UNAUTHORIZED</code>)</strong>.</li>
+            <li>Telefone sem cadastro rejeitado com <strong>HTTP 403 (<code>UNBOUND_PROVIDER_IDENTITY</code>)</strong>.</li>
+            <li>Telefone ambíguo (múltiplos UIDs) rejeitado com <strong>HTTP 409 (<code>AMBIGUOUS_PROVIDER_IDENTITY</code>)</strong>.</li>
+            <li>Telefone com vínculo unívoco aceito com <strong>HTTP 200</strong> e gravado sob o UID resolvido no servidor.</li>
+            <li style="margin-top:0.5rem; color:var(--warning);"><strong>Transporte Físico Externo:</strong> A integração física de transporte com Baileys local e Evolution API segue agendada para as subetapas 03.4 e 03.6.</li>
+          </ul>
+        </div>
+        <div style="background:var(--card-alt); padding:1.25rem; border-radius:0.5rem; border:1px solid var(--border);">
+          <h3 style="margin-top:0;">Paridade Android e Instalação Física</h3>
+          <p style="font-size:0.85rem; color:var(--text-muted);">
+            - <strong>Paridade de Assinatura v2 Scheme:</strong> <span class="status-pill status-applied">HOMOLOGADA</span><br>
+            Certificate SHA-256 Digest <code>9B2B95A993EC5DDB928B76C230D3B32A3AE00DE2D548A519A81B8870C0CE9C74</code> estritamente preservado.<br><br>
+            - <strong>Instalação Física em Aparelho:</strong> <span class="status-pill status-pending">PENDENTE</span><br>
+            Segregada da homologação contábil/transacional e mantida para a subetapa de canal mobile (03.7).
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- SEÇÃO 5: PARECER TÉCNICO -->
+    <div class="card">
+      <h2>📋 5. Pareceres Técnicos Segmentados por Camada</h2>
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:1.5rem; margin-top:1rem;">
+        <div style="background:rgba(16, 185, 129, 0.05); padding:1.25rem; border-radius:0.5rem; border:1px solid var(--accent);">
+          <h3 style="color:var(--accent); margin-top:0;">1. Testes Unitários do Núcleo</h3>
+          <p style="font-size:0.85rem;">
+            <strong>APROVADO (51/51 - 100%):</strong> Money, Calendar, Ledger e Reports operando deterministicamente com aritmética de centavos BigInt e partidas dobradas.
+          </p>
+        </div>
+        <div style="background:rgba(59, 130, 246, 0.05); padding:1.25rem; border-radius:0.5rem; border:1px solid var(--blue);">
+          <h3 style="color:var(--blue); margin-top:0;">2. Contratos Isolados com Mock</h3>
+          <p style="font-size:0.85rem;">
+            <strong>APROVADO (16/16 - 100%):</strong> Prova RS256 isolada com chave pública obrigatória, contratos de webhook e prova isolada de falha pré-commit.
+          </p>
+        </div>
+        <div style="background:rgba(139, 92, 246, 0.05); padding:1.25rem; border-radius:0.5rem; border:1px solid var(--purple);">
+          <h3 style="color:var(--purple); margin-top:0;">3. Integração HTTP Multi-Processo</h3>
+          <p style="font-size:0.85rem;">
+            <strong>APROVADO (37/37 - 100%):</strong> PIDs distintos, Auth e Firestore Emulators oficiais, ramo sem emulador com rejeição 401 e sobrevivência a reinício.
+          </p>
+        </div>
+        <div style="background:rgba(245, 158, 11, 0.05); padding:1.25rem; border-radius:0.5rem; border:1px solid var(--warning);">
+          <h3 style="color:var(--warning); margin-top:0;">4. Dispositivo Físico Android</h3>
+          <p style="font-size:0.85rem;">
+            <strong>ASSINATURA HOMOLOGADA / INSTALAÇÃO PENDENTE:</strong> Assinatura e digest v2 válidos. Instalação em hardware reservada para a subetapa 03.7.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- DOWNLOADS E HISTÓRICO -->
+    <div class="card" style="text-align:center;">
+      <h2 style="justify-content:center;">📦 Pacotes Oficiais e Navegação de Subetapas</h2>
+      <p style="color:var(--text-muted); margin-bottom:1.5rem;">
+        Ponto de Restauração <strong>PR.044</strong> registrado com sucesso no repositório oficial.
+      </p>
+      <div style="display:flex; justify-content:center; gap:1rem; flex-wrap:wrap; margin-bottom:1.5rem;">
+        <a href="https://github.com/Wisterly/kyro-finance/releases/download/apk-latest/KYRO-Finance.apk" class="btn-link" target="_blank">
+          ⬇️ Baixar APK Atualizado (KYRO-Finance.apk)
+        </a>
+        <a href="https://kyro-fase-02-encerramento.vercel.app/" class="btn-link" style="background:#1f2937;" target="_blank">
+          🏛️ Entrega Anterior (Fase 02 / Subetapa 03.2)
+        </a>
+        <a href="https://github.com/Wisterly/kyro-finance" class="btn-link" style="background:#374151;" target="_blank">
+          🔗 Repositório GitHub (PR.044)
+        </a>
+      </div>
+    </div>
+
+    <footer>
+      <p><strong>KYRO Finance | Private Finance</strong> — Relatório Técnico Oficial de Fechamento da Subetapa 03.3</p>
+      <p style="margin-top:0.25rem;">
+        Produção Web: <a href="https://kyro-finance.vercel.app" target="_blank" style="color:var(--accent);">https://kyro-finance.vercel.app</a> | 
+        Subetapa 03.3 Vercel: <a href="https://kyro-fase-03-3.vercel.app/" target="_blank" style="color:var(--accent);">https://kyro-fase-03-3.vercel.app/</a> | 
+        Histórico Fase 02: <a href="https://kyro-fase-02-encerramento.vercel.app/" target="_blank" style="color:var(--accent);">https://kyro-fase-02-encerramento.vercel.app/</a>
+      </p>
+    </footer>
+  </div>
+</body>
+</html>

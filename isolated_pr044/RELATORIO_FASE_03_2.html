@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KYRO Finance | Relatório Oficial — Fase 3.2 (Entrada na 03.3)</title>
+  <style>
+    :root {
+      --bg: #0b0f17;
+      --card-bg: #111827;
+      --card-alt: #162032;
+      --border: #1f2937;
+      --text: #f3f4f6;
+      --text-muted: #9ca3af;
+      --accent: #10b981;
+      --accent-glow: rgba(16, 185, 129, 0.15);
+      --danger: #ef4444;
+      --warning: #f59e0b;
+      --blue: #3b82f6;
+      --purple: #8b5cf6;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      padding: 2rem 1rem;
+    }
+    .container { max-width: 1400px; margin: 0 auto; }
+    header {
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 2rem;
+      margin-bottom: 2.5rem;
+    }
+    .top-meta {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+    .badge-group { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+    .badge {
+      display: inline-block;
+      padding: 0.35rem 0.85rem;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .badge-success { background-color: rgba(16, 185, 129, 0.1); color: var(--accent); border: 1px solid var(--accent); }
+    .badge-blue { background-color: rgba(59, 130, 246, 0.1); color: var(--blue); border: 1px solid var(--blue); }
+    .badge-purple { background-color: rgba(139, 92, 246, 0.1); color: var(--purple); border: 1px solid var(--purple); }
+    .badge-warning { background-color: rgba(245, 158, 11, 0.1); color: var(--warning); border: 1px solid var(--warning); }
+    
+    h1 { font-size: 2.5rem; font-weight: 900; letter-spacing: -0.03em; margin-bottom: 0.5rem; }
+    .subtitle { font-size: 1.15rem; color: var(--text-muted); max-width: 950px; }
+    
+    .grid-kpi {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 3rem;
+    }
+    .card-kpi {
+      background-color: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 0.75rem;
+      padding: 1.5rem;
+      position: relative;
+      overflow: hidden;
+    }
+    .card-kpi::before {
+      content: "";
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--accent), var(--blue));
+    }
+    .kpi-title { font-size: 0.85rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700; margin-bottom: 0.5rem; }
+    .kpi-value { font-size: 2.2rem; font-weight: 800; color: #ffffff; }
+    .kpi-subtitle { font-size: 0.8rem; color: var(--accent); margin-top: 0.35rem; display: flex; align-items: center; gap: 0.35rem; }
+    
+    .card {
+      background-color: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 0.75rem;
+      padding: 2rem;
+      margin-bottom: 2.5rem;
+    }
+    .card h2 {
+      font-size: 1.5rem;
+      font-weight: 800;
+      margin-bottom: 1.25rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.75rem;
+    }
+    .card h3 {
+      font-size: 1.2rem;
+      font-weight: 700;
+      margin: 1.5rem 0 0.75rem 0;
+      color: #e5e7eb;
+    }
+    p { margin-bottom: 1rem; color: #d1d5db; }
+    
+    table { width: 100%; border-collapse: collapse; margin: 1.5rem 0; font-size: 0.9rem; }
+    th, td { padding: 0.85rem 1rem; text-align: left; border-bottom: 1px solid var(--border); }
+    th { background-color: var(--card-alt); color: var(--text-muted); font-weight: 700; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.05em; }
+    tr:hover { background-color: rgba(255, 255, 255, 0.02); }
+    
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.85rem;
+      background-color: #1f2937;
+      padding: 0.2rem 0.4rem;
+      border-radius: 0.25rem;
+      color: #93c5fd;
+    }
+    pre {
+      background-color: #0d1117;
+      border: 1px solid var(--border);
+      padding: 1.25rem;
+      border-radius: 0.5rem;
+      overflow-x: auto;
+      font-size: 0.85rem;
+      margin: 1rem 0;
+      color: #e6edf3;
+    }
+    
+    .status-pass { color: var(--accent); font-weight: 700; display: inline-flex; align-items: center; gap: 0.35rem; }
+    .status-pending { color: var(--warning); font-weight: 700; display: inline-flex; align-items: center; gap: 0.35rem; }
+    
+    .quick-links { display: flex; flex-wrap: wrap; gap: 1rem; margin: 1.5rem 0; }
+    .btn-link {
+      background: var(--card-alt);
+      border: 1px solid var(--border);
+      color: #ffffff;
+      padding: 0.75rem 1.25rem;
+      border-radius: 0.5rem;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 0.875rem;
+      transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .btn-link:hover { background: #1f2937; border-color: var(--accent); color: var(--accent); }
+    .btn-primary { background: rgba(16, 185, 129, 0.15); border-color: var(--accent); color: var(--accent); }
+    .btn-primary:hover { background: var(--accent); color: #000000; }
+    
+    footer { border-top: 1px solid var(--border); padding: 2.5rem 0; text-align: center; color: var(--text-muted); font-size: 0.875rem; }
+  </style>
+</head>
+<body>
+<div class="container">
+  
+  <header>
+    <div class="top-meta">
+      <div class="badge-group">
+        <span class="badge badge-success">Fase 3.2 Homologada</span>
+        <span class="badge badge-blue">Subetapa 03.1 Aceita (Emulador + CI)</span>
+        <span class="badge badge-purple">Ponto de Restauração PR.043</span>
+        <span class="badge badge-warning">Próximo: Subetapa 03.3</span>
+      </div>
+      <div style="font-size:0.85rem; color:var(--text-muted);">
+        Atualizado em: <strong>06/11/2026 00:30 BRT</strong> | SHA: <code>f61977cf73</code>
+      </div>
+    </div>
+    <h1>KYRO Finance | Relatório Oficial — Fase 3.2 (Entrada na 03.3)</h1>
+    <p class="subtitle">
+      Plataforma Unificada de Gestão Financeira Privada. Registro comprobatório do aceite definitivo da Subetapa 03.1, validação dos 51 testes do Núcleo Contábil da Subetapa 03.2 e alinhamento do plano de integração da Subetapa 03.3.
+    </p>
+
+    <div class="quick-links">
+      <a href="https://github.com/Wisterly/kyro-finance/releases/download/apk-latest/KYRO-Finance.apk" class="btn-link btn-primary" target="_blank">
+        📥 Baixar APK Atualizado (.apk)
+      </a>
+      <a href="https://github.com/Wisterly/kyro-finance/commit/f61977cf73d5f2768e2da3c94b214daa7131386e" class="btn-link" target="_blank">
+        🔗 Commit Oficial PR.043 (f61977c)
+      </a>
+      <a href="./emulator_integration_evidence.json" class="btn-link" target="_blank">
+        🔥 Prova Oficial Emuladores (JSON)
+      </a>
+      <a href="./pr043_clean_verification.json" class="btn-link" target="_blank">
+        🧪 Validação Limpa 51 Testes (JSON)
+      </a>
+      <a href="./local_environment_evidence.json" class="btn-link" target="_blank">
+        🧠 Prova Modelo em Memória (JSON)
+      </a>
+      <a href="./offline_reversal_evidence.json" class="btn-link" target="_blank">
+        🔄 Reversão Offline Saneada (JSON)
+      </a>
+      <a href="./encerramento-fase-02.html" class="btn-link">
+        📜 Arquivo: Encerramento Fase 02
+      </a>
+    </div>
+  </header>
+
+  <!-- PAINEL DE STATUS POR AMBIENTE -->
+  <div class="card" style="border-left: 4px solid var(--accent);">
+    <h2>Quadro Consolidado de Homologação por Ambiente</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Ambiente de Execução</th>
+          <th>Escopo Auditado</th>
+          <th>Evidência Canônica</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Modelo Isolado em Memória</strong></td>
+          <td>Prova matemática de RS256, Fencing Tokens e concorrência pura</td>
+          <td><a href="./local_environment_evidence.json" target="_blank" style="color:var(--accent);">local_environment_evidence.json</a></td>
+          <td><span class="status-pass">✓ APROVADO</span></td>
+        </tr>
+        <tr>
+          <td><strong>Emuladores Oficiais Firebase</strong></td>
+          <td>Auth Emulator Oficial (<code>firebase-tools@15.35.0:9099</code>) + Firestore REST v1 (<code>8080</code>) com isolamento por UID</td>
+          <td><a href="./emulator_integration_evidence.json" target="_blank" style="color:var(--accent);">emulator_integration_evidence.json</a></td>
+          <td><span class="status-pass">✓ APROVADO</span></td>
+        </tr>
+        <tr>
+          <td><strong>CI / CD GitHub Actions</strong></td>
+          <td>Build de Release Android APK v1.42 (#42152737178) e v1.43 (#42154867494) com secrets seguros e paridade v2 scheme</td>
+          <td><a href="https://github.com/Wisterly/kyro-finance/actions" target="_blank" style="color:var(--accent);">GitHub Actions Workflow</a></td>
+          <td><span class="status-pass">✓ APROVADO</span></td>
+        </tr>
+        <tr>
+          <td><strong>Dispositivo Físico de Teste</strong></td>
+          <td>Comando <code>adb install -r</code> em aparelho conectado localmente</td>
+          <td>Aguardando pareamento de hardware ou emulador AVD</td>
+          <td><span class="status-pending">⏳ PENDENTE</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- SEÇÃO 1: COMPROVAÇÃO DA INTEGRAÇÃO LOCAL COM EMULADORES (PONTO 1) -->
+  <div class="card">
+    <h2>1. Comprovação da Integração com Emuladores Oficiais (03.1)</h2>
+    <p>
+      O ecossistema local de emuladores foi inicializado no projeto <code>demo-kyro-synthetic</code> demonstrando gravação autorizada e bloqueio estrito de acesso cross-tenant:
+    </p>
+    <ul>
+      <li><strong>Firebase Tools:</strong> Versão <code>15.35.0</code>.</li>
+      <li><strong>Auth Emulator Oficial:</strong> Host <code>127.0.0.1</code> na porta <code>9099</code>.</li>
+      <li><strong>Firestore Emulator Service:</strong> Host <code>127.0.0.1</code> na porta <code>8080</code>.</li>
+      <li><strong>Regra de Segurança Avaliada:</strong> <code>allow read, write: if request.auth.uid == userId;</code> no caminho Modelo B <code>users/{userId}/...</code>.</li>
+    </ul>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Operação Executada</th>
+          <th>Usuário Sintético</th>
+          <th>Caminho do Documento</th>
+          <th>HTTP Status</th>
+          <th>Resultado Observado</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Gravação Autorizada (Caminho da 03.3)</strong></td>
+          <td><code>alpha.user@kyro.synthetic</code><br>(UID: <code>PX6h3KfwRkwAlSwmXpbESospMUIi</code>)</td>
+          <td><code>users/PX6h3KfwRkwAlSwmXpbESospMUIi/transactions/tx-salario-01</code></td>
+          <td><code>200 OK</code></td>
+          <td><span class="status-pass">✓ AUTORIZADO</span> (Gravado R$ 5.000,00 em centavos BigInt)</td>
+        </tr>
+        <tr>
+          <td><strong>Tentativa Bloqueada (Cross-Tenant)</strong></td>
+          <td><code>beta.user@kyro.synthetic</code><br>(UID: <code>CN4rwKgcNdGgZFEDepJlvnRKgWxt</code>)</td>
+          <td><code>users/PX6h3KfwRkwAlSwmXpbESospMUIi/transactions/tx-ataque-02</code></td>
+          <td><code>403 FORBIDDEN</code></td>
+          <td><span class="status-pass">✓ BLOQUEADO</span> (<code>PERMISSION_DENIED</code>: UID divergente)</td>
+        </tr>
+      </tbody>
+    </table>
+    <p>
+      <em>Nota Técnica:</em> O arquivo <a href="./local_environment_evidence.json" target="_blank" style="color:var(--accent);">local_environment_evidence.json</a> permanece preservado como prova do modelo em memória isolado, enquanto o <a href="./emulator_integration_evidence.json" target="_blank" style="color:var(--accent);">emulator_integration_evidence.json</a> documenta a integração viva com as portas de serviço.
+    </p>
+  </div>
+
+  <!-- SEÇÃO 2: VÍNCULO DOS 51 TESTES À PR.043 (PONTO 2) -->
+  <div class="card">
+    <h2>2. Vínculo Rastreável dos 51 Testes ao Código da PR.043</h2>
+    <p>
+      O Ponto de Restauração <strong>PR.043</strong> corresponde ao commit <code>f61977cf73d5f2768e2da3c94b214daa7131386e</code>, verificado de forma limpa via <code>npm run test:engine</code> (duracão: 629ms, exit code: 0) e <code>npx tsc --noEmit</code> (0 erros):
+    </p>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Arquivo Canônico</th>
+          <th>Tamanho</th>
+          <th>Digest Criptográfico (SHA-256)</th>
+          <th>Cobertura de Testes</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>src/engine/money.ts</code></td>
+          <td>4.796 bytes</td>
+          <td><code>0ce40f3e64e8a47ea3707e572c76857fcb9baf04fa587801a8be485cfcbef123</code></td>
+          <td>15 Testes (Parsing BRL, Float safety, Split justo, Wire)</td>
+        </tr>
+        <tr>
+          <td><code>src/engine/calendar.ts</code></td>
+          <td>5.587 bytes</td>
+          <td><code>5536fa5f76cd28cf2e3972ec1b2c17e3f2c8219ffb87bb4c3749ef1dd372169d</code></td>
+          <td>10 Testes (Virada de dia, fuso UTC-3, linguagem natural)</td>
+        </tr>
+        <tr>
+          <td><code>src/engine/ledger.ts</code></td>
+          <td>9.967 bytes</td>
+          <td><code>9616577a8d34d7788ce6034965b98d117cf14e7abd533a2af985063ec7a5c99e</code></td>
+          <td>17 Testes (Modelo B, partidas dobradas, idempotência, tombstones)</td>
+        </tr>
+        <tr>
+          <td><code>src/engine/reports.ts</code></td>
+          <td>5.186 bytes</td>
+          <td><code>020c9cb8ebce06d5064b062e7f4ff9036bb49f5e31b9a4cb21e6c6f75140a60e</code></td>
+          <td>9 Testes (Patrimônio líquido, segregação Realizado vs Previsto)</td>
+        </tr>
+        <tr>
+          <td><code>src/engine/engine.test.ts</code></td>
+          <td>12.443 bytes</td>
+          <td><code>b5e807e48c7dd0d4e93dc2be4059f76958bac1dae294772500be6c8f8bc67258</code></td>
+          <td>Suíte determinística completa (51 asserções)</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>Política do Fuso Horário America/Fortaleza</h3>
+    <ul>
+      <li><strong>Definição da Política:</strong> Deslocamento estrito e linear de <strong>UTC−3 fixo</strong>, sem aplicação de horário de verão.</li>
+      <li><strong>Faixa de Datas Aplicável:</strong> Válido para toda a base operacional a partir de <strong>2019 em diante</strong> (ano de extinção do horário de verão no Brasil pelo Decreto Federal nº 9.772/2019), estendendo-se por todo o horizonte de projeções contínuas.</li>
+      <li><strong>Virada de Dia Comprovada:</strong> <code>02:59:59.999 UTC</code> em D+1 pertence à competência contábil do dia D (23:59:59.999 em Fortaleza).</li>
+    </ul>
+  </div>
+
+  <!-- SEÇÃO 3: ALINHAMENTO DA SUBETAPA 03.3 AOS 28 COMPONENTES (PONTO 3) -->
+  <div class="card">
+    <h2>3. Alinhamento da Subetapa 03.3 aos 28 Componentes Canônicos</h2>
+    <p>
+      Para garantir convergência com o inventário dos 28 componentes da Fase 02, a <strong>Subetapa 03.3</strong> estruturará a migração em 3 fases graduais:
+    </p>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Fase de Integração</th>
+          <th>Componente Alvo</th>
+          <th>Ação Arquitetural</th>
+          <th>Critério de Reversão / Fallback</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Passo 1: Autenticação por UID</strong></td>
+          <td><code>api/chat.ts</code><br><code>api/webhook.ts</code></td>
+          <td>Exigência do cabeçalho <code>Authorization: Bearer</code> com verificação do token e extração do <code>uid</code> para autorização do Modelo B.</td>
+          <td>Se o token for inválido, rejeição fechada (401/403). Sem fallback inseguro.</td>
+        </tr>
+        <tr>
+          <td><strong>Passo 2: Encapsulamento de api/database.ts</strong></td>
+          <td><code>api/database.ts</code><br><code>src/engine/persistenceAdapter.ts</code></td>
+          <td>Substituição do mapa em memória solto por persistência transacional com o <code>LedgerEngine</code> no Firestore (<code>users/{uid}/...</code> em centavos BigInt).</td>
+          <td>Fallback temporário de leitura para <code>schemaVersion: 2</code> se o documento ainda não tiver sido migrado para centavos BigInt.</td>
+        </tr>
+        <tr>
+          <td><strong>Passo 3: Persistência Transacional</strong></td>
+          <td><code>src/firebase.ts</code><br><code>bot.cjs</code></td>
+          <td>Roteamento de transações de Web, APK e WhatsApp exclusivamente através do <code>LedgerEngine</code> com idempotência por <code>requestId</code>.</td>
+          <td>Fila de quarentena local (IndexedDB / SQLite) com retry idempotente em caso de falha de conexão.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <footer>
+    <p><strong>KYRO Finance | Private Finance</strong> — Relatório Oficial de Evolução e Engenharia</p>
+    <p style="margin-top:0.35rem;">
+      Produção Web: <a href="https://kyro-finance.vercel.app" target="_blank" style="color:var(--accent);">https://kyro-finance.vercel.app</a> | 
+      Relatório Contínuo Vercel: <a href="https://kyro-fase-02-encerramento.vercel.app/" target="_blank" style="color:var(--accent);">https://kyro-fase-02-encerramento.vercel.app/</a>
+    </p>
+  </footer>
+
+</div>
+</body>
+</html>

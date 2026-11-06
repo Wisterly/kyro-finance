@@ -262,22 +262,33 @@ export async function validateFencingUnderTransaction(
     );
   }
 
-  // 2. Se o chamador especificou um fencingToken, conferir se é idêntico ao vigente
-  if (requiredFencingToken !== undefined && requiredFencingToken !== null) {
-    if (requiredFencingToken < lease.fencingToken) {
-      throw new FencingTokenMismatchError(
-        `Fencing token informado (${requiredFencingToken}) é inferior ao token vigente no storage (${lease.fencingToken}). Processo obsoleto/fenced.`
-      );
-    }
-    if (requiredFencingToken !== lease.fencingToken) {
-      throw new FencingTokenMismatchError(
-        `Fencing token informado (${requiredFencingToken}) difere do token vigente (${lease.fencingToken}).`
-      );
-    }
+  // 2. Se o recurso possui lease ativo, prova de posse é estritamente OBRIGATÓRIA
+  // A. Conferência de Fencing Token
+  if (requiredFencingToken === undefined || requiredFencingToken === null) {
+    throw new FencingTokenMismatchError(
+      `Recurso '${resourceId}' possui lease ativo concedido a '${lease.holderId}'. Prova de posse obrigatória: fencingToken não fornecido.`
+    );
   }
 
-  // 3. Se o chamador especificou holderId, conferir posse
-  if (holderId && lease.holderId !== holderId) {
+  if (requiredFencingToken < lease.fencingToken) {
+    throw new FencingTokenMismatchError(
+      `Fencing token informado (${requiredFencingToken}) é inferior ao token vigente no storage (${lease.fencingToken}). Processo obsoleto/fenced.`
+    );
+  }
+  if (requiredFencingToken !== lease.fencingToken) {
+    throw new FencingTokenMismatchError(
+      `Fencing token informado (${requiredFencingToken}) difere do token vigente (${lease.fencingToken}).`
+    );
+  }
+
+  // B. Conferência de Titular do Lease (HolderId)
+  if (!holderId || typeof holderId !== 'string' || holderId.trim() === '') {
+    throw new LeaseHolderMismatchError(
+      `Recurso '${resourceId}' possui lease ativo concedido a '${lease.holderId}'. Prova de posse obrigatória: holderId não fornecido.`
+    );
+  }
+
+  if (lease.holderId !== holderId) {
     throw new LeaseHolderMismatchError(
       `Titular do processo ('${holderId}') difere do proprietário do lease ('${lease.holderId}').`
     );

@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <radialGradient id="bgGrad" cx="50%" cy="40%" r="60%">
+      <stop offset="0%" stop-color="#141C30" />
+      <stop offset="100%" stop-color="#070A12" />
+    </radialGradient>
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FDE68A" />
+      <stop offset="30%" stop-color="#F59E0B" />
+      <stop offset="70%" stop-color="#D97706" />
+      <stop offset="100%" stop-color="#B45309" />
+    </linearGradient>
+    <linearGradient id="goldAccent" x1="100%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FEF3C7" />
+      <stop offset="50%" stop-color="#FBBF24" />
+      <stop offset="100%" stop-color="#92400E" />
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="16" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+
+  <!-- Fundo Escuro de Luxo -->
+  <rect width="512" height="512" rx="112" fill="url(#bgGrad)" />
+  <rect width="506" height="506" x="3" y="3" rx="109" fill="none" stroke="#F59E0B" stroke-width="3" stroke-opacity="0.35" />
+
+  <!-- Símbolo Esculpido K -->
+  <g filter="url(#glow)">
+    <!-- Haste Vertical -->
+    <path d="M 160,110 L 210,110 L 210,402 L 160,402 Z" fill="url(#goldGrad)" rx="8" />
+    
+    <!-- Braço Superior -->
+    <path d="M 195,270 L 325,125 L 385,125 L 245,280 Z" fill="url(#goldAccent)" rx="6" />
+    
+    <!-- Braço Inferior -->
+    <path d="M 230,265 L 375,395 L 315,395 L 185,275 Z" fill="url(#goldGrad)" rx="6" />
+
+    <!-- Brilho Central -->
+    <circle cx="210" cy="270" r="14" fill="#FEF3C7" opacity="0.9" />
+  </g>
+</svg>

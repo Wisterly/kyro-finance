@@ -1,0 +1,20 @@
+{
+  "appId": "com.kyro.finance",
+  "appName": "KYRO Finance",
+  "webDir": "dist",
+  "bundledWebRuntime": false,
+  "server": {
+    "androidScheme": "https",
+    "cleartext": true,
+    "allowNavigation": [
+      "kyro-finance.vercel.app",
+      "*.vercel.app",
+      "*.firebaseio.com",
+      "*.googleapis.com"
+    ]
+  },
+  "android": {
+    "backgroundColor": "#0B0F19",
+    "allowMixedContent": true
+  }
+}
