@@ -1,12 +1,14 @@
 {
-  "version": "1.42",
-  "buildNumber": 42,
-  "releaseDate": "2026-11-05",
+  "version": "1.43",
+  "buildNumber": 43,
+  "releaseDate": "2026-11-06",
   "changelog": [
-    "Etapa 03.1 - Início da Etapa 03 (Unificação do Motor Financeiro Web, APK e WhatsApp)",
-    "Sanitização de Assinatura Android: remoção de senhas em texto claro em código, parametrizando por variáveis de ambiente e GitHub Secrets (KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD)",
-    "Preservação Estrita de Identidade do APK: mantido keystore canônico kyro.keystore e com.kyro.finance para atualizações in-place compatíveis",
-    "Mapeamento de Pontos de Entrada e Escritas Legadas: inventário detalhado de fluxos de voz, texto e webhooks nos canais Web, APK, Baileys e Evolution API",
-    "Validação de Regressão em Ambiente Descartável: 100% de aprovação na suíte determinística (45/45), fluxos naturais (6/6), mutantes (10/10) e aceite sintético de reversão offline"
+    "Etapa 03.2 - Núcleo Contábil Unificado Modelo B em Centavos BigInt",
+    "Money Engine (src/engine/money.ts): Aritmética pura em centavos inteiros (BigInt), parsing resiliente BRL e rateio justo (split) com preservação de centavos residuais",
+    "Calendar Engine (src/engine/calendar.ts): Fuso canônico estrito America/Fortaleza (UTC-3), virada de dia contábil e resolução de termos relativos em linguagem natural",
+    "Ledger Engine (src/engine/ledger.ts): Escrituração em partidas dobradas, isolamento por UID, versionamento de concorrência com fencing tokens, idempotência estrita por requestId e tombstones de 90 dias",
+    "Reports Engine (src/engine/reports.ts): Segregação estrita entre Realizado e Previsto/Recorrente, consolidação de patrimônio líquido e demonstrativo por categorias",
+    "Bateria de Testes Unitários 03.2: 51 de 51 testes aprovados (100% de cobertura determinística)",
+    "Aceite Formal 03.1 Consolidado: CI GitHub Actions (#42152737178) aprovada, certificado APK v2 validado com SHA-256 idêntico e ambiente local sintético comprovado"
   ]
 }

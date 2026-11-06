@@ -10,6 +10,7 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "bot": "node bot.cjs",
+    "test:engine": "tsx src/engine/engine.test.ts",
     "apk:sync": "npm run build && npx cap sync android"
   },
   "dependencies": {
