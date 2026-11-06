@@ -2,7 +2,7 @@
 ## Ponto de Restauração: PR.044 (v1.44 / Build 44)
 **Data de Execução:** 06/11/2026  
 **Commit de Referência do Núcleo Contábil:** `f61977cf73d5f2768e2da3c94b214daa7131386e` (PR.043)  
-**Status do Portão Arquitetural 03.3:** 100% HOMOLOGADO E CONCLUÍDO (47/47 TESTES DE ROTA E MULTI-PROCESSO + 51/51 TESTES DO NÚCLEO = 98/98 TESTES NO TOTAL)  
+**Status do Portão Arquitetural 03.3:** 100% HOMOLOGADO E CONCLUÍDO (51 TESTES DO NÚCLEO + 16 DE CONTRATO + 37 DE INTEGRAÇÃO HTTP = 104/104 TESTES NO TOTAL)  
 **Autorização para Subetapa 03.4:** CONCEDIDA  
 **Publicação Oficial na Vercel:** [https://kyro-fase-03-3.vercel.app/](https://kyro-fase-03-3.vercel.app/)  
 **Entrega Anterior de Referência:** [https://kyro-fase-02-encerramento.vercel.app/](https://kyro-fase-02-encerramento.vercel.app/)  
@@ -16,40 +16,39 @@
    - Quando o Firestore estiver inacessível, indisponível ou explicitamente desabilitado, a rota responde com **HTTP 503 (`STORAGE_UNAVAILABLE`)**, sem emitir recibo `APPLIED` e sem mensagem de gravação confirmada.
    - `TransactionalStoreMock` fica restrito única e exclusivamente a testes de contrato via injeção (`setStoreInstance`).
 
-2. **Isolamento de Autenticação Sintética e Prova Criptográfica RS256:**
-   - A entrada pública da aplicação rejeita categoricamente credenciais sintéticas (`Authorization: Bearer demo-token:usr_alice`), retornando **HTTP 401 (`UNAUTHORIZED_INVALID_CREDENTIAL`)**. Nenhuma variável de ambiente da aplicação consegue habilitar `demo-token` na rota pública.
-   - Prova criptográfica RS256 isolada com par de chaves RSA de 2048-bits valida token ausente, expirado, com payload adulterado, assinatura corrompida e `projectId` incorreto.
-   - Integração com o Firebase Auth Emulator oficial (127.0.0.1:9099) via REST oficial emitindo ID Tokens legítimos validados pelo backend.
-   - Tentativa de gravação cross-tenant (`usr_alice` tentando gravar em `usr_bob`) interceptada com **HTTP 403 Forbidden (`PERMISSION_DENIED_CROSS_TENANT`)**.
+2. **Verificação de Assinatura Firebase Admin e Ramos de Autenticação:**
+   - **Ramo Descoberto Fora do Emulador:** Com `FIREBASE_AUTH_EMULATOR_HOST` ausente, o envio de um JWT forjado com claims plausíveis é sumariamente rejeitado pelo verificador oficial do Firebase Admin com **HTTP 401 (`UNAUTHORIZED_INVALID_CREDENTIAL`)**, com zero mutação contábil no Firestore.
+   - **Ramo com Emulador Oficial:** Com `FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099`, tokens legítimos emitidos via REST do Auth Emulator são validados e o UID é extraído diretamente do `localId`.
+   - **Ausência de Chave Pública na Prova Criptográfica:** Chamadas sem chave pública PEM falham explicitamente na verificação, eliminando qualquer aceitação indevida de claims sem checagem de assinatura.
+   - **Entrada Pública Limpa:** Tentativas de injeção externa de falha pré-commit via cabeçalho (`x-simulate-failure`) ou body (`simulatePreCommitFailure`) são **completamente ignoradas** pela rota pública, que conclui com **HTTP 200 OK**. A simulação de falhas fica isolada na dependência interna de testes.
+   - **Bloqueio Cross-Tenant:** Tentativa de Alice gravar na conta de Bob é interceptada com **HTTP 403 Forbidden (`PERMISSION_DENIED_CROSS_TENANT`)**.
 
 3. **Integração Real Multi-Processo (PIDs e Portas Distintos) no Firestore Emulator:**
-   - Dois processos Node.js independentes no SO (Processo 1 na porta 4101 e Processo 2 na porta 4102) com PIDs distintos executam a rota HTTP da aplicação conectados ao Firestore Emulator oficial (127.0.0.1:8080).
+   - Dois processos Node.js independentes no SO (Processo 1 na porta 4101 com PID 17360 e Processo 2 na porta 4102 com PID 42540) executam a rota HTTP da aplicação conectados ao Firestore Emulator oficial (127.0.0.1:8080).
    - Envio concorrente simultâneo via HTTP do mesmo `requestId` às duas instâncias: ambas respondem HTTP 200, exatamente uma recebe `replay: true`, e o Firestore Emulator registra débito único de R$ 200,00 (100.000 -> 80.000 centavos).
-   - Encerramento dos processos (kill nos PIDs) e subida de um terceiro processo independente (Processo 3 na porta 4103).
-   - Reenvio do mesmo `requestId` com mesmo conteúdo: HTTP 200 com `replay: true` recuperado diretamente do Firestore (saldo preservado em R$ 800,00).
+   - Integração HTTP real de Webhook pela rede (Processo 1 respondendo HTTP 200 para vínculo ativo e HTTP 401 para segredo inválido).
+   - Encerramento dos processos (kill nos PIDs) e subida de um terceiro processo independente (Processo 3 na porta 4103 com PID 14632).
+   - Reenvio do mesmo `requestId` com mesmo conteúdo: HTTP 200 com `replay: true` recuperado diretamente do Firestore (**Zero Duplo Débito**).
    - Reenvio com conteúdo divergente: **HTTP 409 Conflict (`IDEMPOTENCY_PAYLOAD_MISMATCH`)** com saldo preservado.
-   - Falha anterior ao commit: HTTP 500 sem mutação parcial e rollback atômico 100% comprovado no Firestore.
-
-4. **Escopo do Webhook e Paridade Android:**
-   - Rota `/api/webhook` validou autenticação de origem (401), rejeição de vínculo ausente (403), ambíguo (409) e sucesso com vínculo unívoco (200), registrando que o transporte físico de webhooks externos dos provedores segue nas subetapas previstas (03.4 e 03.6).
-   - Paridade do APK Signature Scheme v2 (Digest `9B2B95A9...`) preservada; instalação física em hardware mantida como pendente para a subetapa de canal mobile (03.7).
+   - Falha na transação HTTP: HTTP 500 sem mutação parcial e rollback atômico 100% comprovado no Firestore.
 
 ---
 
-### 2. RESULTADOS DA MATRIZ CONSOLIDADA DE TESTES
+### 2. MATRIZ CONSOLIDADA DE TESTES SEGREGADA POR CATEGORIA
 
-1. **Testes do Núcleo Contábil (Etapa 03.2):** 51 de 51 testes aprovados (`npm run test:engine`).
-2. **Testes de Rota, Persistência e Multi-Processo (Subetapa 03.3):** 47 de 47 testes aprovados (`npm run test:subetapa-03-3`).
-3. **Total de Testes Automatizados:** **98 de 98 testes aprovados (100% de sucesso)**.
-4. **Verificação de Tipos TypeScript:** `npx tsc --noEmit` executado com **0 erros**.
+1. **Testes do Núcleo Contábil (Modelo B BigInt):** **51 de 51 testes aprovados (100%)** (`npm run test:engine`).
+2. **Testes de Contrato Isolados:** **16 de 16 testes aprovados (100%)** (Prova RS256, Ausência de Chave, Atomicidade Pré-Commit e Contratos de Webhook com mock).
+3. **Testes de Integração HTTP Real em Emulador Multi-Processo:** **37 de 37 testes aprovados (100%)** (Ramo fora do emulador, demo-token, cross-tenant, PIDs distintos, concorrência, retry pós-reinício, 409 e integração de rede).
+4. **Total Consolidado:** **104 de 104 testes aprovados (100% de sucesso)**.
+5. **Verificação de Tipos TypeScript:** `npx tsc --noEmit` executado com **0 erros**.
 
 ---
 
 ### 3. PARECERES TÉCNICOS SEGREGADOS
 
 1. **Testes Unitários do Núcleo:** **APROVADO (51/51 - 100%)** em memória com centavos BigInt e partidas dobradas.
-2. **Contratos Isolados com Mock:** **APROVADO (100%)** com `TransactionalStoreMock` injetado controladamente.
-3. **Integração HTTP Multi-Processo em Emulador:** **APROVADO (47/47 - 100%)** com processos reais, PIDs distintos, Auth e Firestore Emulators oficiais e tolerância a falhas.
+2. **Contratos Isolados com Mock:** **APROVADO (16/16 - 100%)** com chaves RSA locais e validação contratual.
+3. **Integração HTTP Multi-Processo em Emulador:** **APROVADO (37/37 - 100%)** com processos reais, PIDs distintos, Auth e Firestore Emulators oficiais e tolerância a falhas.
 4. **Dispositivo Físico Android:** **ASSINATURA HOMOLOGADA / INSTALAÇÃO EM HARDWARE PENDENTE** (reservada para 03.7).  
 
 ---

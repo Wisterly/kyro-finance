@@ -68,65 +68,58 @@ export async function verifyRealAuthToken(
     return { uid, isValid: true };
   }
 
-  // 2. Verificação via Firebase Admin SDK Oficial
+  // 2. Verificação via Firebase Admin SDK Oficial (Com ou Sem Emulador)
+  // Qualquer falha de assinatura, projeto incorreto ou chave inexistente resulta em rejeição estrita
   try {
     const auth = getAdminAuth();
     
-    // Se o Auth Emulator estiver ativo via variável de ambiente, o Admin SDK valida diretamente nele
-    if (process.env.FIREBASE_AUTH_EMULATOR_HOST) {
-      const decoded = await auth.verifyIdToken(token, true);
-      const expectedProj = options.expectedProjectId || DEMO_PROJECT_ID;
-      
-      if (decoded.aud !== expectedProj) {
-        return {
-          uid: '',
-          isValid: false,
-          error: `Audience do token inválido: esperado '${expectedProj}', recebido '${decoded.aud}' (projeto incorreto).`
-        };
-      }
-
+    // Chama verifyIdToken() oficial em qualquer ambiente (com ou sem FIREBASE_AUTH_EMULATOR_HOST)
+    const decoded = await auth.verifyIdToken(token, true);
+    const expectedProj = options.expectedProjectId || DEMO_PROJECT_ID;
+    
+    if (decoded.aud !== expectedProj) {
       return {
-        uid: decoded.uid,
-        email: decoded.email,
-        isValid: true
+        uid: '',
+        isValid: false,
+        error: `Audience do token inválido: esperado '${expectedProj}', recebido '${decoded.aud}' (projeto incorreto).`
       };
     }
+
+    return {
+      uid: decoded.uid,
+      email: decoded.email,
+      isValid: true
+    };
   } catch (adminErr: any) {
-    // Trata erros oficiais do Firebase Admin
-    const code = adminErr?.code || '';
-    if (code === 'auth/id-token-expired') {
-      return { uid: '', isValid: false, error: 'Token do Firebase expirado.' };
-    }
-    if (code === 'auth/invalid-id-token' || code === 'auth/argument-error') {
-      return { uid: '', isValid: false, error: 'Assinatura ou formato do ID Token do Firebase inválido.' };
-    }
-    if (code === 'auth/id-token-revoked') {
-      return { uid: '', isValid: false, error: 'ID Token revogado pelo servidor.' };
-    }
+    // Qualquer falha no verificador oficial termina obrigatoriamente em rejeição
+    const msg = adminErr?.message || 'Token inválido perante o verificador oficial Firebase Admin.';
+    return {
+      uid: '',
+      isValid: false,
+      error: `Rejeição de autenticação Firebase Admin: ${msg}`
+    };
   }
-
-  // 3. Verificação Criptográfica Direta de JWT RS256 (Prova de Assinatura Isolada)
-  // Permite validar tokens assinados por chaves RSA específicas mesmo sem conexão externa
-  if (token.includes('.')) {
-    return verifyJwtCryptographically(token, options.expectedProjectId || DEMO_PROJECT_ID);
-  }
-
-  return { uid: '', isValid: false, error: 'Token com formato irreconhecível ou credencial inválida.' };
 }
 
 /**
- * Verificação criptográfica completa de JWT com validação estrita de Claims:
- * - Algoritmo (apenas RS256 / SHA256withRSA)
- * - Assinatura digital com chave pública correspondente
- * - Expiração (exp)
- * - Issuer (iss)
- * - Audience (aud = projectId)
+ * Verificação criptográfica completa de JWT reservada EXCLUSIVAMENTE à prova criptográfica
+ * isolada de testes de contrato com par de chaves RSA gerado localmente.
+ * 
+ * Regra Estrita: A chave pública PEM é OBRIGATÓRIA. Ausência de chave falha explicitamente.
  */
 export function verifyJwtCryptographically(
   token: string,
   expectedProjectId: string,
-  publicKeyPem?: string
+  publicKeyPem: string
 ): AuthContext {
+  if (!publicKeyPem || typeof publicKeyPem !== 'string' || publicKeyPem.trim() === '') {
+    return {
+      uid: '',
+      isValid: false,
+      error: 'Chave pública não fornecida para verificação criptográfica estrita. Ausência de chave falha explicitamente.'
+    };
+  }
+
   try {
     const parts = token.split('.');
     if (parts.length !== 3) {
@@ -167,17 +160,15 @@ export function verifyJwtCryptographically(
       };
     }
 
-    // Validação Criptográfica da Assinatura (se fornecida chave pública)
-    if (publicKeyPem) {
-      const dataToVerify = `${headerB64}.${payloadB64}`;
-      const signature = Buffer.from(signatureB64, 'base64url');
-      const verifier = crypto.createVerify('RSA-SHA256');
-      verifier.update(dataToVerify);
-      const isSigValid = verifier.verify(publicKeyPem, signature);
+    // Validação Criptográfica Estrita da Assinatura com a Chave Pública Fornecida
+    const dataToVerify = `${headerB64}.${payloadB64}`;
+    const signature = Buffer.from(signatureB64, 'base64url');
+    const verifier = crypto.createVerify('RSA-SHA256');
+    verifier.update(dataToVerify);
+    const isSigValid = verifier.verify(publicKeyPem, signature);
 
-      if (!isSigValid) {
-        return { uid: '', isValid: false, error: 'Assinatura digital RS256 inválida ou token adulterado.' };
-      }
+    if (!isSigValid) {
+      return { uid: '', isValid: false, error: 'Assinatura digital RS256 inválida ou token adulterado.' };
     }
 
     const uid = payload.user_id || payload.sub || payload.uid;

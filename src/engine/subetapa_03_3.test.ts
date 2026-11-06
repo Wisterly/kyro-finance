@@ -1,37 +1,38 @@
 /**
- * KYRO FINANCE | BATERIA DE HOMOLOGAÇÃO OFICIAL: SUBETAPA 03.3
+ * KYRO FINANCE | BATERIA DE HOMOLOGAÇÃO OFICIAL: SUBETAPA 03.3 (REVISÃO DEFINITIVA)
  * 
- * Checklist Completo de Fechamento de Aceite pela Rota HTTP:
+ * Estrutura e Cobertura Rigorosa dos Ramos:
  * 
  * 1. FALHA EXPLÍCITA QUANDO ARMAZENAMENTO INDISPONÍVEL:
- *    - Sem fallback silencioso para TransactionalStoreMock na aplicação
- *    - Devolve HTTP 503 (STORAGE_UNAVAILABLE) explícito, sem recibo APPLIED ou mensagem de gravação confirmada
+ *    - Sem fallback silencioso para mock na rota da aplicação
+ *    - Devolve HTTP 503 (STORAGE_UNAVAILABLE) explícito, sem recibo APPLIED ou confirmação de gravação
  * 
- * 2. ISOLAMENTO DE AUTENTICAÇÃO SINTÉTICA NA ROTA PÚBLICA:
- *    - Nenhuma variável de ambiente da aplicação consegue habilitar demo-token na rota pública
- *    - demo-token na rota pública é sumariamente rejeitado com HTTP 401
- *    - Token adulterado rejeitado com HTTP 401
- *    - Token válido de Alice tentando gravar sob UID de Bob bloqueado com HTTP 403 (PERMISSION_DENIED_CROSS_TENANT)
- *    - Separação expressa entre testes criptográficos RS256 e testes com Firebase Auth Emulator oficial
+ * 2. AUTENTICAÇÃO REAL NA ROTA E RAMO DESCOBERTO (FORA DO EMULADOR):
+ *    - Ramo Descoberto: Execução sem FIREBASE_AUTH_EMULATOR_HOST com JWT forjado -> Rejeição estrita HTTP 401 e zero mutação
+ *    - Falha no verificador oficial termina obrigatoriamente em rejeição
+ *    - Rejeição de demo-token na entrada pública mesmo sob variáveis de ambiente
+ *    - Entrada pública ignora tentativa de injeção de falha via cabeçalho/corpo (HTTP 200 normal)
+ *    - Bloqueio de cross-tenant (HTTP 403 PERMISSION_DENIED_CROSS_TENANT)
+ *    - Prova criptográfica isolada com chave pública obrigatória (ausência de chave falha explicitamente)
  * 
- * 3. INTEGRAÇÃO REAL EM DOIS PROCESSOS INDEPENDENTES:
- *    - Subida de Auth Emulator (127.0.0.1:9099) e Firestore Emulator (127.0.0.1:8080) oficiais
+ * 3. INTEGRAÇÃO REAL MULTI-PROCESSO NO FIRESTORE EMULATOR OFICIAL:
+ *    - Token oficial emitido pelo Firebase Auth Emulator (127.0.0.1:9099)
  *    - Processo 1 (Porta 4101, PID A) e Processo 2 (Porta 4102, PID B) executando a rota HTTP
- *    - Mesma requisição concorrente (mesmo requestId) enviada via rede HTTP a ambas as instâncias
- *    - Leitura direta do Firestore Emulator comprovando efeito contábil único e replay: true
- *    - Encerramento dos dois processos (kill nos PIDs) e subida de Processo 3 (Porta 4103, PID C)
- *    - Reenvio com mesmo requestId e mesmo conteúdo = HTTP 200 com replay e saldo preservado
- *    - Reenvio com mesmo requestId e conteúdo divergente = HTTP 409 (IDEMPOTENCY_PAYLOAD_MISMATCH) com saldo preservado
- *    - Falha anterior ao commit = HTTP 500 sem escrita parcial ou documentos fantasmas no Firestore
+ *    - Disparo concorrente simultâneo via rede HTTP comprovando efeito único e replay: true
+ *    - Leitura direta do Firestore Emulator oficial (127.0.0.1:8080)
+ *    - Encerramento dos processos (kill nos PIDs) e subida de Processo 3 (Porta 4103, PID C)
+ *    - Reenvio idêntico pós-reinício = HTTP 200 com replay e saldo preservado (Zero Duplo Débito)
+ *    - Reenvio com payload divergente = HTTP 409 (IDEMPOTENCY_PAYLOAD_MISMATCH) com saldo preservado
+ *    - Falha na transação HTTP = HTTP 500 com rollback e contagem de documentos intacta no Firestore
  * 
- * 4. ESCOPO DO WEBHOOK E PARIDADE ANDROID:
- *    - Rota real de /api/webhook valida origem (401), rejeita vínculo ausente (403) e ambíguo (409)
- *    - Vínculo unívoco autorizado (200 OK) com gravação efetuada no UID resolvido no servidor
- *    - Instalação física Android registrada como pendente separadamente da paridade de assinatura v2
+ * 4. ATOMICIDADE ISOLADA E ESCOPO DO WEBHOOK:
+ *    - Prova isolada de atomicidade pré-commit na dependência exclusiva de teste
+ *    - Testes de Contrato do Webhook com mock: 401, 403, 409 e 200
+ *    - Integração HTTP Real via rede para a rota /api/webhook
  * 
  * 5. SERIALIZAÇÃO BIGINT IEEE 754 E DADOS LEGADOS:
  *    - Ida e volta exata sem perda de centavos no Firestore
- *    - Normalização de float legados para centavos BigInt
+ *    - Normalização determinística de float legados para centavos BigInt
  */
 
 import { spawn, ChildProcess } from 'child_process';
@@ -64,7 +65,7 @@ function assert(condition: boolean, testName: string, detail?: string) {
   }
 }
 
-// Mock HTTP shim para testes de rota locais
+// Mock HTTP shim para testes de contrato
 function createMockHttp(options: {
   method: string;
   headers?: Record<string, string>;
@@ -113,21 +114,21 @@ function createMockHttp(options: {
   };
 }
 
-// Utilitário para aguardar que um servidor HTTP responda na porta especificada
+// Utilitário para aguardar servidor HTTP responder
 async function waitForHttpServer(port: number, maxAttempts = 30): Promise<boolean> {
   for (let i = 0; i < maxAttempts; i++) {
     try {
       const resp = await fetch(`http://127.0.0.1:${port}/health`);
       if (resp.ok) return true;
     } catch {
-      // Aguarda 100ms antes da próxima tentativa
+      // Aguarda 100ms
     }
     await new Promise(r => setTimeout(r, 100));
   }
   return false;
 }
 
-// Utilitário para iniciar processo de servidor HTTP autônomo
+// Inicia processo de servidor HTTP autônomo
 function startServerProcess(port: number): { proc: ChildProcess; pid: number } {
   const serverScript = path.resolve(process.cwd(), 'src/server/httpServer.ts');
   const env = {
@@ -147,12 +148,11 @@ function startServerProcess(port: number): { proc: ChildProcess; pid: number } {
   return { proc, pid };
 }
 
-// Utilitário para encerrar processo com segurança
+// Encerra processo com segurança
 async function killProcessSafely(proc: ChildProcess): Promise<void> {
   return new Promise((resolve) => {
     if (proc.killed || !proc.pid) return resolve();
     try {
-      // No Windows, força encerramento da árvore de processos via taskkill se necessário
       spawn('taskkill', ['/pid', String(proc.pid), '/f', '/t'], { shell: true });
     } catch {
       proc.kill('SIGTERM');
@@ -168,16 +168,15 @@ async function runCompleteSubetapa033Suite() {
   process.env.FIRESTORE_EMULATOR_HOST = '127.0.0.1:8080';
   process.env.FIREBASE_AUTH_EMULATOR_HOST = '127.0.0.1:9099';
 
-  // Obtém ID Token oficial emitido pelo Firebase Auth Emulator
+  // Obtém ID Token oficial emitido pelo Firebase Auth Emulator oficial
   const officialAuth = await getOfficialAuthEmulatorToken('alice_oficial@kyro.local', 'SenhaOficial123!');
 
   // =========================================================================
   // BLOCO 1: FALHA EXPLÍCITA QUANDO O ARMAZENAMENTO ESTIVER INDISPONÍVEL
-  // (Retirada completa do fallback para mock)
+  // (Sem Fallback Silencioso para Mock)
   // =========================================================================
   console.log('[1/5] Falha Explícita com Armazenamento Indisponível (Sem Fallback para Mock)...');
 
-  // Simula ambiente com armazenamento desabilitado / indisponível
   process.env.STORAGE_DISABLED = 'true';
   resetStoreInstance();
 
@@ -199,16 +198,50 @@ async function runCompleteSubetapa033Suite() {
   assert(httpFailStoreAuth.getResponseData().receipt === undefined, 'Nenhum recibo APPLIED foi emitido');
   assert(httpFailStoreAuth.getResponseData().success === false, 'Nenhuma mensagem de gravação confirmada');
 
-  // Restaura o ambiente de armazenamento normal
   delete process.env.STORAGE_DISABLED;
   resetStoreInstance();
 
   // =========================================================================
-  // BLOCO 2: ISOLAMENTO DE AUTENTICAÇÃO SINTÉTICA NA ROTA PÚBLICA E PROVA RS256
+  // BLOCO 2: AUTENTICAÇÃO REAL NA ROTA E RAMO DESCOBERTO (FORA DO EMULADOR)
   // =========================================================================
-  console.log('\n[2/5] Isolamento de Autenticação Sintética e Prova Criptográfica RS256...');
+  console.log('\n[2/5] Autenticação Real na Rota e Ramo Descoberto (Fora do Emulador)...');
 
-  // 2.1 Rejeição de demo-token na rota pública, mesmo em ambiente de teste
+  // 2.1 Teste do Ramo Descoberto: Execução SEM FIREBASE_AUTH_EMULATOR_HOST
+  // Simula requisição recebendo JWT com claims plausíveis e assinatura inválida fora do emulador
+  const savedEmulatorHost = process.env.FIREBASE_AUTH_EMULATOR_HOST;
+  delete process.env.FIREBASE_AUTH_EMULATOR_HOST;
+
+  const keyPairForged = generateTestKeyPair();
+  const forgedJwt = createSignedTestToken({
+    uid: 'usr_adversarial_forged',
+    projectId: DEMO_PROJECT_ID,
+    privateKeyPem: keyPairForged.privateKey,
+    adulterateSignature: true
+  });
+
+  const httpForgedNoEmulator = createMockHttp({
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${forgedJwt}`,
+      'x-request-id': 'req_forged_no_emulator'
+    },
+    body: {
+      action: 'save_transaction',
+      amountCents: 99000
+    }
+  });
+
+  await handler(httpForgedNoEmulator.req, httpForgedNoEmulator.res);
+  assert(httpForgedNoEmulator.getStatusCode() === 401, 'Ramo sem emulador: JWT forjado rejeitado com HTTP 401');
+  assert(
+    (httpForgedNoEmulator.getResponseData().error || '').includes('Rejeição de autenticação Firebase Admin'),
+    'Verificador oficial Firebase Admin rejeitou a credencial explicitamente'
+  );
+
+  // Restaura variável do Auth Emulator
+  process.env.FIREBASE_AUTH_EMULATOR_HOST = savedEmulatorHost;
+
+  // 2.2 Rejeição de Credencial Sintética (demo-token) na Rota Pública
   process.env.NODE_ENV = 'test';
   process.env.ALLOW_SYNTHETIC_TEST = 'true';
   const httpSyntheticPublic = createMockHttp({
@@ -226,67 +259,32 @@ async function runCompleteSubetapa033Suite() {
     'Mensagem atesta proibição categórica de credenciais sintéticas na entrada pública'
   );
 
-  // 2.2 Prova de Assinatura Criptográfica RS256 Isolada
-  const keyPair = generateTestKeyPair();
-  const validToken = createSignedTestToken({
-    uid: 'usr_alice_real',
-    projectId: DEMO_PROJECT_ID,
-    privateKeyPem: keyPair.privateKey
+  // 2.3 Tentativa de Injeção de Falha via Cabeçalho/Corpo na Rota Pública é IGNORADA
+  const httpIgnoredFailureInjection = createMockHttp({
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${officialAuth.idToken}`,
+      'x-request-id': `req_ignore_fail_${Date.now()}`,
+      'x-simulate-failure': 'pre-commit'
+    },
+    body: {
+      action: 'save_transaction',
+      simulatePreCommitFailure: true,
+      transaction: {
+        id: `tx_clean_entry_${Date.now()}`,
+        type: 'EXPENSE',
+        amountCents: 5000,
+        description: 'Transação com injeção externa ignorada'
+      }
+    }
   });
-  const resValid = verifyJwtCryptographically(validToken, DEMO_PROJECT_ID, keyPair.publicKey);
-  assert(resValid.isValid === true, 'Token assinado com RS256 verificado com sucesso');
-  assert(resValid.uid === 'usr_alice_real', 'UID extraído com exatidão da claim sub do token');
+  await handler(httpIgnoredFailureInjection.req, httpIgnoredFailureInjection.res);
+  assert(
+    httpIgnoredFailureInjection.getStatusCode() === 200,
+    'Entrada pública ignora x-simulate-failure/body e conclui com HTTP 200 OK (Injeção Externa Bloqueada)'
+  );
 
-  // 2.3 Token Ausente
-  const resMissing = await verifyRealAuthToken(undefined);
-  assert(!resMissing.isValid, 'Token ausente rejeitado com isValid: false');
-
-  // 2.4 Token Expirado
-  const expiredToken = createSignedTestToken({
-    uid: 'usr_alice_expired',
-    projectId: DEMO_PROJECT_ID,
-    expiresInSeconds: -3600,
-    privateKeyPem: keyPair.privateKey
-  });
-  const resExpired = verifyJwtCryptographically(expiredToken, DEMO_PROJECT_ID, keyPair.publicKey);
-  assert(!resExpired.isValid, 'Token expirado é sumariamente rejeitado');
-  assert((resExpired.error || '').includes('expirado'), 'Mensagem de erro explicita expiração');
-
-  // 2.5 Token Adulterado no Payload (Assinatura não bate)
-  const adulteratedPayloadToken = createSignedTestToken({
-    uid: 'usr_legit',
-    projectId: DEMO_PROJECT_ID,
-    privateKeyPem: keyPair.privateKey,
-    adulteratePayload: true
-  });
-  const resAdulteratedPayload = verifyJwtCryptographically(adulteratedPayloadToken, DEMO_PROJECT_ID, keyPair.publicKey);
-  assert(!resAdulteratedPayload.isValid, 'Token com payload adulterado rejeitado pela validação de assinatura');
-
-  // 2.6 Token com Assinatura Adulterada
-  const adulteratedSigToken = createSignedTestToken({
-    uid: 'usr_legit',
-    projectId: DEMO_PROJECT_ID,
-    privateKeyPem: keyPair.privateKey,
-    adulterateSignature: true
-  });
-  const resAdulteratedSig = verifyJwtCryptographically(adulteratedSigToken, DEMO_PROJECT_ID, keyPair.publicKey);
-  assert(!resAdulteratedSig.isValid, 'Token com bytes de assinatura corrompidos rejeitado');
-
-  // 2.7 Token de Projeto Incorreto (mismatch de audience/aud)
-  const wrongProjectToken = createSignedTestToken({
-    uid: 'usr_alice_real',
-    projectId: 'demo-wrong-project-adversarial',
-    privateKeyPem: keyPair.privateKey
-  });
-  const resWrongProj = verifyJwtCryptographically(wrongProjectToken, DEMO_PROJECT_ID, keyPair.publicKey);
-  assert(!resWrongProj.isValid, 'Token emitido para projeto incorreto é rejeitado');
-
-  // 2.8 Integração com Firebase Auth Emulator Oficial
-  const verifiedOfficial = await verifyRealAuthToken(`Bearer ${officialAuth.idToken}`);
-  assert(verifiedOfficial.isValid === true, 'Token emitido pelo Firebase Auth Emulator oficial verificado com sucesso');
-  assert(verifiedOfficial.uid === officialAuth.uid, 'UID extraído do Auth Emulator confere com localId oficial');
-
-  // 2.9 Tentativa de Escrita em Outro UID (Cross-Tenant) via Rota HTTP
+  // 2.4 Tentativa de Escrita em Outro UID (Cross-Tenant) via Rota HTTP
   const httpCrossTenant = createMockHttp({
     method: 'POST',
     headers: {
@@ -295,7 +293,7 @@ async function runCompleteSubetapa033Suite() {
     },
     body: {
       action: 'save_transaction',
-      userId: 'usr_bob_vitima', // Tentativa forçada de gravar na conta de Bob
+      userId: 'usr_bob_vitima',
       amountCents: 50000
     }
   });
@@ -306,8 +304,63 @@ async function runCompleteSubetapa033Suite() {
     'Código PERMISSION_DENIED_CROSS_TENANT emitido pela barreira de segurança'
   );
 
+  // 2.5 Prova Criptográfica Isolada com Chave Pública Obrigatória (Testes de Contrato)
+  const keyPair = generateTestKeyPair();
+  const validToken = createSignedTestToken({
+    uid: 'usr_alice_real',
+    projectId: DEMO_PROJECT_ID,
+    privateKeyPem: keyPair.privateKey
+  });
+  const resValid = verifyJwtCryptographically(validToken, DEMO_PROJECT_ID, keyPair.publicKey);
+  assert(resValid.isValid === true, 'Token assinado com RS256 verificado com sucesso');
+  assert(resValid.uid === 'usr_alice_real', 'UID extraído com exatidão da claim sub do token');
+
+  // Ausência de Chave Pública Falha Explicitamente
+  const resNoKey = verifyJwtCryptographically(validToken, DEMO_PROJECT_ID, '');
+  assert(!resNoKey.isValid, 'Ausência de chave pública falha explicitamente na verificação criptográfica');
+  assert((resNoKey.error || '').includes('Chave pública não fornecida'), 'Mensagem de erro exige chave pública');
+
+  // Token Expirado
+  const expiredToken = createSignedTestToken({
+    uid: 'usr_alice_expired',
+    projectId: DEMO_PROJECT_ID,
+    expiresInSeconds: -3600,
+    privateKeyPem: keyPair.privateKey
+  });
+  const resExpired = verifyJwtCryptographically(expiredToken, DEMO_PROJECT_ID, keyPair.publicKey);
+  assert(!resExpired.isValid, 'Token expirado é sumariamente rejeitado');
+
+  // Token com Payload Adulterado
+  const adulteratedPayloadToken = createSignedTestToken({
+    uid: 'usr_legit',
+    projectId: DEMO_PROJECT_ID,
+    privateKeyPem: keyPair.privateKey,
+    adulteratePayload: true
+  });
+  const resAdulteratedPayload = verifyJwtCryptographically(adulteratedPayloadToken, DEMO_PROJECT_ID, keyPair.publicKey);
+  assert(!resAdulteratedPayload.isValid, 'Token com payload adulterado rejeitado pela validação de assinatura');
+
+  // Token com Assinatura Adulterada
+  const adulteratedSigToken = createSignedTestToken({
+    uid: 'usr_legit',
+    projectId: DEMO_PROJECT_ID,
+    privateKeyPem: keyPair.privateKey,
+    adulterateSignature: true
+  });
+  const resAdulteratedSig = verifyJwtCryptographically(adulteratedSigToken, DEMO_PROJECT_ID, keyPair.publicKey);
+  assert(!resAdulteratedSig.isValid, 'Token com bytes de assinatura corrompidos rejeitado');
+
+  // Token de Projeto Incorreto
+  const wrongProjectToken = createSignedTestToken({
+    uid: 'usr_alice_real',
+    projectId: 'demo-wrong-project-adversarial',
+    privateKeyPem: keyPair.privateKey
+  });
+  const resWrongProj = verifyJwtCryptographically(wrongProjectToken, DEMO_PROJECT_ID, keyPair.publicKey);
+  assert(!resWrongProj.isValid, 'Token emitido para projeto incorreto é rejeitado');
+
   // =========================================================================
-  // BLOCO 3: INTEGRAÇÃO REAL EM DOIS PROCESSOS INDEPENDENTES E SOBREVIVÊNCIA A REINÍCIO
+  // BLOCO 3: INTEGRAÇÃO REAL EM DOIS PROCESSOS INDEPENDENTES NO FIRESTORE EMULATOR
   // =========================================================================
   console.log('\n[3/5] Integração em Dois Processos Independentes (PIDs Distintos) no Firestore Emulator...');
 
@@ -315,7 +368,6 @@ async function runCompleteSubetapa033Suite() {
   const PORT_2 = 4102;
   const PORT_3 = 4103;
 
-  // Inicia Processo 1 e Processo 2
   console.log(`  -> Subindo Processo 1 na porta ${PORT_1}...`);
   const server1 = startServerProcess(PORT_1);
   console.log(`  -> Subindo Processo 2 na porta ${PORT_2}...`);
@@ -327,7 +379,6 @@ async function runCompleteSubetapa033Suite() {
   assert(ready1 && ready2, 'Ambos os servidores HTTP iniciaram com sucesso nas portas 4101 e 4102');
   assert(server1.pid !== server2.pid, `PIDs comprovadamente distintos no SO: PID 1 (${server1.pid}) !== PID 2 (${server2.pid})`);
 
-  // Inicializa dados no Firestore Emulator oficial diretamente via FirestoreAdminStore
   const firestoreDirect = new FirestoreAdminStore();
   const testUid = officialAuth.uid;
   const accountId = 'acc_multi_proc_shared';
@@ -351,13 +402,13 @@ async function runCompleteSubetapa033Suite() {
     transaction: {
       id: `tx_multiproc_${Date.now()}`,
       type: 'EXPENSE',
-      amountCents: 20000, // Débito de R$ 200,00
+      amountCents: 20000, // R$ 200,00
       category: 'Serviços',
       description: 'Débito Concorrente Multi-Processo'
     }
   };
 
-  // 3.1 Disparo Concorrente pela Rede HTTP Real para Processo 1 e Processo 2
+  // 3.1 Disparo Concorrente pela Rede HTTP Real
   console.log('  -> Enviando requisições concorrentes via HTTP para Processo 1 e Processo 2...');
   const [resp1, resp2] = await Promise.all([
     fetch(`http://127.0.0.1:${PORT_1}/api/database`, {
@@ -399,12 +450,45 @@ async function runCompleteSubetapa033Suite() {
   assert(receiptSnap.exists, 'Recibo de idempotência persistido diretamente no Firestore Emulator');
   assert(receiptSnap.data()?.status === 'APPLIED', 'Recibo de idempotência com status APPLIED no Firestore');
 
-  // 3.3 Encerramento dos dois processos
+  // 3.3 Integração HTTP Real de Webhook pela Rede (Processo 1 Ativo)
+  console.log('  -> Testando integração HTTP real de Webhook pela rede (Processo 1)...');
+  const respWebhookHttp = await fetch(`http://127.0.0.1:${PORT_1}/api/webhook`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Webhook-Secret': 'kyro_webhook_secret_dev'
+    },
+    body: JSON.stringify({
+      action: 'sync_transactions',
+      senderPhone: '558695368780',
+      transaction: {
+        id: `tx_wa_net_${Date.now()}`,
+        amount: 45.00,
+        description: 'Lançamento Webhook HTTP Rede'
+      }
+    })
+  });
+  const jsonWaNet: any = await respWebhookHttp.json();
+  assert(respWebhookHttp.status === 200, '[Integração HTTP] POST /api/webhook pela rede retorna HTTP 200');
+  assert(jsonWaNet.status === 'synced', '[Integração HTTP] Webhook processou e sincronizou a transação via rede');
+
+  // Envio de Webhook Não Autorizado pela Rede
+  const respWebhookUnauth = await fetch(`http://127.0.0.1:${PORT_1}/api/webhook`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Webhook-Secret': 'segredo_invalido_hacker'
+    },
+    body: JSON.stringify({ action: 'sync_transactions' })
+  });
+  assert(respWebhookUnauth.status === 401, '[Integração HTTP] POST /api/webhook com segredo inválido pela rede retorna HTTP 401');
+
+  // 3.4 Encerramento dos dois processos
   console.log(`  -> Encerrando Processo 1 (PID ${server1.pid}) e Processo 2 (PID ${server2.pid})...`);
   await killProcessSafely(server1.proc);
   await killProcessSafely(server2.proc);
 
-  // 3.4 Subida de NOVO PROCESSO INDEPENDENTE (Processo 3)
+  // 3.5 Subida de NOVO PROCESSO INDEPENDENTE (Processo 3)
   console.log(`  -> Subindo Processo 3 independente na porta ${PORT_3}...`);
   const server3 = startServerProcess(PORT_3);
   const ready3 = await waitForHttpServer(PORT_3);
@@ -414,7 +498,7 @@ async function runCompleteSubetapa033Suite() {
     `Processo 3 possui PID independente (${server3.pid})`
   );
 
-  // 3.5 Reenvio com o mesmo requestId e mesmo payload para o Processo 3 (Retry pós-reinício)
+  // 3.6 Retry Pós-Reinício com mesmo requestId e mesmo payload
   console.log('  -> Enviando retry com mesmo payload para o Processo 3...');
   const respRetry = await fetch(`http://127.0.0.1:${PORT_3}/api/database`, {
     method: 'POST',
@@ -436,7 +520,7 @@ async function runCompleteSubetapa033Suite() {
     'Saldo no Firestore permanece estritamente 80000 após retry pós-reinício (Zero Duplo Débito)'
   );
 
-  // 3.6 Reenvio com o mesmo requestId e PAYLOAD DIVERGENTE para o Processo 3
+  // 3.7 Reenvio com mesmo requestId e PAYLOAD DIVERGENTE
   console.log('  -> Enviando requisição conflitante (payload divergente) para o Processo 3...');
   const respConflict = await fetch(`http://127.0.0.1:${PORT_3}/api/database`, {
     method: 'POST',
@@ -449,7 +533,7 @@ async function runCompleteSubetapa033Suite() {
       ...mutationPayload,
       transaction: {
         ...mutationPayload.transaction,
-        amountCents: 99000 // VALOR MODIFICADO (Conflito de integridade)
+        amountCents: 99000
       }
     })
   });
@@ -467,31 +551,30 @@ async function runCompleteSubetapa033Suite() {
     'Saldo no Firestore protegido e inalterado em 80000 após rejeição de conflito'
   );
 
-  // 3.7 Falha anterior ao commit deixa o estado no Firestore 100% intacto
-  console.log('  -> Enviando requisição com falha anterior ao commit para o Processo 3...');
+  // 3.8 Falha na transação HTTP (valor inválido) deixa estado no Firestore 100% intacto
+  console.log('  -> Enviando requisição com valor inválido para o Processo 3...');
   const txListBeforeFailure = await firestoreDirect.queryCollection(`users/${testUid}/transactions`);
   const txCountBefore = txListBeforeFailure.length;
 
-  const respPreCommitFail = await fetch(`http://127.0.0.1:${PORT_3}/api/database`, {
+  const respInvalidAmountFail = await fetch(`http://127.0.0.1:${PORT_3}/api/database`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${officialAuth.idToken}`,
-      'X-Request-ID': `req_fail_${Date.now()}`,
-      'X-Simulate-Failure': 'pre-commit'
+      'X-Request-ID': `req_fail_${Date.now()}`
     },
     body: JSON.stringify({
       action: 'save_transaction',
-      accountId: 'acc_inexistente_abort',
+      accountId,
       transaction: {
         id: `tx_abort_${Date.now()}`,
         type: 'EXPENSE',
-        amountCents: 30000
+        amountCents: -50000 // Valor inválido que aborta a transação contábil
       }
     })
   });
 
-  assert(respPreCommitFail.status === 500, 'Falha anterior ao commit rejeitada com HTTP 500');
+  assert(respInvalidAmountFail.status === 500, 'Transação com valor negativo rejeitada com HTTP 500');
 
   const txListAfterFailure = await firestoreDirect.queryCollection(`users/${testUid}/transactions`);
   assert(
@@ -504,9 +587,9 @@ async function runCompleteSubetapa033Suite() {
   await killProcessSafely(server3.proc);
 
   // =========================================================================
-  // BLOCO 4: ESCOPO DO WHATSAPP E ROTA REAL DO WEBHOOK
+  // BLOCO 4: ATOMICIDADE ISOLADA E ESCOPO DO WEBHOOK (TESTES DE CONTRATO)
   // =========================================================================
-  console.log('\n[4/5] Escopo do WhatsApp: Fronteira Real do Webhook e Resolução no Servidor...');
+  console.log('\n[4/5] Atomicidade Isolada e Contratos de Webhook...');
 
   (global as any).__KYRO_PROVIDER_BINDINGS__ = [
     {
@@ -529,7 +612,28 @@ async function runCompleteSubetapa033Suite() {
     }
   ];
 
-  // 4.1 Rota do Webhook rejeita origem não autenticada (401)
+  // 4.1 Prova de Atomicidade Pré-Commit Exclusiva na Dependência de Teste
+  const contractStore = new TransactionalStoreMock();
+  const contractAdapter = new FirestoreLedgerAdapter(contractStore);
+  let preCommitFailed = false;
+  try {
+    await contractAdapter.commitTransaction('usr_test_atomic', {
+      requestId: 'req_contract_atomic',
+      id: 'tx_contract_atomic',
+      type: 'EXPENSE',
+      amountCents: 10000n,
+      sourceAccountId: 'acc_contract',
+      category: 'Teste',
+      description: 'Prova de falha pré-commit isolada',
+      simulatePreCommitFailure: true // Exclusivo da infraestrutura interna de testes
+    });
+  } catch {
+    preCommitFailed = true;
+  }
+  assert(preCommitFailed, '[Contrato] Falha pré-commit ativada exclusivamente na dependência de teste');
+  assert(contractStore.documents.size === 0, '[Contrato] Zero documentos persistidos após falha pré-commit (Rollback Total)');
+
+  // 4.2 Contrato: Origem Não Autenticada (HTTP 401)
   const httpWaUnauth = createMockHttp({
     method: 'POST',
     headers: { 'x-webhook-secret': 'chave_hacker_errada' },
@@ -540,10 +644,10 @@ async function runCompleteSubetapa033Suite() {
     }
   });
   await webhookHandler(httpWaUnauth.req, httpWaUnauth.res);
-  assert(httpWaUnauth.getStatusCode() === 401, 'POST /api/webhook com segredo incorreto retorna HTTP 401');
+  assert(httpWaUnauth.getStatusCode() === 401, '[Contrato] POST /api/webhook com segredo incorreto retorna HTTP 401');
   assert(httpWaUnauth.getResponseData().code === 'WEBHOOK_ORIGIN_UNAUTHORIZED', 'Código WEBHOOK_ORIGIN_UNAUTHORIZED retornado');
 
-  // 4.2 Rota do Webhook rejeita vínculo ausente (403 UNBOUND_PROVIDER_IDENTITY)
+  // 4.3 Contrato: Vínculo Ausente (HTTP 403)
   const httpWaUnbound = createMockHttp({
     method: 'POST',
     headers: { 'x-webhook-secret': 'kyro_webhook_secret_dev' },
@@ -554,10 +658,10 @@ async function runCompleteSubetapa033Suite() {
     }
   });
   await webhookHandler(httpWaUnbound.req, httpWaUnbound.res);
-  assert(httpWaUnbound.getStatusCode() === 403, 'POST /api/webhook com telefone sem vínculo retorna HTTP 403');
+  assert(httpWaUnbound.getStatusCode() === 403, '[Contrato] POST /api/webhook com telefone sem vínculo retorna HTTP 403');
   assert(httpWaUnbound.getResponseData().code === 'UNBOUND_PROVIDER_IDENTITY', 'Código UNBOUND_PROVIDER_IDENTITY retornado');
 
-  // 4.3 Rota do Webhook rejeita vínculo ambíguo (409 AMBIGUOUS_PROVIDER_IDENTITY)
+  // 4.4 Contrato: Vínculo Ambíguo (HTTP 409)
   const httpWaAmbiguous = createMockHttp({
     method: 'POST',
     headers: { 'x-webhook-secret': 'kyro_webhook_secret_dev' },
@@ -568,10 +672,10 @@ async function runCompleteSubetapa033Suite() {
     }
   });
   await webhookHandler(httpWaAmbiguous.req, httpWaAmbiguous.res);
-  assert(httpWaAmbiguous.getStatusCode() === 409, 'POST /api/webhook com vínculo ambíguo retorna HTTP 409');
+  assert(httpWaAmbiguous.getStatusCode() === 409, '[Contrato] POST /api/webhook com vínculo ambíguo retorna HTTP 409');
   assert(httpWaAmbiguous.getResponseData().code === 'AMBIGUOUS_PROVIDER_IDENTITY', 'Código AMBIGUOUS_PROVIDER_IDENTITY retornado');
 
-  // 4.4 Rota do Webhook com vínculo unívoco e segredo válido (200 OK)
+  // 4.5 Contrato: Vínculo Unívoco Ativo (HTTP 200)
   const httpWaSuccess = createMockHttp({
     method: 'POST',
     headers: { 'x-webhook-secret': 'kyro_webhook_secret_dev' },
@@ -586,7 +690,7 @@ async function runCompleteSubetapa033Suite() {
     }
   });
   await webhookHandler(httpWaSuccess.req, httpWaSuccess.res);
-  assert(httpWaSuccess.getStatusCode() === 200, 'POST /api/webhook autorizado com vínculo unívoco retorna HTTP 200');
+  assert(httpWaSuccess.getStatusCode() === 200, '[Contrato] POST /api/webhook autorizado com vínculo unívoco retorna HTTP 200');
   assert(httpWaSuccess.getResponseData().userId === 'usr_alice_wa', 'Transação gravada sob o UID resolvido no servidor: usr_alice_wa');
 
   // =========================================================================

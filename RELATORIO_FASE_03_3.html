@@ -191,31 +191,31 @@
       </div>
       <h1>KYRO FINANCE | Relatório Técnico Oficial: Fechamento Subetapa 03.3</h1>
       <p class="subtitle">
-        Caminho de gravação autorizado por UID e transacional comprovado pela rota HTTP real em múltiplos processos independentes. Verificador oficial do Firebase Admin SDK, eliminação de fallback para mock, tolerância a falhas de armazenamento (503), persistência atômica no Firestore Emulator oficial e resiliência com sobrevivência a reinício.
+        Caminho de gravação autorizado por UID e transacional comprovado pela rota HTTP real em múltiplos processos independentes. Verificador oficial Firebase Admin em todos os ramos (com e sem emulador), ausência de chave falhando explicitamente, eliminação de fallback para mock, tolerância a falhas de armazenamento (503), persistência atômica no Firestore Emulator oficial e resiliência com sobrevivência a reinício.
       </p>
     </header>
 
     <!-- KPIS -->
     <div class="grid-kpi">
       <div class="card-kpi">
-        <div class="kpi-title">Testes de Rota e Multi-Processo (03.3)</div>
-        <div class="kpi-value">47 / 47</div>
-        <div class="kpi-subtitle">✓ 100% de Sucesso</div>
-      </div>
-      <div class="card-kpi">
         <div class="kpi-title">Testes do Núcleo Contábil</div>
         <div class="kpi-value">51 / 51</div>
         <div class="kpi-subtitle">✓ Cobertura Integral</div>
       </div>
       <div class="card-kpi">
-        <div class="kpi-title">Total Consolidado</div>
-        <div class="kpi-value">98 / 98</div>
-        <div class="kpi-subtitle">✓ Zero Falhas ou Regressões</div>
+        <div class="kpi-title">Testes de Contrato Isolados</div>
+        <div class="kpi-value">16 / 16</div>
+        <div class="kpi-subtitle">✓ Provas Criptográficas e Mocks</div>
       </div>
       <div class="card-kpi">
-        <div class="kpi-title">Verificação TypeScript</div>
-        <div class="kpi-value">0 Erros</div>
-        <div class="kpi-subtitle">✓ Tipagem Estrita Sem Any</div>
+        <div class="kpi-title">Testes de Integração HTTP Real</div>
+        <div class="kpi-value">37 / 37</div>
+        <div class="kpi-subtitle">✓ PIDs Distintos & Emuladores</div>
+      </div>
+      <div class="card-kpi">
+        <div class="kpi-title">Total Consolidado</div>
+        <div class="kpi-value">104 / 104</div>
+        <div class="kpi-subtitle">✓ 100% de Sucesso (0 Falhas)</div>
       </div>
     </div>
 
@@ -257,64 +257,64 @@
       </table>
     </div>
 
-    <!-- SEÇÃO 2: ISOLAMENTO DE AUTENTICAÇÃO SINTÉTICA -->
+    <!-- SEÇÃO 2: VERIFICAÇÃO DE ASSINATURA E RAMOS DE AUTENTICAÇÃO -->
     <div class="card">
-      <h2>🔐 2. Isolamento de Autenticação Sintética e Prova Criptográfica RS256</h2>
+      <h2>🔐 2. Verificação de Assinatura Firebase Admin e Ramos de Autenticação</h2>
       <p style="color:var(--text-muted); margin-bottom:1rem;">
-        A entrada pública utiliza exclusivamente a verificação oficial do Firebase. Nenhuma variável de ambiente da aplicação consegue habilitar credenciais sintéticas (<code>demo-token:</code>) na rota pública do produto:
+        A aplicação utiliza exclusivamente o verificador oficial Firebase Admin (<code>auth.verifyIdToken</code>) em todos os ramos de execução da rota. O fallback inseguro que aceitava claims sem chave pública foi completamente extirpado:
       </p>
       <table>
         <thead>
           <tr>
-            <th>Cenário de Autenticação</th>
-            <th>Entrada / Condição</th>
-            <th>Código HTTP / Resposta</th>
-            <th>Efeito Persistido</th>
-            <th>Status</th>
+            <th>Ramo / Cenário</th>
+            <th>Condição de Execução</th>
+            <th>Resultado Observado</th>
+            <th>Código HTTP</th>
+            <th>Classificação</th>
           </tr>
         </thead>
         <tbody>
           <tr>
+            <td><strong>Ramo Fora do Emulador (Sem Host)</strong></td>
+            <td><code>FIREBASE_AUTH_EMULATOR_HOST</code> ausente + JWT com claims plausíveis e assinatura forjada</td>
+            <td>Verificador oficial rejeita a assinatura perante certificados do Google</td>
+            <td><code>HTTP 401 (UNAUTHORIZED_INVALID_CREDENTIAL)</code></td>
+            <td><span class="status-pill status-rejected">Integração HTTP</span></td>
+          </tr>
+          <tr>
+            <td><strong>Ramo com Emulador Oficial</strong></td>
+            <td><code>FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099</code> + ID Token legítimo via REST do Auth Emulator</td>
+            <td>UID extraído diretamente do <code>localId</code> oficial</td>
+            <td><code>HTTP 200 (Autenticado)</code></td>
+            <td><span class="status-pill status-applied">Integração HTTP</span></td>
+          </tr>
+          <tr>
             <td><strong>Credencial Sintética na Rota Pública</strong></td>
             <td><code>Authorization: Bearer demo-token:usr_alice</code></td>
-            <td><code>HTTP 401 (UNAUTHORIZED_INVALID_CREDENTIAL)</code></td>
-            <td>Nenhum documento gerado</td>
-            <td><span class="status-pill status-rejected">Rejeitado</span></td>
+            <td>Rejeição categórica independente de variáveis de ambiente</td>
+            <td><code>HTTP 401 (Proibido)</code></td>
+            <td><span class="status-pill status-rejected">Integração HTTP</span></td>
           </tr>
           <tr>
-            <td><strong>Token Expirado</strong></td>
-            <td>Token RS256 com <code>exp &lt; now</code></td>
-            <td><code>HTTP 401 (TOKEN_EXPIRED)</code></td>
-            <td>Nenhum efeito contábil</td>
-            <td><span class="status-pill status-rejected">Rejeitado</span></td>
-          </tr>
-          <tr>
-            <td><strong>Token Adulterado no Payload</strong></td>
-            <td>Payload alterado após assinatura digital</td>
-            <td><code>HTTP 401 (SIGNATURE_VERIFICATION_FAILED)</code></td>
-            <td>Nenhum efeito contábil</td>
-            <td><span class="status-pill status-rejected">Rejeitado</span></td>
-          </tr>
-          <tr>
-            <td><strong>Audience / Projeto Incorreto</strong></td>
-            <td>Token emitido para outro <code>projectId</code></td>
-            <td><code>HTTP 401 (PROJECT_ID_MISMATCH)</code></td>
-            <td>Nenhum efeito contábil</td>
-            <td><span class="status-pill status-rejected">Rejeitado</span></td>
-          </tr>
-          <tr>
-            <td><strong>Token Oficial Auth Emulator</strong></td>
-            <td>Emitido via REST do Firebase Auth Emulator (127.0.0.1:9099)</td>
-            <td><code>HTTP 200 (Autenticado)</code></td>
-            <td>UID extraído diretamente do <code>localId</code> oficial</td>
-            <td><span class="status-pill status-applied">Aprovado</span></td>
+            <td><strong>Tentativa de Injeção de Falha Externa</strong></td>
+            <td>Cabeçalho <code>x-simulate-failure</code> ou body <code>simulatePreCommitFailure</code></td>
+            <td>Rota ignora tentativa de injeção e conclui transação legítima</td>
+            <td><code>HTTP 200 (Ignorado)</code></td>
+            <td><span class="status-pill status-applied">Integração HTTP</span></td>
           </tr>
           <tr>
             <td><strong>Tentativa Cross-Tenant</strong></td>
             <td>Token válido de Alice enviando <code>userId: 'usr_bob'</code></td>
+            <td>Barreira de segurança intercepta a personificação</td>
             <td><code>HTTP 403 (PERMISSION_DENIED_CROSS_TENANT)</code></td>
-            <td>Conta de Bob 100% intacta</td>
-            <td><span class="status-pill status-rejected">Bloqueado</span></td>
+            <td><span class="status-pill status-rejected">Integração HTTP</span></td>
+          </tr>
+          <tr>
+            <td><strong>Ausência de Chave Pública na Prova</strong></td>
+            <td>Chamada a <code>verifyJwtCryptographically</code> com <code>publicKeyPem: ''</code></td>
+            <td>Falha explicitamente exigindo a chave pública</td>
+            <td><code>isValid: false</code></td>
+            <td><span class="status-pill status-rejected">Contrato Isolado</span></td>
           </tr>
         </tbody>
       </table>
@@ -328,29 +328,30 @@
       </p>
       <div class="code-block">
 [TESTE MULTI-PROCESSO CONCORRENTE REAL]
-- Processo 1: PID 40008 | Porta 4101 | Firestore Emulator: 127.0.0.1:8080
-- Processo 2: PID 9696  | Porta 4102 | Firestore Emulator: 127.0.0.1:8080
+- Processo 1: PID 17360 | Porta 4101 | Firestore Emulator: 127.0.0.1:8080
+- Processo 2: PID 42540 | Porta 4102 | Firestore Emulator: 127.0.0.1:8080
 - Saldo Inicial no Firestore: R$ 1.000,00 (100000 centavos)
 - Disparo Simultâneo via HTTP: Promise.all([fetch(Porta 4101), fetch(Porta 4102)])
   -> Ambas instâncias respondem HTTP 200 OK com status APPLIED
   -> Exatamente uma instância retorna replay: true
   -> Leitura Direta do Firestore: Saldo = R$ 800,00 (80000 centavos) [Efeito Único]
-- Encerramento dos Processos: kill(PID 40008) e kill(PID 9696)
-- Subida de Novo Processo (Processo 3): PID 41036 | Porta 4103
+- Integração de Webhook via Rede: POST http://127.0.0.1:4101/api/webhook -> HTTP 200 (Synced) e HTTP 401 (Segredo Inválido)
+- Encerramento dos Processos: kill(PID 17360) e kill(PID 42540)
+- Subida de Novo Processo (Processo 3): PID 14632 | Porta 4103
 - Retry Idêntico: HTTP 200 com replay: true recuperado do Firestore | Saldo = R$ 800,00 (Zero Duplo Débito)
 - Retry Divergente: HTTP 409 Conflict (IDEMPOTENCY_PAYLOAD_MISMATCH) | Saldo preservado
-- Falha Pré-Commit: HTTP 500 | Rollback 100% comprovado no Firestore
+- Falha na Transação: HTTP 500 | Rollback 100% comprovado no Firestore
       </div>
     </div>
 
     <!-- SEÇÃO 4: ESCOPO DE WHATSAPP E ANDROID -->
     <div class="card">
-      <h2>📱 4. Escopo do Webhook e Pareceres Segmentados</h2>
+      <h2>📱 4. Escopo do Webhook e Paridade Android</h2>
       <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:1.5rem; margin-top:1rem;">
         <div style="background:var(--card-alt); padding:1.25rem; border-radius:0.5rem; border:1px solid var(--border);">
           <h3 style="margin-top:0;">Rota Real do Webhook (/api/webhook)</h3>
           <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:0.75rem;">
-            A camada de autorização e resolução de identidade no servidor foi 100% comprovada pela rota HTTP:
+            A camada de autorização e resolução de identidade no servidor foi 100% comprovada por contratos e pela rede:
           </p>
           <ul style="font-size:0.85rem;">
             <li>Origem não autenticada rejeitada com <strong>HTTP 401 (<code>WEBHOOK_ORIGIN_UNAUTHORIZED</code>)</strong>.</li>
@@ -374,7 +375,7 @@
 
     <!-- SEÇÃO 5: PARECER TÉCNICO -->
     <div class="card">
-      <h2>📋 5. Pareceres Técnicos Segmentados</h2>
+      <h2>📋 5. Pareceres Técnicos Segmentados por Camada</h2>
       <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:1.5rem; margin-top:1rem;">
         <div style="background:rgba(16, 185, 129, 0.05); padding:1.25rem; border-radius:0.5rem; border:1px solid var(--accent);">
           <h3 style="color:var(--accent); margin-top:0;">1. Testes Unitários do Núcleo</h3>
@@ -385,13 +386,13 @@
         <div style="background:rgba(59, 130, 246, 0.05); padding:1.25rem; border-radius:0.5rem; border:1px solid var(--blue);">
           <h3 style="color:var(--blue); margin-top:0;">2. Contratos Isolados com Mock</h3>
           <p style="font-size:0.85rem;">
-            <strong>APROVADO (100%):</strong> Validação estrita de contratos e simulação de concorrência pura em memória via <code>TransactionalStoreMock</code> injetado.
+            <strong>APROVADO (16/16 - 100%):</strong> Prova RS256 isolada com chave pública obrigatória, contratos de webhook e prova isolada de falha pré-commit.
           </p>
         </div>
         <div style="background:rgba(139, 92, 246, 0.05); padding:1.25rem; border-radius:0.5rem; border:1px solid var(--purple);">
           <h3 style="color:var(--purple); margin-top:0;">3. Integração HTTP Multi-Processo</h3>
           <p style="font-size:0.85rem;">
-            <strong>APROVADO (47/47 - 100%):</strong> PIDs distintos, Auth e Firestore Emulators oficiais, falha 503 com armazenamento indisponível e sobrevivência a reinício.
+            <strong>APROVADO (37/37 - 100%):</strong> PIDs distintos, Auth e Firestore Emulators oficiais, ramo sem emulador com rejeição 401 e sobrevivência a reinício.
           </p>
         </div>
         <div style="background:rgba(245, 158, 11, 0.05); padding:1.25rem; border-radius:0.5rem; border:1px solid var(--warning);">

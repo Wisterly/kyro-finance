@@ -262,9 +262,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
 
         const type = (rawTx.type === 'Receita' || rawTx.type === 'INCOME') ? 'INCOME' : 'EXPENSE';
-        const simulatePreCommitFailure = 
-          req.headers['x-simulate-failure'] === 'pre-commit' || 
-          payload.simulatePreCommitFailure === true;
 
         try {
           const receipt = await adapter.commitTransaction(authUid, {
@@ -278,8 +275,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             description: rawTx.description || 'Lançamento via API Segura',
             date: rawTx.date,
             isEstimated: !!rawTx.isEstimated,
-            fencingToken: payload.fencingToken || 1,
-            simulatePreCommitFailure
+            fencingToken: payload.fencingToken || 1
           });
 
           return res.status(200).json({
