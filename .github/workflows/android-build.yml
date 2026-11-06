@@ -53,6 +53,11 @@ jobs:
 
       - name: Compilar APK Otimizado (Debug e Release Assinados)
         working-directory: ./android
+        env:
+          KEYSTORE_FILE: 'kyro.keystore'
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD || secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS || secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD || secrets.KEY_PASSWORD }}
         run: |
           BUILD_CODE=$(node -p "require('../version.json').buildNumber || 28")
           VERSION_NAME=$(node -p "require('../version.json').version || '1.28'")

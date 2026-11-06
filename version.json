@@ -1,11 +1,12 @@
 {
-  "version": "1.41",
-  "buildNumber": 41,
-  "releaseDate": "2026-10-31",
+  "version": "1.42",
+  "buildNumber": 42,
+  "releaseDate": "2026-11-05",
   "changelog": [
-    "Edição Manual Completa de Lançamentos: clique em qualquer item nas caixas de Entradas, Saídas, Últimas Transações ou na aba de Transações para editar Valor, Método, Tipo, Categoria, Cidade, Local e Data",
-    "Edição por Comando no Chat Interno (Texto e Áudio): comandos como 'Corrija o último lançamento, modifique de PIX para crédito' ou 'Correção do último lançamento, o valor é 400 e não 500'",
-    "Edição por Comando no Grupo do WhatsApp (Texto e Áudio de Voz): o robô interpreta correções faladas ou digitadas e altera o lançamento em tempo real sem duplicar",
-    "Sincronização Instantânea In-Place (SSE + Cloud Sync): edições feitas no celular, PC ou WhatsApp atualizam imediatamente todos os dispositivos abertos"
+    "Etapa 03.1 - Início da Etapa 03 (Unificação do Motor Financeiro Web, APK e WhatsApp)",
+    "Sanitização de Assinatura Android: remoção de senhas em texto claro em código, parametrizando por variáveis de ambiente e GitHub Secrets (KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD)",
+    "Preservação Estrita de Identidade do APK: mantido keystore canônico kyro.keystore e com.kyro.finance para atualizações in-place compatíveis",
+    "Mapeamento de Pontos de Entrada e Escritas Legadas: inventário detalhado de fluxos de voz, texto e webhooks nos canais Web, APK, Baileys e Evolution API",
+    "Validação de Regressão em Ambiente Descartável: 100% de aprovação na suíte determinística (45/45), fluxos naturais (6/6), mutantes (10/10) e aceite sintético de reversão offline"
   ]
 }

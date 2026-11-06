@@ -18,16 +18,18 @@ android {
     }
     signingConfigs {
         release {
-            storeFile file('kyro.keystore')
-            storePassword 'kyrofinance'
-            keyAlias 'kyro'
-            keyPassword 'kyrofinance'
+            def ksFile = System.getenv("KEYSTORE_FILE") ?: (project.findProperty("KEYSTORE_FILE") ?: 'kyro.keystore')
+            storeFile file(ksFile)
+            storePassword System.getenv("KEYSTORE_PASSWORD") ?: (project.findProperty("KEYSTORE_PASSWORD") ?: "")
+            keyAlias System.getenv("KEY_ALIAS") ?: (project.findProperty("KEY_ALIAS") ?: "")
+            keyPassword System.getenv("KEY_PASSWORD") ?: (project.findProperty("KEY_PASSWORD") ?: "")
         }
         debug {
-            storeFile file('kyro.keystore')
-            storePassword 'kyrofinance'
-            keyAlias 'kyro'
-            keyPassword 'kyrofinance'
+            def ksFile = System.getenv("KEYSTORE_FILE") ?: (project.findProperty("KEYSTORE_FILE") ?: 'kyro.keystore')
+            storeFile file(ksFile)
+            storePassword System.getenv("KEYSTORE_PASSWORD") ?: (project.findProperty("KEYSTORE_PASSWORD") ?: "")
+            keyAlias System.getenv("KEY_ALIAS") ?: (project.findProperty("KEY_ALIAS") ?: "")
+            keyPassword System.getenv("KEY_PASSWORD") ?: (project.findProperty("KEY_PASSWORD") ?: "")
         }
     }
     buildTypes {
