@@ -42,6 +42,7 @@ async function main() {
   }
 
   console.log('\n>>> [2/3] EXECUTANDO BATERIA DA SUBETAPA 03.3 (53 CASOS)...');
+  await new Promise(r => setTimeout(r, 1000));
   const res2 = await runCommand('npx.cmd', ['tsx', 'src/engine/subetapa_03_3.test.ts']);
   if (res2.exitCode !== 0) {
     console.error('Falha na suíte da subetapa 03.3!');
@@ -49,6 +50,7 @@ async function main() {
   }
 
   console.log('\n>>> [3/3] EXECUTANDO BATERIA DA SUBETAPA 03.4 (117 CASOS)...');
+  await new Promise(r => setTimeout(r, 1000));
   const res3 = await runCommand('npx.cmd', ['tsx', 'src/engine/subetapa_03_4.test.ts']);
   if (res3.exitCode !== 0) {
     console.error('Falha na suíte da subetapa 03.4!');

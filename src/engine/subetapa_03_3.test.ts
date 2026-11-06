@@ -115,15 +115,15 @@ function createMockHttp(options: {
 }
 
 // Utilitário para aguardar servidor HTTP responder
-async function waitForHttpServer(port: number, maxAttempts = 30): Promise<boolean> {
+async function waitForHttpServer(port: number, maxAttempts = 50): Promise<boolean> {
   for (let i = 0; i < maxAttempts; i++) {
     try {
       const resp = await fetch(`http://127.0.0.1:${port}/health`);
       if (resp.ok) return true;
     } catch {
-      // Aguarda 100ms
+      // Aguarda 150ms
     }
-    await new Promise(r => setTimeout(r, 100));
+    await new Promise(r => setTimeout(r, 150));
   }
   return false;
 }

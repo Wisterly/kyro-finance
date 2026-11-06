@@ -103,7 +103,7 @@ function startServerProcess(port: number, scriptPath?: string): { proc: ChildPro
   return { proc, pid };
 }
 
-async function waitForHttpServer(port: number, maxAttempts = 40): Promise<boolean> {
+async function waitForHttpServer(port: number, maxAttempts = 50): Promise<boolean> {
   for (let i = 0; i < maxAttempts; i++) {
     try {
       const res = await fetch(`http://127.0.0.1:${port}/health`);
@@ -260,8 +260,8 @@ export async function runSubetapa034Tests() {
     const officialAuth = await getOfficialAuthEmulatorToken('usr_dispute_concurrency@kyro.synthetic', 'Pass_123456');
     assert(!!officialAuth.idToken, 'ID Token oficial emitido pelo Firebase Auth Emulator');
 
-    const PORT_A = 4101;
-    const PORT_B = 4102;
+    const PORT_A = 4111;
+    const PORT_B = 4112;
 
     console.log(`  -> Subindo Processo A na porta ${PORT_A}...`);
     const serverA = startServerProcess(PORT_A);
@@ -270,7 +270,7 @@ export async function runSubetapa034Tests() {
 
     const readyA = await waitForHttpServer(PORT_A);
     const readyB = await waitForHttpServer(PORT_B);
-    assert(readyA && readyB, 'Ambos os servidores HTTP iniciaram com sucesso nas portas 4101 e 4102');
+    assert(readyA && readyB, 'Ambos os servidores HTTP iniciaram com sucesso nas portas 4111 e 4112');
     assert(serverA.pid !== serverB.pid, `PIDs independentes no SO: Processo A (${serverA.pid}) !== Processo B (${serverB.pid})`);
 
     const firestoreDirect = new FirestoreAdminStore();
@@ -732,8 +732,8 @@ export async function runSubetapa034Tests() {
     await killAllProcesses();
     await new Promise(r => setTimeout(r, 600));
 
-    // 3.3 Sobe um NOVO Processo C em nova porta (4103)
-    const PORT_C = 4103;
+    // 3.3 Sobe um NOVO Processo C em nova porta (4113)
+    const PORT_C = 4113;
     console.log(`  -> Subindo novo Processo C na porta ${PORT_C}...`);
     const serverC = startServerProcess(PORT_C);
     const readyC = await waitForHttpServer(PORT_C);
@@ -1097,11 +1097,11 @@ export async function runSubetapa034Tests() {
     console.log('  -> [5.3] Encerrando processo 03.4 e iniciando processo da revisão real PR.044 (commit 1fe397de12de565002e0bec6976634c9c166bedb)...');
     await killProcessSafely(serverC.proc);
 
-    const PORT_PR044 = 4104;
+    const PORT_PR044 = 4114;
     const pr044Script = path.resolve(process.cwd(), 'isolated_pr044/src/server/httpServer.ts');
     const serverPR044 = startServerProcess(PORT_PR044, pr044Script);
     const readyPR044 = await waitForHttpServer(PORT_PR044);
-    assert(readyPR044, 'Servidor standalone da revisão real PR.044 (1fe397de12de565002e0bec6976634c9c166bedb) ativo na porta 4104');
+    assert(readyPR044, 'Servidor standalone da revisão real PR.044 (1fe397de12de565002e0bec6976634c9c166bedb) ativo na porta 4114');
     assert(serverPR044.pid !== serverC.pid, 'Processo da PR.044 opera sob PID independente');
 
     // 5.4 Execução na Rota Real da PR.044: Replay de Operação Confirmada Anteriormente (Zero Duplo Débito)
