@@ -125,6 +125,7 @@ export class FirestoreLedgerAdapter {
       date?: string;
       isEstimated?: boolean;
       fencingToken?: number;
+      simulatePreCommitFailure?: boolean;
     }
   ): Promise<MutationReceipt> {
     if (!userId) throw new Error('[FirestoreLedgerAdapter] userId é obrigatório');
@@ -198,8 +199,19 @@ export class FirestoreLedgerAdapter {
         if (params.type === 'INCOME') {
           if (!params.targetAccountId) throw new LedgerTransactionError('Receita requer conta de destino.');
           const accPath = `users/${userId}/accounts/${params.targetAccountId}`;
-          const acc = await t.get(accPath) as StoredAccountRecord | null;
-          if (!acc) throw new LedgerTransactionError(`Conta de destino '${params.targetAccountId}' não encontrada.`);
+          let acc = await t.get(accPath) as StoredAccountRecord | null;
+          if (!acc) {
+            // Inicialização atômica da conta no mesmo commit
+            acc = {
+              id: params.targetAccountId,
+              userId,
+              name: 'Conta Principal',
+              balanceCents: 0,
+              rev: 1,
+              fencingToken: fencing,
+              updatedAt: nowIso
+            };
+          }
 
           const currentCents = SafeMoneySerializer.fromFirestoreCents(acc.balanceCents);
           const newCents = currentCents + params.amountCents;
@@ -215,8 +227,19 @@ export class FirestoreLedgerAdapter {
         } else if (params.type === 'EXPENSE') {
           if (!params.sourceAccountId) throw new LedgerTransactionError('Despesa requer conta de origem.');
           const accPath = `users/${userId}/accounts/${params.sourceAccountId}`;
-          const acc = await t.get(accPath) as StoredAccountRecord | null;
-          if (!acc) throw new LedgerTransactionError(`Conta de origem '${params.sourceAccountId}' não encontrada.`);
+          let acc = await t.get(accPath) as StoredAccountRecord | null;
+          if (!acc) {
+            // Inicialização atômica da conta no mesmo commit
+            acc = {
+              id: params.sourceAccountId,
+              userId,
+              name: 'Conta Principal',
+              balanceCents: 0,
+              rev: 1,
+              fencingToken: fencing,
+              updatedAt: nowIso
+            };
+          }
 
           const currentCents = SafeMoneySerializer.fromFirestoreCents(acc.balanceCents);
           const newCents = currentCents - params.amountCents;
@@ -312,6 +335,14 @@ export class FirestoreLedgerAdapter {
       };
 
       t.set(idempotencyPath, idempotencyDoc);
+
+      // Simulação controlada de falha proposital imediatamente anterior ao commit
+      if (params.simulatePreCommitFailure) {
+        throw new LedgerTransactionError(
+          'Simulação de falha proposital imediatamente antes do commit.',
+          'SIMULATED_PRE_COMMIT_FAILURE'
+        );
+      }
 
       return receipt;
     });

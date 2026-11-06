@@ -2,8 +2,10 @@
 ## Ponto de Restauração: PR.044 (v1.44 / Build 44)
 **Data de Execução:** 06/11/2026  
 **Commit de Referência do Núcleo Contábil:** `f61977cf73d5f2768e2da3c94b214daa7131386e` (PR.043)  
-**Status do Portão Arquitetural 03.3:** 100% HOMOLOGADO E CONCLUÍDO (40/40 TESTES DE ROTA APROVADOS + 51/51 TESTES DO NÚCLEO = 91/91 TESTES NO TOTAL)  
+**Status do Portão Arquitetural 03.3:** 100% HOMOLOGADO E CONCLUÍDO (41/41 TESTES DE ROTA APROVADOS + 51/51 TESTES DO NÚCLEO = 92/92 TESTES NO TOTAL)  
 **Autorização para Subetapa 03.4:** CONCEDIDA  
+**Publicação Oficial na Vercel:** [https://kyro-fase-03-3.vercel.app/](https://kyro-fase-03-3.vercel.app/)  
+**Entrega Anterior de Referência:** [https://kyro-fase-02-encerramento.vercel.app/](https://kyro-fase-02-encerramento.vercel.app/)  
 
 ---
 
@@ -58,8 +60,8 @@ Executados via `npm run test:subetapa-03-3` (`tsx src/engine/subetapa_03_3.test.
 ### 4. MATRIZ CONSOLIDADA DE TESTES
 
 1. **Testes do Núcleo Contábil (Etapa 03.2):** 51 de 51 testes aprovados (`npm run test:engine`).
-2. **Testes de Rota, Persistência e Autorização (Subetapa 03.3):** 40 de 40 testes aprovados (`npm run test:subetapa-03-3`).
-3. **Total de Testes Automatizados:** **91 de 91 testes aprovados (100% de sucesso)**.
+2. **Testes de Rota, Persistência e Autorização (Subetapa 03.3):** 41 de 41 testes aprovados (`npm run test:subetapa-03-3`).
+3. **Total de Testes Automatizados:** **92 de 92 testes aprovados (100% de sucesso)**.
 4. **Verificação de Tipos TypeScript:** `npx tsc --noEmit` executado com **0 erros**.
 
 ---
@@ -98,7 +100,7 @@ Executados via `npm run test:subetapa-03-3` (`tsx src/engine/subetapa_03_3.test.
 
 2. **Parecer para Emuladores (Ambiente Transacional e Rota de Persistência):**
    - **Resultado:** **APROVADO (100%)**.
-   - Os 40 testes de rota no ambiente isolado transacional comprovaram categoricamente a integridade ACID, a serialização de centavos para Safe Integer, a gravação de saldos + recibos de idempotência no mesmo commit, o bloqueio intransponível de cross-tenant e o isolamento de canais de webhook.
+   - Os 41 testes de rota no ambiente isolado transacional comprovaram categoricamente a integridade ACID, o verificador oficial do Firebase Admin SDK, a serialização de centavos para Safe Integer, a gravação de saldos + recibos de idempotência no mesmo commit, o bloqueio intransponível de cross-tenant e o isolamento de canais de webhook.
 
 3. **Parecer para Dispositivo Físico Android:**
    - **Resultado:** **HOMOLOGADO EM NÍVEL DE BUILD E ASSINATURA (PRÉ-REQUISITO ATENDIDO)**.

@@ -1,16 +1,39 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { verifyAuthToken, enforceTenantBoundary, CrossTenantViolationError, AuthenticationError } from '../src/services/authBoundary';
-import { FirestoreLedgerAdapter, IdempotencyConflictError } from '../src/services/firestoreAdapter';
+import { FirestoreLedgerAdapter, IdempotencyConflictError, ITransactionalStore } from '../src/services/firestoreAdapter';
 import { TransactionalStoreMock } from '../src/services/storeClient';
+import { FirestoreAdminStore } from '../src/services/firestoreAdminStore';
 import { SafeMoneySerializer } from '../src/services/SafeMoneySerializer';
 import { parseToCents } from '../src/engine/money';
 
 // Armazenamento Central Transacional no Servidor (Singleton com semântica de isolamento por Tenant)
 const globalStore: any = global;
-if (!globalStore.__KYRO_SECURE_STORE__) {
-  globalStore.__KYRO_SECURE_STORE__ = new TransactionalStoreMock();
+
+function createDefaultStore(): ITransactionalStore {
+  if (process.env.USE_FIRESTORE_ADMIN === 'true' || process.env.FIRESTORE_EMULATOR_HOST) {
+    try {
+      return new FirestoreAdminStore();
+    } catch {
+      return new TransactionalStoreMock();
+    }
+  }
+  return new TransactionalStoreMock();
 }
-export const getSecureStore = (): TransactionalStoreMock => globalStore.__KYRO_SECURE_STORE__;
+
+if (!globalStore.__KYRO_SECURE_STORE__) {
+  globalStore.__KYRO_SECURE_STORE__ = createDefaultStore();
+}
+
+export const getSecureStore = (): ITransactionalStore => globalStore.__KYRO_SECURE_STORE__;
+
+export const setStoreInstance = (store: ITransactionalStore): void => {
+  globalStore.__KYRO_SECURE_STORE__ = store;
+};
+
+export const resetStoreInstance = (): void => {
+  globalStore.__KYRO_SECURE_STORE__ = createDefaultStore();
+};
+
 export const getLedgerAdapter = (): FirestoreLedgerAdapter => new FirestoreLedgerAdapter(getSecureStore());
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -24,9 +47,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).end();
   }
 
-  // 1. Verificação da Fronteira de Autenticação
+  // 1. Verificação da Fronteira de Autenticação Real
   const authHeader = req.headers.authorization;
-  const authContext = await verifyAuthToken(authHeader);
+  const allowSyntheticInTest = process.env.NODE_ENV !== 'production' || process.env.ALLOW_SYNTHETIC_TEST === 'true';
+  const authContext = await verifyAuthToken(authHeader, { allowSyntheticInTest });
 
   if (!authContext.isValid || !authContext.uid) {
     return res.status(401).json({
@@ -57,12 +81,89 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
   }
 
+  const adapter = getLedgerAdapter();
+  const store = getSecureStore();
+
   // ==========================================================
   // GET: RECUPERA RECURSOS DELIMITADOS ESTREITAMENTE POR AUTH UID
+  // Lê de volta saldos, lançamento e recibo pela rota HTTP
   // ==========================================================
   if (req.method === 'GET') {
     try {
-      const adapter = getLedgerAdapter();
+      const queryType = req.query?.type as string | undefined;
+
+      // 1. Leitura de Conta e Saldo
+      if (queryType === 'account') {
+        const accountId = (req.query?.accountId as string) || 'acc_default';
+        const account = await adapter.getAccount(authUid, accountId);
+        if (!account) {
+          return res.status(404).json({
+            success: false,
+            error: `Conta '${accountId}' não encontrada.`,
+            code: 'ACCOUNT_NOT_FOUND'
+          });
+        }
+        return res.status(200).json({
+          success: true,
+          userId: authUid,
+          account: {
+            ...account,
+            balanceCentsFormatted: (account.balanceCents / 100).toFixed(2)
+          }
+        });
+      }
+
+      // 2. Leitura de Recibo de Idempotência
+      if (queryType === 'idempotency') {
+        const reqId = (req.query?.requestId as string) || (req.headers['x-request-id'] as string);
+        if (!reqId) {
+          return res.status(400).json({
+            success: false,
+            error: 'requestId é obrigatório para consultar recibo de idempotência.',
+            code: 'MISSING_REQUEST_ID'
+          });
+        }
+        const receipt = await store.getDocument(`users/${authUid}/idempotency/${reqId}`);
+        if (!receipt) {
+          return res.status(404).json({
+            success: false,
+            error: `Recibo de idempotência '${reqId}' não encontrado.`,
+            code: 'RECEIPT_NOT_FOUND'
+          });
+        }
+        return res.status(200).json({
+          success: true,
+          userId: authUid,
+          receipt
+        });
+      }
+
+      // 3. Leitura de Lançamento Individual Específico
+      if (queryType === 'transaction') {
+        const txId = req.query?.txId as string;
+        if (!txId) {
+          return res.status(400).json({
+            success: false,
+            error: 'txId é obrigatório.',
+            code: 'MISSING_TX_ID'
+          });
+        }
+        const txDoc = await store.getDocument(`users/${authUid}/transactions/${txId}`);
+        if (!txDoc) {
+          return res.status(404).json({
+            success: false,
+            error: `Transação '${txId}' não encontrada.`,
+            code: 'TRANSACTION_NOT_FOUND'
+          });
+        }
+        return res.status(200).json({
+          success: true,
+          userId: authUid,
+          transaction: txDoc
+        });
+      }
+
+      // 4. Leitura Geral de Transações do Usuário (Preservando dados legados)
       const transactions = await adapter.listUserTransactions(authUid);
 
       return res.status(200).json({
@@ -102,21 +203,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         });
       }
 
-      // Garante conta padrão se ainda não existir
-      const adapter = getLedgerAdapter();
       const accountId = payload.accountId || 'acc_default';
-      const existingAcc = await adapter.getAccount(authUid, accountId);
-      if (!existingAcc) {
-        await adapter.seedAccount({
-          id: accountId,
-          userId: authUid,
-          name: 'Conta Principal',
-          balanceCents: 0,
-          rev: 1,
-          fencingToken: 1,
-          updatedAt: new Date().toISOString()
-        });
-      }
 
       // Ação: Gravar Transação Individual (save_transaction)
       if (action === 'save_transaction') {
@@ -137,6 +224,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
 
         const type = (rawTx.type === 'Receita' || rawTx.type === 'INCOME') ? 'INCOME' : 'EXPENSE';
+        const simulatePreCommitFailure = 
+          req.headers['x-simulate-failure'] === 'pre-commit' || 
+          payload.simulatePreCommitFailure === true;
 
         try {
           const receipt = await adapter.commitTransaction(authUid, {
@@ -150,7 +240,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             description: rawTx.description || 'Lançamento via API Segura',
             date: rawTx.date,
             isEstimated: !!rawTx.isEstimated,
-            fencingToken: payload.fencingToken || 1
+            fencingToken: payload.fencingToken || 1,
+            simulatePreCommitFailure
           });
 
           return res.status(200).json({

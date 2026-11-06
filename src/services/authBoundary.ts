@@ -10,6 +10,8 @@
  *    Vínculos ausentes ou ambíguos são terminantemente rejeitados.
  */
 
+import { verifyRealAuthToken, VerifyTokenOptions } from './firebaseAdminAuth';
+
 export interface AuthContext {
   uid: string;
   email?: string;
@@ -49,58 +51,13 @@ export class WebhookAuthorizationError extends Error {
 
 /**
  * Valida o cabeçalho Authorization: Bearer <token>.
- * Em ambiente de teste/emulador, valida tokens canônicos emitidos pelo emulador.
+ * Utiliza o Firebase Admin SDK oficial e verificador criptográfico estrito.
  */
-export async function verifyAuthToken(authHeader: string | undefined): Promise<AuthContext> {
-  if (!authHeader) {
-    return { uid: '', isValid: false, error: 'Cabeçalho Authorization ausente' };
-  }
-
-  const parts = authHeader.trim().split(' ');
-  if (parts.length !== 2 || parts[0].toLowerCase() !== 'bearer') {
-    return { uid: '', isValid: false, error: 'Formato do token inválido. Esperado Bearer <token>' };
-  }
-
-  const token = parts[1];
-
-  // Tokens de emulação / sintéticos ou JWT format
-  // Formato sintético de teste: "demo-token:<uid>" ou JWT de 3 partes
-  if (token.startsWith('demo-token:')) {
-    const uid = token.replace('demo-token:', '').trim();
-    if (!uid) return { uid: '', isValid: false, error: 'Token com UID vazio' };
-    return { uid, isValid: true };
-  }
-
-  // Se for um JWT emulado (3 partes base64url)
-  if (token.includes('.')) {
-    try {
-      const segs = token.split('.');
-      if (segs.length === 3) {
-        const payloadJson = Buffer.from(segs[1], 'base64url').toString('utf8');
-        const payload = JSON.parse(payloadJson);
-        const uid = payload.user_id || payload.sub || payload.uid;
-        const now = Math.floor(Date.now() / 1000);
-
-        if (payload.exp && payload.exp < now) {
-          return { uid: '', isValid: false, error: 'Token expirado' };
-        }
-        if (!uid) {
-          return { uid: '', isValid: false, error: 'Claim de UID ausente no token' };
-        }
-
-        // Validação de assinatura / integridade
-        if (payload.iss && !payload.iss.includes('securetoken.google.com') && !payload.iss.includes('demo-kyro')) {
-          return { uid: '', isValid: false, error: 'Issuer do token não confiável' };
-        }
-
-        return { uid, email: payload.email, isValid: true };
-      }
-    } catch (e: any) {
-      return { uid: '', isValid: false, error: `Falha ao decodificar token JWT: ${e.message}` };
-    }
-  }
-
-  return { uid: '', isValid: false, error: 'Credencial inválida ou token não reconhecido' };
+export async function verifyAuthToken(
+  authHeader: string | undefined,
+  options: VerifyTokenOptions = {}
+): Promise<AuthContext> {
+  return await verifyRealAuthToken(authHeader, options);
 }
 
 /**

@@ -3,6 +3,9 @@ import OpenAI, { toFile } from 'openai';
 import axios from 'axios';
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore, collection, doc, setDoc, getDocs, query, orderBy, limit } from 'firebase/firestore';
+import { validateWebhookOrigin, resolveProviderBinding, ProviderBinding } from '../src/services/authBoundary';
+import { SafeMoneySerializer } from '../src/services/SafeMoneySerializer';
+import { parseToCents } from '../src/engine/money';
 
 // 1. Firebase Firestore Setup
 const firebaseConfig = {
@@ -652,17 +655,25 @@ if (!globalAny.__KYRO_WEBHOOK_TRANSACTIONS__) {
   globalAny.__KYRO_WEBHOOK_TRANSACTIONS__ = [];
 }
 
-async function saveTransaction(tx: any) {
+async function saveTransaction(tx: any, userId: string = 'usr_default') {
   const txId = tx.id ? String(tx.id) : Date.now().toString();
+  const amountCents = tx.amountCents !== undefined && tx.amountCents !== null 
+    ? SafeMoneySerializer.fromFirestoreCents(tx.amountCents) 
+    : parseToCents(tx.amount);
+  const safeCents = SafeMoneySerializer.toFirestoreCents(amountCents);
+
   const payload = {
     ...tx,
     id: txId,
+    userId,
+    amountCents: safeCents,
+    amount: safeCents / 100,
     date: tx.date || new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }),
     status: tx.status || 'Concluído',
     createdAt: tx.createdAt || new Date().toISOString()
   };
 
-  // 1. Se o ID já existir, atualiza in-place (Edição Manual ou Correção por Comando/Áudio)
+  // 1. Se o ID já existir, atualiza in-place
   const existingWebhookIdx = globalAny.__KYRO_WEBHOOK_TRANSACTIONS__.findIndex((t: any) => String(t.id) === txId);
   if (existingWebhookIdx !== -1) {
     const updatedPayload = {
@@ -674,68 +685,25 @@ async function saveTransaction(tx: any) {
 
     if (db) {
       try {
+        await setDoc(doc(db, 'users', userId, 'transactions', txId), updatedPayload, { merge: true });
         await setDoc(doc(db, 'kyro_transactions', txId), updatedPayload, { merge: true });
       } catch (err) {
         console.warn('[Firestore] Erro ao atualizar transação:', err);
       }
     }
 
-    if (globalAny.__KYRO_CENTRAL_DB__) {
-      const centralList = globalAny.__KYRO_CENTRAL_DB__.transactions || [];
-      const cIdx = centralList.findIndex((t: any) => String(t.id) === txId);
-      if (cIdx !== -1) {
-        centralList[cIdx] = { ...centralList[cIdx], ...updatedPayload };
-      } else {
-        centralList.unshift(updatedPayload);
-      }
-      globalAny.__KYRO_CENTRAL_DB__.transactions = centralList;
-      globalAny.__KYRO_CENTRAL_DB__.lastUpdated = new Date().toISOString();
-    }
-
     return updatedPayload;
-  }
-
-  // 2. Previne duplicação em memória global por assinatura recente (apenas para lançamentos novos)
-  const now = new Date(payload.createdAt).getTime();
-  const exists = globalAny.__KYRO_WEBHOOK_TRANSACTIONS__.some((t: any) => {
-    if (t.whatsappMsgId && payload.whatsappMsgId && t.whatsappMsgId === payload.whatsappMsgId) return true;
-    const sameDesc = (t.description || '').trim().toLowerCase() === (payload.description || '').trim().toLowerCase();
-    const sameAmount = Math.abs(Number(t.amount) - Number(payload.amount)) < 0.01;
-    const sameType = t.type === payload.type;
-    const sameMethod = t.method === payload.method;
-    if (sameDesc && sameAmount && sameType && sameMethod) {
-      const tTime = new Date(t.createdAt || 0).getTime();
-      if (Math.abs(now - tTime) < 90000) return true;
-    }
-    return false;
-  });
-
-  if (exists) {
-    return payload;
   }
 
   if (db) {
     try {
+      await setDoc(doc(db, 'users', userId, 'transactions', txId), payload, { merge: true });
       await setDoc(doc(db, 'kyro_transactions', txId), payload, { merge: true });
     } catch (err) {
       console.warn('[Firestore] Erro ao salvar transação:', err);
     }
   }
 
-  // Sincroniza também no banco central global em memória (se disponível)
-  if (globalAny.__KYRO_CENTRAL_DB__) {
-    const centralList = globalAny.__KYRO_CENTRAL_DB__.transactions || [];
-    const cIdx = centralList.findIndex((t: any) => String(t.id) === txId);
-    if (cIdx !== -1) {
-      centralList[cIdx] = { ...centralList[cIdx], ...payload };
-    } else {
-      centralList.unshift(payload);
-    }
-    globalAny.__KYRO_CENTRAL_DB__.transactions = centralList;
-    globalAny.__KYRO_CENTRAL_DB__.lastUpdated = new Date().toISOString();
-  }
-
-  // Sempre armazena no buffer global em memória para sincronização imediata
   globalAny.__KYRO_WEBHOOK_TRANSACTIONS__.unshift(payload);
   if (globalAny.__KYRO_WEBHOOK_TRANSACTIONS__.length > 100) {
     globalAny.__KYRO_WEBHOOK_TRANSACTIONS__ = globalAny.__KYRO_WEBHOOK_TRANSACTIONS__.slice(0, 100);
@@ -1015,6 +983,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
+    // Suporte a cadastro/configuração de vínculos de provedor em runtime
+    if (payload?.action === 'register_provider_binding' && payload?.binding) {
+      if (!globalAny.__KYRO_PROVIDER_BINDINGS__) globalAny.__KYRO_PROVIDER_BINDINGS__ = [];
+      globalAny.__KYRO_PROVIDER_BINDINGS__.push(payload.binding);
+      return res.status(200).json({ success: true, bindings: globalAny.__KYRO_PROVIDER_BINDINGS__ });
+    }
+
+    if (payload?.action === 'clear_provider_bindings') {
+      globalAny.__KYRO_PROVIDER_BINDINGS__ = [];
+      return res.status(200).json({ success: true });
+    }
+
     // Suporte a ping de diagnóstico e teste de conectividade
     if (payload?.action === 'ping' || payload?.testPing === true) {
       return res.status(200).json({
@@ -1025,22 +1005,65 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // Suporte a sincronização direta de transações do robô local para a nuvem
-    if (payload?.action === 'sync_transactions') {
-      const txsToSync = Array.isArray(payload.transactions) 
-        ? payload.transactions 
-        : (payload.transaction ? [payload.transaction] : []);
-      
-      for (const tx of txsToSync) {
-        if (tx && tx.amount) {
-          await saveTransaction(tx);
-        }
+    // Validação da Fronteira de Autorização do Webhook (Origem e Vínculo de Provedor)
+    const isFinancialAction = payload?.action === 'sync_transactions' || payload?.action === 'save_transaction';
+    const isIncomingMessage = !payload?.action && (payload?.data || payload?.Body || payload?.message || payload?.sender);
+
+    if (isFinancialAction || isIncomingMessage) {
+      // 1. Validação Criptográfica da Origem do Webhook
+      if (!validateWebhookOrigin(req.headers)) {
+        return res.status(401).json({
+          success: false,
+          error: 'Origem do Webhook não autorizada ou chave de segurança ausente/inválida.',
+          code: 'WEBHOOK_ORIGIN_UNAUTHORIZED'
+        });
       }
 
-      return res.status(200).json({
-        status: 'synced',
-        count: globalAny.__KYRO_WEBHOOK_TRANSACTIONS__?.length || 0
-      });
+      // 2. Resolução do Vínculo Provedor (Telefone WhatsApp) -> Usuário (UID)
+      const data = payload?.data || payload;
+      const participant = data?.key?.participant || payload?.participant || payload?.sender || payload?.senderPhone || payload?.phoneNumber || '';
+      const providerPhone = String(participant).replace('@s.whatsapp.net', '').replace('@g.us', '').replace(/\D/g, '');
+
+      const bindings: ProviderBinding[] = globalAny.__KYRO_PROVIDER_BINDINGS__ || [
+        { providerPhone: '558695368780', userId: 'usr_default', status: 'ACTIVE', boundAt: new Date().toISOString() }
+      ];
+
+      const resolution = resolveProviderBinding(bindings, providerPhone);
+      if (resolution.status === 'UNBOUND') {
+        return res.status(403).json({
+          success: false,
+          error: resolution.error,
+          code: 'UNBOUND_PROVIDER_IDENTITY'
+        });
+      }
+      if (resolution.status === 'AMBIGUOUS') {
+        return res.status(409).json({
+          success: false,
+          error: resolution.error,
+          code: 'AMBIGUOUS_PROVIDER_IDENTITY'
+        });
+      }
+
+      const resolvedUserId = resolution.userId!;
+
+      // Suporte a sincronização direta de transações com UID resolvido
+      if (payload?.action === 'sync_transactions') {
+        const txsToSync = Array.isArray(payload.transactions) 
+          ? payload.transactions 
+          : (payload.transaction ? [payload.transaction] : []);
+        
+        for (const tx of txsToSync) {
+          if (tx && (tx.amount || tx.amountCents)) {
+            await saveTransaction(tx, resolvedUserId);
+          }
+        }
+
+        return res.status(200).json({
+          status: 'synced',
+          userId: resolvedUserId,
+          count: globalAny.__KYRO_WEBHOOK_TRANSACTIONS__?.length || 0
+        });
+      }
     }
 
     // Suporte a salvar/configurar o grupo monitorado

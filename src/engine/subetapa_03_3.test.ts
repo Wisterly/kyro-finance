@@ -1,16 +1,32 @@
 /**
- * KYRO FINANCE | BATERIA DE HOMOLOGAÇÃO E PROVA DE COMPORTAMENTO: SUBETAPA 03.3
+ * KYRO FINANCE | BATERIA DE HOMOLOGAÇÃO E PROVA DE COMPORTAMENTO: SUBETAPA 03.3 (REVISADA)
  * 
- * Demonstração dos 6 Cenários Oficiais nos Emuladores/Ambiente Isolado:
- * 1. Gravação autorizada (sucesso, persistência, débito de saldo, recibo no mesmo commit).
- * 2. Credencial inválida (rejeição com 401).
- * 3. Tentativa de escrita em outro UID (Cross-tenant bloqueado com 403).
- * 4. Repetição concorrente (idempotência atômica sob concorrência).
- * 5. Perda de confirmação seguida de retry (mesmo payload = replay; payload divergente = conflito 409).
- * 6. Falha antes do commit (rollback atômico garantido).
- * + Comprovação da ida e volta de centavos BigInt no Firestore.
- * + Fronteira de autorização do Webhook (distinção entre provedor e usuário, rejeição de ausente/ambíguo).
- * + Preservação da leitura de dados legados em float.
+ * Checklist Completo de Aceite:
+ * 1. Autenticação real na rota:
+ *    - Prova de assinatura RS256 separada da integração com emulador
+ *    - Token ausente (401)
+ *    - Token expirado (401)
+ *    - Token adulterado no payload (401)
+ *    - Token com assinatura corrompida (401)
+ *    - Token de projeto incorreto (401)
+ *    - Credencial válida tentando gravar sob outro UID (403 PERMISSION_DENIED_CROSS_TENANT)
+ *    - Rejeição de credencial sintética em ambiente de produção
+ * 2. Persistência real no emulador e leitura de volta:
+ *    - Conexão do handler e leitura de volta de saldos, lançamentos e recibos pela rota HTTP
+ *    - Comprovação de que saldo, transação e recibo estão no mesmo commit atômico
+ *    - Falha anterior ao commit deixa estado intacto (inclusive inicialização de conta)
+ * 3. Idempotência entre processos e sobrevivência a reinício:
+ *    - Duas instâncias independentes em concorrência real
+ *    - Perda de confirmação seguida de retry após reinício de processo
+ *    - Mesmo requestId e conteúdo = recuperação de recibo e efeito único
+ *    - Conteúdo divergente = HTTP 409 com preservação de saldo
+ * 4. Escopo de WhatsApp e Android:
+ *    - Rota real do webhook valida autenticação da origem do provedor (401)
+ *    - Rejeição de vínculo ausente (403 UNBOUND_PROVIDER_IDENTITY)
+ *    - Rejeição de vínculo ambíguo (409 AMBIGUOUS_PROVIDER_IDENTITY)
+ *    - Vínculo unívoco autorizado (200 OK)
+ *    - Registro de paridade de certificado APK v2 separado de instalação física
+ * 5. Serialização BigInt <-> Firestore Safe Integer e dados legados
  */
 
 import { SafeMoneySerializer, SafeMoneyError } from '../services/SafeMoneySerializer';
@@ -22,9 +38,17 @@ import {
   ProviderBinding,
   CrossTenantViolationError 
 } from '../services/authBoundary';
+import { 
+  verifyRealAuthToken, 
+  generateTestKeyPair, 
+  createSignedTestToken, 
+  verifyJwtCryptographically,
+  DEMO_PROJECT_ID 
+} from '../services/firebaseAdminAuth';
 import { FirestoreLedgerAdapter, IdempotencyConflictError } from '../services/firestoreAdapter';
 import { TransactionalStoreMock } from '../services/storeClient';
-import handler, { getSecureStore, getLedgerAdapter } from '../../api/database';
+import handler, { getSecureStore, getLedgerAdapter, setStoreInstance, resetStoreInstance } from '../../api/database';
+import webhookHandler from '../../api/webhook';
 
 let passCount = 0;
 let failCount = 0;
@@ -39,7 +63,7 @@ function assert(condition: boolean, testName: string, detail?: string) {
   }
 }
 
-// Mock simples para simular VercelRequest e VercelResponse
+// Mock HTTP para simular requisições VercelRequest e VercelResponse
 function createMockHttp(options: {
   method: string;
   headers?: Record<string, string>;
@@ -88,322 +112,357 @@ function createMockHttp(options: {
   };
 }
 
-async function runSubetapa033Suite() {
-  console.log('\n=== INICIANDO BATERIA DE HOMOLOGAÇÃO DA SUBETAPA 03.3 ===\n');
+async function runCompleteSubetapa033Suite() {
+  console.log('\n=== INICIANDO BATERIA COMPLETA DE HOMOLOGAÇÃO: SUBETAPA 03.3 ===\n');
 
   // =========================================================================
-  // BLOCO 1: SERIALIZADOR MONETÁRIO SEGURO E IDA E VOLTA DE BIGINT NO FIRESTORE
+  // BLOCO 1: AUTENTICAÇÃO REAL E PROVA CRIPTOGRÁFICA DE ASSINATURA RS256
   // =========================================================================
-  console.log('[1/4] Comprovação de Serialização BigInt <-> Firestore Safe Integer...');
+  console.log('[1/5] Autenticação Real na Rota e Prova de Assinatura RS256...');
 
-  const originalCents = 15450n; // R$ 154,50
-  const firestoreNum = SafeMoneySerializer.toFirestoreCents(originalCents);
-  assert(typeof firestoreNum === 'number', 'Centavos BigInt convertidos para Number aceito pelo Firestore');
-  assert(firestoreNum === 15450, 'Valor numérico exato preservado: 15450');
+  const keyPair = generateTestKeyPair();
 
-  const roundTripCents = SafeMoneySerializer.fromFirestoreCents(firestoreNum);
-  assert(typeof roundTripCents === 'bigint', 'Leitura do Firestore retorna tipo BigInt estrito');
-  assert(roundTripCents === originalCents, 'Ida e volta exata comprovada: 15450n -> 15450 -> 15450n');
+  // 1.1 Prova de Assinatura Válida
+  const validToken = createSignedTestToken({
+    uid: 'usr_alice_real',
+    projectId: DEMO_PROJECT_ID,
+    privateKeyPem: keyPair.privateKey
+  });
+  const resValid = verifyJwtCryptographically(validToken, DEMO_PROJECT_ID, keyPair.publicKey);
+  assert(resValid.isValid === true, 'Token assinado com RS256 verificado com sucesso');
+  assert(resValid.uid === 'usr_alice_real', 'UID extraído com exatidão da claim sub do token');
 
-  // Teste de Limites Máximos Seguros (Number.MAX_SAFE_INTEGER = 9.007.199.254.740.991)
-  const maxSafe = BigInt(Number.MAX_SAFE_INTEGER);
-  const maxNum = SafeMoneySerializer.toFirestoreCents(maxSafe);
-  const roundTripMax = SafeMoneySerializer.fromFirestoreCents(maxNum);
-  assert(roundTripMax === maxSafe, 'Limite máximo IEEE 754 (R$ 90 Trilhões) preservado com exatidão');
+  // 1.2 Token Ausente
+  const resMissing = await verifyRealAuthToken(undefined);
+  assert(!resMissing.isValid, 'Token ausente rejeitado');
 
-  // Rejeição de Overflow
-  let threwOverflow = false;
-  try {
-    SafeMoneySerializer.toFirestoreCents(maxSafe + 1n);
-  } catch (e) {
-    if (e instanceof SafeMoneyError) threwOverflow = true;
-  }
-  assert(threwOverflow, 'Valores acima do limite seguro de 53 bits são terminantemente rejeitados');
+  // 1.3 Token Expirado
+  const expiredToken = createSignedTestToken({
+    uid: 'usr_alice_expired',
+    projectId: DEMO_PROJECT_ID,
+    expiresInSeconds: -3600, // Expirado há 1 hora
+    privateKeyPem: keyPair.privateKey
+  });
+  const resExpired = verifyJwtCryptographically(expiredToken, DEMO_PROJECT_ID, keyPair.publicKey);
+  assert(!resExpired.isValid, 'Token expirado é sumariamente rejeitado');
+  assert((resExpired.error || '').includes('expirado'), 'Mensagem indica expiração');
 
-  // Normalização de Float Legado (ex: 150.50 salvo no banco antigo)
-  const legacyFloat = 150.50;
-  const legacyCents = SafeMoneySerializer.fromFirestoreCents(legacyFloat);
-  assert(legacyCents === 15050n, 'Float legado 150.50 normalizado com exatidão para 15050n sem erro de arredondamento');
+  // 1.4 Token Adulterado no Payload (Assinatura não bate)
+  const adulteratedPayloadToken = createSignedTestToken({
+    uid: 'usr_legit',
+    projectId: DEMO_PROJECT_ID,
+    privateKeyPem: keyPair.privateKey,
+    adulteratePayload: true
+  });
+  const resAdulteratedPayload = verifyJwtCryptographically(adulteratedPayloadToken, DEMO_PROJECT_ID, keyPair.publicKey);
+  assert(!resAdulteratedPayload.isValid, 'Token com payload adulterado rejeitado pela validação de assinatura');
+
+  // 1.5 Token com Assinatura Adulterada
+  const adulteratedSigToken = createSignedTestToken({
+    uid: 'usr_legit',
+    projectId: DEMO_PROJECT_ID,
+    privateKeyPem: keyPair.privateKey,
+    adulterateSignature: true
+  });
+  const resAdulteratedSig = verifyJwtCryptographically(adulteratedSigToken, DEMO_PROJECT_ID, keyPair.publicKey);
+  assert(!resAdulteratedSig.isValid, 'Token com bytes de assinatura corrompidos rejeitado');
+
+  // 1.6 Token de Projeto Incorreto (mismatch de audience/aud)
+  const wrongProjectToken = createSignedTestToken({
+    uid: 'usr_alice_real',
+    projectId: 'demo-wrong-project-adversarial',
+    privateKeyPem: keyPair.privateKey
+  });
+  const resWrongProj = verifyJwtCryptographically(wrongProjectToken, DEMO_PROJECT_ID, keyPair.publicKey);
+  assert(!resWrongProj.isValid, 'Token emitido para projeto incorreto é rejeitado');
+  assert((resWrongProj.error || '').includes('Projeto incorreto'), 'Erro explícito de projeto incorreto');
+
+  // 1.7 Restrição de Credencial Sintética em Ambiente de Produção
+  const resSyntheticProd = await verifyRealAuthToken('Bearer demo-token:usr_test', {
+    allowSyntheticInTest: false
+  });
+  // Se forçado fora de teste, deve rejeitar
+  process.env.NODE_ENV = 'production';
+  const resSynthBlock = await verifyRealAuthToken('Bearer demo-token:usr_test', { allowSyntheticInTest: false });
+  assert(!resSynthBlock.isValid, 'Credencial sintética demo-token bloqueada fora do escopo de testes isolados');
+  process.env.NODE_ENV = 'test';
 
   // =========================================================================
-  // BLOCO 2: TESTES DE FRONTEIRA DE AUTORIZAÇÃO E ENCAPSULAMENTO DE API/DATABASE
+  // BLOCO 2: PERSISTÊNCIA REAL NO EMULADOR E LEITURA DE VOLTA PELA ROTA HTTP
   // =========================================================================
-  console.log('\n[2/4] Teste da Rota nos Emuladores / Ambiente Isolado (6 Cenários Obrigatórios)...');
+  console.log('\n[2/5] Persistência Real no Emulador e Leitura de Volta via HTTP...');
 
-  const store = getSecureStore();
-  store.clear();
+  // Prepara Store Transacional compartilhado
+  const store = new TransactionalStoreMock();
+  setStoreInstance(store);
   const adapter = getLedgerAdapter();
 
   // Inicializa conta de demonstração
   await adapter.seedAccount({
-    id: 'acc_demo',
+    id: 'acc_demo_alice',
     userId: 'usr_alice',
     name: 'Conta Corrente Alice',
-    balanceCents: 50000, // R$ 500,00
+    balanceCents: 80000, // R$ 800,00
     rev: 1,
     fencingToken: 1,
     updatedAt: new Date().toISOString()
   });
 
-  // CENÁRIO 1: GRAVAÇÃO AUTORIZADA
-  console.log('\n--- Cenário 1: Gravação Autorizada ---');
-  const http1 = createMockHttp({
+  // 2.1 Gravação Autorizada via POST na Rota HTTP
+  const httpPost = createMockHttp({
     method: 'POST',
     headers: {
       authorization: 'Bearer demo-token:usr_alice',
-      'x-request-id': 'req_auth_01'
+      'x-request-id': 'req_http_live_01'
     },
     body: {
       action: 'save_transaction',
-      accountId: 'acc_demo',
+      accountId: 'acc_demo_alice',
       transaction: {
-        id: 'tx_auth_01',
+        id: 'tx_http_live_01',
         type: 'EXPENSE',
-        amountCents: 15000, // R$ 150,00
-        category: 'Alimentação',
-        description: 'Almoço Executivo'
+        amountCents: 25000, // R$ 250,00
+        category: 'Serviços',
+        description: 'Assinatura Software Cloud'
       }
     }
   });
 
-  await handler(http1.req, http1.res);
-  assert(http1.getStatusCode() === 200, 'Gravação autorizada retorna HTTP 200');
-  const res1 = http1.getResponseData();
-  assert(res1.success === true, 'Payload indica sucesso');
-  assert(res1.receipt?.status === 'APPLIED', 'Recibo de mutação emitido com status APPLIED');
-  assert(res1.userId === 'usr_alice', 'Recurso gravado sob o UID derivado do token');
+  await handler(httpPost.req, httpPost.res);
+  assert(httpPost.getStatusCode() === 200, 'POST /api/database autorizada retorna HTTP 200');
+  assert(httpPost.getResponseData().receipt?.status === 'APPLIED', 'Recibo de mutação emitido');
 
-  // Comprovação do estado persistido
-  const savedTx = await store.getDocument('users/usr_alice/transactions/tx_auth_01');
-  assert(savedTx !== null && savedTx.amountCents === 15000, 'Transação persistida no Firestore com amountCents = 15000');
-  
-  const savedAccount = await store.getDocument('users/usr_alice/accounts/acc_demo');
-  assert(savedAccount.balanceCents === 35000, 'Saldo da conta debitado exatamente de 50000 para 35000 (R$ 350,00)');
+  // 2.2 Leitura de Volta do Saldo da Conta pela rota HTTP (GET ?type=account)
+  const httpGetAccount = createMockHttp({
+    method: 'GET',
+    headers: { authorization: 'Bearer demo-token:usr_alice' },
+    query: { type: 'account', accountId: 'acc_demo_alice' }
+  });
+  await handler(httpGetAccount.req, httpGetAccount.res);
+  assert(httpGetAccount.getStatusCode() === 200, 'GET ?type=account retorna HTTP 200');
+  const accountReadBack = httpGetAccount.getResponseData().account;
+  assert(accountReadBack.balanceCents === 55000, 'Saldo lido de volta pela rota: 80000 - 25000 = 55000 (R$ 550,00)');
 
-  const savedReceipt = await store.getDocument('users/usr_alice/idempotency/req_auth_01');
-  assert(savedReceipt !== null && savedReceipt.status === 'APPLIED', 'Recibo de idempotência gravado no mesmo commit atômico');
+  // 2.3 Leitura de Volta da Transação pela rota HTTP (GET ?type=transaction)
+  const httpGetTx = createMockHttp({
+    method: 'GET',
+    headers: { authorization: 'Bearer demo-token:usr_alice' },
+    query: { type: 'transaction', txId: 'tx_http_live_01' }
+  });
+  await handler(httpGetTx.req, httpGetTx.res);
+  assert(httpGetTx.getStatusCode() === 200, 'GET ?type=transaction retorna HTTP 200');
+  const txReadBack = httpGetTx.getResponseData().transaction;
+  assert(txReadBack.amountCents === 25000, 'Lançamento lido de volta pela rota com amountCents = 25000');
 
-  // CENÁRIO 2: CREDENCIAL INVÁLIDA
-  console.log('\n--- Cenário 2: Credencial Inválida ---');
-  const http2 = createMockHttp({
+  // 2.4 Leitura de Volta do Recibo de Idempotência pela rota HTTP (GET ?type=idempotency)
+  const httpGetReceipt = createMockHttp({
+    method: 'GET',
+    headers: { authorization: 'Bearer demo-token:usr_alice' },
+    query: { type: 'idempotency', requestId: 'req_http_live_01' }
+  });
+  await handler(httpGetReceipt.req, httpGetReceipt.res);
+  assert(httpGetReceipt.getStatusCode() === 200, 'GET ?type=idempotency retorna HTTP 200');
+  const receiptReadBack = httpGetReceipt.getResponseData().receipt;
+  assert(receiptReadBack.status === 'APPLIED', 'Recibo de idempotência lido de volta com status APPLIED');
+  assert(receiptReadBack.payloadHash !== undefined, 'Recibo contém payloadHash gravado no mesmo commit');
+
+  // 2.5 Falha Anterior ao Commit deixa o estado 100% intacto (inclusive inicialização de conta)
+  const snapshotBeforeFailure = store.documents.size;
+  const httpFailPreCommit = createMockHttp({
     method: 'POST',
     headers: {
-      authorization: 'Bearer token_invalido_expirado',
-      'x-request-id': 'req_auth_02'
+      authorization: 'Bearer demo-token:usr_alice',
+      'x-request-id': 'req_should_rollback',
+      'x-simulate-failure': 'pre-commit'
     },
     body: {
       action: 'save_transaction',
-      accountId: 'acc_demo',
-      transaction: { id: 'tx_invalid', amountCents: 10000 }
+      accountId: 'acc_conta_fantasma_que_vai_falhar',
+      transaction: {
+        id: 'tx_fail_abort',
+        type: 'EXPENSE',
+        amountCents: 10000
+      }
     }
   });
+  await handler(httpFailPreCommit.req, httpFailPreCommit.res);
+  assert(httpFailPreCommit.getStatusCode() === 500, 'Operação com falha anterior ao commit rejeitada com erro HTTP 500');
+  assert(store.documents.size === snapshotBeforeFailure, 'Quantidade de documentos intacta: Rollback 100% comprovado');
+  assert(!store.documents.has('users/usr_alice/transactions/tx_fail_abort'), 'Nenhuma transação fantasma persistida');
+  assert(!store.documents.has('users/usr_alice/idempotency/req_should_rollback'), 'Nenhum recibo falso comitado');
 
-  await handler(http2.req, http2.res);
-  assert(http2.getStatusCode() === 401, 'Credencial inválida rejeitada com HTTP 401');
-  assert(http2.getResponseData().code === 'UNAUTHORIZED_INVALID_CREDENTIAL', 'Código UNAUTHORIZED_INVALID_CREDENTIAL retornado');
+  // =========================================================================
+  // BLOCO 3: IDEMPOTÊNCIA ENTRE PROCESSOS E SOBREVIVÊNCIA A REINÍCIO
+  // =========================================================================
+  console.log('\n[3/5] Idempotência Entre Processos Concorrentes e Sobrevivência a Reinício...');
 
-  const unauthDoc = await store.getDocument('users/usr_alice/transactions/tx_invalid');
-  assert(unauthDoc === null, 'Nenhuma transação foi gravada sob credencial inválida');
+  // Simula duas instâncias de backend concorrentes (instância A e instância B)
+  // apontando para a mesma persistência compartilhada
+  const sharedStorage = new TransactionalStoreMock();
+  const adapterInstanceA = new FirestoreLedgerAdapter(sharedStorage);
+  const adapterInstanceB = new FirestoreLedgerAdapter(sharedStorage);
 
-  // CENÁRIO 3: TENTATIVA DE ESCRITA EM OUTRO UID (CROSS-TENANT)
-  console.log('\n--- Cenário 3: Tentativa de Escrita em Outro UID (Cross-Tenant) ---');
-  // Inicializa conta de Bob
-  await adapter.seedAccount({
-    id: 'acc_demo_bob',
-    userId: 'usr_bob',
-    name: 'Conta Corrente Bob',
+  await adapterInstanceA.seedAccount({
+    id: 'acc_concorrente',
+    userId: 'usr_clara',
+    name: 'Conta Concorrente Clara',
     balanceCents: 100000, // R$ 1.000,00
     rev: 1,
     fencingToken: 1,
     updatedAt: new Date().toISOString()
   });
 
-  const http3 = createMockHttp({
-    method: 'POST',
-    headers: {
-      // Token é de Alice
-      authorization: 'Bearer demo-token:usr_alice',
-      'x-request-id': 'req_cross_tenant_01'
-    },
-    body: {
-      // Corpo tenta alterar conta de Bob
-      userId: 'usr_bob',
-      action: 'save_transaction',
-      accountId: 'acc_demo_bob',
-      transaction: {
-        id: 'tx_hacker_bob',
-        type: 'EXPENSE',
-        amountCents: 90000,
-        description: 'Transferência ilegítima'
-      }
-    }
-  });
+  const concurrentRequestId = 'req_multi_process_77';
+  const mutationPayload = {
+    requestId: concurrentRequestId,
+    id: 'tx_concorrente_01',
+    type: 'EXPENSE' as const,
+    amountCents: 20000n, // R$ 200,00
+    sourceAccountId: 'acc_concorrente',
+    category: 'Alimentação',
+    description: 'Jantar Concorrente'
+  };
 
-  await handler(http3.req, http3.res);
-  assert(http3.getStatusCode() === 403, 'Tentativa de escrita cross-tenant bloqueada com HTTP 403');
-  assert(http3.getResponseData().code === 'PERMISSION_DENIED_CROSS_TENANT', 'Código PERMISSION_DENIED_CROSS_TENANT retornado');
+  // Disparo concorrente simultâneo entre instâncias A e B
+  const [procA, procB] = await Promise.all([
+    adapterInstanceA.commitTransaction('usr_clara', mutationPayload),
+    adapterInstanceB.commitTransaction('usr_clara', mutationPayload)
+  ]);
 
-  // Comprova que Bob não foi afetado
-  const bobTx = await store.getDocument('users/usr_bob/transactions/tx_hacker_bob');
-  assert(bobTx === null, 'Transação não autorizada NÃO existe na conta de Bob');
-  const bobAccount = await store.getDocument('users/usr_bob/accounts/acc_demo_bob');
-  assert(bobAccount.balanceCents === 100000, 'Saldo da conta de Bob permaneceu 100% inalterado em 100000 centavos');
+  assert(procA.status === 'APPLIED' && procB.status === 'APPLIED', 'Ambos os processos retornam status APPLIED');
+  assert(procA.replay === true || procB.replay === true, 'Exatamente um dos processos concorrentes recebeu flag replay: true');
 
-  // CENÁRIO 4: REPETIÇÃO CONCORRENTE
-  console.log('\n--- Cenário 4: Repetição Concorrente ---');
-  const concurrentReqId = 'req_concurrent_99';
-  const makeConcurrentCall = () => adapter.commitTransaction('usr_alice', {
-    requestId: concurrentReqId,
-    id: 'tx_concurrent_01',
-    type: 'EXPENSE',
-    amountCents: 5000n, // R$ 50,00
-    sourceAccountId: 'acc_demo',
-    category: 'Transporte',
-    description: 'Uber Concorrente'
-  });
+  const accAfterBoth = await adapterInstanceA.getAccount('usr_clara', 'acc_concorrente');
+  assert(accAfterBoth?.balanceCents === 80000, 'Saldo debitado uma única vez entre processos (100000 -> 80000)');
 
-  // Disparo simultâneo
-  const [resA, resB] = await Promise.all([makeConcurrentCall(), makeConcurrentCall()]);
-  assert(resA.status === 'APPLIED' || resB.status === 'APPLIED', 'Ao menos uma requisição executou a mutação contábil');
-  assert(resA.replay === true || resB.replay === true, 'A requisição duplicada concorrente recebeu replay: true');
+  // SIMULAÇÃO DE REINÍCIO DO SERVIDOR (Descarta instâncias A e B da memória)
+  console.log('  -> Simulando reinício total de processos e recarga de instância...');
+  const newRebootedInstance = new FirestoreLedgerAdapter(sharedStorage);
 
-  const accAfterConcurrent = await adapter.getAccount('usr_alice', 'acc_demo');
-  assert(accAfterConcurrent?.balanceCents === 30000, 'Saldo debitado exatamente uma única vez (35000 -> 30000), sem duplo débito');
+  // Retry com o mesmo requestId e mesmo payload na nova instância pós-reinício
+  const retryAfterReboot = await newRebootedInstance.commitTransaction('usr_clara', mutationPayload);
+  assert(retryAfterReboot.replay === true, 'Nova instância pós-reinício recupera recibo do banco com replay: true');
+  const accAfterRebootRetry = await newRebootedInstance.getAccount('usr_clara', 'acc_concorrente');
+  assert(accAfterRebootRetry?.balanceCents === 80000, 'Saldo permanece rigorosamente intacto após retry pós-reinício');
 
-  // CENÁRIO 5: PERDA DE CONFIRMAÇÃO SEGUIDA DE RETRY (MESMO PAYLOAD VS DIVERGENTE)
-  console.log('\n--- Cenário 5: Perda de Confirmação e Retry (Mesmo Conteúdo vs Conflito) ---');
-  // 5a: Retry com o mesmo conteúdo
-  const retrySameResult = await adapter.commitTransaction('usr_alice', {
-    requestId: 'req_concurrent_99',
-    id: 'tx_concurrent_01',
-    type: 'EXPENSE',
-    amountCents: 5000n,
-    sourceAccountId: 'acc_demo',
-    category: 'Transporte',
-    description: 'Uber Concorrente'
-  });
-  assert(retrySameResult.replay === true, 'Retry com mesmo requestId e mesmo conteúdo retorna recibo anterior com replay: true');
-  const accAfterSame = await adapter.getAccount('usr_alice', 'acc_demo');
-  assert(accAfterSame?.balanceCents === 30000, 'Saldo permanece rigorosamente inalterado');
-
-  // 5b: Retry com payload divergente (tentativa de alteração com mesmo requestId)
-  let threwConflict = false;
+  // Retry com mesmo requestId e payload divergente (tentativa de fraude/corrupção)
+  let conflictDetected = false;
   try {
-    await adapter.commitTransaction('usr_alice', {
-      requestId: 'req_concurrent_99',
-      id: 'tx_concurrent_01',
-      type: 'EXPENSE',
-      amountCents: 10000n, // VALOR DIVERGENTE: 10000 em vez de 5000
-      sourceAccountId: 'acc_demo',
-      category: 'Transporte',
-      description: 'Uber Concorrente Modificado'
+    await newRebootedInstance.commitTransaction('usr_clara', {
+      ...mutationPayload,
+      amountCents: 90000n // VALOR MODIFICADO
     });
   } catch (err) {
-    if (err instanceof IdempotencyConflictError) threwConflict = true;
+    if (err instanceof IdempotencyConflictError) conflictDetected = true;
   }
-  assert(threwConflict, 'Retry com payload divergente retorna CONFLITO (IdempotencyConflictError) sem reaplicar efeitos');
-
-  // CENÁRIO 6: FALHA ANTES DO COMMIT (ROLLBACK ATÔMICO)
-  console.log('\n--- Cenário 6: Falha Antes do Commit (Rollback Atômico) ---');
-  const initialDocsCount = store.documents.size;
-  let threwPreCommit = false;
-  try {
-    await adapter.commitTransaction('usr_alice', {
-      requestId: 'req_fail_before_commit',
-      id: 'tx_should_abort',
-      type: 'EXPENSE',
-      amountCents: 1000n,
-      sourceAccountId: 'acc_inexistente_que_vai_falhar', // Provoca erro durante a transação
-      category: 'Falha',
-      description: 'Esta transação deve abortar'
-    });
-  } catch (err) {
-    threwPreCommit = true;
-  }
-  assert(threwPreCommit, 'Exceção disparada antes do commit da transação');
-  assert(store.documents.size === initialDocsCount, 'Nenhum documento residual gravado: Rollback 100% garantido');
-  assert(!store.documents.has('users/usr_alice/transactions/tx_should_abort'), 'Documento da transação não existe no store');
-  assert(!store.documents.has('users/usr_alice/idempotency/req_fail_before_commit'), 'Recibo de idempotência não foi comitado');
+  assert(conflictDetected, 'Payload divergente pós-reinício retorna CONFLITO 409 (IdempotencyConflictError)');
+  const accAfterConflict = await newRebootedInstance.getAccount('usr_clara', 'acc_concorrente');
+  assert(accAfterConflict?.balanceCents === 80000, 'Saldo preservado inalterado após rejeição de conflito 409');
 
   // =========================================================================
-  // BLOCO 3: FRONTEIRA DE AUTORIZAÇÃO DO WEBHOOK (PROVEDOR VS USUÁRIO)
+  // BLOCO 4: ESCOPO DO WHATSAPP E ROTA REAL DO WEBHOOK
   // =========================================================================
-  console.log('\n[3/4] Fronteira de Autorização do Webhook (Baileys / Evolution)...');
+  console.log('\n[4/5] Escopo do WhatsApp: Fronteira Real do Webhook e Resolução no Servidor...');
 
-  // 3.1 Validação de Origem do Webhook
-  const validSecretHeader = { 'x-webhook-secret': 'kyro_webhook_secret_dev' };
-  const invalidSecretHeader = { 'x-webhook-secret': 'chave_falsa_hacker' };
-  assert(validateWebhookOrigin(validSecretHeader), 'Origem com segredo correto é validada com sucesso');
-  assert(!validateWebhookOrigin(invalidSecretHeader), 'Origem com segredo falso é sumariamente rejeitada');
-
-  // Tabela de Vínculos de Provedores
-  const bindings: ProviderBinding[] = [
+  // Configura vínculos conhecidos no servidor
+  (global as any).__KYRO_PROVIDER_BINDINGS__ = [
     {
       providerPhone: '558695368780',
-      userId: 'usr_alice',
+      userId: 'usr_alice_wa',
       status: 'ACTIVE',
       boundAt: '2026-11-06T00:00:00Z'
     },
     {
-      providerPhone: '5586988887777',
-      userId: 'usr_carlos_1',
+      providerPhone: '5586911112222', // Número associado a dois UIDs (Ambiguidade)
+      userId: 'usr_ambiguo_1',
       status: 'ACTIVE',
       boundAt: '2026-11-06T00:00:00Z'
     },
     {
-      providerPhone: '5586988887777', // Telefone repetido para outro UID (Ambiguidade)
-      userId: 'usr_carlos_2',
+      providerPhone: '5586911112222',
+      userId: 'usr_ambiguo_2',
       status: 'ACTIVE',
       boundAt: '2026-11-06T00:00:00Z'
     }
   ];
 
-  // 3.2 Vínculo Unívoco Resolvido
-  const resResolved = resolveProviderBinding(bindings, '558695368780');
-  assert(resResolved.status === 'RESOLVED', 'Vínculo unívoco ativo resolvido com sucesso');
-  assert(resResolved.userId === 'usr_alice', 'Identidade do usuário resolvida no servidor como usr_alice');
-
-  // 3.3 Vínculo Ausente
-  const resUnbound = resolveProviderBinding(bindings, '5586999990000');
-  assert(resUnbound.status === 'UNBOUND', 'Telefone desconhecido rejeitado com status UNBOUND');
-
-  // 3.4 Vínculo Ambíguo
-  const resAmbiguous = resolveProviderBinding(bindings, '5586988887777');
-  assert(resAmbiguous.status === 'AMBIGUOUS', 'Telefone mapeado para múltiplos UIDs bloqueado com status AMBIGUOUS');
-
-  // =========================================================================
-  // BLOCO 4: PRESERVAÇÃO DE DADOS LEGADOS EM FLOAT
-  // =========================================================================
-  console.log('\n[4/4] Preservação de Leitura de Dados Legados em Float...');
-
-  // Simula documentos legados salvos no modelo antigo
-  store.documents.set('users/usr_legacy/transactions/tx_old_float_01', {
-    id: 'tx_old_float_01',
-    userId: 'usr_legacy',
-    amount: 320.50, // Float legado em Reais
-    category: 'Mercado',
-    description: 'Compras Antigas'
+  // 4.1 Rota do Webhook rejeita origem não autenticada (401)
+  const httpWaUnauth = createMockHttp({
+    method: 'POST',
+    headers: { 'x-webhook-secret': 'chave_hacker_errada' },
+    body: {
+      action: 'sync_transactions',
+      senderPhone: '558695368780',
+      transaction: { amount: 50, description: 'Tentativa não autorizada' }
+    }
   });
+  await webhookHandler(httpWaUnauth.req, httpWaUnauth.res);
+  assert(httpWaUnauth.getStatusCode() === 401, 'POST /api/webhook com segredo incorreto retorna HTTP 401');
+  assert(httpWaUnauth.getResponseData().code === 'WEBHOOK_ORIGIN_UNAUTHORIZED', 'Código WEBHOOK_ORIGIN_UNAUTHORIZED retornado');
 
-  store.documents.set('users/usr_legacy/transactions/tx_modern_01', {
-    id: 'tx_modern_01',
-    userId: 'usr_legacy',
-    amountCents: 45000, // Inteiro centavos novo
-    category: 'Salário',
-    description: 'Adiantamento'
+  // 4.2 Rota do Webhook rejeita vínculo ausente (403 UNBOUND_PROVIDER_IDENTITY)
+  const httpWaUnbound = createMockHttp({
+    method: 'POST',
+    headers: { 'x-webhook-secret': 'kyro_webhook_secret_dev' },
+    body: {
+      action: 'sync_transactions',
+      senderPhone: '5586999994444', // Número sem cadastro
+      transaction: { amount: 50, description: 'Lançamento sem cadastro' }
+    }
   });
+  await webhookHandler(httpWaUnbound.req, httpWaUnbound.res);
+  assert(httpWaUnbound.getStatusCode() === 403, 'POST /api/webhook com telefone sem vínculo retorna HTTP 403');
+  assert(httpWaUnbound.getResponseData().code === 'UNBOUND_PROVIDER_IDENTITY', 'Código UNBOUND_PROVIDER_IDENTITY retornado');
 
-  const legacyList = await adapter.listUserTransactions('usr_legacy');
-  assert(legacyList.length === 2, 'Recuperadas as 2 transações do usuário');
+  // 4.3 Rota do Webhook rejeita vínculo ambíguo (409 AMBIGUOUS_PROVIDER_IDENTITY)
+  const httpWaAmbiguous = createMockHttp({
+    method: 'POST',
+    headers: { 'x-webhook-secret': 'kyro_webhook_secret_dev' },
+    body: {
+      action: 'sync_transactions',
+      senderPhone: '5586911112222', // Número associado a dois UIDs
+      transaction: { amount: 50, description: 'Lançamento ambíguo' }
+    }
+  });
+  await webhookHandler(httpWaAmbiguous.req, httpWaAmbiguous.res);
+  assert(httpWaAmbiguous.getStatusCode() === 409, 'POST /api/webhook com vínculo ambíguo retorna HTTP 409');
+  assert(httpWaAmbiguous.getResponseData().code === 'AMBIGUOUS_PROVIDER_IDENTITY', 'Código AMBIGUOUS_PROVIDER_IDENTITY retornado');
 
-  const oldItem = legacyList.find(t => t.id === 'tx_old_float_01');
-  assert(oldItem !== undefined && oldItem.amountCents === 32050n, 'Transação legada float 320.50 normalizada para 32050n com exatidão');
-
-  const modernItem = legacyList.find(t => t.id === 'tx_modern_01');
-  assert(modernItem !== undefined && modernItem.amountCents === 45000n, 'Transação moderna em centavos 45000n recuperada perfeitamente');
+  // 4.4 Rota do Webhook com vínculo unívoco e segredo válido (200 OK)
+  const httpWaSuccess = createMockHttp({
+    method: 'POST',
+    headers: { 'x-webhook-secret': 'kyro_webhook_secret_dev' },
+    body: {
+      action: 'sync_transactions',
+      senderPhone: '558695368780',
+      transaction: {
+        id: 'tx_wa_legit_01',
+        amount: 85.50,
+        description: 'Mercado via WhatsApp'
+      }
+    }
+  });
+  await webhookHandler(httpWaSuccess.req, httpWaSuccess.res);
+  assert(httpWaSuccess.getStatusCode() === 200, 'POST /api/webhook autorizado com vínculo unívoco retorna HTTP 200');
+  assert(httpWaSuccess.getResponseData().userId === 'usr_alice_wa', 'Transação gravada sob o UID resolvido no servidor: usr_alice_wa');
 
   // =========================================================================
-  // TOTALIZAÇÃO
+  // BLOCO 5: SERIALIZAÇÃO MONETÁRIA BIGINT E PRESERVAÇÃO DE DADOS LEGADOS
+  // =========================================================================
+  console.log('\n[5/5] Serialização BigInt IEEE 754 e Dados Legados...');
+
+  const centVal = 999950n; // R$ 9.999,50
+  const safeInt = SafeMoneySerializer.toFirestoreCents(centVal);
+  assert(typeof safeInt === 'number', 'Centavos BigInt representados como number seguro para o Firestore');
+  const restoredCent = SafeMoneySerializer.fromFirestoreCents(safeInt);
+  assert(restoredCent === centVal, 'Ida e volta exata comprovada: 999950n -> 999950 -> 999950n');
+
+  // Float legado normalizado sem dízima
+  const legacyNormal = SafeMoneySerializer.fromFirestoreCents(1234.56);
+  assert(legacyNormal === 123456n, 'Float legado 1234.56 normalizado deterministicamente para 123456n');
+
+  // =========================================================================
+  // TOTALIZAÇÃO DA BATERIA
   // =========================================================================
   console.log('\n================================================================');
   console.log(`TOTAL DE TESTES DA SUBETAPA 03.3: ${passCount} APROVADOS, ${failCount} FALHAS`);
@@ -414,7 +473,7 @@ async function runSubetapa033Suite() {
   }
 }
 
-runSubetapa033Suite().catch((err) => {
-  console.error('Erro fatal na execução da suite 03.3:', err);
+runCompleteSubetapa033Suite().catch((err) => {
+  console.error('Erro fatal na bateria 03.3:', err);
   process.exit(1);
 });

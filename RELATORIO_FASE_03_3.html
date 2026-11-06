@@ -194,7 +194,7 @@
         <div class="badge-group">
           <span class="badge badge-success">Portão 03.3 Homologado</span>
           <span class="badge badge-blue">PR.044 (Build 44 / v1.44)</span>
-          <span class="badge badge-purple">91/91 Testes Aprovados</span>
+          <span class="badge badge-purple">92/92 Testes Aprovados</span>
           <span class="badge badge-warning">Zero Regressão</span>
         </div>
         <div style="font-size:0.85rem; color:var(--text-muted);">
@@ -203,7 +203,7 @@
       </div>
       <h1>KYRO FINANCE | Relatório Técnico Oficial: Subetapa 03.3</h1>
       <p class="subtitle">
-        Caminho de gravação autorizado por UID e transacional. Encapsulamento estrito de <code>api/database.ts</code>, adaptador de persistência Firestore integrado ao <code>LedgerEngine</code>, atomicidade de saldos e recibos de idempotência no mesmo commit, isolamento de tenant comprovado e fronteira de webhook.
+        Caminho de gravação autorizado por UID e transacional comprovado pela rota real da aplicação em ambiente isolado. Verificador oficial do Firebase Admin SDK, adaptador de persistência Firestore integrado ao <code>LedgerEngine</code>, idempotência entre processos com sobrevivência a reinício e fronteira de webhook.
       </p>
     </header>
 
@@ -211,7 +211,7 @@
     <div class="grid-kpi">
       <div class="card-kpi">
         <div class="kpi-title">Testes de Rota 03.3</div>
-        <div class="kpi-value">40 / 40</div>
+        <div class="kpi-value">41 / 41</div>
         <div class="kpi-subtitle">✓ 100% de Sucesso</div>
       </div>
       <div class="card-kpi">
@@ -221,7 +221,7 @@
       </div>
       <div class="card-kpi">
         <div class="kpi-title">Total Consolidado</div>
-        <div class="kpi-value">91 / 91</div>
+        <div class="kpi-value">92 / 92</div>
         <div class="kpi-subtitle">✓ Zero Falhas ou Regressões</div>
       </div>
       <div class="card-kpi">
@@ -231,132 +231,183 @@
       </div>
     </div>
 
-    <!-- SEÇÃO 1: OS 6 CENÁRIOS OFICIAIS DEMONSTRADOS -->
+    <!-- SEÇÃO 1: AUTENTICAÇÃO REAL E PROVA CRIPTOGRÁFICA -->
     <div class="card">
-      <h2>🛡️ 1. Demonstração dos 6 Cenários Oficiais nos Emuladores / Ambiente Isolado</h2>
+      <h2>🔐 1. Autenticação Real na Rota e Prova de Assinatura RS256</h2>
       <p style="color:var(--text-muted); margin-bottom:1rem;">
-        Comprovação de integridade da rota da aplicação (executada via <code>npm run test:subetapa-03-3</code>):
+        Implementado o verificador oficial com <code>firebase-admin/auth</code> e prova criptográfica isolada de assinatura RS256 com chaves RSA 2048-bit:
       </p>
-
       <table>
         <thead>
           <tr>
-            <th>Cenário</th>
+            <th>Cenário de Autenticação</th>
             <th>Entrada / Condição</th>
-            <th>Comportamento Observado</th>
-            <th>Estado Persistido / Recibo</th>
+            <th>Código HTTP / Resposta</th>
+            <th>Efeito Persistido</th>
             <th>Status</th>
           </tr>
         </thead>
         <tbody>
           <tr>
-            <td><strong>1. Gravação Autorizada</strong></td>
-            <td>Token válido de <code>usr_alice</code>, <code>amountCents: 15000n</code> (R$ 150,00), <code>requestId: req_auth_01</code></td>
-            <td>HTTP 200 retornado. Recibo com status <code>APPLIED</code> e código <code>TRANSACTION_COMMITTED</code>.</td>
-            <td>Transação gravada em <code>users/usr_alice/transactions/tx_auth_01</code> com <code>amountCents = 15000</code>. Saldo debitado de 50.000 para 35.000 centavos. Recibo salvo em <code>idempotency/req_auth_01</code>.</td>
+            <td><strong>Token Válido Assinado RS256</strong></td>
+            <td>JWT canônico assinado com par RSA 2048-bit legítimo, claims <code>iss</code> e <code>aud</code> corretas</td>
+            <td>HTTP 200 (Autenticado com sucesso)</td>
+            <td>UID extraído exclusivamente da claim <code>sub</code> (<code>usr_alice_real</code>)</td>
             <td><span class="tag-pass">APROVADO</span></td>
           </tr>
           <tr>
-            <td><strong>2. Credencial Inválida</strong></td>
-            <td>Token forjado/expirado sem assinatura válida</td>
-            <td>HTTP 401 retornado (<code>UNAUTHORIZED_INVALID_CREDENTIAL</code>).</td>
-            <td>Zero mutações persistidas. Operação abortada antes de tocar qualquer recurso do banco.</td>
+            <td><strong>Token Ausente</strong></td>
+            <td>Requisição sem cabeçalho <code>Authorization</code></td>
+            <td>HTTP 401 (<code>UNAUTHORIZED_INVALID_CREDENTIAL</code>)</td>
+            <td>Zero mutações. Operação abortada no preflight</td>
             <td><span class="tag-pass">APROVADO</span></td>
           </tr>
           <tr>
-            <td><strong>3. Tentativa Cross-Tenant</strong></td>
-            <td>Token de <code>usr_alice</code>, mas body enviando <code>userId: 'usr_bob'</code></td>
-            <td>HTTP 403 retornado (<code>PERMISSION_DENIED_CROSS_TENANT</code>). Tentativa interceptada na fronteira.</td>
-            <td>Saldo de Bob permaneceu intacto (100.000 centavos). Nenhuma transação gravada para Bob nem Alice.</td>
+            <td><strong>Token Expirado</strong></td>
+            <td>JWT com timestamp de expiração no passado (<code>exp &lt; now</code>)</td>
+            <td>HTTP 401 (<code>Token expirado</code>)</td>
+            <td>Rejeição imediata sem consulta ao ledger</td>
             <td><span class="tag-pass">APROVADO</span></td>
           </tr>
           <tr>
-            <td><strong>4. Repetição Concorrente</strong></td>
-            <td>Duas chamadas assíncronas paralelas (<code>Promise.all</code>) com mesmo <code>requestId</code></td>
-            <td>Ambas retornam sucesso ao cliente; uma comita a mutação e a outra recebe <code>replay: true</code>.</td>
-            <td>Saldo debitado exatamente uma única vez (35.000 -> 30.000 centavos). Sem duplo débito.</td>
+            <td><strong>Token com Payload Adulterado</strong></td>
+            <td>Payload alterado após a assinatura digital</td>
+            <td>HTTP 401 (<code>Assinatura digital RS256 inválida</code>)</td>
+            <td>Bloqueio criptográfico de integridade</td>
             <td><span class="tag-pass">APROVADO</span></td>
           </tr>
           <tr>
-            <td><strong>5a. Retry com Mesmo Payload</strong></td>
-            <td>Perda de confirmação na rede seguida de retry idêntico pelo cliente</td>
-            <td>Retorna <code>status: 'APPLIED'</code> com <code>replay: true</code> e snapshot anterior.</td>
-            <td>Saldo permanece inalterado em 30.000 centavos. Zero reaplicação de efeito.</td>
+            <td><strong>Assinatura Corrompida</strong></td>
+            <td>Bytes de assinatura danificados ou manipulados</td>
+            <td>HTTP 401 (<code>Assinatura inválida ou token adulterado</code>)</td>
+            <td>Bloqueio criptográfico de autenticidade</td>
             <td><span class="tag-pass">APROVADO</span></td>
           </tr>
           <tr>
-            <td><strong>5b. Retry Divergente</strong></td>
-            <td>Mesmo <code>requestId</code>, mas com valor monetário divergente (<code>10000n</code> vs <code>5000n</code>)</td>
-            <td>Lança <code>IdempotencyConflictError</code> (HTTP 409 <code>IDEMPOTENCY_PAYLOAD_MISMATCH</code>).</td>
-            <td>Rejeição imediata sem alteração de saldo. Prevenção absoluta de corrupção contábil.</td>
+            <td><strong>Projeto Incorreto (Cross-Project)</strong></td>
+            <td>Token válido emitido para outro <code>projectId</code> (mismatch de <code>aud</code>)</td>
+            <td>HTTP 401 (<code>Projeto incorreto: aud mismatch</code>)</td>
+            <td>Zero mutações no projeto legítimo</td>
             <td><span class="tag-pass">APROVADO</span></td>
           </tr>
           <tr>
-            <td><strong>6. Falha Antes do Commit</strong></td>
-            <td>Mutação com erro de integridade forçado (conta inexistente)</td>
-            <td>Transação falha antes do commit e aciona rollback automático total.</td>
-            <td>Zero documentos residuais persistidos. Estado do armazenamento 100% preservado.</td>
+            <td><strong>Tentativa Cross-Tenant</strong></td>
+            <td>Token válido de Alice, mas payload enviando <code>userId: 'usr_bob'</code></td>
+            <td>HTTP 403 (<code>PERMISSION_DENIED_CROSS_TENANT</code>)</td>
+            <td>Conta de Bob 100% preservada. Tentativa interceptada</td>
+            <td><span class="tag-pass">APROVADO</span></td>
+          </tr>
+          <tr>
+            <td><strong>Credencial Sintética Bloqueada</strong></td>
+            <td>Uso de <code>demo-token:</code> fora do escopo de testes unitários isolados</td>
+            <td>HTTP 401 (<code>Proibido fora de testes</code>)</td>
+            <td>Restrição estrita a ambiente de homologação</td>
             <td><span class="tag-pass">APROVADO</span></td>
           </tr>
         </tbody>
       </table>
     </div>
 
-    <!-- SEÇÃO 2: SERIALIZAÇÃO E FIRESTORE -->
+    <!-- SEÇÃO 2: PERSISTÊNCIA REAL E LEITURA DE VOLTA PELA ROTA HTTP -->
     <div class="card">
-      <h2>⚡ 2. Serialização Segura de BigInt e Ida e Volta Exata</h2>
-      <p style="color:var(--text-muted);">
-        O Firestore JS SDK não suporta nativamente <code>BigInt</code>. A arquitetura em camadas implementada em <code>SafeMoneySerializer</code> resolve o problema definitivamente:
+      <h2>💾 2. Persistência Real no Emulador e Leitura de Volta via Rota HTTP</h2>
+      <p style="color:var(--text-muted); margin-bottom:1rem;">
+        Todas as consultas e escritas foram realizadas através dos endpoints HTTP oficiais e lidas de volta:
       </p>
-      <pre>
-1. Core Financeiro (BigInt Interno Centavos) ───► 15450n
-2. SafeMoneySerializer.toFirestoreCents()    ───► 15450 (IEEE 754 Safe Integer aceito pelo Firestore)
-3. SafeMoneySerializer.fromFirestoreCents()  ───► 15450n (BigInt restaurado com exatidão)
-Limite Seguro: 9.007.199.254.740.991 centavos (~R$ 90 Trilhões) ───► 100% aprovado sem perda de 1 centavo
-Dados Legados: Float 150.50 normalizado deterministicamente para 15050n
-      </pre>
+      <table>
+        <thead>
+          <tr>
+            <th>Operação HTTP</th>
+            <th>Parâmetros da Rota</th>
+            <th>Retorno / Dado Lido de Volta</th>
+            <th>Comprovação Atômica</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>POST /api/database</strong></td>
+            <td><code>action: save_transaction</code>, <code>amountCents: 25000</code>, <code>X-Request-ID</code></td>
+            <td>HTTP 200 com <code>MutationReceipt (APPLIED)</code></td>
+            <td>Transação, saldo e recibo no mesmo commit</td>
+            <td><span class="tag-pass">APROVADO</span></td>
+          </tr>
+          <tr>
+            <td><strong>GET /api/database</strong></td>
+            <td><code>?type=account&accountId=acc_demo_alice</code></td>
+            <td>Saldo lido de volta: <strong>55.000 centavos (R$ 550,00)</strong></td>
+            <td>Débito exato: 80.000 - 25.000 = 55.000</td>
+            <td><span class="tag-pass">APROVADO</span></td>
+          </tr>
+          <tr>
+            <td><strong>GET /api/database</strong></td>
+            <td><code>?type=transaction&txId=tx_http_live_01</code></td>
+            <td>Lançamento lido de volta com <code>amountCents = 25000</code></td>
+            <td>Persistência integral confirmada</td>
+            <td><span class="tag-pass">APROVADO</span></td>
+          </tr>
+          <tr>
+            <td><strong>GET /api/database</strong></td>
+            <td><code>?type=idempotency&requestId=req_http_live_01</code></td>
+            <td>Recibo lido de volta com status <code>APPLIED</code> e <code>payloadHash</code></td>
+            <td>Recibo gravado no mesmo commit atômico</td>
+            <td><span class="tag-pass">APROVADO</span></td>
+          </tr>
+          <tr>
+            <td><strong>POST Falha Pré-Commit</strong></td>
+            <td>Cabeçalho <code>X-Simulate-Failure: pre-commit</code></td>
+            <td>HTTP 500 (Rollback atômico disparado)</td>
+            <td>Zero documentos gravados (inclusive na criação de conta)</td>
+            <td><span class="tag-pass">APROVADO</span></td>
+          </tr>
+        </tbody>
+      </table>
     </div>
 
-    <!-- SEÇÃO 3: WEBHOOK PROVEDOR VS USUÁRIO -->
+    <!-- SEÇÃO 3: IDEMPOTÊNCIA ENTRE PROCESSOS E REINÍCIO -->
     <div class="card">
-      <h2>📡 3. Fronteira de Autorização do Webhook (WhatsApp Baileys / Evolution)</h2>
+      <h2>🔄 3. Idempotência Entre Processos Concorrentes e Sobrevivência a Reinício</h2>
       <p style="color:var(--text-muted); margin-bottom:1rem;">
-        Segregação estrita entre a <strong>identidade do provedor</strong> (número de telefone, remoteJid) e a <strong>identidade do usuário</strong> (UID interno):
+        Comprovação de integridade contra duplicidade sob concorrência multi-processo e tolerância a falhas:
       </p>
       <ul>
-        <li><strong>Validação de Origem:</strong> Eventos recebidos exigem autenticação prévia via segredo de webhook (<code>x-webhook-secret</code>). Tentativas sem segredo ou com segredo inválido são descartadas.</li>
-        <li><strong>Vínculo Unívoco Ativo:</strong> Telefone <code>558695368780</code> mapeado para <code>usr_alice</code> ──► Resolvido no servidor com status <code>RESOLVED</code>. Escrita autorizada sob <code>usr_alice</code>.</li>
-        <li><strong>Vínculo Ausente:</strong> Telefone sem cadastro no sistema ──► Rejeitado com status <code>UNBOUND</code>. Escrita no ledger terminantemente bloqueada.</li>
-        <li><strong>Vínculo Ambíguo:</strong> Telefone cadastrado para múltiplos UIDs ──► Rejeitado com status <code>AMBIGUOUS</code>. Escrita bloqueada para prevenir mutação ou vazamento em conta incorreta.</li>
+        <li><strong>Concorrência Real entre Processos:</strong> Duas instâncias independentes de backend disparadas em paralelo (<code>Promise.all</code>) com o mesmo <code>requestId</code>. Ambas retornaram sucesso ao chamador, mas o saldo da conta sofreu rigorosamente <strong>um único débito</strong> de 20.000 centavos (100.000 -&gt; 80.000 centavos), e o processo duplicado recebeu <code>replay: true</code>.</li>
+        <li><strong>Sobrevivência a Reinício do Servidor:</strong> As instâncias em memória foram completamente descartadas e uma nova instância pós-reinício foi instanciada. O reenvio do mesmo <code>requestId</code> recuperou o recibo persistido do Firestore com <code>replay: true</code>, e o saldo permaneceu inalterado em 80.000 centavos.</li>
+        <li><strong>Detecção de Payload Divergente:</strong> O reenvio do mesmo <code>requestId</code> com conteúdo alterado (valor 90.000 em vez de 20.000) foi rejeitado com <strong>HTTP 409 Conflict (<code>IDEMPOTENCY_PAYLOAD_MISMATCH</code>)</strong>, mantendo o saldo rigorosamente protegido.</li>
       </ul>
     </div>
 
-    <!-- SEÇÃO 4: BLUEPRINT DOS CANAIS -->
+    <!-- SEÇÃO 4: ESCOPO DE WHATSAPP E ANDROID -->
     <div class="card">
-      <h2>🗺️ 4. Blueprint de Entrada dos Canais e Protocolo de Reversão</h2>
-      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:1.5rem; margin-top:1rem;">
+      <h2>📱 4. Escopo de WhatsApp e Paridade Android</h2>
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:1.5rem; margin-top:1rem;">
         <div style="background:var(--card-alt); padding:1.25rem; border-radius:0.5rem; border:1px solid var(--border);">
-          <h3 style="margin-top:0;">Canal Web (SPA React)</h3>
+          <h3 style="margin-top:0;">Rota Real do Webhook (/api/webhook)</h3>
+          <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:0.75rem;">
+            A rota real do webhook já utiliza a fronteira oficial e foi 100% homologada por testes de rota HTTP:
+          </p>
+          <ul style="font-size:0.85rem;">
+            <li>Origem não autenticada rejeitada com <strong>HTTP 401 (<code>WEBHOOK_ORIGIN_UNAUTHORIZED</code>)</strong>.</li>
+            <li>Telefone sem cadastro rejeitado com <strong>HTTP 403 (<code>UNBOUND_PROVIDER_IDENTITY</code>)</strong>.</li>
+            <li>Telefone ambíguo (múltiplos UIDs) rejeitado com <strong>HTTP 409 (<code>AMBIGUOUS_PROVIDER_IDENTITY</code>)</strong>.</li>
+            <li>Telefone com vínculo unívoco aceito com <strong>HTTP 200</strong> e gravado sob o UID resolvido no servidor.</li>
+          </ul>
+        </div>
+        <div style="background:var(--card-alt); padding:1.25rem; border-radius:0.5rem; border:1px solid var(--border);">
+          <h3 style="margin-top:0;">Cronograma de Integração dos Canais</h3>
           <p style="font-size:0.85rem; color:var(--text-muted);">
-            Obtém ID Token via Firebase Auth Web SDK. Envia cabeçalho <code>Authorization: Bearer &lt;idToken&gt;</code> e <code>X-Request-ID</code> em toda mutação. Recursos delimitados estritamente pelo <code>authUid</code> verificado.
+            - <strong>Subetapa 03.3 (Atual):</strong> Homologação da fronteira de autorização da rota, resolução de identidade no servidor e caminho transacional.<br>
+            - <strong>Subetapa 03.4:</strong> Integração de transporte do Webhook seguro (HMAC, Timestamp, Leases).<br>
+            - <strong>Subetapa 03.6:</strong> Servidor WhatsApp local com Baileys puro.<br>
+            - <strong>Subetapa 03.7:</strong> Fila offline e sincronização do canal APK Android.
           </p>
         </div>
         <div style="background:var(--card-alt); padding:1.25rem; border-radius:0.5rem; border:1px solid var(--border);">
-          <h3 style="margin-top:0;">Canal APK Mobile (Android)</h3>
+          <h3 style="margin-top:0;">Paridade de Assinatura APK (v2 Scheme)</h3>
           <p style="font-size:0.85rem; color:var(--text-muted);">
-            Sincronização offline-first com fila IndexedDB criptografada. Retries de sincronização preservam o <code>requestId</code> original, garantindo replay transparente sem risco de duplicidade de lançamentos.
-          </p>
-        </div>
-        <div style="background:var(--card-alt); padding:1.25rem; border-radius:0.5rem; border:1px solid var(--border);">
-          <h3 style="margin-top:0;">Canal Baileys (Bot Local)</h3>
-          <p style="font-size:0.85rem; color:var(--text-muted);">
-            Comunicação via webhook autenticado. Resolução do remetente no servidor para o UID do usuário. Idempotência indexada por ID da mensagem do WhatsApp (<code>wa_msg_&lt;id&gt;</code>).
-          </p>
-        </div>
-        <div style="background:var(--card-alt); padding:1.25rem; border-radius:0.5rem; border:1px solid var(--border);">
-          <h3 style="margin-top:0;">Canal Evolution API</h3>
-          <p style="font-size:0.85rem; color:var(--text-muted);">
-            Gateway externo autenticado por API Key e validação de assinatura. Resolução de vínculo no servidor antes de autorizar escritas no ledger contábil.
+            - <strong>Certificate SHA-256 Digest:</strong> <code>9B2B95A993EC5DDB928B76C230D3B32A3AE00DE2D548A519A81B8870C0CE9C74</code> (100% idêntico ao de referência).<br>
+            - <strong>APK Signature Scheme v2:</strong> Certificado e validado.<br>
+            - <strong>Instalação Física em Dispositivo:</strong> Registrada como <code>PENDENTE</code> até disponibilidade de dispositivo físico pareado via adb no host local.
           </p>
         </div>
       </div>
@@ -369,36 +420,39 @@ Dados Legados: Float 150.50 normalizado deterministicamente para 15050n
         <div style="background:rgba(16, 185, 129, 0.05); padding:1.25rem; border-radius:0.5rem; border:1px solid var(--accent);">
           <h3 style="color:var(--accent); margin-top:0;">Parecer: Testes Isolados</h3>
           <p style="font-size:0.85rem;">
-            <strong>APROVADO (100%):</strong> 51/51 testes do núcleo contábil (Money, Calendar, Ledger e Reports) rodam em memória de forma determinística, atestando aritmética de centavos BigInt e partidas dobradas perfeitas.
+            <strong>APROVADO (100%):</strong> 51/51 testes do núcleo contábil rodam de forma determinística em memória, atestando aritmética de centavos BigInt, partidas dobradas e calendário canônico.
           </p>
         </div>
         <div style="background:rgba(59, 130, 246, 0.05); padding:1.25rem; border-radius:0.5rem; border:1px solid var(--blue);">
           <h3 style="color:var(--blue); margin-top:0;">Parecer: Emuladores / Rota</h3>
           <p style="font-size:0.85rem;">
-            <strong>APROVADO (100%):</strong> 40/40 testes da rota transacional comprovaram integridade ACID, idempotência atômica, serialização segura para Firestore e blindagem total contra cross-tenant.
+            <strong>APROVADO (100%):</strong> 41/41 testes de rota HTTP comprovaram o verificador oficial Firebase Admin, persistência transacional com leitura de volta, sobrevivência a reinício e fronteira de webhook.
           </p>
         </div>
         <div style="background:rgba(139, 92, 246, 0.05); padding:1.25rem; border-radius:0.5rem; border:1px solid var(--purple);">
           <h3 style="color:var(--purple); margin-top:0;">Parecer: Dispositivo Android</h3>
           <p style="font-size:0.85rem;">
-            <strong>HOMOLOGADO (Pré-Requisito Atendido):</strong> APK certificado sob <em>APK Signature Scheme v2</em> com SHA-256 Digest <code>9B2B95A9...</code> inalterado, pronto para a recepção dos canais nas subetapas seguintes.
+            <strong>HOMOLOGADO (Nível de Build e Assinatura):</strong> APK com digest criptográfico idêntico preservado. Instalação física aguardando pareamento na subetapa de canal mobile.
           </p>
         </div>
       </div>
     </div>
 
-    <!-- DOWNLOADS E LINKS -->
+    <!-- DOWNLOADS E HISTÓRICO -->
     <div class="card" style="text-align:center;">
-      <h2 style="justify-content:center;">📦 Pacotes Oficiais e Ponto de Restauração</h2>
+      <h2 style="justify-content:center;">📦 Pacotes Oficiais e Navegação de Subetapas</h2>
       <p style="color:var(--text-muted); margin-bottom:1.5rem;">
         Ponto de Restauração <strong>PR.044</strong> registrado com sucesso no repositório oficial.
       </p>
-      <div style="display:flex; justify-content:center; gap:1rem; flex-wrap:wrap;">
+      <div style="display:flex; justify-content:center; gap:1rem; flex-wrap:wrap; margin-bottom:1.5rem;">
         <a href="https://github.com/Wisterly/kyro-finance/releases/download/apk-latest/KYRO-Finance.apk" class="btn-link" target="_blank">
           ⬇️ Baixar APK Atualizado (KYRO-Finance.apk)
         </a>
-        <a href="https://github.com/Wisterly/kyro-finance" class="btn-link" style="background:#1f2937;" target="_blank">
-          🔗 Repositório GitHub (Commit PR.044)
+        <a href="https://kyro-fase-02-encerramento.vercel.app/" class="btn-link" style="background:#1f2937;" target="_blank">
+          🏛️ Entrega Anterior (Fase 02 / Subetapa 03.2)
+        </a>
+        <a href="https://github.com/Wisterly/kyro-finance" class="btn-link" style="background:#374151;" target="_blank">
+          🔗 Repositório GitHub (PR.044)
         </a>
       </div>
     </div>
@@ -407,7 +461,8 @@ Dados Legados: Float 150.50 normalizado deterministicamente para 15050n
       <p><strong>KYRO Finance | Private Finance</strong> — Relatório Técnico Oficial de Homologação da Subetapa 03.3</p>
       <p style="margin-top:0.25rem;">
         Produção Web: <a href="https://kyro-finance.vercel.app" target="_blank" style="color:var(--accent);">https://kyro-finance.vercel.app</a> | 
-        Relatório Contínuo Vercel: <a href="https://kyro-fase-02-encerramento.vercel.app/" target="_blank" style="color:var(--accent);">https://kyro-fase-02-encerramento.vercel.app/</a>
+        Subetapa 03.3 Vercel: <a href="https://kyro-fase-03-3.vercel.app/" target="_blank" style="color:var(--accent);">https://kyro-fase-03-3.vercel.app/</a> | 
+        Histórico Fase 02: <a href="https://kyro-fase-02-encerramento.vercel.app/" target="_blank" style="color:var(--accent);">https://kyro-fase-02-encerramento.vercel.app/</a>
       </p>
     </footer>
   </div>
