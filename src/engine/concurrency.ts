@@ -100,10 +100,10 @@ export class LeaseManager {
       const existing = await t.get(leasePath) as LeaseRecord | null;
       const now = Date.now();
 
-      // Caso 1: Lease existe e ainda está ativo
-      if (existing && now < existing.expiresAt) {
+      // Caso 1: Lease existe e ainda está ativamente detido
+      if (existing && existing.holderId && now < existing.expiresAt) {
         if (existing.holderId === holderId) {
-          // Mesmo holder: renovação durante aquisição
+          // Mesmo holder ativo: renovação durante aquisição
           const renewedLease: LeaseRecord = {
             ...existing,
             ttlMs,
@@ -121,7 +121,8 @@ export class LeaseManager {
         }
       }
 
-      // Caso 2: Não existe ou já expirou (assunção por novo titular com token monotônico estritamente crescente)
+      // Caso 2: Não existe, já expirou ou foi liberado voluntariamente
+      // (nova concessão/reaquisição com token monotônico estritamente crescente)
       const nextToken = (existing?.fencingToken || 0) + 1;
       const newLease: LeaseRecord = {
         resourceId,
@@ -138,7 +139,7 @@ export class LeaseManager {
       return {
         success: true,
         lease: newLease,
-        isReacquired: !!existing
+        isReacquired: !!existing && !!existing.holderId
       };
     });
   }
@@ -207,7 +208,7 @@ export class LeaseManager {
 
     await this.store.runTransaction(async (t) => {
       const existing = await t.get(leasePath) as LeaseRecord | null;
-      if (!existing) return;
+      if (!existing || !existing.holderId || existing.expiresAt === 0) return;
 
       if (existing.fencingToken !== fencingToken) {
         throw new FencingTokenMismatchError(
@@ -221,16 +222,28 @@ export class LeaseManager {
         );
       }
 
-      t.delete(leasePath);
+      // Ao invés de apagar o documento e perder a sequência numérica, marca como liberado
+      // zerando titular e expiração, preservando a monotonicidade estrita do fencingToken para futuras reaquisições
+      const releasedRecord: LeaseRecord = {
+        ...existing,
+        holderId: '',
+        expiresAt: 0,
+        updatedAt: Date.now()
+      };
+      t.set(leasePath, releasedRecord);
     });
   }
 
   /**
    * Recupera o estado atual do lease diretamente do armazenamento.
+   * Retorna null se não houver lease ativo (não existente, expirado ou liberado).
    */
   public async getLease(userId: string, resourceId: string): Promise<LeaseRecord | null> {
-    const doc = await this.store.getDocument(`users/${userId}/leases/${resourceId}`);
-    return doc || null;
+    const doc = await this.store.getDocument(`users/${userId}/leases/${resourceId}`) as LeaseRecord | null;
+    if (!doc || !doc.holderId || doc.expiresAt === 0 || Date.now() > doc.expiresAt) {
+      return null;
+    }
+    return doc;
   }
 }
 
@@ -248,8 +261,8 @@ export async function validateFencingUnderTransaction(
   const leasePath = `users/${userId}/leases/${resourceId}`;
   const lease = await t.get(leasePath) as LeaseRecord | null;
 
-  if (!lease) {
-    // Se não há lease explícito cadastrado para o recurso, não há restrição de fencing
+  if (!lease || !lease.holderId || lease.expiresAt === 0) {
+    // Se não há lease explícito ativo cadastrado para o recurso, não há restrição de fencing
     return null;
   }
 

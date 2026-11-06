@@ -250,7 +250,31 @@ export async function runSubetapa034Tests() {
     // 1.9 Liberação voluntária legítima por worker_B com token 2
     await leaseManager.releaseLease(userId, resourceId, 'worker_B', 2);
     const leaseAfterRelease = await leaseManager.getLease(userId, resourceId);
-    assert(leaseAfterRelease === null, 'Lease liberado voluntariamente removido do armazenamento');
+    assert(leaseAfterRelease === null, 'Lease liberado voluntariamente removido do armazenamento ativo');
+
+    // 1.10 Sequência estrita de monotonicidade: Readquisição pelo MESMO titular pós-liberação
+    console.log('  -> Testando sequência de monotonicidade: adquirir, liberar e readquirir com o mesmo titular...');
+    const reacquiredByB = await leaseManager.acquireLease(userId, resourceId, 'worker_B', 5000);
+    assert(reacquiredByB.success === true, 'Readquisição pelo mesmo titular (worker_B) concluída com sucesso');
+    assert(reacquiredByB.lease.fencingToken === 3, 'Monotonicidade estrita comprovada: Token incrementado de 2 para 3');
+    assert(reacquiredByB.lease.holderId === 'worker_B', 'Titular do lease permanece worker_B');
+
+    // 1.11 Tentativa de renovação usando o token 2 antigo pelo mesmo titular
+    let oldTokenError: any = null;
+    try {
+      await leaseManager.renewLease(userId, resourceId, 'worker_B', 2);
+    } catch (e) {
+      oldTokenError = e;
+    }
+    assert(
+      oldTokenError instanceof FencingTokenMismatchError,
+      'Tentativa de renovação com token pré-liberação (token 2 vs vigente 3) bloqueada com FencingTokenMismatchError'
+    );
+
+    // 1.12 Liberação final pelo titular com o token 3 vigente
+    await leaseManager.releaseLease(userId, resourceId, 'worker_B', 3);
+    const leaseClean = await leaseManager.getLease(userId, resourceId);
+    assert(leaseClean === null, 'Lease ativo limpo no armazenamento após término do teste de contrato');
 
     // =========================================================================
     // BLOCO 2: DISPUTA CONCORRENTE REAL MULTI-PROCESSO PELA REDE HTTP
@@ -638,6 +662,95 @@ export async function runSubetapa034Tests() {
       snapLeaseAfterRelease.data()?.fencingToken === 2,
       'Leitura direta no Firestore: Fencing token continua 2 (validade de B intacta no storage)'
     );
+
+    // 2.7.1 Comprovação HTTP da Sequência: Adquirir, Liberar e Readquirir com o Mesmo Titular
+    console.log('  -> Testando pela rota HTTP a sequência: adquirir, liberar e readquirir com o mesmo titular...');
+    // Processo B libera seu lease ativo com token 2 via HTTP
+    const respReleaseB = await fetch(`http://127.0.0.1:${PORT_B}/api/database`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${officialAuth.idToken}`,
+        'X-Request-ID': `req_release_b_${Date.now()}`
+      },
+      body: JSON.stringify({
+        action: 'release_lease',
+        resourceId: sharedResource,
+        holderId: `pid_${serverB.pid}_processB`,
+        fencingToken: 2
+      })
+    });
+    assert(respReleaseB.status === 200, 'Processo B libera voluntariamente seu lease via HTTP 200');
+
+    // Processo B readquire imediatamente o mesmo recurso via HTTP
+    const respReacquireB = await fetch(`http://127.0.0.1:${PORT_B}/api/database`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${officialAuth.idToken}`,
+        'X-Request-ID': `req_reacquire_b_${Date.now()}`
+      },
+      body: JSON.stringify({
+        action: 'acquire_lease',
+        resourceId: sharedResource,
+        holderId: `pid_${serverB.pid}_processB`,
+        ttlMs: 5000
+      })
+    });
+    const jsonReacquireB: any = await respReacquireB.json();
+    assert(respReacquireB.status === 200, 'Processo B readquire o mesmo recurso via HTTP 200');
+    assert(jsonReacquireB.lease?.fencingToken === 3, 'HTTP: Fencing token incrementado monotonicamente de 2 para 3 para o mesmo titular');
+    assert(jsonReacquireB.lease?.holderId === `pid_${serverB.pid}_processB`, 'HTTP: Titular readquirente permanece Processo B');
+
+    // Tentativa de gravação pelo Processo B usando o token 2 antigo
+    const txOldTokenB = `tx_old_tok_b_${Date.now()}`;
+    const respOldTokenB = await fetch(`http://127.0.0.1:${PORT_B}/api/database`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${officialAuth.idToken}`,
+        'X-Request-ID': `req_old_tok_b_${Date.now()}`
+      },
+      body: JSON.stringify({
+        action: 'save_transaction',
+        accountId: sharedResource,
+        holderId: `pid_${serverB.pid}_processB`,
+        fencingToken: 2, // Token pré-liberação (obsoleto)
+        transaction: {
+          id: txOldTokenB,
+          type: 'INCOME',
+          amountCents: 5000,
+          description: 'Tentativa com token antigo pós-liberação'
+        }
+      })
+    });
+    assert(respOldTokenB.status === 412, 'Mutação de B com token 2 antigo pós-liberação rejeitada com HTTP 412');
+
+    // Gravação legítima pelo Processo B com o token 3 vigente
+    const txValidTokenB = `tx_valid_tok_b_${Date.now()}`;
+    const respValidTokenB = await fetch(`http://127.0.0.1:${PORT_B}/api/database`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${officialAuth.idToken}`,
+        'X-Request-ID': `req_valid_tok_b_${Date.now()}`
+      },
+      body: JSON.stringify({
+        action: 'save_transaction',
+        accountId: sharedResource,
+        holderId: `pid_${serverB.pid}_processB`,
+        fencingToken: 3, // Token vigente
+        transaction: {
+          id: txValidTokenB,
+          type: 'INCOME',
+          amountCents: 5000,
+          description: 'Mutação legítima sob token 3'
+        }
+      })
+    });
+    assert(respValidTokenB.status === 200, 'Mutação de B com token 3 vigente aprovada com HTTP 200 OK');
+    const snapAccToken3 = await rawDb.doc(`users/${testUid}/accounts/${sharedResource}`).get();
+    assert(snapAccToken3.data()?.balanceCents === 30000, 'Saldo no Firestore atualizado de R$ 250,00 para R$ 300,00 sob token 3');
 
     // 2.8 Proteção contra Replay de Webhook entre Instâncias (Processo A na porta 4101 vs Processo B na 4102)
     console.log('  -> Testando proteção contra replay de Webhook entre instâncias independentes (Porta 4101 vs 4102)...');
@@ -1089,9 +1202,11 @@ export async function runSubetapa034Tests() {
     });
     assert(respReleaseRollback.status === 200, 'Lease ativo liberado voluntariamente no drain de reversão');
 
-    // Leitura direta no Firestore: lease liberado (documento deletado)
+    // Leitura direta no Firestore: lease desocupado e liberado (sem titular ativo e expiresAt = 0)
     const snapLeaseDrained = await rawDb.doc(`users/${testUid}/leases/${rollbackAccId}`).get();
-    assert(!snapLeaseDrained.exists, 'Leitura direta no Firestore: Recurso desimpedido para retorno à PR.044');
+    const isDrained = !snapLeaseDrained.exists || !snapLeaseDrained.data()?.holderId || snapLeaseDrained.data()?.expiresAt === 0;
+    assert(isDrained, 'Leitura direta no Firestore: Recurso desimpedido para retorno à PR.044');
+    assert(snapLeaseDrained.data()?.fencingToken === tokenPre, 'Fencing token preservado no storage para garantir monotonicidade');
 
     // 5.3 Troca de Processo: Encerramento da 03.4 e Subida do Servidor Real da PR.044
     console.log('  -> [5.3] Encerrando processo 03.4 e iniciando processo da revisão real PR.044 (commit 1fe397de12de565002e0bec6976634c9c166bedb)...');

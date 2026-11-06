@@ -49,7 +49,7 @@ async function main() {
     process.exit(res2.exitCode);
   }
 
-  console.log('\n>>> [3/3] EXECUTANDO BATERIA DA SUBETAPA 03.4 (117 CASOS)...');
+  console.log('\n>>> [3/3] EXECUTANDO BATERIA DA SUBETAPA 03.4 (130 CASOS)...');
   await new Promise(r => setTimeout(r, 1000));
   const res3 = await runCommand('npx.cmd', ['tsx', 'src/engine/subetapa_03_4.test.ts']);
   if (res3.exitCode !== 0) {
@@ -61,9 +61,9 @@ async function main() {
   console.log('HOMOLOGAÇÃO CONSOLIDADA CONCLUÍDA COM SUCESSO:');
   console.log('1. Núcleo Contábil:     51 / 51 APROVADOS (100%)');
   console.log('2. Subetapa 03.3:       53 / 53 APROVADOS (100%)');
-  console.log('3. Subetapa 03.4:       117 / 117 APROVADOS (100%)');
+  console.log('3. Subetapa 03.4:       130 / 130 APROVADOS (100%)');
   console.log('----------------------------------------------------------------');
-  console.log('TOTAL CONSOLIDADO:     221 / 221 APROVADOS (100%)');
+  console.log('TOTAL CONSOLIDADO:     234 / 234 APROVADOS (100%)');
   console.log('STATUS FINAL:          HOMOLOGADO PARA PRODUÇÃO (PR.045)');
   console.log('================================================================\n');
 
