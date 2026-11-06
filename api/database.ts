@@ -1,6 +1,15 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { verifyAuthToken, enforceTenantBoundary, CrossTenantViolationError, AuthenticationError } from '../src/services/authBoundary';
-import { FirestoreLedgerAdapter, IdempotencyConflictError, ITransactionalStore } from '../src/services/firestoreAdapter';
+import { 
+  FirestoreLedgerAdapter, 
+  IdempotencyConflictError, 
+  ITransactionalStore,
+  LeaseExpiredError,
+  FencingTokenMismatchError,
+  LeaseHolderMismatchError,
+  LeaseAlreadyHeldError,
+  LeaseNotFoundError
+} from '../src/services/firestoreAdapter';
 import { TransactionalStoreMock } from '../src/services/storeClient';
 import { FirestoreAdminStore } from '../src/services/firestoreAdminStore';
 import { SafeMoneySerializer } from '../src/services/SafeMoneySerializer';
@@ -201,6 +210,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         });
       }
 
+      // 3.5. Leitura de Lease de Concorrência
+      if (queryType === 'lease') {
+        const resourceId = (req.query?.resourceId as string) || 'default_ledger';
+        const lease = await adapter.getLeaseManager().getLease(authUid, resourceId);
+        return res.status(200).json({
+          success: true,
+          userId: authUid,
+          resourceId,
+          lease
+        });
+      }
+
       // 4. Leitura Geral de Transações do Usuário (Preservando dados legados)
       const transactions = await adapter.listUserTransactions(authUid);
 
@@ -243,6 +264,45 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       const accountId = payload.accountId || 'acc_default';
 
+      // Ação: Adquirir Lease de Concorrência (acquire_lease)
+      if (action === 'acquire_lease') {
+        const resourceId = payload.resourceId || 'default_ledger';
+        const holderId = payload.holderId || (req.headers['x-process-holder-id'] as string) || `pid_${process.pid}`;
+        const ttlMs = payload.ttlMs ? Number(payload.ttlMs) : 30000;
+        const result = await adapter.getLeaseManager().acquireLease(authUid, resourceId, holderId, ttlMs);
+        return res.status(200).json({
+          userId: authUid,
+          ...result
+        });
+      }
+
+      // Ação: Renovar Lease de Concorrência (renew_lease)
+      if (action === 'renew_lease') {
+        const resourceId = payload.resourceId || 'default_ledger';
+        const holderId = payload.holderId || (req.headers['x-process-holder-id'] as string) || `pid_${process.pid}`;
+        const fencingToken = Number(payload.fencingToken);
+        const ttlMs = payload.ttlMs ? Number(payload.ttlMs) : 30000;
+        const lease = await adapter.getLeaseManager().renewLease(authUid, resourceId, holderId, fencingToken, ttlMs);
+        return res.status(200).json({
+          success: true,
+          userId: authUid,
+          lease
+        });
+      }
+
+      // Ação: Liberar Lease de Concorrência (release_lease)
+      if (action === 'release_lease') {
+        const resourceId = payload.resourceId || 'default_ledger';
+        const holderId = payload.holderId || (req.headers['x-process-holder-id'] as string) || `pid_${process.pid}`;
+        const fencingToken = Number(payload.fencingToken);
+        await adapter.getLeaseManager().releaseLease(authUid, resourceId, holderId, fencingToken);
+        return res.status(200).json({
+          success: true,
+          userId: authUid,
+          message: `Lease do recurso '${resourceId}' liberado com sucesso.`
+        });
+      }
+
       // Ação: Gravar Transação Individual (save_transaction)
       if (action === 'save_transaction') {
         const rawTx = payload.transaction || payload;
@@ -275,7 +335,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             description: rawTx.description || 'Lançamento via API Segura',
             date: rawTx.date,
             isEstimated: !!rawTx.isEstimated,
-            fencingToken: payload.fencingToken || 1
+            fencingToken: payload.fencingToken !== undefined ? Number(payload.fencingToken) : undefined,
+            holderId: payload.holderId || (req.headers['x-process-holder-id'] as string) || undefined,
+            resourceId: payload.resourceId || accountId || undefined
           });
 
           return res.status(200).json({
@@ -290,6 +352,34 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               success: false,
               error: commitErr.message,
               code: commitErr.code
+            });
+          }
+          if (commitErr instanceof LeaseExpiredError || commitErr?.code === 'LEASE_EXPIRED') {
+            return res.status(412).json({
+              success: false,
+              error: commitErr.message,
+              code: 'LEASE_EXPIRED'
+            });
+          }
+          if (commitErr instanceof FencingTokenMismatchError || commitErr?.code === 'FENCING_TOKEN_OBSOLETE') {
+            return res.status(412).json({
+              success: false,
+              error: commitErr.message,
+              code: 'FENCING_TOKEN_OBSOLETE'
+            });
+          }
+          if (commitErr instanceof LeaseHolderMismatchError || commitErr?.code === 'LEASE_HOLDER_MISMATCH') {
+            return res.status(412).json({
+              success: false,
+              error: commitErr.message,
+              code: 'LEASE_HOLDER_MISMATCH'
+            });
+          }
+          if (commitErr instanceof LeaseAlreadyHeldError || commitErr?.code === 'LEASE_ALREADY_HELD') {
+            return res.status(409).json({
+              success: false,
+              error: commitErr.message,
+              code: 'LEASE_ALREADY_HELD'
             });
           }
           throw commitErr;
@@ -308,6 +398,41 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           success: false,
           error: e.message,
           code: e.code
+        });
+      }
+      if (e instanceof LeaseExpiredError || e?.code === 'LEASE_EXPIRED') {
+        return res.status(412).json({
+          success: false,
+          error: e.message,
+          code: 'LEASE_EXPIRED'
+        });
+      }
+      if (e instanceof FencingTokenMismatchError || e?.code === 'FENCING_TOKEN_OBSOLETE') {
+        return res.status(412).json({
+          success: false,
+          error: e.message,
+          code: 'FENCING_TOKEN_OBSOLETE'
+        });
+      }
+      if (e instanceof LeaseHolderMismatchError || e?.code === 'LEASE_HOLDER_MISMATCH') {
+        return res.status(412).json({
+          success: false,
+          error: e.message,
+          code: 'LEASE_HOLDER_MISMATCH'
+        });
+      }
+      if (e instanceof LeaseAlreadyHeldError || e?.code === 'LEASE_ALREADY_HELD') {
+        return res.status(409).json({
+          success: false,
+          error: e.message,
+          code: 'LEASE_ALREADY_HELD'
+        });
+      }
+      if (e instanceof LeaseNotFoundError || e?.code === 'LEASE_NOT_FOUND') {
+        return res.status(404).json({
+          success: false,
+          error: e.message,
+          code: 'LEASE_NOT_FOUND'
         });
       }
 

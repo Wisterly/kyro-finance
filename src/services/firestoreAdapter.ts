@@ -12,6 +12,26 @@
 import { SafeMoneySerializer, SafeMoneyError } from './SafeMoneySerializer';
 import { Cents, parseToCents, formatCentsToBRL } from '../engine/money';
 import { LedgerTransaction, TransactionType, MutationReceipt } from '../engine/ledger';
+import { 
+  validateFencingUnderTransaction, 
+  LeaseExpiredError, 
+  FencingTokenMismatchError, 
+  LeaseHolderMismatchError,
+  LeaseAlreadyHeldError,
+  LeaseNotFoundError,
+  LeaseRecord,
+  LeaseManager
+} from '../engine/concurrency';
+
+export {
+  LeaseExpiredError,
+  FencingTokenMismatchError,
+  LeaseHolderMismatchError,
+  LeaseAlreadyHeldError,
+  LeaseNotFoundError,
+  LeaseManager
+};
+export type { LeaseRecord };
 
 export class IdempotencyConflictError extends Error {
   public readonly code = 'IDEMPOTENCY_PAYLOAD_MISMATCH';
@@ -125,6 +145,8 @@ export class FirestoreLedgerAdapter {
       date?: string;
       isEstimated?: boolean;
       fencingToken?: number;
+      holderId?: string;
+      resourceId?: string;
       simulatePreCommitFailure?: boolean;
     }
   ): Promise<MutationReceipt> {
@@ -189,11 +211,21 @@ export class FirestoreLedgerAdapter {
         );
       }
 
+      // 3.5. Validação Atômica de Lease e Fencing Token no MESMO Commit
+      const targetResource = params.resourceId || params.targetAccountId || params.sourceAccountId || 'ledger';
+      const activeLease = await validateFencingUnderTransaction(
+        t,
+        userId,
+        targetResource,
+        params.fencingToken,
+        params.holderId
+      );
+
       // 4. Aplicação dos Efeitos Financeiros nas Contas
       const nowIso = new Date().toISOString();
       const isEstimated = params.isEstimated || false;
       let resultingRev = 1;
-      const fencing = params.fencingToken || 1;
+      const fencing = activeLease ? activeLease.fencingToken : (params.fencingToken || 1);
 
       if (!isEstimated) {
         if (params.type === 'INCOME') {
@@ -403,5 +435,12 @@ export class FirestoreLedgerAdapter {
     await this.store.runTransaction(async (t) => {
       t.set(`users/${account.userId}/accounts/${account.id}`, account);
     });
+  }
+
+  /**
+   * Retorna uma instância do LeaseManager sobre a mesma store.
+   */
+  public getLeaseManager(): LeaseManager {
+    return new LeaseManager(this.store);
   }
 }

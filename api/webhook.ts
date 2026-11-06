@@ -3,7 +3,14 @@ import OpenAI, { toFile } from 'openai';
 import axios from 'axios';
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore, collection, doc, setDoc, getDocs, query, orderBy, limit } from 'firebase/firestore';
-import { validateWebhookOrigin, resolveProviderBinding, ProviderBinding } from '../src/services/authBoundary';
+import { 
+  validateWebhookOrigin, 
+  validateWebhookHmac, 
+  validateWebhookTimestamp, 
+  validateWebhookNonce, 
+  resolveProviderBinding, 
+  ProviderBinding 
+} from '../src/services/authBoundary';
 import { SafeMoneySerializer } from '../src/services/SafeMoneySerializer';
 import { parseToCents } from '../src/engine/money';
 
@@ -946,6 +953,48 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const payload = req.body || {};
 
+    // 0. Validação Criptográfica Global do Webhook (HMAC, Timestamp e Nonce)
+    // Se o chamador forneceu cabeçalhos criptográficos, valida rigorosamente antes de qualquer despacho
+    if (!globalAny.__KYRO_SEEN_NONCES__) {
+      globalAny.__KYRO_SEEN_NONCES__ = new Set<string>();
+    }
+
+    const signatureHeader = (req.headers['x-webhook-signature'] || req.headers['x-hub-signature-256']) as string | undefined;
+    const timestampHeader = req.headers['x-webhook-timestamp'] as string | undefined;
+    const nonceHeader = req.headers['x-webhook-nonce'] as string | undefined;
+
+    if (signatureHeader || timestampHeader || nonceHeader) {
+      // A. Validação de Timestamp (tolerância máxima de 5 minutos)
+      const tsResult = validateWebhookTimestamp(timestampHeader);
+      if (!tsResult.valid) {
+        return res.status(401).json({
+          success: false,
+          error: tsResult.error,
+          code: 'WEBHOOK_TIMESTAMP_EXPIRED'
+        });
+      }
+
+      // B. Validação de Assinatura HMAC SHA-256 sobre os bytes originais (rawBody)
+      const rawBody = (req as any).rawBody || (typeof req.body === 'string' ? req.body : JSON.stringify(req.body));
+      if (!validateWebhookHmac(rawBody, signatureHeader)) {
+        return res.status(401).json({
+          success: false,
+          error: 'Assinatura HMAC SHA-256 inválida ou corpo adulterado.',
+          code: 'WEBHOOK_HMAC_INVALID'
+        });
+      }
+
+      // C. Validação de Replay Attack via Nonce Único
+      const nonceResult = validateWebhookNonce(nonceHeader, globalAny.__KYRO_SEEN_NONCES__);
+      if (!nonceResult.valid) {
+        return res.status(409).json({
+          success: false,
+          error: nonceResult.error,
+          code: 'WEBHOOK_NONCE_REPLAY'
+        });
+      }
+    }
+
     // Suporte a sincronização de QR Code, Grupos e Status Oficial do WhatsApp Web (Baileys -> Nuvem)
     if (payload?.action === 'sync_bot_status' && payload?.botStatus) {
       globalAny.__KYRO_BOT_STATUS__ = {
@@ -1010,13 +1059,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const isIncomingMessage = !payload?.action && (payload?.data || payload?.Body || payload?.message || payload?.sender);
 
     if (isFinancialAction || isIncomingMessage) {
-      // 1. Validação Criptográfica da Origem do Webhook
-      if (!validateWebhookOrigin(req.headers)) {
-        return res.status(401).json({
-          success: false,
-          error: 'Origem do Webhook não autorizada ou chave de segurança ausente/inválida.',
-          code: 'WEBHOOK_ORIGIN_UNAUTHORIZED'
-        });
+      // 1. Validação de Origem (caso a requisição não utilize assinatura HMAC)
+      if (!signatureHeader) {
+        if (!validateWebhookOrigin(req.headers)) {
+          return res.status(401).json({
+            success: false,
+            error: 'Origem do Webhook não autorizada ou chave de segurança ausente/inválida.',
+            code: 'WEBHOOK_ORIGIN_UNAUTHORIZED'
+          });
+        }
       }
 
       // 2. Resolução do Vínculo Provedor (Telefone WhatsApp) -> Usuário (UID)

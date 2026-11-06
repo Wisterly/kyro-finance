@@ -10,6 +10,7 @@
  *    Vínculos ausentes ou ambíguos são terminantemente rejeitados.
  */
 
+import crypto from 'crypto';
 import { verifyRealAuthToken, VerifyTokenOptions } from './firebaseAdminAuth';
 
 export interface AuthContext {
@@ -160,3 +161,79 @@ export function resolveProviderBinding(
     userId: activeMatches[0].userId
   };
 }
+
+/**
+ * Validação Criptográfica de Assinatura HMAC SHA-256 do corpo original (rawBody).
+ * Resistente a timing attacks via timingSafeEqual.
+ */
+export function validateWebhookHmac(
+  rawBody: string | Buffer,
+  signatureHeader: string | undefined,
+  configuredSecret?: string
+): boolean {
+  if (!signatureHeader) return false;
+  const secret = configuredSecret || process.env.WEBHOOK_SECRET || 'kyro_webhook_secret_dev';
+
+  const cleanSignature = signatureHeader.replace(/^sha256=/i, '').trim();
+  if (cleanSignature.length !== 64) return false;
+
+  const hmac = crypto.createHmac('sha256', secret);
+  hmac.update(rawBody);
+  const calculatedHex = hmac.digest('hex');
+
+  const bufIncoming = Buffer.from(cleanSignature, 'hex');
+  const bufCalculated = Buffer.from(calculatedHex, 'hex');
+
+  if (bufIncoming.length !== bufCalculated.length) return false;
+  return crypto.timingSafeEqual(bufIncoming, bufCalculated);
+}
+
+/**
+ * Validação de tolerância de Timestamp (tolerância máxima de 5 minutos = 300.000 ms).
+ */
+export function validateWebhookTimestamp(
+  timestampHeader: string | undefined,
+  maxToleranceMs: number = 300000
+): { valid: boolean; error?: string } {
+  if (!timestampHeader) {
+    return { valid: false, error: 'Cabeçalho x-webhook-timestamp é obrigatório.' };
+  }
+
+  const parsed = Number(timestampHeader) || Date.parse(timestampHeader);
+  if (isNaN(parsed) || parsed <= 0) {
+    return { valid: false, error: 'Timestamp em formato inválido.' };
+  }
+
+  const drift = Math.abs(Date.now() - parsed);
+  if (drift > maxToleranceMs) {
+    return {
+      valid: false,
+      error: `Timestamp expirado. Desvio temporal de ${Math.round(drift / 1000)}s excede a tolerância máxima permitida de ${Math.round(maxToleranceMs / 1000)}s.`
+    };
+  }
+
+  return { valid: true };
+}
+
+/**
+ * Validação de proteção contra replay com Nonce único.
+ */
+export function validateWebhookNonce(
+  nonce: string | undefined,
+  seenNonces: Set<string>
+): { valid: boolean; error?: string } {
+  if (!nonce || nonce.trim().length === 0) {
+    return { valid: false, error: 'Cabeçalho x-webhook-nonce é obrigatório para proteção contra replay.' };
+  }
+
+  if (seenNonces.has(nonce)) {
+    return {
+      valid: false,
+      error: `Replay detectado: Nonce '${nonce}' já foi processado anteriormente.`
+    };
+  }
+
+  seenNonces.add(nonce);
+  return { valid: true };
+}
+

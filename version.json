@@ -1,17 +1,16 @@
 {
-  "version": "1.44",
-  "buildNumber": 44,
+  "version": "1.45",
+  "buildNumber": 45,
   "releaseDate": "2026-11-06",
   "changelog": [
-    "Subetapa 03.3 - Caminho de Gravação Autorizado por UID e Transacional (PR.044)",
-    "Encapsulamento de api/database.ts: Fronteira de autorização com derivação estrita de UID a partir de token verificado",
-    "Isolamento Cross-Tenant: Bloqueio estrito de acesso a outras contas mesmo quando o backend possui privilégios elevados",
-    "Fronteira de Webhook: Segregação entre identidade de provedor (WhatsApp) e identidade de usuário com resolução autorizada no servidor",
-    "Adaptador de Persistência Firestore (src/services/firestoreAdapter.ts): Serialização exata de BigInt em Safe Integers IEEE 754",
-    "Commit Atômico Indissociável: Efeitos contábeis nos saldos e recibos de idempotência gravados no mesmo commit atômico",
-    "Protocolo de Idempotência: Mesmo requestId recupera resultado anterior; payload divergente retorna conflito 409",
-    "Preservação de Dados Legados: Conversão automática e transparente de registros em float para centavos inteiros BigInt",
-    "Homologação Completa: 53 testes de rota e multi-processo aprovados + 51 testes contábeis = 104/104 testes aprovados (100% de sucesso)",
-    "Verificação TypeScript: 0 erros de compilação com verificação estrita"
+    "Subetapa 03.4 - Motor de Concorrência, Leases Monotônicos e Fencing Tokens (PR.045)",
+    "Componente 04 (src/engine/concurrency.ts): Gerenciador atômico de leases com escopo por usuário e recurso (users/{uid}/leases/{resourceId})",
+    "Fencing Tokens Monotônicos: Incremento estritamente crescente a cada concessão/expiração e conferência indissociável no mesmo commit do Firestore",
+    "Disputa Concorrente Multi-Processo Real: Processo com token obsoleto rejeitado com HTTP 412 (FENCING_TOKEN_OBSOLETE) e zero efeitos no banco",
+    "Resiliência Pós-Reinício de Servidor: Efeito contábil e recibo de idempotência sobrevivem a crash/restart; repetição recupera recibo com replay: true",
+    "Detecção de Conflito de Idempotência: Reenvio de mesmo requestId com payload divergente retorna HTTP 409 (IDEMPOTENCY_PAYLOAD_MISMATCH) com saldo preservado",
+    "Fronteira Criptográfica Avançada do Webhook: Validação de assinatura HMAC SHA-256 sobre bytes originais (timingSafeEqual), tolerância de timestamp (5 min) e replay protection por nonce",
+    "Homologação Consolidada: 64 testes da 03.4 + 53 testes da 03.3 + 51 testes contábeis = 168/168 testes aprovados (100% de sucesso)",
+    "Compilação TypeScript Estrita: 0 erros"
   ]
 }

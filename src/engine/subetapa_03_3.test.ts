@@ -717,6 +717,7 @@ async function runCompleteSubetapa033Suite() {
   if (failCount > 0) {
     process.exit(1);
   }
+  process.exit(0);
 }
 
 runCompleteSubetapa033Suite().catch((err) => {

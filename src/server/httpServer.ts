@@ -63,6 +63,7 @@ export function createHttpApp() {
       const vercelReq: any = req;
       vercelReq.query = parsed.query;
       vercelReq.body = parsedBody;
+      vercelReq.rawBody = bodyBuffer;
 
       // Vercel Response Shim
       const vercelRes: any = res;

@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KYRO Finance | Relatório Oficial — Subetapa 03.4 (PR.045)</title>
+  <style>
+    :root {
+      --bg: #0b0f17;
+      --card-bg: #111827;
+      --card-alt: #162032;
+      --border: #1f2937;
+      --text: #f3f4f6;
+      --text-muted: #9ca3af;
+      --accent: #10b981;
+      --accent-glow: rgba(16, 185, 129, 0.15);
+      --danger: #ef4444;
+      --warning: #f59e0b;
+      --blue: #3b82f6;
+      --purple: #8b5cf6;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      padding: 2rem 1rem;
+    }
+    .container { max-width: 1400px; margin: 0 auto; }
+    header {
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 2rem;
+      margin-bottom: 2.5rem;
+    }
+    .top-meta {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+    .badge-group { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+    .badge {
+      display: inline-block;
+      padding: 0.35rem 0.85rem;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .badge-success { background-color: rgba(16, 185, 129, 0.1); color: var(--accent); border: 1px solid var(--accent); }
+    .badge-blue { background-color: rgba(59, 130, 246, 0.1); color: var(--blue); border: 1px solid var(--blue); }
+    .badge-purple { background-color: rgba(139, 92, 246, 0.1); color: var(--purple); border: 1px solid var(--purple); }
+    .badge-warning { background-color: rgba(245, 158, 11, 0.1); color: var(--warning); border: 1px solid var(--warning); }
+    
+    h1 { font-size: 2.5rem; font-weight: 900; letter-spacing: -0.03em; margin-bottom: 0.5rem; }
+    .subtitle { font-size: 1.15rem; color: var(--text-muted); max-width: 950px; }
+    
+    .grid-kpi {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 3rem;
+    }
+    .card-kpi {
+      background-color: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 0.75rem;
+      padding: 1.5rem;
+      position: relative;
+      overflow: hidden;
+    }
+    .card-kpi::before {
+      content: "";
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--accent), var(--blue));
+    }
+    .kpi-title { font-size: 0.85rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700; margin-bottom: 0.5rem; }
+    .kpi-value { font-size: 2.2rem; font-weight: 800; color: #ffffff; }
+    .kpi-subtitle { font-size: 0.8rem; color: var(--accent); margin-top: 0.35rem; display: flex; align-items: center; gap: 0.35rem; }
+    
+    .card {
+      background-color: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 0.75rem;
+      padding: 2rem;
+      margin-bottom: 2.5rem;
+    }
+    .card h2 {
+      font-size: 1.5rem;
+      font-weight: 800;
+      margin-bottom: 1.25rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.75rem;
+    }
+    
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 1rem;
+      font-size: 0.9rem;
+    }
+    th, td {
+      padding: 0.85rem 1rem;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+    th {
+      background-color: var(--card-alt);
+      color: var(--text-muted);
+      font-weight: 700;
+      text-transform: uppercase;
+      font-size: 0.75rem;
+      letter-spacing: 0.05em;
+    }
+    tr:hover td { background-color: rgba(255, 255, 255, 0.02); }
+    
+    .status-pill {
+      display: inline-block;
+      padding: 0.2rem 0.6rem;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 700;
+    }
+    .status-pill.success { background: rgba(16, 185, 129, 0.2); color: var(--accent); }
+    .status-pill.warning { background: rgba(245, 158, 11, 0.2); color: var(--warning); }
+    .status-pill.info { background: rgba(59, 130, 246, 0.2); color: var(--blue); }
+    
+    .code-box {
+      background-color: #05070a;
+      border: 1px solid var(--border);
+      border-radius: 0.5rem;
+      padding: 1rem;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.85rem;
+      color: #38bdf8;
+      overflow-x: auto;
+      margin: 1rem 0;
+    }
+    
+    .links-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+    .link-item {
+      display: block;
+      background: var(--card-alt);
+      border: 1px solid var(--border);
+      padding: 1rem 1.25rem;
+      border-radius: 0.5rem;
+      color: var(--text);
+      text-decoration: none;
+      transition: all 0.2s;
+    }
+    .link-item:hover {
+      border-color: var(--accent);
+      transform: translateY(-2px);
+    }
+    .link-item strong { display: block; color: var(--accent); margin-bottom: 0.25rem; }
+    .link-item span { font-size: 0.8rem; color: var(--text-muted); }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="top-meta">
+        <div class="badge-group">
+          <span class="badge badge-success">Subetapa 03.4 Homologada</span>
+          <span class="badge badge-blue">PR.045 / v1.45 (Build 45)</span>
+          <span class="badge badge-purple">Motor de Concorrência e Leases</span>
+          <span class="badge badge-warning">168/168 Testes Aprovados</span>
+        </div>
+        <div style="font-size: 0.85rem; color: var(--text-muted);">
+          Data da Homologação: <strong>06 de Novembro de 2026</strong>
+        </div>
+      </div>
+      <h1>KYRO Finance — Relatório de Homologação da Subetapa 03.4</h1>
+      <p class="subtitle">
+        Comprovação de Concorrência Distribuída, Leases Monotônicos com Fencing Tokens Atômicos,
+        Resiliência Pós-Crash/Restart e Fronteira Criptográfica do Webhook (HMAC + Timestamp + Nonce).
+      </p>
+    </header>
+
+    <!-- KPIs -->
+    <div class="grid-kpi">
+      <div class="card-kpi">
+        <div class="kpi-title">Testes Totais da Subetapa 03.4</div>
+        <div class="kpi-value">64 / 64</div>
+        <div class="kpi-subtitle">✓ 100% de Aprovação sem Regressões</div>
+      </div>
+      <div class="card-kpi">
+        <div class="kpi-title">Bateria Consolidada (Geral)</div>
+        <div class="kpi-value">168 / 168</div>
+        <div class="kpi-subtitle">✓ 51 Núcleo + 53 03.3 + 64 03.4</div>
+      </div>
+      <div class="card-kpi">
+        <div class="kpi-title">Isolamento Multi-Processo</div>
+        <div class="kpi-value">2 PIDs Reais</div>
+        <div class="kpi-subtitle">✓ Processos A e B Concorrentes (HTTP 412)</div>
+      </div>
+      <div class="card-kpi">
+        <div class="kpi-title">Fronteira Criptográfica Webhook</div>
+        <div class="kpi-value">HMAC SHA-256</div>
+        <div class="kpi-subtitle">✓ timingSafeEqual + Nonce Anti-Replay</div>
+      </div>
+    </div>
+
+    <!-- Seção 1: Checklist de Aceite Oficial -->
+    <div class="card">
+      <h2>1. Verificação do Checklist Oficial de Aceite</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Requisito Arquitetural</th>
+            <th>Evidência Observável</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Lease e Fencing no Caminho de Gravação</strong></td>
+            <td>Componente 04 (<code>src/engine/concurrency.ts</code>) com tokens monotônicos validados no mesmo commit do Firestore. Processo com lease vencido ou substituído falha com HTTP 412 sem tocar em saldos ou recibos.</td>
+            <td><span class="status-pill success">CONCLUÍDO</span></td>
+          </tr>
+          <tr>
+            <td><strong>Disputa Real Entre Processos</strong></td>
+            <td>Dois processos com PIDs distintos (Processo A na porta 4101 e Processo B na 4102). Processo A deixa expirar; Processo B assume com token 2. Processo A tenta comitar com token 1 e é rejeitado (HTTP 412). Leitura direta no Firestore confirma saldo R$ 0,00 intacto.</td>
+            <td><span class="status-pill success">CONCLUÍDO</span></td>
+          </tr>
+          <tr>
+            <td><strong>Retry Após Perda de Confirmação</strong></td>
+            <td>Processos A e B encerrados com crash forçado (kill). Subida de Processo C na porta 4103. Reenvio do mesmo requestId recupera recibo com replay: true sem duplicar saldo. Payload divergente recebe HTTP 409.</td>
+            <td><span class="status-pill success">CONCLUÍDO</span></td>
+          </tr>
+          <tr>
+            <td><strong>Fronteira Criptográfica do Webhook</strong></td>
+            <td>Validação de assinatura HMAC SHA-256 sobre bytes originais (timingSafeEqual), tolerância de timestamp (5 min), barreira contra replay com Nonce único (HTTP 409), bloqueio de origem não autorizada (401), telefone sem vínculo (403) e ambiguidade (409).</td>
+            <td><span class="status-pill success">CONCLUÍDO</span></td>
+          </tr>
+          <tr>
+            <td><strong>Regressão e Reversão</strong></td>
+            <td>168 testes automatizados aprovados (51 núcleo + 53 03.3 + 64 03.4 = 100%). TypeScript sem erros. Procedimento determinístico de rollback baseado no PR.044.</td>
+            <td><span class="status-pill success">CONCLUÍDO</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Seção 2: Cenário de Disputa Concorrente -->
+    <div class="card">
+      <h2>2. Demonstração Observável da Disputa Concorrente (HTTP Multi-Processo)</h2>
+      <p style="color: var(--text-muted); margin-bottom: 1rem;">
+        Dois servidores HTTP autônomos com PIDs independentes foram iniciados no sistema operacional sobre o mesmo Firestore Emulator (porta 8080):
+      </p>
+      <div class="code-box">
+[Processo A | PID 44240 | Porta 4101] -> Adquire Lease de 'acc_fencing' com TTL=1200ms -> FencingToken = 1
+[Relógio de Sistema]                  -> Avança 1400ms (Lease de A expirou temporalmente)
+[Processo B | PID 18952 | Porta 4102] -> Assume Lease de 'acc_fencing' -> FencingToken = 2 (Monotônico Crescente)
+[Processo A | PID 44240 | Porta 4101] -> Tenta comitar transação de R$ 500,00 com FencingToken = 1 (Obsoleto)
+>>> RESPOSTA DA ROTA PARA PROCESSO A : HTTP 412 Precondition Failed | code: FENCING_TOKEN_OBSOLETE
+>>> LEITURA DIRETA NO FIRESTORE EMULATOR: Saldo = R$ 0,00 | Transação de A = NÃO EXISTE | Recibos de A = 0
+[Processo B | PID 18952 | Porta 4102] -> Comita transação legítima de R$ 250,00 com FencingToken = 2
+>>> RESPOSTA DA ROTA PARA PROCESSO B : HTTP 200 OK | status: APPLIED | resultingRev: 2 | fencingToken: 2
+>>> LEITURA DIRETA NO FIRESTORE EMULATOR: Saldo = R$ 250,00 | Recibo de B = PERSISTIDO COM SUCESSO
+      </div>
+    </div>
+
+    <!-- Seção 3: Resiliência Pós-Crash e Retry -->
+    <div class="card">
+      <h2>3. Resiliência a Falhas de Processo e Idempotência Estrita</h2>
+      <div class="code-box">
+[Processo B | Porta 4102] -> Grava requisição inicial 'req_reboot_1' (R$ 150,00) -> HTTP 200 | replay: false
+[Evento de Desastre]      -> CRASH FORÇADO : taskkill /f /t nos PIDs 44240 e 18952 (Servidores Encerrados)
+[Recuperação]             -> Subida de NOVO Processo C na Porta 4103 (Novo PID) conectado ao Firestore ativo
+[Cliente]                 -> Reenvia 'req_reboot_1' com payload idêntico para a porta 4103
+>>> RESPOSTA DA ROTA PARA PROCESSO C : HTTP 200 OK | status: APPLIED | replay: true
+>>> LEITURA DIRETA NO FIRESTORE EMULATOR: Saldo = R$ 400,00 exato (ZERO DUPLO CRÉDITO)
+[Cliente]                 -> Envia 'req_reboot_1' com payload divergente (R$ 999,00)
+>>> RESPOSTA DA ROTA PARA PROCESSO C : HTTP 409 Conflict | code: IDEMPOTENCY_PAYLOAD_MISMATCH
+>>> LEITURA DIRETA NO FIRESTORE EMULATOR: Saldo permanece R$ 400,00 rigorosamente intacto
+      </div>
+    </div>
+
+    <!-- Seção 4: Links de Acesso e Deploys -->
+    <div class="card">
+      <h2>4. Ambientes e Artefatos Homologados</h2>
+      <div class="links-grid">
+        <a href="https://kyro-fase-03-4.vercel.app/" class="link-item" target="_blank">
+          <strong>Ambiente Oficial Subetapa 03.4</strong>
+          <span>https://kyro-fase-03-4.vercel.app/ (PR.045 / v1.45)</span>
+        </a>
+        <a href="https://kyro-fase-03-3.vercel.app/" class="link-item" target="_blank">
+          <strong>Ambiente Oficial Subetapa 03.3</strong>
+          <span>https://kyro-fase-03-3.vercel.app/ (PR.044 / v1.44)</span>
+        </a>
+        <a href="https://kyro-fase-02-encerramento.vercel.app/" class="link-item" target="_blank">
+          <strong>Ambiente Histórico Fase 02</strong>
+          <span>https://kyro-fase-02-encerramento.vercel.app/ (PR.042)</span>
+        </a>
+        <a href="https://github.com/Wisterly/kyro-finance/releases/download/apk-latest/KYRO-Finance.apk" class="link-item" target="_blank">
+          <strong>Download Direto do APK Android Atualizado</strong>
+          <span>KYRO-Finance.apk (Release Oficial GitHub apk-latest)</span>
+        </a>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
