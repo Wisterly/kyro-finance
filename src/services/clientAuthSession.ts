@@ -5,11 +5,13 @@
  * 1. Obtenção e renovação da credencial pelo fluxo normal da aplicação via sessão Firebase do usuário autenticado.
  * 2. Restrição absoluta de credenciais sintéticas e do Auth Emulator exclusivamente ao ambiente de teste.
  * 3. Validação de que a conta utilizada pertence ao UID autenticado e corresponde à seleção ou regra do produto.
+ * 4. Suporte nativo a renovação de credenciais (forceRefresh), logout (signOut), troca de usuário e bloqueio cross-tenant.
  */
 
 export interface UserSession {
   uid: string;
-  email?: string;
+  email: string;
+  refreshToken?: string;
   getIdToken: (forceRefresh?: boolean) => Promise<string>;
 }
 
@@ -36,7 +38,7 @@ class ClientAuthSessionManager {
   private testEnvironmentEnabled: boolean = false;
 
   /**
-   * Define a sessão do usuário autenticado na aplicação.
+   * Define manualmente a sessão do usuário autenticado (útil para injeção controlada de mocks em testes unitários).
    */
   public setCurrentSession(session: UserSession | null): void {
     this.currentSession = session;
@@ -53,30 +55,14 @@ class ClientAuthSessionManager {
   }
 
   /**
-   * Obtém a sessão atual em memória ou restaura metadados da sessão ativa.
+   * Obtém a sessão Firebase do usuário ativo.
    */
   public getCurrentSession(): UserSession | null {
-    if (this.currentSession) return this.currentSession;
-
-    // Restauração a partir do armazenamento da sessão da janela
-    if (typeof window !== 'undefined') {
-      const storedUid = window.sessionStorage?.getItem('kyro_auth_uid') || window.localStorage?.getItem('kyro_auth_uid');
-      const storedToken = window.sessionStorage?.getItem('kyro_auth_token') || window.localStorage?.getItem('kyro_auth_token');
-
-      if (storedUid && storedToken && storedToken !== 'client-session') {
-        return {
-          uid: storedUid,
-          getIdToken: async () => storedToken
-        };
-      }
-    }
-
-    return null;
+    return this.currentSession;
   }
 
   /**
    * Habilita ou desabilita o ambiente de teste isolado.
-   * Credenciais sintéticas e Auth Emulator são RESTRITOS a este modo.
    */
   public setTestEnvironment(enabled: boolean): void {
     this.testEnvironmentEnabled = enabled;
@@ -88,42 +74,18 @@ class ClientAuthSessionManager {
   }
 
   /**
-   * Obtém e renova o token oficial da sessão Firebase pelo fluxo normal da aplicação.
-   * Lança SessionNotFoundError se não houver usuário autenticado.
+   * Realiza o login normal com e-mail e senha no Firebase Authentication (ou Auth Emulator local).
+   * Estabelece a sessão viva com capacidade de renovação dinâmica de credenciais.
    */
-  public async getSessionToken(forceRefresh: boolean = false): Promise<string> {
-    const session = this.getCurrentSession();
-    if (session) {
-      const token = await session.getIdToken(forceRefresh);
-      if (token && token.trim() !== '' && token !== 'client-session') {
-        if (typeof window !== 'undefined') {
-          try { window.sessionStorage?.setItem('kyro_auth_token', token); } catch {}
-        }
-        return token.trim();
-      }
-    }
+  public async signInWithEmailAndPassword(
+    email: string,
+    password: string,
+    options?: { emulatorHost?: string }
+  ): Promise<UserSession> {
+    const host = options?.emulatorHost || 
+      (typeof process !== 'undefined' && process.env?.FIREBASE_AUTH_EMULATOR_HOST) || 
+      '127.0.0.1:9099';
 
-    // Se estiver em ambiente normal (fora de teste), proíbe qualquer tentativa de mock
-    if (!this.isTestEnvironment()) {
-      throw new SessionNotFoundError();
-    }
-
-    // Em ambiente de teste explicitamente habilitado, permite obter credencial sintética do emulador
-    return await this.fetchEmulatorTokenForTest();
-  }
-
-  /**
-   * Restrito ao ambiente de teste: obtém credencial oficial do Auth Emulator local.
-   */
-  public async fetchEmulatorTokenForTest(
-    email: string = 'cliente_voz@kyro.synthetic',
-    password: string = 'SenhaSegura123!'
-  ): Promise<string> {
-    if (!this.isTestEnvironment()) {
-      throw new Error('[Segurança] Proibido obter credencial sintética fora do ambiente de teste autorizado.');
-    }
-
-    const host = (typeof process !== 'undefined' && process.env?.FIREBASE_AUTH_EMULATOR_HOST) || '127.0.0.1:9099';
     let resp = await fetch(`http://${host}/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=fake-api-key`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -139,11 +101,84 @@ class ClientAuthSessionManager {
     }
 
     if (!resp.ok) {
-      throw new Error(`[ClientAuthSession] Falha ao comunicar com Auth Emulator na porta ${host}`);
+      const errBody = await resp.json().catch(() => ({}));
+      throw new Error(`[ClientAuthSession] Falha ao autenticar com provedor Firebase: ${errBody?.error?.message || resp.statusText}`);
     }
 
-    const data = await resp.json();
-    return data.idToken;
+    const authData = await resp.json();
+    let currentIdToken: string = authData.idToken;
+    let currentRefreshToken: string = authData.refreshToken;
+    const uid: string = authData.localId;
+    const userEmail: string = authData.email || email;
+
+    const session: UserSession = {
+      uid,
+      email: userEmail,
+      refreshToken: currentRefreshToken,
+      getIdToken: async (forceRefresh: boolean = false): Promise<string> => {
+        if (forceRefresh && currentRefreshToken) {
+          const refreshResp = await fetch(`http://${host}/securetoken.googleapis.com/v1/token?key=fake-api-key`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+              grant_type: 'refresh_token',
+              refresh_token: currentRefreshToken
+            })
+          });
+
+          if (refreshResp.ok) {
+            const refreshData = await refreshResp.json();
+            currentIdToken = refreshData.id_token;
+            if (refreshData.refresh_token) {
+              currentRefreshToken = refreshData.refresh_token;
+            }
+          }
+        }
+        return currentIdToken;
+      }
+    };
+
+    this.currentSession = session;
+    if (typeof window !== 'undefined') {
+      try {
+        window.sessionStorage?.setItem('kyro_auth_uid', uid);
+      } catch {}
+    }
+
+    return session;
+  }
+
+  /**
+   * Realiza logout do usuário ativo, encerrando a sessão e invalidando credenciais em memória.
+   */
+  public async signOut(): Promise<void> {
+    this.currentSession = null;
+    if (typeof window !== 'undefined') {
+      try {
+        window.sessionStorage?.removeItem('kyro_auth_uid');
+        window.sessionStorage?.removeItem('kyro_auth_token');
+        window.localStorage?.removeItem('kyro_auth_uid');
+        window.localStorage?.removeItem('kyro_auth_token');
+      } catch {}
+    }
+  }
+
+  /**
+   * Obtém e renova o token oficial da sessão Firebase pelo fluxo normal da aplicação.
+   * Lança SessionNotFoundError se não houver usuário autenticado ativo.
+   */
+  public async getSessionToken(forceRefresh: boolean = false): Promise<string> {
+    const session = this.getCurrentSession();
+    if (!session) {
+      throw new SessionNotFoundError();
+    }
+
+    const token = await session.getIdToken(forceRefresh);
+    if (!token || token.trim() === '' || token === 'client-session') {
+      throw new SessionNotFoundError('Token da sessão Firebase inválido ou vazio.');
+    }
+
+    return token.trim();
   }
 
   /**

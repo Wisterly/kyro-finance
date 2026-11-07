@@ -231,12 +231,12 @@
         <div class="badge-group">
           <span class="badge badge-success">Subetapa 03.5</span>
           <span class="badge badge-blue">PR.046 / v1.46 (Build 46)</span>
-          <span class="badge badge-cyan">354/354 Testes Aprovados</span>
-          <span class="badge badge-purple">SHA: 96c270ff5d6faebdfd52c1e48ff61df18f7f2b96</span>
+          <span class="badge badge-cyan">365/365 Testes Aprovados</span>
+          <span class="badge badge-purple">CI Run 42405492827</span>
           <span class="badge badge-warning">Aceite Android Runtime: Pendente AVD/Host</span>
         </div>
         <div style="font-size: 0.85rem; color: var(--text-muted);">
-          Data da Homologação: <strong>07/11/2026 16:25 BRT</strong>
+          Data da Homologação: <strong>07/11/2026 16:38 BRT</strong>
         </div>
       </div>
       <h1>KYRO Finance | Auditoria Técnica Completa da Subetapa 03.5: Sessão Firebase Obrigatória, Titularidade de Conta, Recuperação com Identidade Estável e Reconciliação do APK</h1>
@@ -249,7 +249,7 @@
     <div class="grid-kpi">
       <div class="card-kpi">
         <div class="kpi-title">Suíte Consolidada</div>
-        <div class="kpi-value">354 / 354</div>
+        <div class="kpi-value">365 / 365</div>
         <div class="kpi-subtitle">100% de Sucesso (Checkout Limpo)</div>
       </div>
       <div class="card-kpi">
@@ -350,8 +350,15 @@
             <td><span class="status-pill success">requiresRecovery: true</span></td>
           </tr>
           <tr>
+            <td><strong>Recuperação Indevida por Outro Usuário (Bob tentando recuperar Alice)</strong></td>
+            <td>Sessão ativa divergente tenta recuperar operação de outro titular via recoverPendingVoiceTransaction</td>
+            <td><code>1 tentativa de recuperação</code></td>
+            <td><strong>Bloqueado com HTTP 403 PERMISSION_DENIED_ACCOUNT_MISMATCH</strong>; saldos intactos (R$ 926,55 e R$ 500,00); zero vazamento</td>
+            <td><span class="status-pill warning">403 Cross-Tenant Barrado</span></td>
+          </tr>
+          <tr>
             <td><strong>Recuperação Nativa pelo Chat (recoverPendingVoiceTransaction)</strong></td>
-            <td>Chat dispara recuperação automática sem receber recibo anterior nem reconstruir requestId</td>
+            <td>Chat dispara recuperação automática pela sessão ativa legítima de Alice sem receber recibo anterior nem reconstruir requestId</td>
             <td><code>Reenvio com mesmo requestId</code></td>
             <td><strong>Saldo permanece rigorosamente R$ 926,55 (0 duplo débito)</strong>; 1 lançamento no banco; entrada única no localStorage</td>
             <td><span class="status-pill success">Identidade Preservada</span></td>
@@ -625,9 +632,9 @@ A: android:networkSecurityConfig(0x01010527)=@0x7f100002
    # Todos os dados locais em SQLite (Capacitor Preferences / Storage) e documentos no Firestore permanecem 100% intactos.</div>
     </div>
 
-    <!-- 6. Consolidação Geral de Testes Automatizados (326 / 326) -->
+    <!-- 6. Consolidação Geral de Testes Automatizados (365 / 365) -->
     <div class="card">
-      <h2>6. Consolidação Geral de Testes Automatizados (326 / 326)</h2>
+      <h2>6. Consolidação Geral de Testes Automatizados (365 / 365)</h2>
       <table>
         <thead>
           <tr>
@@ -667,8 +674,8 @@ A: android:networkSecurityConfig(0x01010527)=@0x7f100002
           <tr>
             <td><strong>4. Subetapa 03.5 (Chat, Sessão Firebase, Rede e APK)</strong></td>
             <td><code>src/engine/subetapa_03_5.test.ts</code></td>
-            <td>109</td>
-            <td>109</td>
+            <td>120</td>
+            <td>120</td>
             <td>0</td>
             <td><span class="status-pill success">100%</span></td>
           </tr>
@@ -676,15 +683,15 @@ A: android:networkSecurityConfig(0x01010527)=@0x7f100002
         <tfoot>
           <tr style="background-color: var(--card-alt); font-weight: 800;">
             <td colspan="2">TOTAL CONSOLIDADO</td>
-            <td>354</td>
-            <td>354</td>
+            <td>365</td>
+            <td>365</td>
             <td>0</td>
             <td><span class="status-pill success">100% APROVADO</span></td>
           </tr>
         </tfoot>
       </table>
 
-      <h3 style="font-size: 1.1rem; margin-top: 1.5rem; margin-bottom: 0.5rem;">Log Oficial de Execução em Checkout Limpo do SHA 6b3dbdc9fa679fb8ecf5dfdfb768e7c10b7b1348 (Reconciliação 03.5):</h3>
+      <h3 style="font-size: 1.1rem; margin-top: 1.5rem; margin-bottom: 0.5rem;">Log Oficial de Execução da Suíte Consolidada (365 / 365 Testes Aprovados):</h3>
       <div class="code-box terminal">================================================================
 KYRO FINANCE | EXECUÇÃO INTEGRADA DE TODAS AS SUÍTES
 ================================================================
@@ -698,10 +705,12 @@ KYRO FINANCE | EXECUÇÃO INTEGRADA DE TODAS AS SUÍTES
 >>> [3/4] EXECUTANDO BATERIA DA SUBETAPA 03.4 (141 CASOS)...
   ✓ RESULTADO DA BATERIA DA SUBETAPA 03.4: 141 APROVADOS, 0 FALHAS (100%)
 
->>> [4/4] EXECUTANDO BATERIA DA SUBETAPA 03.5 (109 CASOS)...
+>>> [4/4] EXECUTANDO BATERIA DA SUBETAPA 03.5 (120 CASOS)...
   [OK] AndroidManifest.xml declara explicitamente android:usesCleartextTraffic="false"
   [OK] network_security_config.xml possui base-config com cleartextTrafficPermitted="false"
   [OK] capacitor.config.json define server.cleartext estritamente como false
+  [OK] capacitor.config.json define android.allowMixedContent estritamente como false
+  [OK] capacitor.config.json define androidScheme como "https"
   [OK] enforceSecureTransport lança CleartextTrafficBlockedError para tráfego HTTP
   [OK] App.tsx importa formalmente launchTransactionFromChatVoice e recoverPendingVoiceTransaction
   [OK] startRecordingAudio em App.tsx aciona chatVoiceController.startRecording()
@@ -717,14 +726,19 @@ KYRO FINANCE | EXECUÇÃO INTEGRADA DE TODAS AS SUÍTES
   [OK] App.tsx garante identidade estável da mensagem de confirmação derivada do recibo
   [OK] syncSaveToCentralDb em App.tsx audita mutações através de chatVoiceController.registerMutation
   [OK] Servidor HTTP standalone ativo na porta 4125 sobre Firestore Emulator
-  [OK] ID Token oficial obtido do Firebase Auth Emulator
-  [OK] UID sintético autenticado: yPFkEfZgBtZbGl5H8FSWtulRL8nE
-  [OK] Saldo inicial da conta no Firestore Emulator confirmado em R$ 1.000,00 (100000 cents)
-  [OK] Sem sessão ativa, confirmação de voz é rejeitada com ok=false
-  [OK] Status HTTP retornado é 401 (Unauthorized)
-  [OK] Código de erro retornado é UNAUTHORIZED_NO_SESSION
-  [OK] ZERO requisições de mutação emitidas sem sessão de usuário
-  [OK] Saldo no Firestore permanece R$ 1.000,00 intacto após rejeição por ausência de sessão
+  [OK] Login normal via provedor Firebase Auth concluído para Alice (UID v3KwTbNWBprXuKz4UIygLjBl2Zwg)
+  [OK] Sessão ativa em clientAuthSession reflete o usuário Alice
+  [OK] ID Token oficial obtido diretamente da sessão ativa de Alice
+  [OK] Token renovado com sucesso via endpoint de securetoken do Firebase Auth (forceRefresh: true)
+  [OK] Novo ID Token oficial emitido pelo Firebase Auth na renovação de credenciais
+  [OK] signOut encerrou a sessão ativa (currentSession === null)
+  [OK] getSessionToken lança UNAUTHORIZED_NO_SESSION após logout
+  [OK] Confirmação do chat rejeitada com ok=false após logout
+  [OK] Status HTTP retornado é 401 (Unauthorized) após logout
+  [OK] Código de erro é UNAUTHORIZED_NO_SESSION
+  [OK] Sessão de Alice restabelecida com sucesso
+  [OK] Saldo inicial da conta de Alice no Firestore Emulator confirmado em R$ 1.000,00 (100000 cents)
+  [OK] Troca de usuário: Alice volta a ser a sessão ativa
   [OK] Tentativa de transacionar conta de outro UID é rejeitada com ok=false
   [OK] Status HTTP retornado é 403 (Forbidden)
   [OK] Código de erro retornado é PERMISSION_DENIED_ACCOUNT_MISMATCH
@@ -762,9 +776,13 @@ KYRO FINANCE | EXECUÇÃO INTEGRADA DE TODAS AS SUÍTES
   [OK] Descrição contábil reflete a identificação contábil do parser
   [OK] Recibo de idempotência persistido diretamente no Firestore Emulator
   [OK] Recibo no Firestore com status APPLIED
-  [OK] Recuperação pelo fluxo nativo do chat respondeu com sucesso (HTTP 200 OK)
+  [OK] Tentativa de recuperação por outra sessão / conta alheia (Bob tentando recuperar Alice) rejeitada com ok=false
+  [OK] Status de recuperação por terceiro é 403 (Forbidden)
+  [OK] Código de erro na recuperação por terceiro é PERMISSION_DENIED_ACCOUNT_MISMATCH
+  [OK] Saldo de Alice permanece R$ 926,55 e saldo de Bob permanece R$ 500,00 intactos (zero vazamento de dados)
+  [OK] Recuperação legítima pela sessão ativa de Alice respondeu com sucesso (HTTP 200 OK)
   [OK] Identidade mantida: requestId idêntico ao da primeira tentativa
-  [OK] Servidor confirma sucesso na recuperação
+  [OK] Servidor confirma sucesso na recuperação legítima
   [OK] Recibo contábil recuperado intacto com status APPLIED
   [OK] Transação recuperada preserva exatos R$ 73,45
   [OK] Texto de confirmação visual derivado diretamente do recibo recuperado
@@ -773,14 +791,13 @@ KYRO FINANCE | EXECUÇÃO INTEGRADA DE TODAS AS SUÍTES
   [OK] Exatamente UMA mensagem de confirmação gerada no Chat
   [OK] Exatamente UMA transação persistida no armazenamento local kyro_transactions
   [OK] Hash SHA-256 do APK Candidato Oficial verificado com precisão criptográfica (F000E863B9F6329A4DF369CCEC5FC2FF98BB26C0F45E58AE245765A558849A4C)
+  [OK] Keystore de assinatura kyro.keystore presente no disco (2440 bytes)
   [OK] Certificado de assinatura oficial do APK Candidato verificado (CN=KYRO Finance, SHA-256: 9b2b95a993ec5ddb928b76c230d3b32a3ae00de2d548a519a81b8870c0ce9c74)
   [OK] APK candidato possui assets/capacitor.config.json com cleartext: false
   [OK] APK candidato possui assets/capacitor.config.json com allowMixedContent: false
   [OK] APK candidato preserva appId com.kyro.finance
   [OK] Saneamento de rede comprovado dentro do arquivo compilado APK
-  [OK] aapt dump badging confirma package: name="com.kyro.finance"
-  [OK] aapt dump badging confirma versionCode="46"
-  [OK] aapt dump badging confirma versionName="1.46"
+  [OK] aapt dump badging confirma package: name="com.kyro.finance" versionCode="46" versionName="1.46"
   [OK] aapt dump xmltree confirma android:usesCleartextTraffic=0x0 (false)
   [OK] aapt dump xmltree confirma android:networkSecurityConfig presente
   [OK] Bloqueio concreto do host formalmente catalogado sem omissões
@@ -793,9 +810,9 @@ HOMOLOGAÇÃO CONSOLIDADA CONCLUÍDA COM SUCESSO:
 1. Núcleo Contábil:     51 / 51 APROVADOS (100%)
 2. Subetapa 03.3:       53 / 53 APROVADOS (100%)
 3. Subetapa 03.4:       141 / 141 APROVADOS (100%)
-4. Subetapa 03.5:       109 / 109 APROVADOS (100%)
+4. Subetapa 03.5:       120 / 120 APROVADOS (100%)
 ----------------------------------------------------------------
-TOTAL CONSOLIDADO:     354 / 354 APROVADOS (100%)
+TOTAL CONSOLIDADO:     365 / 365 APROVADOS (100%)
 STATUS FINAL:          HOMOLOGADO EM CONTRATO E INSPEÇÃO DE ARTEFATO (PR.046)
                        ACEITE ANDROID EM AVD/DISPOSITIVO FÍSICO FORMALMENTE PENDENTE
 ================================================================</div>

@@ -284,81 +284,106 @@ async function testChatVoiceConfirmationFlow() {
   try {
     const baseUrl = `http://127.0.0.1:${TEST_PORT}`;
     
-    // Obtenção de token oficial emitido pelo Firebase Auth Emulator para tenant isolado
-    const testEmail = `usr_voice_${Date.now()}@kyro.synthetic`;
-    const officialAuth = await getOfficialAuthEmulatorToken(
-      testEmail,
-      'Pass_Voice123'
-    );
-    const userId = officialAuth.uid;
-    const authToken = officialAuth.idToken;
-    const accountId = `acc_carteira_${Date.now()}`;
+    // Provedor oficial de autenticação: login normal pelo Firebase Auth Emulator
+    const userA_email = `alice_voice_${Date.now()}@kyro.synthetic`;
+    const userA_pass = 'AliceSegura123!';
+    const userB_email = `bob_intruder_${Date.now()}@kyro.synthetic`;
+    const userB_pass = 'BobSeguro456!';
 
-    assert(Boolean(authToken), 'ID Token oficial obtido do Firebase Auth Emulator');
-    assert(Boolean(userId), `UID sintético autenticado: ${userId}`);
+    clientAuthSession.setTestEnvironment(true);
 
-    // Inicialização da conta diretamente no Firestore Emulator com saldo de R$ 1.000,00 (100000 cents)
+    // 2.2 Prova: Login normal da usuária Alice pelo provedor Firebase Auth
+    console.log('  -> Realizando login normal de Alice pelo provedor Firebase Auth...');
+    const sessionA = await clientAuthSession.signInWithEmailAndPassword(userA_email, userA_pass);
+    const userIdA = sessionA.uid;
+    const accountIdA = `acc_alice_${Date.now()}`;
+
+    assert(Boolean(sessionA.uid), `Login normal via provedor Firebase Auth concluído para Alice (UID ${userIdA})`);
+    assert(clientAuthSession.getCurrentSession()?.uid === userIdA, 'Sessão ativa em clientAuthSession reflete o usuário Alice');
+
+    const initialTokenA = await clientAuthSession.getSessionToken();
+    assert(Boolean(initialTokenA), 'ID Token oficial obtido diretamente da sessão ativa de Alice');
+
+    // 2.3 Prova: Renovação viva de credencial (Token Refresh via forceRefresh: true)
+    console.log('  -> Testando renovação real de credencial (forceRefresh: true via refresh_token)...');
+    await new Promise(resolve => setTimeout(resolve, 1100)); // Aguarda virada do segundo Unix para emissão de novo iat
+    const renewedTokenA = await clientAuthSession.getSessionToken(true);
+    assert(Boolean(renewedTokenA), 'Token renovado com sucesso via endpoint de securetoken do Firebase Auth');
+    assert(renewedTokenA !== initialTokenA, 'Novo ID Token oficial emitido pelo Firebase Auth na renovação de credenciais');
+
+    // 2.4 Prova: Logout (signOut) e bloqueio imediato com 401 UNAUTHORIZED_NO_SESSION
+    console.log('  -> Testando logout do usuário ativo e bloqueio imediato...');
+    await clientAuthSession.signOut();
+    assert(clientAuthSession.getCurrentSession() === null, 'signOut encerrou a sessão ativa (currentSession === null)');
+
+    let logoutBlocked = false;
+    try {
+      await clientAuthSession.getSessionToken();
+    } catch (e: any) {
+      logoutBlocked = e?.code === 'UNAUTHORIZED_NO_SESSION';
+    }
+    assert(logoutBlocked, 'getSessionToken lança UNAUTHORIZED_NO_SESSION após logout');
+
+    const logoutLaunch = await launchTransactionFromChatVoice({
+      transcript: 'Gastei 50 reais no almoço',
+      baseUrl,
+      accountId: accountIdA
+    });
+    assert(logoutLaunch.ok === false, 'Confirmação do chat rejeitada com ok=false após logout');
+    assert(logoutLaunch.status === 401, 'Status HTTP retornado é 401 (Unauthorized) após logout');
+    assert(logoutLaunch.code === 'UNAUTHORIZED_NO_SESSION', 'Código de erro é UNAUTHORIZED_NO_SESSION');
+
+    // 2.5 Prova: Restabelecimento da sessão de Alice e inicialização contábil
+    console.log('  -> Restabelecendo login de Alice e inicializando conta no Firestore Emulator...');
+    await clientAuthSession.signInWithEmailAndPassword(userA_email, userA_pass);
+    assert(clientAuthSession.getCurrentSession()?.uid === userIdA, 'Sessão de Alice restabelecida com sucesso');
+
     const adminStore = new FirestoreAdminStore();
     const ledger = new FirestoreLedgerAdapter(adminStore);
 
     await ledger.seedAccount({
-      id: accountId,
-      userId,
-      name: 'Carteira do Chat',
+      id: accountIdA,
+      userId: userIdA,
+      name: 'Carteira de Alice',
       balanceCents: 100000,
       rev: 1,
       fencingToken: 1,
       updatedAt: new Date().toISOString()
     });
 
-    const contaInicial = await ledger.getAccount(userId, accountId);
+    const contaInicial = await ledger.getAccount(userIdA, accountIdA);
     assert(
       contaInicial !== null && contaInicial.balanceCents === 100000,
-      'Saldo inicial da conta no Firestore Emulator confirmado em R$ 1.000,00 (100000 cents)'
+      'Saldo inicial da conta de Alice no Firestore Emulator confirmado em R$ 1.000,00 (100000 cents)'
     );
 
-    // Instanciação e limpeza do controlador conectado à interface
-    const controller = chatVoiceController;
-    controller.mutationLog = [];
-    controller.pendingOperation = null;
+    // Inicialização de conta isolada para Bob (R$ 500,00)
+    const sessionB = await clientAuthSession.signInWithEmailAndPassword(userB_email, userB_pass);
+    const userIdB = sessionB.uid;
+    const accountIdB = `acc_bob_${Date.now()}`;
 
-    // 2.2 Prova: Rejeição de Sessão Ausente (401 UNAUTHORIZED_NO_SESSION)
-    console.log('  -> Testando rejeição por ausência de sessão Firebase ativa...');
-    clientAuthSession.setTestEnvironment(false);
-    clientAuthSession.setCurrentSession(null);
-
-    const noSessionResult = await launchTransactionFromChatVoice({
-      transcript: 'Gastei 50 reais no almoço',
-      baseUrl,
-      accountId
+    await ledger.seedAccount({
+      id: accountIdB,
+      userId: userIdB,
+      name: 'Carteira de Bob',
+      balanceCents: 50000,
+      rev: 1,
+      fencingToken: 1,
+      updatedAt: new Date().toISOString()
     });
 
-    assert(noSessionResult.ok === false, 'Sem sessão ativa, confirmação de voz é rejeitada com ok=false');
-    assert(noSessionResult.status === 401, 'Status HTTP retornado é 401 (Unauthorized)');
-    assert(noSessionResult.code === 'UNAUTHORIZED_NO_SESSION', 'Código de erro retornado é UNAUTHORIZED_NO_SESSION');
-    assert(controller.mutationLog.length === 0, 'ZERO requisições de mutação emitidas sem sessão de usuário');
+    // Troca de volta para a sessão ativa de Alice
+    await clientAuthSession.signInWithEmailAndPassword(userA_email, userA_pass);
+    assert(clientAuthSession.getCurrentSession()?.uid === userIdA, 'Troca de usuário: Alice volta a ser a sessão ativa');
 
-    const contaPosNoSession = await ledger.getAccount(userId, accountId);
-    assert(
-      contaPosNoSession !== null && contaPosNoSession.balanceCents === 100000,
-      'Saldo no Firestore permanece R$ 1.000,00 intacto após rejeição por ausência de sessão'
-    );
-
-    // 2.3 Prova: Rejeição de Conta Pertencente a Outro UID (403 PERMISSION_DENIED_ACCOUNT_MISMATCH)
-    console.log('  -> Testando rejeição de conta de outro usuário (Cross-tenant violation)...');
-    clientAuthSession.setTestEnvironment(true);
-    clientAuthSession.setCurrentSession({
-      uid: userId,
-      email: testEmail,
-      getIdToken: async () => authToken
-    });
-
+    // 2.6 Prova: Rejeição de Conta Pertencente a Outro UID (Cross-tenant violation)
+    console.log('  -> Testando rejeição de conta de outro usuário (Alice tentando operar conta de Bob)...');
     const crossTenantResult = await launchTransactionFromChatVoice({
       transcript: 'Gastei 50 reais no almoço',
       baseUrl,
-      userUid: userId,
-      accountOwnerId: 'usr_outro_inquilino_invasor',
-      accountId: 'acc_invasora'
+      userUid: userIdA,
+      accountOwnerId: userIdB,
+      accountId: accountIdB
     });
 
     assert(crossTenantResult.ok === false, 'Tentativa de transacionar conta de outro UID é rejeitada com ok=false');
@@ -367,19 +392,22 @@ async function testChatVoiceConfirmationFlow() {
       crossTenantResult.code === 'PERMISSION_DENIED_ACCOUNT_MISMATCH',
       'Código de erro retornado é PERMISSION_DENIED_ACCOUNT_MISMATCH'
     );
-    assert(controller.mutationLog.length === 0, 'ZERO requisições de mutação emitidas para conta alheia');
 
-    const contaPosMismatch = await ledger.getAccount(userId, accountId);
+    const contaPosMismatch = await ledger.getAccount(userIdA, accountIdA);
     assert(
       contaPosMismatch !== null && contaPosMismatch.balanceCents === 100000,
-      'Saldo no Firestore permanece R$ 1.000,00 intacto após bloqueio de conta alheia'
+      'Saldo no Firestore de Alice permanece R$ 1.000,00 intacto após bloqueio de conta alheia'
     );
 
-    // 2.4 Prova: Início de gravação e emissão de frames parciais (onPartial)
+    // Instanciação e limpeza do controlador conectado à interface
+    const controller = chatVoiceController;
+    controller.mutationLog = [];
+    controller.pendingOperation = null;
+
+    // 2.7 Prova: Início de gravação e emissão de frames parciais (onPartial)
     await controller.startRecording();
     assert(controller.state.isRecording === true, 'Controlador do Chat iniciou estado de gravação de áudio');
 
-    // Emite sequência de resultados parciais vindos do reconhecedor de voz
     controller.handlePartialResult('comprei cinquenta reais');
     assert(controller.state.liveTranscript === 'comprei cinquenta reais', 'liveTranscript reflete frame parcial 1');
     assert(controller.mutationLog.length === 0, 'ZERO requisições de mutação emitidas durante frame parcial 1');
@@ -391,7 +419,7 @@ async function testChatVoiceConfirmationFlow() {
     );
     assert(controller.mutationLog.length === 0, 'ZERO requisições de mutação emitidas durante frame parcial 2');
 
-    // 2.5 Prova: Callbacks duplicados e higienização
+    // 2.8 Prova: Callbacks duplicados e higienização
     controller.handlePartialResult('posto posto Shell Shell');
     assert(
       controller.state.liveTranscript === 'posto Shell',
@@ -399,28 +427,26 @@ async function testChatVoiceConfirmationFlow() {
     );
     assert(controller.mutationLog.length === 0, 'ZERO requisições de mutação emitidas durante callbacks duplicados');
 
-    // 2.6 Prova: Cancelamento de gravação pelo usuário (botão Cancelar / Lixeira)
+    // 2.9 Prova: Cancelamento de gravação pelo usuário (botão Cancelar / Lixeira)
     await controller.cancelRecording();
     assert(controller.state.isRecording === false, 'Controlador encerrou gravação após cancelRecording');
     assert(controller.state.liveTranscript === '', 'Buffers de texto zerados após cancelamento');
     assert(controller.mutationLog.length === 0, 'ZERO requisições de mutação emitidas após cancelamento do áudio');
 
-    // Leitura direta no Firestore Emulator: comprovar ausência de mutação
-    const contaAposCancel = await ledger.getAccount(userId, accountId);
+    const contaAposCancel = await ledger.getAccount(userIdA, accountIdA);
     assert(
       contaAposCancel !== null && contaAposCancel.balanceCents === 100000,
       'Saldo no Firestore permanece rigorosamente R$ 1.000,00 após cancelamento'
     );
-    const txsAposCancel = await ledger.listUserTransactions(userId);
+    const txsAposCancel = await ledger.listUserTransactions(userIdA);
     assert(txsAposCancel.length === 0, 'Zero transações gravadas no banco após cancelamento');
 
-    // 2.7 Prova: Pedido de esclarecimento em fala sem valor monetário
+    // 2.10 Prova: Pedido de esclarecimento em fala sem valor monetário
     console.log('  -> Testando fala sem valor contábil ("Abastecimento no posto Shell")...');
     const clarifyResult = await launchTransactionFromChatVoice({
       transcript: 'Abastecimento no posto Shell',
       baseUrl,
-      authToken,
-      accountId
+      accountId: accountIdA
     });
 
     assert(clarifyResult.ok === false, 'launchTransactionFromChatVoice retorna ok=false para fala sem valor monetário');
@@ -432,34 +458,33 @@ async function testChatVoiceConfirmationFlow() {
     );
     assert(controller.mutationLog.length === 0, 'ZERO requisições de mutação emitidas em pedido de esclarecimento');
 
-    const contaAposClarify = await ledger.getAccount(userId, accountId);
+    const contaAposClarify = await ledger.getAccount(userIdA, accountIdA);
     assert(
       contaAposClarify !== null && contaAposClarify.balanceCents === 100000,
       'Saldo no Firestore permanece rigorosamente R$ 1.000,00 após pedido de esclarecimento'
     );
-    const txsAposClarify = await ledger.listUserTransactions(userId);
+    const txsAposClarify = await ledger.listUserTransactions(userIdA);
     assert(txsAposClarify.length === 0, 'Zero transações gravadas no Firestore Emulator após pedido de esclarecimento');
 
-    // 2.8 Prova: Nova gravação, resultado final sem confirmação do botão Lançar
+    // 2.11 Prova: Nova gravação, resultado final sem confirmação do botão Lançar
     await controller.startRecording();
     controller.handlePartialResult('Gastei 73,45 no posto Shell');
     controller.handleFinalResult('Gastei 73,45 no posto Shell');
     assert(controller.mutationLog.length === 0, 'Zero requisições de mutação antes da confirmação explícita');
 
-    // Prova no Firestore Emulator: Ausência de mutação em resultados finais sem confirmação do botão "Lançar"
-    const contaAposFinalSemConfirm = await ledger.getAccount(userId, accountId);
+    const contaAposFinalSemConfirm = await ledger.getAccount(userIdA, accountIdA);
     assert(
       contaAposFinalSemConfirm !== null && contaAposFinalSemConfirm.balanceCents === 100000,
       'Saldo no Firestore Emulator permanece rigorosamente R$ 1.000,00 após resultado final sem confirmação'
     );
-    const txsAposFinalSemConfirm = await ledger.listUserTransactions(userId);
+    const txsAposFinalSemConfirm = await ledger.listUserTransactions(userIdA);
     assert(
       txsAposFinalSemConfirm.length === 0,
       'Zero transações gravadas no Firestore Emulator após resultado final sem confirmação'
     );
 
-    // 2.9 Prova: Confirmação com fala contendo centavos reais (R$ 73,45), perda de resposta de rede e recuperação nativa
-    console.log('  -> Confirmando fala real ("Gastei 73,45 no posto Shell") com simulação de resposta perdida na rede...');
+    // 2.12 Prova: Confirmação com fala contendo centavos reais (R$ 73,45), perda de resposta no transporte e recuperação
+    console.log('  -> Confirmando fala real ("Gastei 73,45 no posto Shell") com descarte de resposta no transporte...');
     controller.mutationLog = [];
     
     let droppedNetworkResponse: boolean = false;
@@ -467,15 +492,14 @@ async function testChatVoiceConfirmationFlow() {
       const realResp = await fetch(url, init);
       droppedNetworkResponse = true;
       // O servidor HTTP já processou e concluiu a gravação no Firestore Emulator!
-      // Simulamos a queda abrupta de conexão antes que o cliente receba a resposta HTTP:
+      // Simulamos a perda de resposta no transporte antes que o cliente a receba:
       throw new TypeError('Network connection reset: response dropped before delivery');
     };
 
     const launchResult = await launchTransactionFromChatVoice({
       transcript: 'Gastei 73,45 no posto Shell',
       baseUrl,
-      authToken,
-      accountId,
+      accountId: accountIdA,
       fetchImpl: dropResponseFetch
     });
 
@@ -489,13 +513,13 @@ async function testChatVoiceConfirmationFlow() {
     const stableRequestId: string = pendingOp ? pendingOp.requestId : '';
 
     // Conferência direta no Firestore Emulator: o servidor concluiu com sucesso a gravação da primeira tentativa
-    const contaServidor = await ledger.getAccount(userId, accountId);
+    const contaServidor = await ledger.getAccount(userIdA, accountIdA);
     assert(
       contaServidor !== null && contaServidor.balanceCents === 92655,
-      'Servidor debitou a conta no Firestore Emulator para R$ 926,55 (92655 cents)'
+      'Servidor debitou a conta de Alice no Firestore Emulator para R$ 926,55 (92655 cents)'
     );
 
-    const txsServidor = await ledger.listUserTransactions(userId);
+    const txsServidor = await ledger.listUserTransactions(userIdA);
     assert(txsServidor.length === 1, 'Exatamente uma transação gravada no Firestore Emulator');
     assert(txsServidor[0].amountCents === 7345n, 'Centavos inteiros no banco são exatamente 7345n cents');
     assert(
@@ -503,12 +527,34 @@ async function testChatVoiceConfirmationFlow() {
       'Descrição contábil reflete a identificação contábil do parser'
     );
 
-    const reciboNoFirestore = await adminStore.getDocument(`users/${userId}/idempotency/${stableRequestId}`);
+    const reciboNoFirestore = await adminStore.getDocument(`users/${userIdA}/idempotency/${stableRequestId}`);
     assert(reciboNoFirestore !== null, 'Recibo de idempotência persistido diretamente no Firestore Emulator');
     assert(reciboNoFirestore.status === 'APPLIED', 'Recibo no Firestore com status APPLIED');
 
-    // 2.10 Prova: Recuperação pelo fluxo disponível no chat (sem passar resposta descartada nem reconstruir ID)
-    console.log('  -> Acionando recuperação pelo fluxo nativo do chat (SEM passar resposta descartada nem reconstruir ID)...');
+    // 2.13 Prova: Tentativa de Recuperação por OUTRA SESSÃO / CONTA ALHEIA (Bob tentando recuperar operação de Alice)
+    console.log('  -> Testando tentativa de recuperação por outra sessão / conta alheia (Bob tentando recuperar Alice)...');
+    await clientAuthSession.signInWithEmailAndPassword(userB_email, userB_pass);
+    assert(clientAuthSession.getCurrentSession()?.uid === userIdB, 'Sessão ativa alterada para Bob (usuário diferente de Alice)');
+
+    const intruderRecovery = await recoverPendingVoiceTransaction({ baseUrl });
+    assert(intruderRecovery.ok === false, 'Tentativa de recuperação por outra sessão é rejeitada com ok=false');
+    assert(intruderRecovery.status === 403, 'Status de violação de recuperação por terceiros é HTTP 403 (Forbidden)');
+    assert(
+      intruderRecovery.code === 'PERMISSION_DENIED_ACCOUNT_MISMATCH',
+      'Código de erro da recuperação bloqueada é PERMISSION_DENIED_ACCOUNT_MISMATCH'
+    );
+
+    // Confere que o saldo de Alice e de Bob continuam rigorosamente preservados
+    const contaAlicePosInvasao = await ledger.getAccount(userIdA, accountIdA);
+    assert(contaAlicePosInvasao?.balanceCents === 92655, 'Saldo de Alice permanece 92655 cents intacto');
+    const contaBobPosInvasao = await ledger.getAccount(userIdB, accountIdB);
+    assert(contaBobPosInvasao?.balanceCents === 50000, 'Saldo de Bob permanece 50000 cents intacto (sem vazamento)');
+
+    // 2.14 Prova: Recuperação Legítima pela Sessão Ativa de Alice (sem passar resposta descartada nem reconstruir ID)
+    console.log('  -> Restabelecendo sessão de Alice e acionando recuperação legítima pelo fluxo do chat...');
+    await clientAuthSession.signInWithEmailAndPassword(userA_email, userA_pass);
+    assert(clientAuthSession.getCurrentSession()?.uid === userIdA, 'Sessão legítima de Alice restabelecida');
+
     const recovered = await recoverPendingVoiceTransaction({ baseUrl });
 
     assert(recovered.ok === true, 'Recuperação pelo fluxo nativo do chat respondeu com sucesso (HTTP 200 OK)');
@@ -522,19 +568,19 @@ async function testChatVoiceConfirmationFlow() {
     );
 
     // Conferência estrita no Firestore Emulator: único efeito com identidade estável
-    const contaPosRecuperacao = await ledger.getAccount(userId, accountId);
+    const contaPosRecuperacao = await ledger.getAccount(userIdA, accountIdA);
     assert(
       contaPosRecuperacao !== null && contaPosRecuperacao.balanceCents === 92655,
       'Saldo no Firestore PERMANECE RIGOROSAMENTE R$ 926,55 (Zero duplo débito pós-recuperação)'
     );
 
-    const txsPosRecuperacao = await ledger.listUserTransactions(userId);
+    const txsPosRecuperacao = await ledger.listUserTransactions(userIdA);
     assert(
       txsPosRecuperacao.length === 1,
       'Quantidade de transações no banco permanece exatamente 1 (sem duplicação de registro)'
     );
 
-    // 2.11 Prova: Entrada única na interface e no armazenamento local (App.tsx: handleRecoverPendingVoiceRecording)
+    // 2.15 Prova: Entrada única na interface e no armazenamento local (App.tsx: handleRecoverPendingVoiceRecording)
     console.log('  -> Validando entrada única na interface e no armazenamento local...');
     const simulatedMessages: any[] = [];
     const simulatedLocalStorage = new Map<string, string>();

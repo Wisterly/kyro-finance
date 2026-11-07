@@ -547,7 +547,48 @@ export class ChatVoiceController {
         confirmationText: '',
         requiresClarification: false,
         requiresRecovery: true,
-        message: '⚠️ Sessão necessária para recuperação da operação.'
+        message: '⚠️ Autenticação necessária: sessão Firebase ausente ou expirada. Faça login para continuar.'
+      };
+    }
+
+    // Validação estrita de titularidade: a sessão ativa DEVE coincidir com o titular que originou a operação
+    const activeSession = clientAuthSession.getCurrentSession();
+    const activeUid = activeSession?.uid;
+    if (activeUid && op.accountOwnerId && op.accountOwnerId !== activeUid) {
+      return {
+        ok: false,
+        status: 403,
+        code: 'PERMISSION_DENIED_ACCOUNT_MISMATCH',
+        data: null,
+        requestId: op.requestId,
+        transaction: null,
+        confirmationText: '',
+        requiresClarification: false,
+        requiresRecovery: false,
+        message: `⚠️ Acesso negado: a operação pendente pertence ao usuário '${op.accountOwnerId}', divergente da sessão ativa '${activeUid}'.`
+      };
+    }
+
+    try {
+      if (activeUid) {
+        clientAuthSession.resolveAndValidateAccount({
+          userUid: activeUid,
+          requestedAccountId: op.accountId,
+          accountOwnerId: op.accountOwnerId
+        });
+      }
+    } catch (accErr: any) {
+      return {
+        ok: false,
+        status: 403,
+        code: 'PERMISSION_DENIED_ACCOUNT_MISMATCH',
+        data: null,
+        requestId: op.requestId,
+        transaction: null,
+        confirmationText: '',
+        requiresClarification: false,
+        requiresRecovery: false,
+        message: `⚠️ ${accErr.message}`
       };
     }
 
