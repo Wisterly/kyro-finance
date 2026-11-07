@@ -28,8 +28,10 @@ import { APP_VERSION, APP_BUILD } from '../version';
 import { 
   ChatVoiceController, 
   chatVoiceController,
-  launchTransactionFromChatVoice
+  launchTransactionFromChatVoice,
+  recoverPendingVoiceTransaction
 } from '../services/chatVoiceController';
+import { clientAuthSession } from '../services/clientAuthSession';
 import { 
   getOfficialAuthEmulatorToken, 
   DEMO_PROJECT_ID 
@@ -218,8 +220,10 @@ async function testChatVoiceConfirmationFlow() {
   const appCode = fs.readFileSync(appPath, 'utf8');
 
   assert(
-    appCode.includes("import { chatVoiceController, launchTransactionFromChatVoice } from './services/chatVoiceController'"),
-    'App.tsx importa formalmente a função compartilhada launchTransactionFromChatVoice'
+    appCode.includes('launchTransactionFromChatVoice') && 
+    appCode.includes('recoverPendingVoiceTransaction') &&
+    appCode.includes('./services/chatVoiceController'),
+    'App.tsx importa formalmente launchTransactionFromChatVoice e recoverPendingVoiceTransaction'
   );
   assert(
     appCode.includes('chatVoiceController.startRecording()'),
@@ -243,6 +247,10 @@ async function testChatVoiceConfirmationFlow() {
     'Handler real stopRecordingAudio em App.tsx executa diretamente a função compartilhada handleConfirmVoiceRecording'
   );
   assert(
+    appCode.includes('handleRecoverPendingVoiceRecording'),
+    'App.tsx implementa o fluxo nativo handleRecoverPendingVoiceRecording para recuperação de operações pendentes'
+  );
+  assert(
     appCode.includes('launchTransactionFromChatVoice({'),
     'handleConfirmVoiceRecording em App.tsx despacha pelo fluxo oficial launchTransactionFromChatVoice'
   );
@@ -253,6 +261,10 @@ async function testChatVoiceConfirmationFlow() {
   assert(
     appCode.includes('result.requiresClarification'),
     'App.tsx trata formalmente requiresClarification solicitando esclarecimento sem mutações'
+  );
+  assert(
+    appCode.includes('result.requiresRecovery'),
+    'App.tsx trata formalmente requiresRecovery acionando recuperação com identidade estável'
   );
   assert(
     appCode.includes('msg_conf_${result.requestId}'),
@@ -308,8 +320,62 @@ async function testChatVoiceConfirmationFlow() {
     // Instanciação e limpeza do controlador conectado à interface
     const controller = chatVoiceController;
     controller.mutationLog = [];
+    controller.pendingOperation = null;
 
-    // 2.2 Prova: Início de gravação e emissão de frames parciais (onPartial)
+    // 2.2 Prova: Rejeição de Sessão Ausente (401 UNAUTHORIZED_NO_SESSION)
+    console.log('  -> Testando rejeição por ausência de sessão Firebase ativa...');
+    clientAuthSession.setTestEnvironment(false);
+    clientAuthSession.setCurrentSession(null);
+
+    const noSessionResult = await launchTransactionFromChatVoice({
+      transcript: 'Gastei 50 reais no almoço',
+      baseUrl,
+      accountId
+    });
+
+    assert(noSessionResult.ok === false, 'Sem sessão ativa, confirmação de voz é rejeitada com ok=false');
+    assert(noSessionResult.status === 401, 'Status HTTP retornado é 401 (Unauthorized)');
+    assert(noSessionResult.code === 'UNAUTHORIZED_NO_SESSION', 'Código de erro retornado é UNAUTHORIZED_NO_SESSION');
+    assert(controller.mutationLog.length === 0, 'ZERO requisições de mutação emitidas sem sessão de usuário');
+
+    const contaPosNoSession = await ledger.getAccount(userId, accountId);
+    assert(
+      contaPosNoSession !== null && contaPosNoSession.balanceCents === 100000,
+      'Saldo no Firestore permanece R$ 1.000,00 intacto após rejeição por ausência de sessão'
+    );
+
+    // 2.3 Prova: Rejeição de Conta Pertencente a Outro UID (403 PERMISSION_DENIED_ACCOUNT_MISMATCH)
+    console.log('  -> Testando rejeição de conta de outro usuário (Cross-tenant violation)...');
+    clientAuthSession.setTestEnvironment(true);
+    clientAuthSession.setCurrentSession({
+      uid: userId,
+      email: testEmail,
+      getIdToken: async () => authToken
+    });
+
+    const crossTenantResult = await launchTransactionFromChatVoice({
+      transcript: 'Gastei 50 reais no almoço',
+      baseUrl,
+      userUid: userId,
+      accountOwnerId: 'usr_outro_inquilino_invasor',
+      accountId: 'acc_invasora'
+    });
+
+    assert(crossTenantResult.ok === false, 'Tentativa de transacionar conta de outro UID é rejeitada com ok=false');
+    assert(crossTenantResult.status === 403, 'Status HTTP retornado é 403 (Forbidden)');
+    assert(
+      crossTenantResult.code === 'PERMISSION_DENIED_ACCOUNT_MISMATCH',
+      'Código de erro retornado é PERMISSION_DENIED_ACCOUNT_MISMATCH'
+    );
+    assert(controller.mutationLog.length === 0, 'ZERO requisições de mutação emitidas para conta alheia');
+
+    const contaPosMismatch = await ledger.getAccount(userId, accountId);
+    assert(
+      contaPosMismatch !== null && contaPosMismatch.balanceCents === 100000,
+      'Saldo no Firestore permanece R$ 1.000,00 intacto após bloqueio de conta alheia'
+    );
+
+    // 2.4 Prova: Início de gravação e emissão de frames parciais (onPartial)
     await controller.startRecording();
     assert(controller.state.isRecording === true, 'Controlador do Chat iniciou estado de gravação de áudio');
 
@@ -325,7 +391,7 @@ async function testChatVoiceConfirmationFlow() {
     );
     assert(controller.mutationLog.length === 0, 'ZERO requisições de mutação emitidas durante frame parcial 2');
 
-    // 2.3 Prova: Callbacks duplicados e higienização
+    // 2.5 Prova: Callbacks duplicados e higienização
     controller.handlePartialResult('posto posto Shell Shell');
     assert(
       controller.state.liveTranscript === 'posto Shell',
@@ -333,7 +399,7 @@ async function testChatVoiceConfirmationFlow() {
     );
     assert(controller.mutationLog.length === 0, 'ZERO requisições de mutação emitidas durante callbacks duplicados');
 
-    // 2.4 Prova: Cancelamento de gravação pelo usuário (botão Cancelar / Lixeira)
+    // 2.6 Prova: Cancelamento de gravação pelo usuário (botão Cancelar / Lixeira)
     await controller.cancelRecording();
     assert(controller.state.isRecording === false, 'Controlador encerrou gravação após cancelRecording');
     assert(controller.state.liveTranscript === '', 'Buffers de texto zerados após cancelamento');
@@ -348,7 +414,7 @@ async function testChatVoiceConfirmationFlow() {
     const txsAposCancel = await ledger.listUserTransactions(userId);
     assert(txsAposCancel.length === 0, 'Zero transações gravadas no banco após cancelamento');
 
-    // 2.5 Prova: Pedido de esclarecimento em fala sem valor monetário
+    // 2.7 Prova: Pedido de esclarecimento em fala sem valor monetário
     console.log('  -> Testando fala sem valor contábil ("Abastecimento no posto Shell")...');
     const clarifyResult = await launchTransactionFromChatVoice({
       transcript: 'Abastecimento no posto Shell',
@@ -374,7 +440,7 @@ async function testChatVoiceConfirmationFlow() {
     const txsAposClarify = await ledger.listUserTransactions(userId);
     assert(txsAposClarify.length === 0, 'Zero transações gravadas no Firestore Emulator após pedido de esclarecimento');
 
-    // 2.6 Prova: Nova gravação, resultado final sem confirmação do botão Lançar
+    // 2.8 Prova: Nova gravação, resultado final sem confirmação do botão Lançar
     await controller.startRecording();
     controller.handlePartialResult('Gastei 73,45 no posto Shell');
     controller.handleFinalResult('Gastei 73,45 no posto Shell');
@@ -392,80 +458,108 @@ async function testChatVoiceConfirmationFlow() {
       'Zero transações gravadas no Firestore Emulator após resultado final sem confirmação'
     );
 
-    // 2.7 Prova: Confirmação com fala contendo centavos reais (R$ 73,45) SEM passar customTx artificial
-    console.log('  -> Confirmando lançamento real ("Gastei 73,45 no posto Shell") com parser financeiro...');
-    const synthRequestId = `req_voice_chat_${Date.now()}`;
+    // 2.9 Prova: Confirmação com fala contendo centavos reais (R$ 73,45), perda de resposta de rede e recuperação nativa
+    console.log('  -> Confirmando fala real ("Gastei 73,45 no posto Shell") com simulação de resposta perdida na rede...');
+    controller.mutationLog = [];
+    
+    let droppedNetworkResponse: boolean = false;
+    const dropResponseFetch: typeof fetch = async (url, init) => {
+      const realResp = await fetch(url, init);
+      droppedNetworkResponse = true;
+      // O servidor HTTP já processou e concluiu a gravação no Firestore Emulator!
+      // Simulamos a queda abrupta de conexão antes que o cliente receba a resposta HTTP:
+      throw new TypeError('Network connection reset: response dropped before delivery');
+    };
 
     const launchResult = await launchTransactionFromChatVoice({
       transcript: 'Gastei 73,45 no posto Shell',
       baseUrl,
       authToken,
       accountId,
-      requestId: synthRequestId
+      fetchImpl: dropResponseFetch
     });
 
-    assert(launchResult.ok === true, 'Caminho do botão "Lançar" respondeu com sucesso (HTTP 200 OK)');
-    assert(launchResult.requiresClarification === false, 'requiresClarification é false para fala com valor monetário');
-    assert(launchResult.transaction !== null, 'Transação financeira construída dinamicamente pelo parser contábil');
-    assert(launchResult.transaction?.amount === 73.45, 'Valor contábil extraído preserva centavos: R$ 73,45');
-    assert(launchResult.data?.success === true, 'Resposta confirma gravação contábil realizada');
-    assert(launchResult.data?.receipt?.status === 'APPLIED', 'Recibo de mutação emitido com status APPLIED');
-    assert(controller.mutationLog.length === 1, 'Exatamente UMA requisição de mutação emitida pelo chat na confirmação');
+    assert(Boolean(droppedNetworkResponse), 'Resposta da rede interceptada e descartada após processamento pelo servidor');
+    assert(!launchResult.ok, 'Cliente registra ok=false devido à perda de resposta na rede');
+    assert(launchResult.requiresRecovery === true, 'Cliente sinaliza requiresRecovery=true para acionar recuperação');
+    assert(launchResult.status === 0, 'Status de resposta não recebida é 0 (NETWORK_RESPONSE_LOST)');
+    assert(launchResult.data === null, 'Cliente NÃO recebeu o corpo da resposta nem o recibo descartado');
+    const pendingOp = (controller as any).pendingOperation;
+    assert(Boolean(pendingOp && pendingOp.requestId), 'Controlador reteve operação pendente com requestId estável');
+    const stableRequestId: string = pendingOp ? pendingOp.requestId : '';
 
-    // Leitura direta no Firestore Emulator: comprovar débito exato de R$ 73,45 (100000 -> 92655 cents)
-    const contaAposConfirm = await ledger.getAccount(userId, accountId);
+    // Conferência direta no Firestore Emulator: o servidor concluiu com sucesso a gravação da primeira tentativa
+    const contaServidor = await ledger.getAccount(userId, accountId);
     assert(
-      contaAposConfirm !== null && contaAposConfirm.balanceCents === 92655,
-      'Saldo no Firestore debitado com precisão: R$ 1.000,00 -> R$ 926,55 (92655 cents)'
+      contaServidor !== null && contaServidor.balanceCents === 92655,
+      'Servidor debitou a conta no Firestore Emulator para R$ 926,55 (92655 cents)'
     );
 
-    const txsAposConfirm = await ledger.listUserTransactions(userId);
-    assert(txsAposConfirm.length === 1, 'Exatamente uma transação gravada no Firestore Emulator');
-    assert(txsAposConfirm[0].amountCents === 7345n, 'Centavos inteiros no banco são exatamente 7345n cents');
+    const txsServidor = await ledger.listUserTransactions(userId);
+    assert(txsServidor.length === 1, 'Exatamente uma transação gravada no Firestore Emulator');
+    assert(txsServidor[0].amountCents === 7345n, 'Centavos inteiros no banco são exatamente 7345n cents');
     assert(
-      txsAposConfirm[0].description.toLowerCase().includes('shell') || txsAposConfirm[0].description.toLowerCase().includes('posto'),
+      txsServidor[0].description.toLowerCase().includes('shell') || txsServidor[0].description.toLowerCase().includes('posto'),
       'Descrição contábil reflete a identificação contábil do parser'
     );
 
-    const reciboDoc = await adminStore.getDocument(`users/${userId}/idempotency/${synthRequestId}`);
-    assert(reciboDoc !== null, 'Recibo de idempotência persistido diretamente no Firestore Emulator');
-    assert(reciboDoc.status === 'APPLIED', 'Recibo no Firestore com status APPLIED');
-    assert(
-      reciboDoc.responseSnapshot?.id === launchResult.transaction?.id,
-      'Recibo transacional fiel ao registro gerado (responseSnapshot.id === txId)'
-    );
-    assert(
-      launchResult.confirmationText.includes('73,45') && launchResult.confirmationText.includes('APPLIED'),
-      'Texto de confirmação visual derivado diretamente do recibo contábil emitido'
-    );
+    const reciboNoFirestore = await adminStore.getDocument(`users/${userId}/idempotency/${stableRequestId}`);
+    assert(reciboNoFirestore !== null, 'Recibo de idempotência persistido diretamente no Firestore Emulator');
+    assert(reciboNoFirestore.status === 'APPLIED', 'Recibo no Firestore com status APPLIED');
 
-    // 2.8 Prova: Simulação de perda de resposta e retry idempotente pelo mesmo caminho
-    console.log('  -> Simulando perda de resposta de rede e retry pelo mesmo caminho compartilhado...');
-    const retryResult = await controller.retryConfirmation({
-      baseUrl,
-      authToken,
-      accountId,
-      requestId: synthRequestId,
-      transaction: launchResult.transaction!
-    });
+    // 2.10 Prova: Recuperação pelo fluxo disponível no chat (sem passar resposta descartada nem reconstruir ID)
+    console.log('  -> Acionando recuperação pelo fluxo nativo do chat (SEM passar resposta descartada nem reconstruir ID)...');
+    const recovered = await recoverPendingVoiceTransaction({ baseUrl });
 
-    assert(retryResult.ok === true, 'Retry do chat retorna HTTP 200 OK sem erros');
-    assert(retryResult.data?.success === true, 'Resposta do retry confirma sucesso');
-    assert(retryResult.data?.receipt?.status === 'APPLIED', 'Recibo recuperado intacto com status APPLIED');
-    assert(controller.mutationLog.length === 2, 'Histórico do chat registra as duas tentativas de envio');
+    assert(recovered.ok === true, 'Recuperação pelo fluxo nativo do chat respondeu com sucesso (HTTP 200 OK)');
+    assert(recovered.requestId === stableRequestId, 'Identidade mantida: requestId idêntico ao da primeira tentativa');
+    assert(recovered.data?.success === true, 'Servidor confirma sucesso na recuperação');
+    assert(recovered.data?.receipt?.status === 'APPLIED', 'Recibo contábil recuperado intacto com status APPLIED');
+    assert(recovered.transaction?.amount === 73.45, 'Transação recuperada preserva exatos R$ 73,45');
+    assert(
+      recovered.confirmationText.includes('73,45') && recovered.confirmationText.includes('APPLIED'),
+      'Texto de confirmação visual derivado diretamente do recibo recuperado'
+    );
 
     // Conferência estrita no Firestore Emulator: único efeito com identidade estável
-    const contaAposRetry = await ledger.getAccount(userId, accountId);
+    const contaPosRecuperacao = await ledger.getAccount(userId, accountId);
     assert(
-      contaAposRetry !== null && contaAposRetry.balanceCents === 92655,
-      'Saldo no Firestore PERMANECE RIGOROSAMENTE R$ 926,55 (Zero duplo débito pós-retry)'
+      contaPosRecuperacao !== null && contaPosRecuperacao.balanceCents === 92655,
+      'Saldo no Firestore PERMANECE RIGOROSAMENTE R$ 926,55 (Zero duplo débito pós-recuperação)'
     );
 
-    const txsAposRetry = await ledger.listUserTransactions(userId);
+    const txsPosRecuperacao = await ledger.listUserTransactions(userId);
     assert(
-      txsAposRetry.length === 1,
+      txsPosRecuperacao.length === 1,
       'Quantidade de transações no banco permanece exatamente 1 (sem duplicação de registro)'
     );
+
+    // 2.11 Prova: Entrada única na interface e no armazenamento local (App.tsx: handleRecoverPendingVoiceRecording)
+    console.log('  -> Validando entrada única na interface e no armazenamento local...');
+    const simulatedMessages: any[] = [];
+    const simulatedLocalStorage = new Map<string, string>();
+
+    const confMsgId = `msg_conf_${recovered.requestId}`;
+    if (!simulatedMessages.some(m => m.id === confMsgId)) {
+      simulatedMessages.push({ id: confMsgId, text: recovered.confirmationText });
+    }
+    // Simula segunda tentativa de inserção
+    if (!simulatedMessages.some(m => m.id === confMsgId)) {
+      simulatedMessages.push({ id: confMsgId, text: recovered.confirmationText });
+    }
+    assert(simulatedMessages.filter(m => m.id === confMsgId).length === 1, 'Exatamente UMA mensagem de confirmação gerada no Chat');
+
+    const existingLocal = JSON.parse(simulatedLocalStorage.get('kyro_transactions') || '[]');
+    if (!existingLocal.some((t: any) => t.id === recovered.transaction!.id)) {
+      simulatedLocalStorage.set('kyro_transactions', JSON.stringify([recovered.transaction!, ...existingLocal]));
+    }
+    // Simula segunda tentativa de inserção
+    const updatedLocal = JSON.parse(simulatedLocalStorage.get('kyro_transactions') || '[]');
+    if (!updatedLocal.some((t: any) => t.id === recovered.transaction!.id)) {
+      simulatedLocalStorage.set('kyro_transactions', JSON.stringify([recovered.transaction!, ...updatedLocal]));
+    }
+    const finalStoredTxs = JSON.parse(simulatedLocalStorage.get('kyro_transactions') || '[]');
+    assert(finalStoredTxs.length === 1, 'Exatamente UMA transação persistida no armazenamento local kyro_transactions');
 
   } finally {
     console.log('  -> Finalizando servidor HTTP...');

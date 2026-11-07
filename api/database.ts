@@ -142,6 +142,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // 1. Leitura de Conta e Saldo
       if (queryType === 'account') {
         const accountId = (req.query?.accountId as string) || 'acc_default';
+        const accountOwner = req.query?.accountOwnerId as string | undefined;
+        if (accountOwner && accountOwner !== authUid) {
+          return res.status(403).json({
+            success: false,
+            error: `Violação de fronteira: A conta pertence ao UID '${accountOwner}'. Acesso bloqueado.`,
+            code: 'PERMISSION_DENIED_ACCOUNT_MISMATCH'
+          });
+        }
+        if (accountId.includes(':')) {
+          const prefix = accountId.split(':')[0];
+          if (prefix !== authUid) {
+            return res.status(403).json({
+              success: false,
+              error: `Violação de fronteira: A conta '${accountId}' pertence a outro usuário. Acesso bloqueado.`,
+              code: 'PERMISSION_DENIED_ACCOUNT_MISMATCH'
+            });
+          }
+        }
+
         const account = await adapter.getAccount(authUid, accountId);
         if (!account) {
           return res.status(404).json({
@@ -307,6 +326,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (action === 'save_transaction') {
         const rawTx = payload.transaction || payload;
         const txId = String(rawTx.id || `tx_${Date.now()}`);
+
+        // Validação estrita de Titularidade da Conta: a conta informada DEVE pertencer ao UID autenticado
+        const incomingAccountOwner = payload.accountOwnerId || payload.accountUserId || rawTx.accountOwnerId;
+        if (incomingAccountOwner && incomingAccountOwner.trim() !== '' && incomingAccountOwner !== authUid) {
+          return res.status(403).json({
+            success: false,
+            error: `Violação de fronteira: A conta '${accountId}' pertence ao UID '${incomingAccountOwner}', divergente do usuário autenticado '${authUid}'. Acesso bloqueado.`,
+            code: 'PERMISSION_DENIED_ACCOUNT_MISMATCH'
+          });
+        }
+
+        if (accountId.includes(':')) {
+          const accountOwnerPrefix = accountId.split(':')[0];
+          if (accountOwnerPrefix !== authUid) {
+            return res.status(403).json({
+              success: false,
+              error: `Violação de fronteira: A conta '${accountId}' pertence a outro usuário (${accountOwnerPrefix}). Acesso bloqueado.`,
+              code: 'PERMISSION_DENIED_ACCOUNT_MISMATCH'
+            });
+          }
+        }
         
         let amountCents: bigint;
         if (rawTx.amountCents !== undefined && rawTx.amountCents !== null) {

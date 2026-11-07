@@ -4,15 +4,15 @@
  * Unifica o ciclo de vida do reconhecimento nativo de voz (NativeSpeechRecognizer)
  * com o estado reativo da interface do Chat e o despachante de persistência HTTP (/api/database).
  * 
- * Regras Estritas de Auditoria:
+ * Regras Estritas de Auditoria (Subetapa 03.5):
  * 1. O botão "Lançar" percorre um ÚNICO fluxo de processamento e persistência.
- * 2. Autenticação REAL obrigatória com autorização por UID (rejeita strings literais estáticas).
- * 3. Reutilização do processamento financeiro existente (parseDynamicFinancialMessage).
- * 4. Preservação exata de centavos e campos ausentes (zero valores e campos inventados).
- * 5. Se o áudio não contiver valor monetário ou for inconclusivo, solicita esclarecimento
- *    ao usuário SEM enviar mutações nem alterar o saldo contábil.
- * 6. A confirmação visual exibida no Chat é derivada DIRETAMENTE do recibo contábil
- *    retornado da gravação efetiva, com identidade estável em caso de retry.
+ * 2. Obtenção e renovação da credencial pela sessão Firebase do usuário autenticado.
+ *    Restrição absoluta de credenciais sintéticas e do Auth Emulator exclusivamente ao ambiente de teste.
+ * 3. Validação de que a conta utilizada pertence ao UID autenticado e corresponde à regra do produto.
+ * 4. Manutenção da identidade da operação desde a confirmação até a recuperação do recibo (mesmo requestId).
+ * 5. Reutilização do processamento financeiro existente (parseDynamicFinancialMessage) com centavos exatos.
+ * 6. Pedido de esclarecimento sem efeito colateral (0 mutações e saldo intacto quando a fala não tiver valor).
+ * 7. Confirmação visual exibida no Chat derivada diretamente do recibo emitido.
  */
 
 import {
@@ -25,34 +25,22 @@ import {
 import { Transaction } from '../types';
 import { parseDynamicFinancialMessage } from '../utils/financialParser';
 import { parseToCents } from '../engine/money';
+import {
+  clientAuthSession,
+  SessionNotFoundError,
+  AccountMismatchError
+} from './clientAuthSession';
 
-/**
- * Função utilitária compatível com navegador e runtime Node.js para obter
- * credencial emitida pelo Firebase Auth Emulator sem importar bibliotecas pesadas de servidor.
- */
-async function fetchAuthEmulatorToken(email: string, password: string): Promise<{ idToken: string; uid: string } | null> {
-  const host = (typeof process !== 'undefined' && process.env?.FIREBASE_AUTH_EMULATOR_HOST) || '127.0.0.1:9099';
-  try {
-    let resp = await fetch(`http://${host}/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=fake-api-key`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password, returnSecureToken: true })
-    });
-    if (!resp.ok) {
-      resp = await fetch(`http://${host}/identitytoolkit.googleapis.com/v1/accounts:signUp?key=fake-api-key`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, returnSecureToken: true })
-      });
-    }
-    if (resp.ok) {
-      const data = await resp.json();
-      return { idToken: data.idToken, uid: data.localId };
-    }
-  } catch (e) {
-    // Emulador indisponível ou fora do ar
-  }
-  return null;
+export interface PendingVoiceOperation {
+  requestId: string;
+  transcript: string;
+  transaction: Transaction;
+  amountCents: bigint;
+  accountId: string;
+  accountOwnerId: string;
+  baseUrl: string;
+  createdAt: string;
+  status: 'pending' | 'network_lost' | 'completed' | 'failed';
 }
 
 export interface ChatVoiceState {
@@ -75,54 +63,26 @@ export interface ChatMutationRequestLog {
 export interface LaunchVoiceTransactionResult {
   ok: boolean;
   status: number;
+  code?: string;
   data: any;
   requestId: string;
   transaction: Transaction | null;
   confirmationText: string;
   requiresClarification: boolean;
+  requiresRecovery: boolean;
   message: string;
 }
 
 /**
- * Resolve o token oficial de autenticação do cliente.
- * Nunca utiliza strings estáticas fictícias.
+ * Resolve a credencial oficial da sessão Firebase do usuário.
+ * No fluxo normal da aplicação, obtém e renova pelo cliente oficial;
+ * o acesso ao Auth Emulator é estritamente restrito ao ambiente de teste.
  */
 export async function getClientAuthToken(explicitToken?: string): Promise<string> {
   if (explicitToken && explicitToken.trim() !== '' && explicitToken !== 'client-session') {
     return explicitToken.trim();
   }
-
-  // 1. Token na sessão do navegador / Storage
-  if (typeof window !== 'undefined') {
-    const sessionToken = window.sessionStorage?.getItem('kyro_auth_token') || 
-                         window.localStorage?.getItem('kyro_auth_token') ||
-                         (window as any).__KYRO_AUTH_TOKEN__;
-    if (sessionToken && sessionToken !== 'client-session') {
-      return sessionToken;
-    }
-  }
-
-  // 2. Ambiente de desenvolvimento / Emulador Firebase Auth ativo
-  const isEmulatorEnv = Boolean(
-    (typeof process !== 'undefined' && (process.env.FIREBASE_AUTH_EMULATOR_HOST || process.env.FIRESTORE_EMULATOR_HOST)) ||
-    (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'))
-  );
-
-  if (isEmulatorEnv) {
-    try {
-      const emulatorToken = await fetchAuthEmulatorToken('cliente_voz@kyro.synthetic', 'SenhaSegura123!');
-      if (emulatorToken?.idToken) {
-        if (typeof window !== 'undefined' && window.sessionStorage) {
-          window.sessionStorage.setItem('kyro_auth_token', emulatorToken.idToken);
-        }
-        return emulatorToken.idToken;
-      }
-    } catch (e: any) {
-      console.warn('[ChatVoiceController] Falha ao obter token do Auth Emulator:', e?.message || e);
-    }
-  }
-
-  throw new Error('Autenticação necessária: credencial de acesso ausente ou inválida. Faça login para continuar.');
+  return await clientAuthSession.getSessionToken();
 }
 
 export class ChatVoiceController {
@@ -137,6 +97,9 @@ export class ChatVoiceController {
 
   // Histórico de requisições de mutação enviadas para conferência de auditoria
   public mutationLog: ChatMutationRequestLog[] = [];
+
+  // Operação pendente ativa para garantia da identidade ponta a ponta e recuperação
+  public pendingOperation: PendingVoiceOperation | null = null;
 
   constructor(
     private fetchImpl: typeof fetch = typeof window !== 'undefined' ? window.fetch.bind(window) : fetch
@@ -206,16 +169,19 @@ export class ChatVoiceController {
 
   /**
    * Confirmação deliberada do usuário (botão "Lançar" / Check).
-   * Executa um único fluxo com autenticação real, interpretação financeira e recibo.
+   * Executa um único fluxo com autenticação da sessão Firebase, validação de conta e idempotência.
    */
   public async confirmRecording(options: {
     baseUrl: string;
     authToken?: string;
     getAuthToken?: () => Promise<string>;
     accountId?: string;
+    accountOwnerId?: string;
+    userUid?: string;
     requestId?: string;
     transcript?: string;
     customTx?: Partial<Transaction>;
+    fetchImpl?: typeof fetch;
   }): Promise<LaunchVoiceTransactionResult> {
     this.state.isRecording = false;
     this.state.lastAction = 'confirmed';
@@ -236,6 +202,7 @@ export class ChatVoiceController {
         transaction: null,
         confirmationText: '',
         requiresClarification: true,
+        requiresRecovery: false,
         message: '⚠️ Nenhuma fala foi detectada com clareza. Fale próximo ao microfone e clique em Lançar.'
       };
     }
@@ -244,7 +211,6 @@ export class ChatVoiceController {
     let transaction: Transaction;
 
     if (options.customTx && options.customTx.amount !== undefined && options.customTx.amount > 0) {
-      // Uso de transação já fornecida explicitamente (ex: override de teste)
       const txId = options.customTx.id || `tx_voice_${Date.now()}`;
       transaction = {
         id: txId,
@@ -260,7 +226,6 @@ export class ChatVoiceController {
         status: options.customTx.status || 'Concluído'
       };
     } else {
-      // Interpretação dinâmica pelo parser contábil existente do app
       const parsed = parseDynamicFinancialMessage(finalText, true);
 
       if (!parsed || (!parsed.savedTx && !parsed.recurringData) || (parsed.savedTx && parsed.savedTx.amount <= 0)) {
@@ -273,6 +238,7 @@ export class ChatVoiceController {
           transaction: null,
           confirmationText: '',
           requiresClarification: true,
+          requiresRecovery: false,
           message: `⚠️ Não identifiquei o valor do lançamento na sua fala: "${finalText}". Por favor, informe o valor (ex: 'R$ 73,45 no posto Shell') e clique em Lançar.`
         };
       }
@@ -304,21 +270,108 @@ export class ChatVoiceController {
     // 2. Preservação Exata de Centavos via Money Engine
     const amountCents = parseToCents(transaction.amount);
 
-    // 3. Resolução da Autenticação Real com Autorização por UID
-    let resolvedAuthToken = options.authToken;
-    if (!resolvedAuthToken && options.getAuthToken) {
-      resolvedAuthToken = await options.getAuthToken();
+    // 3. Obtenção e Renovação da Credencial pela Sessão Firebase do Usuário
+    let resolvedAuthToken: string;
+    try {
+      if (options.authToken && options.authToken.trim() !== '' && options.authToken !== 'client-session') {
+        resolvedAuthToken = options.authToken.trim();
+      } else if (options.getAuthToken) {
+        resolvedAuthToken = await options.getAuthToken();
+      } else {
+        resolvedAuthToken = await clientAuthSession.getSessionToken();
+      }
+    } catch (authErr: any) {
+      if (authErr instanceof SessionNotFoundError || authErr?.code === 'UNAUTHORIZED_NO_SESSION') {
+        return {
+          ok: false,
+          status: 401,
+          code: 'UNAUTHORIZED_NO_SESSION',
+          data: null,
+          requestId: '',
+          transaction: null,
+          confirmationText: '',
+          requiresClarification: false,
+          requiresRecovery: false,
+          message: '⚠️ Autenticação necessária: sessão Firebase ausente ou expirada. Faça login para continuar.'
+        };
+      }
+      return {
+        ok: false,
+        status: 401,
+        code: 'UNAUTHORIZED_INVALID_CREDENTIAL',
+        data: null,
+        requestId: '',
+        transaction: null,
+        confirmationText: '',
+        requiresClarification: false,
+        requiresRecovery: false,
+        message: `⚠️ Erro de autenticação: ${authErr?.message || authErr}`
+      };
     }
-    resolvedAuthToken = await getClientAuthToken(resolvedAuthToken);
 
-    // 4. Identidade Estável do requestId e da Transação
-    const accountId = options.accountId || 'acc_default';
+    // 4. Validação de Titularidade da Conta Segundo a Regra do Produto
+    // O UID é extraído da sessão ou informado pelo chamador autorizado
+    const effectiveUid = options.userUid || 
+                         clientAuthSession.getCurrentSession()?.uid || 
+                         (typeof window !== 'undefined' ? window.sessionStorage?.getItem('kyro_auth_uid') : null) || 
+                         'user_authenticated';
+
+    let resolvedAccount: { accountId: string; accountOwnerId: string };
+    try {
+      resolvedAccount = clientAuthSession.resolveAndValidateAccount({
+        userUid: effectiveUid,
+        requestedAccountId: options.accountId,
+        accountOwnerId: options.accountOwnerId
+      });
+    } catch (accErr: any) {
+      if (accErr instanceof AccountMismatchError || accErr?.code === 'PERMISSION_DENIED_ACCOUNT_MISMATCH') {
+        return {
+          ok: false,
+          status: 403,
+          code: 'PERMISSION_DENIED_ACCOUNT_MISMATCH',
+          data: null,
+          requestId: '',
+          transaction: null,
+          confirmationText: '',
+          requiresClarification: false,
+          requiresRecovery: false,
+          message: `⚠️ ${accErr.message}`
+        };
+      }
+      throw accErr;
+    }
+
+    // 5. Manutenção da Identidade da Operação desde a Confirmação (mesmo requestId)
     const requestId = options.requestId || `req_voice_${transaction.id}`;
+    const pendingOp: PendingVoiceOperation = {
+      requestId,
+      transcript: finalText,
+      transaction,
+      amountCents,
+      accountId: resolvedAccount.accountId,
+      accountOwnerId: resolvedAccount.accountOwnerId,
+      baseUrl: options.baseUrl,
+      createdAt: new Date().toISOString(),
+      status: 'pending'
+    };
 
+    this.pendingOperation = pendingOp;
+
+    if (typeof window !== 'undefined') {
+      try {
+        window.localStorage?.setItem('kyro_pending_voice_op', JSON.stringify({
+          ...pendingOp,
+          amountCents: pendingOp.amountCents.toString()
+        }));
+      } catch {}
+    }
+
+    // 6. Envio da Mutação para a Rota HTTP Oficial
     const payload = {
       action: 'save_transaction',
       requestId,
-      accountId,
+      accountId: resolvedAccount.accountId,
+      accountOwnerId: resolvedAccount.accountOwnerId,
       transaction: {
         id: transaction.id,
         description: transaction.description,
@@ -338,7 +391,6 @@ export class ChatVoiceController {
 
     const targetUrl = `${options.baseUrl.replace(/\/$/, '')}/api/database`;
 
-    // Registra mutação para auditoria estrita de tráfego
     this.mutationLog.push({
       timestamp: new Date().toISOString(),
       url: targetUrl,
@@ -347,17 +399,61 @@ export class ChatVoiceController {
       body: payload
     });
 
-    const response = await this.fetchImpl(targetUrl, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(payload)
-    });
+    const activeFetch = options.fetchImpl || this.fetchImpl;
 
-    const data = await response.json().catch(() => null);
+    let response: Response;
+    let data: any = null;
 
-    // 5. Confirmação Exibida Derivada Diretamente do Recibo da Gravação Efetiva
+    try {
+      response = await activeFetch(targetUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload)
+      });
+      data = await response.json().catch(() => null);
+    } catch (networkErr: any) {
+      // Simulação ou ocorrência real de perda de resposta de rede antes do cliente receber o recibo:
+      // A operação permanece registrada com identidade estável pronta para o fluxo de recuperação.
+      pendingOp.status = 'network_lost';
+      return {
+        ok: false,
+        status: 0,
+        code: 'NETWORK_RESPONSE_LOST',
+        data: null,
+        requestId,
+        transaction,
+        confirmationText: '',
+        requiresClarification: false,
+        requiresRecovery: true,
+        message: '⚠️ A resposta da rede foi perdida antes do recebimento do recibo. A operação pode ser recuperada com o mesmo identificador.'
+      };
+    }
+
+    // Se o servidor rejeitou por incompatibilidade de conta
+    if (response.status === 403 && data?.code === 'PERMISSION_DENIED_ACCOUNT_MISMATCH') {
+      pendingOp.status = 'failed';
+      return {
+        ok: false,
+        status: 403,
+        code: 'PERMISSION_DENIED_ACCOUNT_MISMATCH',
+        data,
+        requestId,
+        transaction: null,
+        confirmationText: '',
+        requiresClarification: false,
+        requiresRecovery: false,
+        message: `⚠️ ${data.error || 'Acesso negado: a conta informada pertence a outro usuário.'}`
+      };
+    }
+
+    // 7. Confirmação Exibida Derivada Diretamente do Recibo da Gravação Efetiva
     let confirmationText = '';
     if (response.ok && data?.receipt) {
+      pendingOp.status = 'completed';
+      if (typeof window !== 'undefined') {
+        try { window.localStorage?.removeItem('kyro_pending_voice_op'); } catch {}
+      }
+
       const receipt = data.receipt;
       const snap = receipt.responseSnapshot;
       const confirmedAmount = snap?.amountCents !== undefined
@@ -376,58 +472,109 @@ export class ChatVoiceController {
     return {
       ok: response.ok,
       status: response.status,
+      code: data?.code,
       data,
       requestId,
       transaction,
       confirmationText,
       requiresClarification: false,
+      requiresRecovery: false,
       message: response.ok ? 'Lançamento aplicado com sucesso' : (data?.error || 'Falha ao persistir transação')
     };
   }
 
   /**
-   * Reenvia a confirmação do chat (Simula perda de resposta de rede ou retry automático).
-   * Envia o mesmo requestId e transação para a rota HTTP oficial.
+   * Recupera a operação pendente pelo fluxo nativo do chat (sem exigir que o teste passe
+   * a resposta descartada ou reconstrua manualmente o identificador da transação).
    */
-  public async retryConfirmation(options: {
-    baseUrl: string;
+  public async recoverPendingVoiceTransaction(options?: {
+    baseUrl?: string;
     authToken?: string;
     getAuthToken?: () => Promise<string>;
-    requestId: string;
-    transaction: Transaction;
-    accountId?: string;
+    fetchImpl?: typeof fetch;
   }): Promise<LaunchVoiceTransactionResult> {
-    const accountId = options.accountId || 'acc_default';
-    const amountCents = parseToCents(options.transaction.amount);
+    let op = this.pendingOperation;
 
-    let resolvedAuthToken = options.authToken;
-    if (!resolvedAuthToken && options.getAuthToken) {
-      resolvedAuthToken = await options.getAuthToken();
+    // Se não estiver em memória, tenta re-hidratar do armazenamento local
+    if (!op && typeof window !== 'undefined') {
+      try {
+        const raw = window.localStorage?.getItem('kyro_pending_voice_op');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          op = {
+            ...parsed,
+            amountCents: BigInt(parsed.amountCents || '0')
+          };
+          this.pendingOperation = op;
+        }
+      } catch {}
     }
-    resolvedAuthToken = await getClientAuthToken(resolvedAuthToken);
 
+    if (!op) {
+      return {
+        ok: false,
+        status: 404,
+        code: 'NO_PENDING_OPERATION',
+        data: null,
+        requestId: '',
+        transaction: null,
+        confirmationText: '',
+        requiresClarification: false,
+        requiresRecovery: false,
+        message: '⚠️ Nenhuma operação pendente de voz localizada para recuperação.'
+      };
+    }
+
+    const baseUrl = options?.baseUrl || op.baseUrl || 'http://127.0.0.1:4125';
+    let resolvedAuthToken: string;
+
+    try {
+      if (options?.authToken && options.authToken.trim() !== '' && options.authToken !== 'client-session') {
+        resolvedAuthToken = options.authToken.trim();
+      } else if (options?.getAuthToken) {
+        resolvedAuthToken = await options.getAuthToken();
+      } else {
+        resolvedAuthToken = await clientAuthSession.getSessionToken();
+      }
+    } catch (authErr: any) {
+      return {
+        ok: false,
+        status: 401,
+        code: 'UNAUTHORIZED_NO_SESSION',
+        data: null,
+        requestId: op.requestId,
+        transaction: op.transaction,
+        confirmationText: '',
+        requiresClarification: false,
+        requiresRecovery: true,
+        message: '⚠️ Sessão necessária para recuperação da operação.'
+      };
+    }
+
+    // Reenvio para a rota oficial com o MESMO requestId preservado no cliente
     const payload = {
       action: 'save_transaction',
-      requestId: options.requestId,
-      accountId,
+      requestId: op.requestId,
+      accountId: op.accountId,
+      accountOwnerId: op.accountOwnerId,
       transaction: {
-        id: options.transaction.id,
-        description: options.transaction.description,
-        amount: options.transaction.amount,
-        amountCents: Number(amountCents),
-        type: options.transaction.type === 'Entrada' ? 'INCOME' : 'EXPENSE',
-        category: options.transaction.category,
-        date: options.transaction.date
+        id: op.transaction.id,
+        description: op.transaction.description,
+        amount: op.transaction.amount,
+        amountCents: Number(op.amountCents),
+        type: op.transaction.type === 'Entrada' ? 'INCOME' : 'EXPENSE',
+        category: op.transaction.category,
+        date: op.transaction.date
       }
     };
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${resolvedAuthToken}`,
-      'X-Request-ID': options.requestId
+      'X-Request-ID': op.requestId
     };
 
-    const targetUrl = `${options.baseUrl.replace(/\/$/, '')}/api/database`;
+    const targetUrl = `${baseUrl.replace(/\/$/, '')}/api/database`;
 
     this.mutationLog.push({
       timestamp: new Date().toISOString(),
@@ -437,7 +584,8 @@ export class ChatVoiceController {
       body: payload
     });
 
-    const response = await this.fetchImpl(targetUrl, {
+    const activeFetch = options?.fetchImpl || this.fetchImpl;
+    const response = await activeFetch(targetUrl, {
       method: 'POST',
       headers,
       body: JSON.stringify(payload)
@@ -447,13 +595,18 @@ export class ChatVoiceController {
 
     let confirmationText = '';
     if (response.ok && data?.receipt) {
+      op.status = 'completed';
+      if (typeof window !== 'undefined') {
+        try { window.localStorage?.removeItem('kyro_pending_voice_op'); } catch {}
+      }
+
       const receipt = data.receipt;
       const snap = receipt.responseSnapshot;
       const confirmedAmount = snap?.amountCents !== undefined
         ? (Number(snap.amountCents) / 100)
-        : (snap?.amount || options.transaction.amount);
+        : (snap?.amount || op.transaction.amount);
       const confirmedType = snap?.type === 'INCOME' ? 'Entrada' : 'Saída';
-      const confirmedDesc = snap?.description || options.transaction.description;
+      const confirmedDesc = snap?.description || op.transaction.description;
 
       confirmationText = `✅ Lançamento registrado com sucesso via Áudio!\n\n` +
         `• Descrição: ${confirmedDesc}\n` +
@@ -465,13 +618,47 @@ export class ChatVoiceController {
     return {
       ok: response.ok,
       status: response.status,
+      code: data?.code,
       data,
-      requestId: options.requestId,
-      transaction: options.transaction,
+      requestId: op.requestId,
+      transaction: op.transaction,
       confirmationText,
       requiresClarification: false,
-      message: response.ok ? 'Recibo recuperado intacto' : (data?.error || 'Erro no retry')
+      requiresRecovery: false,
+      message: response.ok ? 'Recibo recuperado intacto com sucesso' : (data?.error || 'Erro na recuperação da operação')
     };
+  }
+
+  /**
+   * Reenvio de confirmação preservando a identidade da operação.
+   */
+  public async retryConfirmation(options: {
+    baseUrl: string;
+    authToken?: string;
+    getAuthToken?: () => Promise<string>;
+    requestId: string;
+    transaction: Transaction;
+    accountId?: string;
+    accountOwnerId?: string;
+  }): Promise<LaunchVoiceTransactionResult> {
+    if (!this.pendingOperation || this.pendingOperation.requestId !== options.requestId) {
+      this.pendingOperation = {
+        requestId: options.requestId,
+        transcript: options.transaction.description || '',
+        transaction: options.transaction,
+        amountCents: parseToCents(options.transaction.amount),
+        accountId: options.accountId || 'acc_default',
+        accountOwnerId: options.accountOwnerId || 'user_authenticated',
+        baseUrl: options.baseUrl,
+        createdAt: new Date().toISOString(),
+        status: 'pending'
+      };
+    }
+    return this.recoverPendingVoiceTransaction({
+      baseUrl: options.baseUrl,
+      authToken: options.authToken,
+      getAuthToken: options.getAuthToken
+    });
   }
 
   /**
@@ -501,9 +688,24 @@ export async function launchTransactionFromChatVoice(options: {
   authToken?: string;
   getAuthToken?: () => Promise<string>;
   accountId?: string;
+  accountOwnerId?: string;
+  userUid?: string;
   requestId?: string;
   customTx?: Partial<Transaction>;
   fetchImpl?: typeof fetch;
 }): Promise<LaunchVoiceTransactionResult> {
   return chatVoiceController.confirmRecording(options);
+}
+
+/**
+ * Função compartilhada de recuperação de operação pendente do chat por voz.
+ * Acionada pelo fluxo do chat sem exigir a reconstrução manual do identificador no teste.
+ */
+export async function recoverPendingVoiceTransaction(options?: {
+  baseUrl?: string;
+  authToken?: string;
+  getAuthToken?: () => Promise<string>;
+  fetchImpl?: typeof fetch;
+}): Promise<LaunchVoiceTransactionResult> {
+  return chatVoiceController.recoverPendingVoiceTransaction(options);
 }

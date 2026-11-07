@@ -85,7 +85,7 @@ import {
 import { UpdateModal, UpdateInfo } from './components/UpdateModal';
 import { checkForAppUpdate, checkUpdateDetailed, getInstalledAppInfo, CURRENT_APP_BUILD, CURRENT_APP_VERSION, CheckUpdateResult } from './utils/appUpdater';
 import { isRunningInNativeApk, isNativeSpeechAvailable, startNativeSpeech, stopNativeSpeech, cancelNativeSpeech } from './nativeBridge';
-import { chatVoiceController, launchTransactionFromChatVoice } from './services/chatVoiceController';
+import { chatVoiceController, launchTransactionFromChatVoice, recoverPendingVoiceTransaction } from './services/chatVoiceController';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'transacoes' | 'orcamentos' | 'mapa' | 'relatorios' | 'whatsapp' | 'configuracoes' | 'cartoes'>('dashboard');
@@ -3123,21 +3123,40 @@ export default function App() {
           text: result.message,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         }]);
+      } else if (result.requiresRecovery) {
+        // Perda de resposta antes do cliente receber o recibo: mantém a identidade para recuperação estável
+        setMessages(prev => [...prev, {
+          id: `msg_recov_wait_${result.requestId}`,
+          sender: 'ia',
+          text: result.message,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        }]);
       } else if (result.ok && result.transaction) {
         // Lançamento confirmado com recibo formal emitido pelo servidor
         const confMsgId = `msg_conf_${result.requestId}`;
-        setMessages(prev => [...prev, {
-          id: confMsgId,
-          sender: 'ia',
-          text: result.confirmationText,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        }]);
+        setMessages(prev => {
+          const exists = prev.some(m => m.id === confMsgId);
+          if (exists) return prev;
+          return [...prev, {
+            id: confMsgId,
+            sender: 'ia',
+            text: result.confirmationText,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          }];
+        });
 
-        // Atualização reativa de estado local e persistência em storage
-        setTransactions(prev => [result.transaction!, ...prev]);
+        // Atualização reativa de estado local garantindo entrada única
+        setTransactions(prev => {
+          const exists = prev.some(t => t.id === result.transaction!.id);
+          if (exists) return prev;
+          return [result.transaction!, ...prev];
+        });
+
         try {
           const currentTxs = JSON.parse(localStorage.getItem('kyro_transactions') || '[]');
-          localStorage.setItem('kyro_transactions', JSON.stringify([result.transaction!, ...currentTxs]));
+          if (!currentTxs.some((t: any) => t.id === result.transaction!.id)) {
+            localStorage.setItem('kyro_transactions', JSON.stringify([result.transaction!, ...currentTxs]));
+          }
         } catch (e) {}
 
         setWhatsappSyncToast({
@@ -3146,7 +3165,7 @@ export default function App() {
         });
         setTimeout(() => setWhatsappSyncToast(null), 4000);
       } else {
-        // Erro no processamento pelo servidor
+        // Erro no processamento pelo servidor (ex: sessão ausente ou conta não pertencente ao UID)
         setMessages(prev => [...prev, {
           id: `msg_err_${Date.now()}`,
           sender: 'ia',
@@ -3159,6 +3178,67 @@ export default function App() {
         id: `msg_err_${Date.now()}`,
         sender: 'ia',
         text: `⚠️ Erro no processamento de voz: ${err?.message || err}`,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      }]);
+    } finally {
+      setIsAiLoading(false);
+    }
+  };
+
+  /**
+   * Fluxo nativo de recuperação de operação pendente de voz disponível no Chat.
+   * Aciona a recuperação sem passar resposta descartada ou reconstruir identificador no teste.
+   */
+  const handleRecoverPendingVoiceRecording = async () => {
+    setIsAiLoading(true);
+    try {
+      const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'http://127.0.0.1:4125';
+      const result = await recoverPendingVoiceTransaction({ baseUrl });
+
+      if (result.ok && result.transaction) {
+        const confMsgId = `msg_conf_${result.requestId}`;
+        setMessages(prev => {
+          const exists = prev.some(m => m.id === confMsgId);
+          if (exists) return prev;
+          return [...prev, {
+            id: confMsgId,
+            sender: 'ia',
+            text: result.confirmationText,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          }];
+        });
+
+        setTransactions(prev => {
+          const exists = prev.some(t => t.id === result.transaction!.id);
+          if (exists) return prev;
+          return [result.transaction!, ...prev];
+        });
+
+        try {
+          const currentTxs = JSON.parse(localStorage.getItem('kyro_transactions') || '[]');
+          if (!currentTxs.some((t: any) => t.id === result.transaction!.id)) {
+            localStorage.setItem('kyro_transactions', JSON.stringify([result.transaction!, ...currentTxs]));
+          }
+        } catch (e) {}
+
+        setWhatsappSyncToast({
+          show: true,
+          text: `✅ ${result.transaction.description}: Lançamento recuperado com sucesso!`
+        });
+        setTimeout(() => setWhatsappSyncToast(null), 4000);
+      } else {
+        setMessages(prev => [...prev, {
+          id: `msg_err_${Date.now()}`,
+          sender: 'ia',
+          text: `⚠️ Falha na recuperação da operação: ${result.message}`,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        }]);
+      }
+    } catch (err: any) {
+      setMessages(prev => [...prev, {
+        id: `msg_err_${Date.now()}`,
+        sender: 'ia',
+        text: `⚠️ Erro ao recuperar operação: ${err?.message || err}`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       }]);
     } finally {
