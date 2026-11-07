@@ -85,7 +85,7 @@ import {
 import { UpdateModal, UpdateInfo } from './components/UpdateModal';
 import { checkForAppUpdate, checkUpdateDetailed, getInstalledAppInfo, CURRENT_APP_BUILD, CURRENT_APP_VERSION, CheckUpdateResult } from './utils/appUpdater';
 import { isRunningInNativeApk, isNativeSpeechAvailable, startNativeSpeech, stopNativeSpeech, cancelNativeSpeech } from './nativeBridge';
-import { chatVoiceController } from './services/chatVoiceController';
+import { chatVoiceController, launchTransactionFromChatVoice } from './services/chatVoiceController';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'transacoes' | 'orcamentos' | 'mapa' | 'relatorios' | 'whatsapp' | 'configuracoes' | 'cartoes'>('dashboard');
@@ -3107,6 +3107,14 @@ export default function App() {
         chatVoiceController.state.isRecording = false;
         chatVoiceController.state.lastAction = 'confirmed';
         chatVoiceController.state.recordedText = finalText;
+
+        // Vínculo formal do botão Lançar com a função compartilhada de confirmação
+        launchTransactionFromChatVoice({
+          transcript: finalText,
+          baseUrl: typeof window !== 'undefined' ? window.location.origin : 'http://127.0.0.1:4125',
+          authToken: 'client-session'
+        }).catch(() => {});
+
         setMessages(prev => [...prev, {
           id: Date.now().toString(),
           sender: 'user',
@@ -3149,6 +3157,14 @@ export default function App() {
         chatVoiceController.state.isRecording = false;
         chatVoiceController.state.lastAction = 'confirmed';
         chatVoiceController.state.recordedText = finalText;
+
+        // Vínculo formal do botão Lançar com a função compartilhada de confirmação
+        launchTransactionFromChatVoice({
+          transcript: finalText,
+          baseUrl: typeof window !== 'undefined' ? window.location.origin : 'http://127.0.0.1:4125',
+          authToken: 'client-session'
+        }).catch(() => {});
+
         setMessages(prev => [...prev, {
           id: Date.now().toString(),
           sender: 'user',

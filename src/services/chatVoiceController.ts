@@ -281,3 +281,50 @@ export class ChatVoiceController {
 // Instância singleton conectada ao ciclo de vida de App.tsx e à suíte de testes
 export const chatVoiceController = new ChatVoiceController();
 
+/**
+ * Função compartilhada de confirmação do chat por voz.
+ * Invocada diretamente pelo handler do botão real "Lançar" em App.tsx e pela suíte de testes automatizados.
+ * 
+ * Atravessa o pipeline completo do chat:
+ * 1. Higieniza e desduplica a transcrição falada
+ * 2. Monta a transação e o payload com requestId estável
+ * 3. Envia para a rota oficial POST /api/database
+ * 4. Comita no Firestore Emulator e retorna recibo APPLIED
+ */
+export async function launchTransactionFromChatVoice({
+  transcript,
+  baseUrl,
+  authToken,
+  accountId = 'acc_default',
+  requestId,
+  customTx,
+  fetchImpl = typeof window !== 'undefined' ? window.fetch.bind(window) : fetch
+}: {
+  transcript: string;
+  baseUrl: string;
+  authToken: string;
+  accountId?: string;
+  requestId?: string;
+  customTx?: Partial<Transaction>;
+  fetchImpl?: typeof fetch;
+}): Promise<{
+  ok: boolean;
+  status: number;
+  data: any;
+  requestId: string;
+  transaction: Transaction;
+}> {
+  return chatVoiceController.confirmRecording({
+    baseUrl,
+    authToken,
+    accountId,
+    requestId,
+    customTx: {
+      description: transcript,
+      product: transcript,
+      ...customTx
+    }
+  });
+}
+
+

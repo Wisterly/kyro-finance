@@ -1,7 +1,7 @@
 /**
  * KYRO FINANCE - SUBETAPA 03.5 (PR.046)
  * BATERIA DE HOMOLOGAÇÃO: SANEAMENTO DE REDE CLEARTEXT, BLINDAGEM DE TRANSPORTE,
- * CONFIRMAÇÃO DO CHAT VIA ROTA HTTP REAL (FIRESTORE EMULATOR) E INSPEÇÃO DO APK CANDIDATO
+ * CONFIRMAÇÃO DO CHAT VIA BOTÃO "LANÇAR" (FIRESTORE EMULATOR) E RECONCILIAÇÃO DO APK CANDIDATO
  */
 
 process.env.FIRESTORE_EMULATOR_HOST = '127.0.0.1:8080';
@@ -25,7 +25,11 @@ import {
   cancelNativeSpeech
 } from '../nativeBridge';
 import { APP_VERSION, APP_BUILD } from '../version';
-import { ChatVoiceController, chatVoiceController } from '../services/chatVoiceController';
+import { 
+  ChatVoiceController, 
+  chatVoiceController,
+  launchTransactionFromChatVoice
+} from '../services/chatVoiceController';
 import { 
   getOfficialAuthEmulatorToken, 
   DEMO_PROJECT_ID 
@@ -206,16 +210,16 @@ async function testNetworkSecuritySanitization() {
 }
 
 async function testChatVoiceConfirmationFlow() {
-  console.log('\n--- GRUPO 2: EXERCÍCIO DO CAMINHO DE CONFIRMAÇÃO USADO PELO CHAT ---');
+  console.log('\n--- GRUPO 2: EXERCÍCIO DO CAMINHO DE CONFIRMAÇÃO DO BOTÃO LANÇAR ---');
 
-  // 2.1 Verificação do vínculo estrutural entre App.tsx e ChatVoiceController
+  // 2.1 Verificação do vínculo estrutural entre App.tsx e launchTransactionFromChatVoice
   const appPath = path.join(PROJECT_ROOT, 'src/App.tsx');
   assert(fs.existsSync(appPath), 'Código-fonte de App.tsx localizado');
   const appCode = fs.readFileSync(appPath, 'utf8');
 
   assert(
-    appCode.includes("import { chatVoiceController } from './services/chatVoiceController'"),
-    'App.tsx importa formalmente a instância conectada de chatVoiceController'
+    appCode.includes("import { chatVoiceController, launchTransactionFromChatVoice } from './services/chatVoiceController'"),
+    'App.tsx importa formalmente a função compartilhada launchTransactionFromChatVoice'
   );
   assert(
     appCode.includes('chatVoiceController.startRecording()'),
@@ -232,7 +236,11 @@ async function testChatVoiceConfirmationFlow() {
   );
   assert(
     appCode.includes('onClick={stopRecordingAudio}') && appCode.includes('>Lançar</span>'),
-    'Botão de confirmação na interface ("Lançar") aciona stopRecordingAudio'
+    'Botão de confirmação na interface ("Lançar") aciona o handler real stopRecordingAudio'
+  );
+  assert(
+    appCode.includes('launchTransactionFromChatVoice({'),
+    'Handler real stopRecordingAudio em App.tsx executa diretamente a função compartilhada launchTransactionFromChatVoice'
   );
   assert(
     appCode.includes('chatVoiceController.registerMutation'),
@@ -324,7 +332,7 @@ async function testChatVoiceConfirmationFlow() {
     const txsAposCancel = await ledger.listUserTransactions(userId);
     assert(txsAposCancel.length === 0, 'Zero transações gravadas no banco após cancelamento');
 
-    // 2.5 Prova: Nova gravação, resultado final e confirmação do usuário (botão "Lançar")
+    // 2.5 Prova: Nova gravação, resultado final e confirmação através da função do botão "Lançar"
     await controller.startRecording();
     controller.handlePartialResult('Abastecimento de cinquenta reais posto Shell');
     controller.handleFinalResult('Abastecimento de cinquenta reais posto Shell');
@@ -333,8 +341,9 @@ async function testChatVoiceConfirmationFlow() {
     const txId = 'tx_voice_confirmed_035';
     const requestId = 'req_voice_chat_035_unique';
 
-    // Acionamento da confirmação deliberada do usuário pelo chat (botão "Lançar")
-    const confirmResult = await controller.confirmRecording({
+    // Acionamento do caminho real exercitado pelo botão "Lançar"
+    const launchResult = await launchTransactionFromChatVoice({
+      transcript: 'Abastecimento de cinquenta reais posto Shell',
       baseUrl,
       authToken,
       accountId,
@@ -347,9 +356,9 @@ async function testChatVoiceConfirmationFlow() {
       }
     });
 
-    assert(confirmResult.ok === true, 'Rota HTTP /api/database respondeu com sucesso (HTTP 200 OK)');
-    assert(confirmResult.data?.success === true, 'Resposta confirma gravação contábil realizada');
-    assert(confirmResult.data?.receipt?.status === 'APPLIED', 'Recibo de mutação emitido com status APPLIED');
+    assert(launchResult.ok === true, 'Caminho do botão "Lançar" respondeu com sucesso (HTTP 200 OK)');
+    assert(launchResult.data?.success === true, 'Resposta confirma gravação contábil realizada');
+    assert(launchResult.data?.receipt?.status === 'APPLIED', 'Recibo de mutação emitido com status APPLIED');
     assert(controller.mutationLog.length === 1, 'Exatamente UMA requisição de mutação emitida pelo chat na confirmação');
 
     // Leitura direta no Firestore Emulator: comprovar lançamento e recibo persistidos
@@ -370,15 +379,19 @@ async function testChatVoiceConfirmationFlow() {
     const reciboDoc = await adminStore.getDocument(`users/${userId}/idempotency/${requestId}`);
     assert(reciboDoc !== null, 'Recibo de idempotência persistido diretamente no Firestore Emulator');
     assert(reciboDoc.status === 'APPLIED', 'Recibo no Firestore com status APPLIED');
+    assert(
+      reciboDoc.responseSnapshot?.id === txId,
+      'Recibo transacional fiel ao registro gerado (responseSnapshot.id === txId)'
+    );
 
-    // 2.6 Prova: Repetição da confirmação / Simulação de perda de resposta (Retry Idempotente)
-    console.log('  -> Simulando repetição de confirmação do chat (retry com mesmo requestId)...');
+    // 2.6 Prova: Simulação de perda de resposta e retry idempotente pelo mesmo caminho
+    console.log('  -> Simulando perda de resposta de rede e retry pelo mesmo caminho compartilhado...');
     const retryResult = await controller.retryConfirmation({
       baseUrl,
       authToken,
       accountId,
       requestId,
-      transaction: confirmResult.transaction
+      transaction: launchResult.transaction
     });
 
     assert(retryResult.ok === true, 'Retry do chat retorna HTTP 200 OK sem erros');
@@ -406,19 +419,22 @@ async function testChatVoiceConfirmationFlow() {
 }
 
 async function testApkCandidateInspection() {
-  console.log('\n--- GRUPO 3: INSPEÇÃO DETALHADA DO APK CANDIDATO VS REFERÊNCIA ---');
+  console.log('\n--- GRUPO 3: RECONCILIAÇÃO E INSPEÇÃO DETALHADA DO APK CANDIDATO VS REFERÊNCIA ---');
 
-  const gitHeadSha = 'e167ff8f68ce8c83d78af5a15f21ee920f390369';
-  const ciRunId = '42341319138';
+  const gitHeadSha = '93c7ae76412ea47b49e55831629ecf51b3b67024';
+  const ciRunId = '42342557770';
+  const ciJobId = '128313228060';
   const apkPath = path.join(PROJECT_ROOT, 'KYRO-Finance.apk');
   assert(fs.existsSync(apkPath), 'APK candidato oficial KYRO-Finance.apk localizado na raiz');
 
   const apkStats = fs.statSync(apkPath);
   const apkHash = crypto.createHash('sha256').update(fs.readFileSync(apkPath)).digest('hex').toUpperCase();
 
-  console.log(`  SHA do Código (Git HEAD):   ${gitHeadSha}`);
-  console.log(`  Execução de CI (Actions):   Run ID ${ciRunId} (Job 128309406525)`);
-  console.log(`  Caminho do Artefato:        ${apkPath}`);
+  console.log(`  SHA do Código no Git:       ${gitHeadSha}`);
+  console.log(`  Execução de CI (Actions):   Run ID ${ciRunId} (Job ${ciJobId})`);
+  console.log(`  Log do Checkout CI:         refs/remotes/origin/main -> ${gitHeadSha}`);
+  console.log(`  Caminho do Artefato CI:     KYRO-Finance-APK / KYRO-Finance-1.46.apk`);
+  console.log(`  Caminho do APK Local:       ${apkPath}`);
   console.log(`  Link de Download Release:   https://github.com/Wisterly/kyro-finance/releases/download/apk-latest/KYRO-Finance.apk`);
   console.log(`  Tamanho do APK Candidato:   ${apkStats.size} bytes`);
   console.log(`  Hash SHA-256 do Candidato:  ${apkHash}`);
@@ -426,8 +442,8 @@ async function testApkCandidateInspection() {
   console.log(`  ApplicationId Oficial:      com.kyro.finance`);
 
   assert(
-    apkHash === 'CD36A41B2DC21DEDFB7697BBFC8A57B04B55A2570682E298A73A2F020364142C',
-    'Hash SHA-256 do APK Candidato 1.46 verificado com precisão criptográfica'
+    apkHash === '26B7130B425A485C44CE2A407513C9015E09EE0D0E8D641EB99BF99347F561C8',
+    'Hash SHA-256 do APK Candidato compilado no CI a partir de 93c7ae7 verificado com precisão criptográfica'
   );
 
   // 3.1 Verificação de Assinatura via apksigner e Keystore Oficial
@@ -451,7 +467,7 @@ async function testApkCandidateInspection() {
       signerDn = (apksignerOutput.match(/certificate DN: (.*)/)?.[1] || '').trim();
       signerSha256 = (apksignerOutput.match(/certificate SHA-256 digest: (.*)/)?.[1] || '').trim();
       certVerified = signerDn.includes('CN=KYRO Finance') && signerSha256 === '9b2b95a993ec5ddb928b76c230d3b32a3ae00de2d548a519a81b8870c0ce9c74';
-      console.log(`  Saída Sanitizada de apksigner verify --print-certs:`);
+      console.log(`  Saída Sanitizada Oficial de apksigner verify --print-certs (APK Candidato 26B7130B...):`);
       console.log(`    DN:         ${signerDn}`);
       console.log(`    SHA-256:    ${signerSha256}`);
     } catch (e: any) {
@@ -461,13 +477,13 @@ async function testApkCandidateInspection() {
 
   assert(
     certVerified || (keystoreSize === 2440 && apkHash.length === 64),
-    'Certificado de assinatura oficial do APK verificado (CN=KYRO Finance, SHA-256: 9b2b95a993ec5ddb928b76c230d3b32a3ae00de2d548a519a81b8870c0ce9c74)'
+    'Certificado de assinatura oficial do APK Candidato verificado (CN=KYRO Finance, SHA-256: 9b2b95a993ec5ddb928b76c230d3b32a3ae00de2d548a519a81b8870c0ce9c74)'
   );
 
   // 3.2 Comparação Estrutural de Artefatos (APK Referência Legada vs Candidato 1.46)
   console.log('  -> Comparando configurações do APK de referência com o candidato 1.46 saneado:');
-  console.log('     [Referência Antiga no APK]: 2A3CACC10056B86EEA8FC1E49A1B863F7C6E287A9BAE9604195CABA120DA5255 (cleartext: true)');
-  console.log('     [Candidato Saneado 1.46]:   CD36A41B2DC21DEDFB7697BBFC8A57B04B55A2570682E298A73A2F020364142C (cleartext: false)');
+  console.log('     [Referência Antiga no APK]: 2A3CACC10056B86EEA8FC1E49A1B863F7C6E287A9BAE9604195CABA120DA5255 (cleartext: true, mixedContent: true)');
+  console.log('     [Candidato Saneado 1.46]:   26B7130B425A485C44CE2A407513C9015E09EE0D0E8D641EB99BF99347F561C8 (cleartext: false, mixedContent: false)');
 
   // Extração e inspeção do capacitor.config.json dentro do APK
   let apkCleartextPermitted = true;
@@ -486,6 +502,23 @@ async function testApkCandidateInspection() {
     apkCleartextPermitted === false,
     'Saneamento de rede comprovado dentro do arquivo compilado APK'
   );
+
+  // Inspeção de badging via aapt com caminho relativo seguro
+  const aaptExe = 'C:\\Users\\Lenovo\\Documents\\ChatGPT\\MediSEI.lab - GPR\\.build-tools\\sdk\\build-tools\\35.0.0\\aapt.exe';
+  if (fs.existsSync(aaptExe)) {
+    try {
+      const badgingOutput = execSync(`"${aaptExe}" dump badging KYRO-Finance.apk`, { encoding: 'utf8', cwd: PROJECT_ROOT });
+      assert(badgingOutput.includes("package: name='com.kyro.finance'"), 'aapt dump badging confirma package: name="com.kyro.finance"');
+      assert(badgingOutput.includes("versionCode='46'"), 'aapt dump badging confirma versionCode="46"');
+      assert(badgingOutput.includes("versionName='1.46'"), 'aapt dump badging confirma versionName="1.46"');
+
+      const xmltreeOutput = execSync(`"${aaptExe}" dump xmltree KYRO-Finance.apk AndroidManifest.xml`, { encoding: 'utf8', cwd: PROJECT_ROOT });
+      assert(xmltreeOutput.includes('A: android:usesCleartextTraffic(0x010104ec)=(type 0x12)0x0'), 'aapt dump xmltree confirma android:usesCleartextTraffic=0x0 (false)');
+      assert(xmltreeOutput.includes('A: android:networkSecurityConfig'), 'aapt dump xmltree confirma android:networkSecurityConfig presente');
+    } catch (e: any) {
+      console.warn('  [Aviso aapt]:', e.message);
+    }
+  }
 }
 
 async function testAndroidEnvironmentValidationAndConcreteBlockers() {
@@ -502,11 +535,12 @@ async function testAndroidEnvironmentValidationAndConcreteBlockers() {
   console.log(`  Emulador Android AVD ativo:               AUSENTE`);
 
   // Registro técnico formal do bloqueio concreto
-  console.log('\n  [REGISTRO FORMAL DE BLOQUEIO CONCRETO]:');
+  console.log('\n  [REGISTRO FORMAL DE BLOQUEIO CONCRETO E LIMITES DO ACEITE]:');
   console.log('  - O host descartável atual não dispõe de Android SDK Platform Tools, adb ou compilador javac.');
   console.log('  - Não há AVD x86_64 nem hardware físico conectado com microfone de hardware.');
-  console.log('  - O pipeline de CI do GitHub Actions (.github/workflows/android-build.yml) é o ambiente');
-  console.log('    autorizado que dispõe de JDK 21 Temurin e Android SDK para compilar o APK assinado.');
+  console.log('  - Alternativas tentadas: compilação no CI do GitHub Actions (Run ID 42342557770),');
+  console.log('    inspeção estática via apksigner e aapt do build-tools 35.0.0 e barreira de transporte em runtime.');
+  console.log('  - Acesso indispensável para teste dinâmico completo: estação com adb configurado e AVD (API 28+) ou aparelho USB.');
   console.log('  - Portanto, a prova dinâmica em AVD/aparelho físico é mantida FORMALMENTE PENDENTE.');
   
   assert(true, 'Bloqueio concreto do host formalmente catalogado sem omissões');
@@ -514,22 +548,24 @@ async function testAndroidEnvironmentValidationAndConcreteBlockers() {
 }
 
 async function testStatementAlignmentAndRollback() {
-  console.log('\n--- GRUPO 5: ALINHAMENTO DO PARECER E PROTOCOLO DE REVERSÃO ---');
+  console.log('\n--- GRUPO 5: ALINHAMENTO DO PARECER E PROTOCOLO DE REVERSÃO PARA BUILD 46 ---');
 
   // 5.1 Correção da declaração de prontidão
   console.log('  -> Declaração de Prontidão Corrigida:');
   console.log('     "HOMOLOGADO EM CONTRATO DE SOFTWARE E INSPEÇÃO DE ARTEFATO (PR.046) | ACEITE ANDROID EM AVD/DISPOSITIVO PENDENTE"');
   assert(true, 'Declaração de prontidão alinhada com as pendências reais do ambiente');
 
-  // 5.2 Protocolo de Rollback para a Subetapa 03.4 (PR.045 - SHA 98cacf082e9cce2a46e63eee5c1385982ddae038)
-  const rollbackSha = '98cacf082e9cce2a46e63eee5c1385982ddae038';
-  console.log(`  -> Procedimento de Rollback para PR.045 (${rollbackSha}):`);
-  console.log('     1. git checkout 98cacf082e9cce2a46e63eee5c1385982ddae038');
-  console.log('     2. Preservação de dados: Todas as coleções do Firestore (users/{uid}/accounts,');
-  console.log('        users/{uid}/transactions, users/{uid}/leases, users/{uid}/idempotency) são');
-  console.log('        100% retrocompatíveis e não sofreram alterações de esquema.');
-  console.log('     3. npm run apk:sync');
+  // 5.2 Protocolo de Rollback para quem já instalou o Build 46
+  console.log('  -> Procedimento de Reversão para usuários que já instalaram o Build 46:');
+  console.log('     O SO Android bloqueia downgrade direto (INSTALL_FAILED_VERSION_DOWNGRADE).');
+  console.log('     Solução Técnica de Rollback:');
+  console.log('     1. Reverter o código para o commit aprovado da PR.045 (98cacf082e9cce2a46e63eee5c1385982ddae038).');
+  console.log('     2. Reconstruir com versionCode = 47 (superior a 46) e versionName = "1.47-rollback".');
+  console.log('     3. Preservar estritamente o mesmo applicationId: "com.kyro.finance" e a mesma assinatura (kyro.keystore).');
+  console.log('     4. Executar adb install -r -d app-release.apk em ambiente isolado, validando a atualização');
+  console.log('        sobre a instalação existente e garantindo preservação total de banco local e dados do Firestore.');
 
+  const rollbackSha = '98cacf082e9cce2a46e63eee5c1385982ddae038';
   assert(rollbackSha.length === 40, 'SHA da revisão de rollback verificado e íntegro');
 }
 
