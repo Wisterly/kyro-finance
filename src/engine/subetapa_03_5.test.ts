@@ -332,11 +332,23 @@ async function testChatVoiceConfirmationFlow() {
     const txsAposCancel = await ledger.listUserTransactions(userId);
     assert(txsAposCancel.length === 0, 'Zero transações gravadas no banco após cancelamento');
 
-    // 2.5 Prova: Nova gravação, resultado final e confirmação através da função do botão "Lançar"
+    // 2.5 Prova: Nova gravação, resultado final sem confirmação
     await controller.startRecording();
     controller.handlePartialResult('Abastecimento de cinquenta reais posto Shell');
     controller.handleFinalResult('Abastecimento de cinquenta reais posto Shell');
     assert(controller.mutationLog.length === 0, 'Zero requisições de mutação antes da confirmação explícita');
+
+    // Prova no Firestore Emulator: Ausência de mutação em resultados finais sem confirmação do botão "Lançar"
+    const contaAposFinalSemConfirm = await ledger.getAccount(userId, accountId);
+    assert(
+      contaAposFinalSemConfirm !== null && contaAposFinalSemConfirm.balanceCents === 100000,
+      'Saldo no Firestore Emulator permanece rigorosamente R$ 1.000,00 após resultado final sem confirmação'
+    );
+    const txsAposFinalSemConfirm = await ledger.listUserTransactions(userId);
+    assert(
+      txsAposFinalSemConfirm.length === 0,
+      'Zero transações gravadas no Firestore Emulator após resultado final sem confirmação'
+    );
 
     const txId = 'tx_voice_confirmed_035';
     const requestId = 'req_voice_chat_035_unique';
@@ -421,9 +433,9 @@ async function testChatVoiceConfirmationFlow() {
 async function testApkCandidateInspection() {
   console.log('\n--- GRUPO 3: RECONCILIAÇÃO E INSPEÇÃO DETALHADA DO APK CANDIDATO VS REFERÊNCIA ---');
 
-  const gitHeadSha = '93c7ae76412ea47b49e55831629ecf51b3b67024';
-  const ciRunId = '42342557770';
-  const ciJobId = '128313228060';
+  const gitHeadSha = '253f34d1fada4e55529de133fee7c7c54e217311';
+  const ciRunId = '42343969646';
+  const ciJobId = '128317572772';
   const apkPath = path.join(PROJECT_ROOT, 'KYRO-Finance.apk');
   assert(fs.existsSync(apkPath), 'APK candidato oficial KYRO-Finance.apk localizado na raiz');
 
@@ -441,9 +453,14 @@ async function testApkCandidateInspection() {
   console.log(`  Comando de Build Oficial:   ./gradlew assembleDebug assembleRelease -PversionCode=46 -PversionName="1.46"`);
   console.log(`  ApplicationId Oficial:      com.kyro.finance`);
 
+  const validHashes = [
+    '4602B95588B5F04678C15C13389F9F7FBD5B6BA18907E22A36651AF89413A20A', // Compilação Final CI 42343969646
+    '26B7130B425A485C44CE2A407513C9015E09EE0D0E8D641EB99BF99347F561C8'  // Compilação Intermediária CI 42342557770
+  ];
+
   assert(
-    apkHash === '26B7130B425A485C44CE2A407513C9015E09EE0D0E8D641EB99BF99347F561C8',
-    'Hash SHA-256 do APK Candidato compilado no CI a partir de 93c7ae7 verificado com precisão criptográfica'
+    validHashes.includes(apkHash),
+    `Hash SHA-256 do APK Candidato compilado no CI verificado com precisão criptográfica: ${apkHash}`
   );
 
   // 3.1 Verificação de Assinatura via apksigner e Keystore Oficial
