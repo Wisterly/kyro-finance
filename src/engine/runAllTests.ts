@@ -58,7 +58,7 @@ async function main() {
     process.exit(res3.exitCode);
   }
 
-  console.log('\n>>> [4/4] EXECUTANDO BATERIA DA SUBETAPA 03.5 (120 CASOS)...');
+  console.log('\n>>> [4/4] EXECUTANDO BATERIA DA SUBETAPA 03.5 (124 CASOS)...');
   await new Promise(r => setTimeout(r, 1000));
   const res4 = await runCommand('npx.cmd', ['tsx', 'src/engine/subetapa_03_5.test.ts']);
   if (res4.exitCode !== 0) {
@@ -71,9 +71,9 @@ async function main() {
   console.log('1. Núcleo Contábil:     51 / 51 APROVADOS (100%)');
   console.log('2. Subetapa 03.3:       53 / 53 APROVADOS (100%)');
   console.log('3. Subetapa 03.4:       141 / 141 APROVADOS (100%)');
-  console.log('4. Subetapa 03.5:       120 / 120 APROVADOS (100%)');
+  console.log('4. Subetapa 03.5:       124 / 124 APROVADOS (100%)');
   console.log('----------------------------------------------------------------');
-  console.log('TOTAL CONSOLIDADO:     365 / 365 APROVADOS (100%)');
+  console.log('TOTAL CONSOLIDADO:     369 / 369 APROVADOS (100%)');
   console.log('STATUS FINAL:          HOMOLOGADO EM CONTRATO E INSPEÇÃO DE ARTEFATO (PR.046)');
   console.log('                       ACEITE ANDROID EM AVD/DISPOSITIVO FÍSICO FORMALMENTE PENDENTE');
   console.log('================================================================\n');

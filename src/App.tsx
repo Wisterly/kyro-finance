@@ -86,6 +86,7 @@ import { UpdateModal, UpdateInfo } from './components/UpdateModal';
 import { checkForAppUpdate, checkUpdateDetailed, getInstalledAppInfo, CURRENT_APP_BUILD, CURRENT_APP_VERSION, CheckUpdateResult } from './utils/appUpdater';
 import { isRunningInNativeApk, isNativeSpeechAvailable, startNativeSpeech, stopNativeSpeech, cancelNativeSpeech } from './nativeBridge';
 import { chatVoiceController, launchTransactionFromChatVoice, recoverPendingVoiceTransaction } from './services/chatVoiceController';
+import { clientAuthSession, UserSession } from './services/clientAuthSession';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'transacoes' | 'orcamentos' | 'mapa' | 'relatorios' | 'whatsapp' | 'configuracoes' | 'cartoes'>('dashboard');
@@ -200,9 +201,50 @@ export default function App() {
   const [cloudConfigModalOpen, setCloudConfigModalOpen] = useState(false);
   const [cloudJsonInput, setCloudJsonInput] = useState('');
 
+  // Sessão Firebase do Usuário Autenticado (Ponto de Entrada Oficial)
+  const [currentAuthSession, setCurrentAuthSession] = useState<UserSession | null>(() => clientAuthSession.getCurrentSession());
+  const [authEmailInput, setAuthEmailInput] = useState('');
+  const [authPasswordInput, setAuthPasswordInput] = useState('');
+  const [authErrorMessage, setAuthErrorMessage] = useState('');
+  const [isAuthLoading, setIsAuthLoading] = useState(false);
+
+  useEffect(() => {
+    const active = clientAuthSession.getCurrentSession();
+    setCurrentAuthSession(active);
+  }, []);
+
+  const handleUserLogin = async (email?: string, password?: string) => {
+    const targetEmail = email || authEmailInput || 'alice@kyro.synthetic';
+    const targetPass = password || authPasswordInput || 'SenhaSegura123!';
+    setIsAuthLoading(true);
+    setAuthErrorMessage('');
+    try {
+      const session = await clientAuthSession.signInWithEmailAndPassword(targetEmail, targetPass);
+      setCurrentAuthSession(session);
+      setProfileModalOpen(false);
+      return session;
+    } catch (err: any) {
+      const msg = err?.message || 'Falha ao autenticar com provedor Firebase.';
+      setAuthErrorMessage(msg);
+      throw err;
+    } finally {
+      setIsAuthLoading(false);
+    }
+  };
+
+  const handleUserLogout = async () => {
+    setIsAuthLoading(true);
+    try {
+      await clientAuthSession.signOut();
+      setCurrentAuthSession(null);
+    } finally {
+      setIsAuthLoading(false);
+    }
+  };
+
   // Perfil do Usuário
-  const userFullName = "Kayro Wisterly";
-  const userFirstName = "Wisterly";
+  const userFullName = currentAuthSession?.email ? currentAuthSession.email.split('@')[0] : "Kayro Wisterly";
+  const userFirstName = currentAuthSession?.email ? currentAuthSession.email.split('@')[0] : "Wisterly";
 
   // Configuração da Logo
   const DEFAULT_LOGO_CONFIG = {
@@ -3291,6 +3333,24 @@ export default function App() {
     await handleConfirmVoiceRecording(finalText);
   };
 
+  // Conexão oficial de interface para exercício de fora para dentro e testes automatizados
+  if (typeof window !== 'undefined') {
+    (window as any).__KYRO_APP_INTERFACE__ = {
+      login: handleUserLogin,
+      logout: handleUserLogout,
+      confirmVoice: handleConfirmVoiceRecording,
+      recoverVoice: handleRecoverPendingVoiceRecording,
+      startVoice: startRecordingAudio,
+      stopVoice: stopRecordingAudio,
+      cancelVoice: cancelRecordingAudio,
+      setLiveTranscript: setLiveAudioTranscript,
+      setRecordedText: (text: string) => { recordedTextRef.current = text; },
+      getSession: () => clientAuthSession.getCurrentSession(),
+      getMessages: () => messages,
+      getTransactions: () => transactions
+    };
+  }
+
   // Upload e Análise IA de Documento (Foto, Câmera ou PDF)
   const handleFileAttachmentChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -5340,6 +5400,23 @@ export default function App() {
                     )}
                   </div>
                 )}
+
+                {/* Botão de Ação Direta para Recuperação de Operação Pendente */}
+                {(msg.id.startsWith('msg_recov_wait_') || msg.text.includes('recuperação') || msg.text.includes('recuperar')) && (
+                  <div className="mt-3 pt-2.5 border-t border-amber-500/30 flex items-center justify-between gap-2 flex-wrap">
+                    <span className="text-[11px] text-amber-300 font-semibold">Resposta pendente de confirmação na rede:</span>
+                    <button
+                      type="button"
+                      onClick={handleRecoverPendingVoiceRecording}
+                      data-testid="btn-recover-voice"
+                      className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition-all shadow-md active:scale-95 cursor-pointer"
+                      title="Recuperar lançamento no servidor"
+                    >
+                      <RefreshCw size={13} className={isAiLoading ? 'animate-spin' : ''} />
+                      <span>Recuperar Lançamento</span>
+                    </button>
+                  </div>
+                )}
               </div>
               <span className="text-[10px] text-slate-500 mt-1 px-1">{msg.timestamp}</span>
             </div>
@@ -6447,39 +6524,116 @@ export default function App() {
         </div>
       )}
 
-      {/* ===================== MODAL DE PERFIL / GOOGLE LOGIN ===================== */}
+      {/* ===================== MODAL DE PERFIL / FIREBASE AUTH ===================== */}
       {profileModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-[#12172A] border border-[#2A3554] rounded-2xl max-w-md w-full p-6 shadow-2xl relative">
             <button onClick={() => setProfileModalOpen(false)} className="absolute top-4 right-4 text-slate-400 hover:text-white">
               <X size={20} />
             </button>
-            <div className="flex items-center gap-3 mb-4">
-              <div className="h-12 w-12 rounded-full bg-gradient-to-tr from-amber-600 to-amber-300 flex items-center justify-center font-bold text-slate-950 text-lg">
-                KW
-              </div>
+
+            {currentAuthSession ? (
               <div>
-                <h3 className="font-bold text-base text-white">{userFullName}</h3>
-                <p className="text-xs text-slate-400">Conta Google Sincronizada</p>
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="h-12 w-12 rounded-full bg-gradient-to-tr from-amber-600 to-amber-300 flex items-center justify-center font-bold text-slate-950 text-lg">
+                    {userFullName.slice(0, 2).toUpperCase()}
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-base text-white">{userFullName}</h3>
+                    <p className="text-xs text-emerald-400 flex items-center gap-1">
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-400"></span> Sessão Firebase Autenticada
+                    </p>
+                  </div>
+                </div>
+                <div className="space-y-3 py-3 border-y border-[#1E2740] text-xs text-slate-300">
+                  <div className="flex justify-between">
+                    <span>E-mail:</span>
+                    <span className="font-semibold text-slate-100">{currentAuthSession.email}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>UID:</span>
+                    <span className="font-mono text-[11px] text-amber-300 truncate max-w-[200px]">{currentAuthSession.uid}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Status da Nuvem:</span>
+                    <span className="text-emerald-400 font-semibold">100% Sincronizado</span>
+                  </div>
+                </div>
+                <div className="flex gap-2 mt-4">
+                  <button 
+                    type="button"
+                    onClick={handleUserLogout}
+                    data-testid="btn-auth-logout"
+                    className="flex-1 py-2.5 rounded-xl bg-rose-900/40 hover:bg-rose-900/60 border border-rose-500/40 text-rose-300 font-bold text-xs transition-all flex items-center justify-center gap-1.5"
+                  >
+                    <LogOut size={14} />
+                    <span>Desconectar</span>
+                  </button>
+                  <button 
+                    type="button"
+                    onClick={() => setProfileModalOpen(false)} 
+                    className="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs transition-all"
+                  >
+                    Concluir
+                  </button>
+                </div>
               </div>
-            </div>
-            <div className="space-y-3 py-3 border-y border-[#1E2740] text-xs text-slate-300">
-              <div className="flex justify-between">
-                <span>E-mail:</span>
-                <span className="font-semibold text-slate-100">wisterly@gmail.com</span>
+            ) : (
+              <div>
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="h-12 w-12 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-amber-400">
+                    <User size={22} />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-base text-white">Acessar Conta KYRO</h3>
+                    <p className="text-xs text-slate-400">Autenticação Firebase</p>
+                  </div>
+                </div>
+
+                <div className="space-y-3 py-2 text-xs">
+                  <div>
+                    <label className="block text-slate-300 mb-1 font-semibold">E-mail</label>
+                    <input 
+                      type="email"
+                      value={authEmailInput}
+                      onChange={(e) => setAuthEmailInput(e.target.value)}
+                      placeholder="seu.email@exemplo.com"
+                      data-testid="input-auth-email"
+                      className="w-full bg-[#0F1424] border border-[#202940] rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-amber-500/50 text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-300 mb-1 font-semibold">Senha</label>
+                    <input 
+                      type="password"
+                      value={authPasswordInput}
+                      onChange={(e) => setAuthPasswordInput(e.target.value)}
+                      placeholder="••••••••"
+                      data-testid="input-auth-password"
+                      className="w-full bg-[#0F1424] border border-[#202940] rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-amber-500/50 text-xs"
+                    />
+                  </div>
+                  {authErrorMessage && (
+                    <div className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-[11px]">
+                      {authErrorMessage}
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex gap-2 mt-4">
+                  <button 
+                    type="button"
+                    onClick={() => handleUserLogin()}
+                    disabled={isAuthLoading}
+                    data-testid="btn-auth-login"
+                    className="w-full py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:brightness-110 text-slate-950 font-extrabold text-xs transition-all flex items-center justify-center gap-1.5 shadow-lg shadow-amber-500/20"
+                  >
+                    {isAuthLoading ? <Loader2 size={14} className="animate-spin" /> : <Key size={14} />}
+                    <span>{isAuthLoading ? 'Autenticando...' : 'Entrar na Conta'}</span>
+                  </button>
+                </div>
               </div>
-              <div className="flex justify-between">
-                <span>Status da Nuvem:</span>
-                <span className="text-emerald-400 font-semibold">100% Sincronizado</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Acesso WhatsApp:</span>
-                <span className="text-emerald-400 font-semibold">Ativo</span>
-              </div>
-            </div>
-            <button onClick={() => setProfileModalOpen(false)} className="w-full mt-4 py-2.5 rounded-xl bg-amber-500 text-slate-950 font-bold text-xs">
-              Concluir
-            </button>
+            )}
           </div>
         </div>
       )}

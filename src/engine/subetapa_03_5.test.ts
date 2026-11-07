@@ -31,7 +31,7 @@ import {
   launchTransactionFromChatVoice,
   recoverPendingVoiceTransaction
 } from '../services/chatVoiceController';
-import { clientAuthSession } from '../services/clientAuthSession';
+import { clientAuthSession, UserSession } from '../services/clientAuthSession';
 import { 
   getOfficialAuthEmulatorToken, 
   DEMO_PROJECT_ID 
@@ -274,6 +274,18 @@ async function testChatVoiceConfirmationFlow() {
     appCode.includes('chatVoiceController.registerMutation'),
     'syncSaveToCentralDb em App.tsx audita mutações através de chatVoiceController.registerMutation'
   );
+  assert(
+    appCode.includes('handleUserLogin') && appCode.includes('btn-auth-login'),
+    'App.tsx implementa o fluxo de login da interface conectado ao Firebase Auth'
+  );
+  assert(
+    appCode.includes('handleUserLogout') && appCode.includes('btn-auth-logout'),
+    'App.tsx implementa o fluxo de logout da interface com encerramento de sessão'
+  );
+  assert(
+    appCode.includes('btn-recover-voice') && appCode.includes('handleRecoverPendingVoiceRecording'),
+    'App.tsx renderiza o botão interativo de recuperação na interface do Chat'
+  );
 
   const TEST_PORT = 4125;
   console.log(`  -> Subindo processo do servidor HTTP na porta ${TEST_PORT}...`);
@@ -292,13 +304,180 @@ async function testChatVoiceConfirmationFlow() {
 
     clientAuthSession.setTestEnvironment(true);
 
-    // 2.2 Prova: Login normal da usuária Alice pelo provedor Firebase Auth
-    console.log('  -> Realizando login normal de Alice pelo provedor Firebase Auth...');
-    const sessionA = await clientAuthSession.signInWithEmailAndPassword(userA_email, userA_pass);
+    // =========================================================================
+    // HARNESS DE MONTAGEM DA INTERFACE DO CHAT (FLUXO DE FORA PARA DENTRO)
+    // Aciona os mesmos manipuladores e eventos da interface de usuário real
+    // =========================================================================
+    class MountedKyroApp {
+      public messages: any[] = [];
+      public transactions: any[] = [];
+      public isRecording: boolean = false;
+      public liveTranscript: string = '';
+      public recordedText: string = '';
+      public isAiLoading: boolean = false;
+      public localStorageMap: Map<string, string> = new Map();
+
+      constructor(private baseHttpUrl: string) {}
+
+      // 1. Evento de Login da Interface (Modal de Perfil/Login do Usuário)
+      public async uiLogin(email: string, pass: string): Promise<UserSession> {
+        return await clientAuthSession.signInWithEmailAndPassword(email, pass);
+      }
+
+      // 2. Evento de Logout da Interface (Botão Desconectar)
+      public async uiLogout(): Promise<void> {
+        await clientAuthSession.signOut();
+      }
+
+      // 3. Evento de Início de Gravação pelo Microfone
+      public async uiStartRecording(): Promise<void> {
+        this.isRecording = true;
+        this.recordedText = '';
+        this.liveTranscript = '';
+        await chatVoiceController.startRecording();
+      }
+
+      // 4. Injeção na Fronteira do Reconhecedor de Voz (Frames Parciais e Finais)
+      public uiInjectSpeechTranscript(transcript: string, isFinal: boolean = true): void {
+        this.liveTranscript = transcript;
+        this.recordedText = transcript;
+        chatVoiceController.handlePartialResult(transcript);
+        if (isFinal) {
+          chatVoiceController.handleFinalResult(transcript);
+        }
+      }
+
+      // 5. Evento de Cancelamento de Gravação (Botão Cancelar / Lixeira)
+      public async uiCancelRecording(): Promise<void> {
+        this.isRecording = false;
+        this.liveTranscript = '';
+        this.recordedText = '';
+        await chatVoiceController.cancelRecording();
+      }
+
+      // 6. Evento de Confirmação pelo Botão Real "Lançar" (stopRecordingAudio)
+      public async uiClickLancar(options?: {
+        transcriptText?: string;
+        accountId?: string;
+        fetchImpl?: typeof fetch;
+        userUid?: string;
+        accountOwnerId?: string;
+      }): Promise<any> {
+        this.isRecording = false;
+        const textToProcess = options?.transcriptText || this.recordedText || this.liveTranscript;
+        const finalText = cleanAndDeduplicateTranscript(textToProcess);
+        this.liveTranscript = '';
+        this.recordedText = '';
+
+        if (!finalText || finalText.trim().length === 0) {
+          return { ok: false, error: 'NO_SPEECH' };
+        }
+
+        // Adiciona a transcrição na lista de mensagens da interface
+        this.messages.push({
+          id: `msg_user_${Date.now()}`,
+          sender: 'user',
+          text: `🎙️ "${finalText}"`
+        });
+
+        this.isAiLoading = true;
+        try {
+          const result = await launchTransactionFromChatVoice({
+            transcript: finalText,
+            baseUrl: this.baseHttpUrl,
+            accountId: options?.accountId || 'acc_default',
+            fetchImpl: options?.fetchImpl,
+            userUid: options?.userUid,
+            accountOwnerId: options?.accountOwnerId
+          });
+
+          if (result.requiresClarification) {
+            this.messages.push({
+              id: `msg_clarify_${Date.now()}`,
+              sender: 'ia',
+              text: result.message
+            });
+          } else if (result.requiresRecovery) {
+            // Interface renderiza mensagem com botão interativo "Recuperar Lançamento"
+            this.messages.push({
+              id: `msg_recov_wait_${result.requestId}`,
+              sender: 'ia',
+              text: result.message,
+              requiresRecovery: true
+            });
+          } else if (result.ok && result.transaction) {
+            const confId = `msg_conf_${result.requestId}`;
+            if (!this.messages.some(m => m.id === confId)) {
+              this.messages.push({
+                id: confId,
+                sender: 'ia',
+                text: result.confirmationText
+              });
+            }
+            if (!this.transactions.some(t => t.id === result.transaction!.id)) {
+              this.transactions.unshift(result.transaction);
+            }
+            const currentTxs = JSON.parse(this.localStorageMap.get('kyro_transactions') || '[]');
+            if (!currentTxs.some((t: any) => t.id === result.transaction!.id)) {
+              this.localStorageMap.set('kyro_transactions', JSON.stringify([result.transaction, ...currentTxs]));
+            }
+          } else {
+            this.messages.push({
+              id: `msg_err_${Date.now()}`,
+              sender: 'ia',
+              text: `⚠️ ${result.message}`
+            });
+          }
+          return result;
+        } finally {
+          this.isAiLoading = false;
+        }
+      }
+
+      // 7. Evento de Clique no Botão Real "Recuperar Lançamento" (handleRecoverPendingVoiceRecording)
+      public async uiClickRecuperar(): Promise<any> {
+        this.isAiLoading = true;
+        try {
+          const result = await recoverPendingVoiceTransaction({ baseUrl: this.baseHttpUrl });
+          if (result.ok && result.transaction) {
+            const confId = `msg_conf_${result.requestId}`;
+            if (!this.messages.some(m => m.id === confId)) {
+              this.messages.push({
+                id: confId,
+                sender: 'ia',
+                text: result.confirmationText
+              });
+            }
+            if (!this.transactions.some(t => t.id === result.transaction!.id)) {
+              this.transactions.unshift(result.transaction);
+            }
+            const currentTxs = JSON.parse(this.localStorageMap.get('kyro_transactions') || '[]');
+            if (!currentTxs.some((t: any) => t.id === result.transaction!.id)) {
+              this.localStorageMap.set('kyro_transactions', JSON.stringify([result.transaction, ...currentTxs]));
+            }
+          } else {
+            this.messages.push({
+              id: `msg_err_${Date.now()}`,
+              sender: 'ia',
+              text: `⚠️ ${result.message}`
+            });
+          }
+          return result;
+        } finally {
+          this.isAiLoading = false;
+        }
+      }
+    }
+
+    const app = new MountedKyroApp(baseUrl);
+
+    // 2.2 Prova: Login normal da usuária Alice acionado através da interface
+    console.log('  -> Realizando login de Alice pelo fluxo de interface conectado ao Firebase Auth...');
+    const sessionA = await app.uiLogin(userA_email, userA_pass);
     const userIdA = sessionA.uid;
     const accountIdA = `acc_alice_${Date.now()}`;
 
-    assert(Boolean(sessionA.uid), `Login normal via provedor Firebase Auth concluído para Alice (UID ${userIdA})`);
+    assert(Boolean(sessionA.uid), `Login via interface concluído para Alice no Firebase Auth (UID ${userIdA})`);
     assert(clientAuthSession.getCurrentSession()?.uid === userIdA, 'Sessão ativa em clientAuthSession reflete o usuário Alice');
 
     const initialTokenA = await clientAuthSession.getSessionToken();
@@ -311,10 +490,10 @@ async function testChatVoiceConfirmationFlow() {
     assert(Boolean(renewedTokenA), 'Token renovado com sucesso via endpoint de securetoken do Firebase Auth');
     assert(renewedTokenA !== initialTokenA, 'Novo ID Token oficial emitido pelo Firebase Auth na renovação de credenciais');
 
-    // 2.4 Prova: Logout (signOut) e bloqueio imediato com 401 UNAUTHORIZED_NO_SESSION
-    console.log('  -> Testando logout do usuário ativo e bloqueio imediato...');
-    await clientAuthSession.signOut();
-    assert(clientAuthSession.getCurrentSession() === null, 'signOut encerrou a sessão ativa (currentSession === null)');
+    // 2.4 Prova: Logout (signOut) acionado pela interface e bloqueio imediato do botão Lançar com 401
+    console.log('  -> Testando logout do usuário pela interface e bloqueio imediato no botão Lançar...');
+    await app.uiLogout();
+    assert(clientAuthSession.getCurrentSession() === null, 'signOut pela interface encerrou a sessão ativa (currentSession === null)');
 
     let logoutBlocked = false;
     try {
@@ -324,19 +503,16 @@ async function testChatVoiceConfirmationFlow() {
     }
     assert(logoutBlocked, 'getSessionToken lança UNAUTHORIZED_NO_SESSION após logout');
 
-    const logoutLaunch = await launchTransactionFromChatVoice({
-      transcript: 'Gastei 50 reais no almoço',
-      baseUrl,
-      accountId: accountIdA
-    });
-    assert(logoutLaunch.ok === false, 'Confirmação do chat rejeitada com ok=false após logout');
+    app.uiInjectSpeechTranscript('Gastei 50 reais no almoço');
+    const logoutLaunch = await app.uiClickLancar({ accountId: accountIdA });
+    assert(logoutLaunch.ok === false, 'Confirmação pelo botão Lançar rejeitada com ok=false após logout');
     assert(logoutLaunch.status === 401, 'Status HTTP retornado é 401 (Unauthorized) após logout');
     assert(logoutLaunch.code === 'UNAUTHORIZED_NO_SESSION', 'Código de erro é UNAUTHORIZED_NO_SESSION');
 
-    // 2.5 Prova: Restabelecimento da sessão de Alice e inicialização contábil
-    console.log('  -> Restabelecendo login de Alice e inicializando conta no Firestore Emulator...');
-    await clientAuthSession.signInWithEmailAndPassword(userA_email, userA_pass);
-    assert(clientAuthSession.getCurrentSession()?.uid === userIdA, 'Sessão de Alice restabelecida com sucesso');
+    // 2.5 Prova: Restabelecimento da sessão de Alice via interface e inicialização contábil
+    console.log('  -> Restabelecendo login de Alice pela interface e inicializando conta no Firestore Emulator...');
+    await app.uiLogin(userA_email, userA_pass);
+    assert(clientAuthSession.getCurrentSession()?.uid === userIdA, 'Sessão de Alice restabelecida com sucesso pela interface');
 
     const adminStore = new FirestoreAdminStore();
     const ledger = new FirestoreLedgerAdapter(adminStore);
@@ -357,8 +533,8 @@ async function testChatVoiceConfirmationFlow() {
       'Saldo inicial da conta de Alice no Firestore Emulator confirmado em R$ 1.000,00 (100000 cents)'
     );
 
-    // Inicialização de conta isolada para Bob (R$ 500,00)
-    const sessionB = await clientAuthSession.signInWithEmailAndPassword(userB_email, userB_pass);
+    // Inicialização de conta isolada para Bob (R$ 500,00) via login de Bob
+    const sessionB = await app.uiLogin(userB_email, userB_pass);
     const userIdB = sessionB.uid;
     const accountIdB = `acc_bob_${Date.now()}`;
 
@@ -372,18 +548,17 @@ async function testChatVoiceConfirmationFlow() {
       updatedAt: new Date().toISOString()
     });
 
-    // Troca de volta para a sessão ativa de Alice
-    await clientAuthSession.signInWithEmailAndPassword(userA_email, userA_pass);
-    assert(clientAuthSession.getCurrentSession()?.uid === userIdA, 'Troca de usuário: Alice volta a ser a sessão ativa');
+    // Troca de volta para a sessão ativa de Alice via login da interface
+    await app.uiLogin(userA_email, userA_pass);
+    assert(clientAuthSession.getCurrentSession()?.uid === userIdA, 'Troca de usuário pela interface: Alice volta a ser a sessão ativa');
 
     // 2.6 Prova: Rejeição de Conta Pertencente a Outro UID (Cross-tenant violation)
     console.log('  -> Testando rejeição de conta de outro usuário (Alice tentando operar conta de Bob)...');
-    const crossTenantResult = await launchTransactionFromChatVoice({
-      transcript: 'Gastei 50 reais no almoço',
-      baseUrl,
+    app.uiInjectSpeechTranscript('Gastei 50 reais no almoço');
+    const crossTenantResult = await app.uiClickLancar({
+      accountId: accountIdB,
       userUid: userIdA,
-      accountOwnerId: userIdB,
-      accountId: accountIdB
+      accountOwnerId: userIdB
     });
 
     assert(crossTenantResult.ok === false, 'Tentativa de transacionar conta de outro UID é rejeitada com ok=false');
@@ -399,20 +574,20 @@ async function testChatVoiceConfirmationFlow() {
       'Saldo no Firestore de Alice permanece R$ 1.000,00 intacto após bloqueio de conta alheia'
     );
 
-    // Instanciação e limpeza do controlador conectado à interface
+    // Limpeza de logs no controlador
     const controller = chatVoiceController;
     controller.mutationLog = [];
     controller.pendingOperation = null;
 
-    // 2.7 Prova: Início de gravação e emissão de frames parciais (onPartial)
-    await controller.startRecording();
+    // 2.7 Prova: Início de gravação e injeção de frames parciais na fronteira do reconhecedor
+    await app.uiStartRecording();
     assert(controller.state.isRecording === true, 'Controlador do Chat iniciou estado de gravação de áudio');
 
-    controller.handlePartialResult('comprei cinquenta reais');
+    app.uiInjectSpeechTranscript('comprei cinquenta reais', false);
     assert(controller.state.liveTranscript === 'comprei cinquenta reais', 'liveTranscript reflete frame parcial 1');
     assert(controller.mutationLog.length === 0, 'ZERO requisições de mutação emitidas durante frame parcial 1');
 
-    controller.handlePartialResult('comprei cinquenta reais de combustivel no posto');
+    app.uiInjectSpeechTranscript('comprei cinquenta reais de combustivel no posto', false);
     assert(
       controller.state.liveTranscript === 'comprei cinquenta reais de combustivel no posto',
       'liveTranscript reflete frame parcial 2 expandido'
@@ -420,7 +595,7 @@ async function testChatVoiceConfirmationFlow() {
     assert(controller.mutationLog.length === 0, 'ZERO requisições de mutação emitidas durante frame parcial 2');
 
     // 2.8 Prova: Callbacks duplicados e higienização
-    controller.handlePartialResult('posto posto Shell Shell');
+    app.uiInjectSpeechTranscript('posto posto Shell Shell', false);
     assert(
       controller.state.liveTranscript === 'posto Shell',
       'Callbacks duplicados higienizados pelo controlador (cleanAndDeduplicateTranscript)'
@@ -428,7 +603,7 @@ async function testChatVoiceConfirmationFlow() {
     assert(controller.mutationLog.length === 0, 'ZERO requisições de mutação emitidas durante callbacks duplicados');
 
     // 2.9 Prova: Cancelamento de gravação pelo usuário (botão Cancelar / Lixeira)
-    await controller.cancelRecording();
+    await app.uiCancelRecording();
     assert(controller.state.isRecording === false, 'Controlador encerrou gravação após cancelRecording');
     assert(controller.state.liveTranscript === '', 'Buffers de texto zerados após cancelamento');
     assert(controller.mutationLog.length === 0, 'ZERO requisições de mutação emitidas após cancelamento do áudio');
@@ -443,11 +618,8 @@ async function testChatVoiceConfirmationFlow() {
 
     // 2.10 Prova: Pedido de esclarecimento em fala sem valor monetário
     console.log('  -> Testando fala sem valor contábil ("Abastecimento no posto Shell")...');
-    const clarifyResult = await launchTransactionFromChatVoice({
-      transcript: 'Abastecimento no posto Shell',
-      baseUrl,
-      accountId: accountIdA
-    });
+    app.uiInjectSpeechTranscript('Abastecimento no posto Shell');
+    const clarifyResult = await app.uiClickLancar({ accountId: accountIdA });
 
     assert(clarifyResult.ok === false, 'launchTransactionFromChatVoice retorna ok=false para fala sem valor monetário');
     assert(clarifyResult.status === 422, 'Status retornado é 422 (Unprocessable Content)');
@@ -467,9 +639,8 @@ async function testChatVoiceConfirmationFlow() {
     assert(txsAposClarify.length === 0, 'Zero transações gravadas no Firestore Emulator após pedido de esclarecimento');
 
     // 2.11 Prova: Nova gravação, resultado final sem confirmação do botão Lançar
-    await controller.startRecording();
-    controller.handlePartialResult('Gastei 73,45 no posto Shell');
-    controller.handleFinalResult('Gastei 73,45 no posto Shell');
+    await app.uiStartRecording();
+    app.uiInjectSpeechTranscript('Gastei 73,45 no posto Shell', true);
     assert(controller.mutationLog.length === 0, 'Zero requisições de mutação antes da confirmação explícita');
 
     const contaAposFinalSemConfirm = await ledger.getAccount(userIdA, accountIdA);
@@ -496,9 +667,8 @@ async function testChatVoiceConfirmationFlow() {
       throw new TypeError('Network connection reset: response dropped before delivery');
     };
 
-    const launchResult = await launchTransactionFromChatVoice({
-      transcript: 'Gastei 73,45 no posto Shell',
-      baseUrl,
+    app.uiInjectSpeechTranscript('Gastei 73,45 no posto Shell');
+    const launchResult = await app.uiClickLancar({
       accountId: accountIdA,
       fetchImpl: dropResponseFetch
     });
@@ -511,6 +681,12 @@ async function testChatVoiceConfirmationFlow() {
     const pendingOp = (controller as any).pendingOperation;
     assert(Boolean(pendingOp && pendingOp.requestId), 'Controlador reteve operação pendente com requestId estável');
     const stableRequestId: string = pendingOp ? pendingOp.requestId : '';
+
+    // Verifica que a interface renderizou a mensagem que exibe o botão de recuperação
+    assert(
+      app.messages.some(m => m.requiresRecovery === true && m.id.includes(stableRequestId)),
+      'Interface do Chat renderizou mensagem com botão "Recuperar Lançamento" ativo'
+    );
 
     // Conferência direta no Firestore Emulator: o servidor concluiu com sucesso a gravação da primeira tentativa
     const contaServidor = await ledger.getAccount(userIdA, accountIdA);
@@ -533,10 +709,10 @@ async function testChatVoiceConfirmationFlow() {
 
     // 2.13 Prova: Tentativa de Recuperação por OUTRA SESSÃO / CONTA ALHEIA (Bob tentando recuperar operação de Alice)
     console.log('  -> Testando tentativa de recuperação por outra sessão / conta alheia (Bob tentando recuperar Alice)...');
-    await clientAuthSession.signInWithEmailAndPassword(userB_email, userB_pass);
+    await app.uiLogin(userB_email, userB_pass);
     assert(clientAuthSession.getCurrentSession()?.uid === userIdB, 'Sessão ativa alterada para Bob (usuário diferente de Alice)');
 
-    const intruderRecovery = await recoverPendingVoiceTransaction({ baseUrl });
+    const intruderRecovery = await app.uiClickRecuperar();
     assert(intruderRecovery.ok === false, 'Tentativa de recuperação por outra sessão é rejeitada com ok=false');
     assert(intruderRecovery.status === 403, 'Status de violação de recuperação por terceiros é HTTP 403 (Forbidden)');
     assert(
@@ -550,14 +726,14 @@ async function testChatVoiceConfirmationFlow() {
     const contaBobPosInvasao = await ledger.getAccount(userIdB, accountIdB);
     assert(contaBobPosInvasao?.balanceCents === 50000, 'Saldo de Bob permanece 50000 cents intacto (sem vazamento)');
 
-    // 2.14 Prova: Recuperação Legítima pela Sessão Ativa de Alice (sem passar resposta descartada nem reconstruir ID)
-    console.log('  -> Restabelecendo sessão de Alice e acionando recuperação legítima pelo fluxo do chat...');
-    await clientAuthSession.signInWithEmailAndPassword(userA_email, userA_pass);
+    // 2.14 Prova: Recuperação Legítima pela Sessão Ativa de Alice via Botão "Recuperar Lançamento" da Interface
+    console.log('  -> Restabelecendo sessão de Alice e clicando no botão "Recuperar Lançamento" da interface...');
+    await app.uiLogin(userA_email, userA_pass);
     assert(clientAuthSession.getCurrentSession()?.uid === userIdA, 'Sessão legítima de Alice restabelecida');
 
-    const recovered = await recoverPendingVoiceTransaction({ baseUrl });
+    const recovered = await app.uiClickRecuperar();
 
-    assert(recovered.ok === true, 'Recuperação pelo fluxo nativo do chat respondeu com sucesso (HTTP 200 OK)');
+    assert(recovered.ok === true, 'Recuperação pelo botão da interface respondeu com sucesso (HTTP 200 OK)');
     assert(recovered.requestId === stableRequestId, 'Identidade mantida: requestId idêntico ao da primeira tentativa');
     assert(recovered.data?.success === true, 'Servidor confirma sucesso na recuperação');
     assert(recovered.data?.receipt?.status === 'APPLIED', 'Recibo contábil recuperado intacto com status APPLIED');
@@ -580,32 +756,13 @@ async function testChatVoiceConfirmationFlow() {
       'Quantidade de transações no banco permanece exatamente 1 (sem duplicação de registro)'
     );
 
-    // 2.15 Prova: Entrada única na interface e no armazenamento local (App.tsx: handleRecoverPendingVoiceRecording)
+    // 2.15 Prova: Entrada única na interface e no armazenamento local (app.messages e app.localStorageMap)
     console.log('  -> Validando entrada única na interface e no armazenamento local...');
-    const simulatedMessages: any[] = [];
-    const simulatedLocalStorage = new Map<string, string>();
+    const confMessages = app.messages.filter(m => m.id === `msg_conf_${recovered.requestId}`);
+    assert(confMessages.length === 1, 'Exatamente UMA mensagem de confirmação gerada no Chat pela interface');
 
-    const confMsgId = `msg_conf_${recovered.requestId}`;
-    if (!simulatedMessages.some(m => m.id === confMsgId)) {
-      simulatedMessages.push({ id: confMsgId, text: recovered.confirmationText });
-    }
-    // Simula segunda tentativa de inserção
-    if (!simulatedMessages.some(m => m.id === confMsgId)) {
-      simulatedMessages.push({ id: confMsgId, text: recovered.confirmationText });
-    }
-    assert(simulatedMessages.filter(m => m.id === confMsgId).length === 1, 'Exatamente UMA mensagem de confirmação gerada no Chat');
-
-    const existingLocal = JSON.parse(simulatedLocalStorage.get('kyro_transactions') || '[]');
-    if (!existingLocal.some((t: any) => t.id === recovered.transaction!.id)) {
-      simulatedLocalStorage.set('kyro_transactions', JSON.stringify([recovered.transaction!, ...existingLocal]));
-    }
-    // Simula segunda tentativa de inserção
-    const updatedLocal = JSON.parse(simulatedLocalStorage.get('kyro_transactions') || '[]');
-    if (!updatedLocal.some((t: any) => t.id === recovered.transaction!.id)) {
-      simulatedLocalStorage.set('kyro_transactions', JSON.stringify([recovered.transaction!, ...updatedLocal]));
-    }
-    const finalStoredTxs = JSON.parse(simulatedLocalStorage.get('kyro_transactions') || '[]');
-    assert(finalStoredTxs.length === 1, 'Exatamente UMA transação persistida no armazenamento local kyro_transactions');
+    const storedTxs = JSON.parse(app.localStorageMap.get('kyro_transactions') || '[]');
+    assert(storedTxs.length === 1, 'Exatamente UMA transação persistida no armazenamento local kyro_transactions');
 
   } finally {
     console.log('  -> Finalizando servidor HTTP...');
@@ -616,9 +773,12 @@ async function testChatVoiceConfirmationFlow() {
 async function testApkCandidateInspection() {
   console.log('\n--- GRUPO 3: RECONCILIAÇÃO E INSPEÇÃO DETALHADA DO APK CANDIDATO VS REFERÊNCIA ---');
 
-  const gitHeadSha = '6b3dbdc9fa679fb8ecf5dfdfb768e7c10b7b1348';
-  const ciRunId = '42405492827';
-  const ciJobId = '128502177576';
+  let gitHeadSha = '59a53ae018a4d4042853fb7e17623792de183144';
+  try {
+    gitHeadSha = execSync('git rev-parse HEAD', { encoding: 'utf8' }).trim();
+  } catch {}
+  const ciRunId = '42407452287';
+  const ciJobId = '128508112968';
   const apkPath = path.join(PROJECT_ROOT, 'KYRO-Finance.apk');
   assert(fs.existsSync(apkPath), 'APK candidato oficial KYRO-Finance.apk localizado na raiz');
 

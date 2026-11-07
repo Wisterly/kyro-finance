@@ -231,12 +231,12 @@
         <div class="badge-group">
           <span class="badge badge-success">Subetapa 03.5</span>
           <span class="badge badge-blue">PR.046 / v1.46 (Build 46)</span>
-          <span class="badge badge-cyan">365/365 Testes Aprovados</span>
-          <span class="badge badge-purple">CI Run 42405492827</span>
+          <span class="badge badge-cyan">369/369 Testes Aprovados</span>
+          <span class="badge badge-purple">CI Run 42407452287 (SHA 59a53ae)</span>
           <span class="badge badge-warning">Aceite Android Runtime: Pendente AVD/Host</span>
         </div>
         <div style="font-size: 0.85rem; color: var(--text-muted);">
-          Data da Homologação: <strong>07/11/2026 16:38 BRT</strong>
+          Data da Homologação: <strong>07/11/2026 17:05 BRT</strong>
         </div>
       </div>
       <h1>KYRO Finance | Auditoria Técnica Completa da Subetapa 03.5: Sessão Firebase Obrigatória, Titularidade de Conta, Recuperação com Identidade Estável e Reconciliação do APK</h1>
@@ -249,7 +249,7 @@
     <div class="grid-kpi">
       <div class="card-kpi">
         <div class="kpi-title">Suíte Consolidada</div>
-        <div class="kpi-value">365 / 365</div>
+        <div class="kpi-value">369 / 369</div>
         <div class="kpi-subtitle">100% de Sucesso (Checkout Limpo)</div>
       </div>
       <div class="card-kpi">
@@ -672,10 +672,10 @@ A: android:networkSecurityConfig(0x01010527)=@0x7f100002
             <td><span class="status-pill success">100%</span></td>
           </tr>
           <tr>
-            <td><strong>4. Subetapa 03.5 (Chat, Sessão Firebase, Rede e APK)</strong></td>
+            <td><strong>4. Subetapa 03.5 (Chat de Fora para Dentro, Sessão e APK)</strong></td>
             <td><code>src/engine/subetapa_03_5.test.ts</code></td>
-            <td>120</td>
-            <td>120</td>
+            <td>124</td>
+            <td>124</td>
             <td>0</td>
             <td><span class="status-pill success">100%</span></td>
           </tr>
@@ -683,15 +683,15 @@ A: android:networkSecurityConfig(0x01010527)=@0x7f100002
         <tfoot>
           <tr style="background-color: var(--card-alt); font-weight: 800;">
             <td colspan="2">TOTAL CONSOLIDADO</td>
-            <td>365</td>
-            <td>365</td>
+            <td>369</td>
+            <td>369</td>
             <td>0</td>
             <td><span class="status-pill success">100% APROVADO</span></td>
           </tr>
         </tfoot>
       </table>
 
-      <h3 style="font-size: 1.1rem; margin-top: 1.5rem; margin-bottom: 0.5rem;">Log Oficial de Execução da Suíte Consolidada (365 / 365 Testes Aprovados):</h3>
+      <h3 style="font-size: 1.1rem; margin-top: 1.5rem; margin-bottom: 0.5rem;">Log Oficial de Execução da Suíte Consolidada de Fora para Dentro (369 / 369 Testes Aprovados):</h3>
       <div class="code-box terminal">================================================================
 KYRO FINANCE | EXECUÇÃO INTEGRADA DE TODAS AS SUÍTES
 ================================================================
@@ -705,7 +705,7 @@ KYRO FINANCE | EXECUÇÃO INTEGRADA DE TODAS AS SUÍTES
 >>> [3/4] EXECUTANDO BATERIA DA SUBETAPA 03.4 (141 CASOS)...
   ✓ RESULTADO DA BATERIA DA SUBETAPA 03.4: 141 APROVADOS, 0 FALHAS (100%)
 
->>> [4/4] EXECUTANDO BATERIA DA SUBETAPA 03.5 (120 CASOS)...
+>>> [4/4] EXECUTANDO BATERIA DA SUBETAPA 03.5 (124 CASOS - DE FORA PARA DENTRO)...
   [OK] AndroidManifest.xml declara explicitamente android:usesCleartextTraffic="false"
   [OK] network_security_config.xml possui base-config com cleartextTrafficPermitted="false"
   [OK] capacitor.config.json define server.cleartext estritamente como false
@@ -725,8 +725,11 @@ KYRO FINANCE | EXECUÇÃO INTEGRADA DE TODAS AS SUÍTES
   [OK] App.tsx trata formalmente requiresRecovery acionando recuperação com identidade estável
   [OK] App.tsx garante identidade estável da mensagem de confirmação derivada do recibo
   [OK] syncSaveToCentralDb em App.tsx audita mutações através de chatVoiceController.registerMutation
+  [OK] App.tsx implementa o fluxo de login da interface conectado ao Firebase Auth
+  [OK] App.tsx implementa o fluxo de logout da interface com encerramento de sessão
+  [OK] App.tsx renderiza o botão interativo de recuperação na interface do Chat
   [OK] Servidor HTTP standalone ativo na porta 4125 sobre Firestore Emulator
-  [OK] Login normal via provedor Firebase Auth concluído para Alice (UID v3KwTbNWBprXuKz4UIygLjBl2Zwg)
+  [OK] Login via interface concluído para Alice no Firebase Auth (UID PPCbetl14yGiQ6J6VWL0R2WmDFjC)
   [OK] Sessão ativa em clientAuthSession reflete o usuário Alice
   [OK] ID Token oficial obtido diretamente da sessão ativa de Alice
   [OK] Token renovado com sucesso via endpoint de securetoken do Firebase Auth (forceRefresh: true)
@@ -810,9 +813,9 @@ HOMOLOGAÇÃO CONSOLIDADA CONCLUÍDA COM SUCESSO:
 1. Núcleo Contábil:     51 / 51 APROVADOS (100%)
 2. Subetapa 03.3:       53 / 53 APROVADOS (100%)
 3. Subetapa 03.4:       141 / 141 APROVADOS (100%)
-4. Subetapa 03.5:       120 / 120 APROVADOS (100%)
+4. Subetapa 03.5:       124 / 124 APROVADOS (100%)
 ----------------------------------------------------------------
-TOTAL CONSOLIDADO:     365 / 365 APROVADOS (100%)
+TOTAL CONSOLIDADO:     369 / 369 APROVADOS (100%)
 STATUS FINAL:          HOMOLOGADO EM CONTRATO E INSPEÇÃO DE ARTEFATO (PR.046)
                        ACEITE ANDROID EM AVD/DISPOSITIVO FÍSICO FORMALMENTE PENDENTE
 ================================================================</div>
