@@ -1,16 +1,16 @@
 {
   "version": "1.46",
   "buildNumber": 46,
-  "releaseDate": "2026-11-06",
+  "releaseDate": "2026-11-07",
   "changelog": [
-    "Subetapa 03.5 - Saneamento de Rede Cleartext e Validação do Bridge de Voz Nativo (PR.046)",
-    "Blindagem de Tráfego de Rede: Bloqueio estrito de cleartext (HTTP) e mixed content no AndroidManifest, capacitor.config.json e network_security_config.xml",
-    "Segregação de Ambientes: Base-config e domain-config exigindo TLS/HTTPS obrigatório para produção, com debug-overrides restrito ao ambiente de desenvolvimento",
-    "Interceptador de Transporte Seguro: CleartextTrafficBlockedError com HTTP 400 rejeitando qualquer tráfego inseguro em tempo de execução",
-    "Bridge Nativo de Voz (NativeSpeechRecognizer): Ciclo de vida completo validado (permissão concedida vs negada, start, cancel, onError e finalResult)",
-    "Blindagem Contábil de Voz: Resultados parciais e callbacks duplicados rigorosamente impedidos de disparar mutações financeiras",
-    "Higienização de Transcrição: cleanAndDeduplicateTranscript eliminando repetições e ruídos de frames de áudio sucessivos",
-    "Preservação da Identidade do APK: applicationId 'com.kyro.finance', keystore kyro.keystore e avanço alinhado para versionCode 46 e versionName 1.46",
-    "Relatório Unificado no Endereço Fixo: https://kyro-analise.vercel.app/ e https://kyro-fase-03-5.vercel.app/"
+    "Subetapa 03.5 - Saneamento de Rede Cleartext, Prova de Confirmação do Chat e Inspeção do APK (PR.046)",
+    "Exercício do Caminho de Confirmação do Chat: Validação pelo ChatVoiceController conectado à rota HTTP real (/api/database) sobre Firestore Emulator",
+    "Ausência Estrita de Mutação: Comprovado que frames parciais (onPartial), finais (onFinal), cancelamento e callbacks duplicados emitem ZERO requisições de mutação",
+    "Confirmação e Idempotência: Confirmação do usuário comita lançamento único (R$ 50,00) e recibo APPLIED; retry simulando perda de rede preserva saldo e identidade estável sem duplicidade",
+    "Inspeção Detalhada do APK: Registro de SHA, hash SHA-256 do APK (2A3CACC10056B86EEA8FC1E49A1B863F7C6E287A9BAE9604195CABA120DA5255), comando de build e appId 'com.kyro.finance'",
+    "Comparação de Artefato Compilado: Eliminação de cleartext: true e allowMixedContent: true presentes no APK legado de referência em prol da blindagem TLS obrigatória",
+    "Registro Formal de Bloqueio Concreto: Documentação técnica da ausência de AVD/hardware no host descartável e manutenção do aceite Android dinâmico como FORMALMENTE PENDENTE",
+    "Alinhamento do Parecer e Rollback: Declaração de prontidão ajustada e procedimento documentado para retorno à PR.045 (98cacf082e9cce2a46e63eee5c1385982ddae038)",
+    "Homologação Consolidada: 308 testes aprovados (51 Núcleo + 53 Subetapa 03.3 + 141 Subetapa 03.4 + 63 Subetapa 03.5 = 100% sucesso)"
   ]
 }

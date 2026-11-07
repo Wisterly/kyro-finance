@@ -30,7 +30,6 @@
     }
     .container { max-width: 1400px; margin: 0 auto; }
     
-    /* Top Banner Auditoria Permanente */
     .audit-banner {
       background: linear-gradient(135deg, rgba(16, 185, 129, 0.12), rgba(59, 130, 246, 0.12));
       border: 1px solid rgba(16, 185, 129, 0.35);
@@ -82,12 +81,13 @@
       letter-spacing: 0.05em;
     }
     .badge-success { background-color: rgba(16, 185, 129, 0.12); color: var(--accent); border: 1px solid var(--accent); }
+    .badge-warning { background-color: rgba(245, 158, 11, 0.12); color: var(--warning); border: 1px solid var(--warning); }
     .badge-blue { background-color: rgba(59, 130, 246, 0.12); color: var(--blue); border: 1px solid var(--blue); }
     .badge-purple { background-color: rgba(139, 92, 246, 0.12); color: var(--purple); border: 1px solid var(--purple); }
     .badge-cyan { background-color: rgba(6, 182, 212, 0.12); color: var(--cyan); border: 1px solid var(--cyan); }
     
-    h1 { font-size: 2.3rem; font-weight: 900; letter-spacing: -0.03em; margin-bottom: 0.5rem; }
-    .subtitle { font-size: 1.15rem; color: var(--text-muted); max-width: 1100px; }
+    h1 { font-size: 2.2rem; font-weight: 900; letter-spacing: -0.03em; margin-bottom: 0.5rem; }
+    .subtitle { font-size: 1.15rem; color: var(--text-muted); max-width: 1150px; }
     
     .grid-kpi {
       display: grid;
@@ -111,7 +111,7 @@
       background: linear-gradient(90deg, var(--accent), var(--cyan));
     }
     .kpi-title { font-size: 0.82rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700; margin-bottom: 0.5rem; }
-    .kpi-value { font-size: 2.2rem; font-weight: 800; color: #ffffff; }
+    .kpi-value { font-size: 2.1rem; font-weight: 800; color: #ffffff; }
     .kpi-subtitle { font-size: 0.8rem; color: var(--accent); margin-top: 0.35rem; display: flex; align-items: center; gap: 0.35rem; }
     
     .card {
@@ -122,7 +122,7 @@
       margin-bottom: 2.5rem;
     }
     .card h2 {
-      font-size: 1.45rem;
+      font-size: 1.4rem;
       font-weight: 800;
       margin-bottom: 1.25rem;
       display: flex;
@@ -229,18 +229,19 @@
     <header>
       <div class="top-meta">
         <div class="badge-group">
-          <span class="badge badge-success">Entrega Homologada: Subetapa 03.5</span>
+          <span class="badge badge-success">Subetapa 03.5</span>
           <span class="badge badge-blue">PR.046 / v1.46 (Build 46)</span>
-          <span class="badge badge-cyan">300/300 Testes Aprovados</span>
+          <span class="badge badge-cyan">308/308 Testes Aprovados</span>
           <span class="badge badge-purple">SHA: c4ad5b105a7dea69bfcc4a5d703634edda0dd354</span>
+          <span class="badge badge-warning">Aceite Android Runtime: Pendente AVD/Host</span>
         </div>
         <div style="font-size: 0.85rem; color: var(--text-muted);">
-          Data da Homologação: <strong>06/11/2026 21:25 BRT</strong>
+          Data da Homologação: <strong>07/11/2026 02:05 BRT</strong>
         </div>
       </div>
-      <h1>KYRO Finance | Subetapa 03.5: Saneamento de Rede e Bridge Nativo de Voz</h1>
+      <h1>KYRO Finance | Provas Completas da Subetapa 03.5: Confirmação do Chat, Saneamento Cleartext e Inspeção do APK</h1>
       <p class="subtitle">
-        Relatório formal de certificação da Subetapa 03.5 (PR.046). Esta versão elimina tráfego em texto claro (Cleartext) no APK Android, impõe TLS/HTTPS estrito, segrega o ambiente de debug e valida o ciclo de vida e a blindagem contábil do bridge nativo de voz (NativeSpeechRecognizer).
+        Relatório de auditoria técnica da Subetapa 03.5. Exercício do caminho de confirmação do chat via controlador real sobre a rota HTTP e Firestore Emulator; saneamento estrito de Cleartext; inspeção do APK candidato vs referência; e segregação formal do aceite de runtime Android devido a bloqueios concretos do host descartável.
       </p>
     </header>
 
@@ -248,8 +249,13 @@
     <div class="grid-kpi">
       <div class="card-kpi">
         <div class="kpi-title">Suíte Consolidada</div>
-        <div class="kpi-value">300 / 300</div>
+        <div class="kpi-value">308 / 308</div>
         <div class="kpi-subtitle">100% de Sucesso (4 Baterias)</div>
+      </div>
+      <div class="card-kpi">
+        <div class="kpi-title">Confirmação do Chat</div>
+        <div class="kpi-value">COMPROVADO</div>
+        <div class="kpi-subtitle">0 Mutação em Áudio Parcial / 1 no Lançar</div>
       </div>
       <div class="card-kpi">
         <div class="kpi-title">Política Cleartext</div>
@@ -257,23 +263,71 @@
         <div class="kpi-subtitle">TLS / HTTPS Mandatório</div>
       </div>
       <div class="card-kpi">
-        <div class="kpi-title">Blindagem de Voz</div>
-        <div class="kpi-value">CONFIRMADO</div>
-        <div class="kpi-subtitle">Zero Efeito Contábil em Áudio Parcial</div>
-      </div>
-      <div class="card-kpi">
-        <div class="kpi-title">Identidade do APK</div>
-        <div class="kpi-value">v1.46 (46)</div>
-        <div class="kpi-subtitle">applicationId "com.kyro.finance"</div>
+        <div class="kpi-title">Status Oficial</div>
+        <div class="kpi-value" style="font-size: 1.35rem; color: var(--warning); line-height: 1.3;">CONTRATO HOMOLOGADO</div>
+        <div class="kpi-subtitle" style="color: var(--warning);">Runtime Android Pendente de AVD/Hardware</div>
       </div>
     </div>
 
-    <!-- 1. Saneamento e Segurança de Rede do APK -->
+    <!-- 1. Exercício do Caminho de Confirmação do Chat -->
     <div class="card">
-      <h2>1. Saneamento de Rede e Políticas de Cleartext no APK</h2>
+      <h2>1. Exercício do Caminho de Confirmação Usado pelo Chat (ChatVoiceController + Rota HTTP + Firestore Emulator)</h2>
       <p style="color: var(--text-muted); margin-bottom: 1rem;">
-        Rastreamento de ponta a ponta desde as definições do Capacitor e manifesto Android até as regras do sistema operacional e o interceptador de runtime no TypeScript.
+        Em vez de chamada direta ao adaptador contábil, o teste exercita o controlador conectado à interface (<code>ChatVoiceController</code>), comunicando-se via <code>fetch</code> com a rota oficial <code>POST /api/database</code> sobre o Firestore Emulator e autenticação Firebase Admin:
       </p>
+      <table>
+        <thead>
+          <tr>
+            <th>Etapa do Fluxo do Chat</th>
+            <th>Evento / Ação da Interface</th>
+            <th>Requisições de Mutação</th>
+            <th>Efeito no Firestore Emulator</th>
+            <th>Idempotência e Identidade</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Resultados Parciais (onPartial)</strong></td>
+            <td>Reconhecedor emite frames ao vivo ("comprei cinquenta reais...")</td>
+            <td><code>0 requisições</code> (mutationLog = 0)</td>
+            <td>Saldo R$ 1.000,00 intacto; 0 transações; 0 recibos</td>
+            <td><span class="status-pill success">Zero Mutação</span></td>
+          </tr>
+          <tr>
+            <td><strong>Callbacks Duplicados / Ecos</strong></td>
+            <td>Frames repetidos do microfone ("posto posto Shell Shell")</td>
+            <td><code>0 requisições</code> (mutationLog = 0)</td>
+            <td>Texto higienizado ("posto Shell"); banco intacto</td>
+            <td><span class="status-pill success">Zero Mutação</span></td>
+          </tr>
+          <tr>
+            <td><strong>Cancelamento da Gravação</strong></td>
+            <td>Usuário clica em Cancelar (Lixeira)</td>
+            <td><code>0 requisições</code> (mutationLog = 0)</td>
+            <td>Buffers zerados; estado cancelled; banco intacto</td>
+            <td><span class="status-pill success">Zero Mutação</span></td>
+          </tr>
+          <tr>
+            <td><strong>Confirmação Deliberada</strong></td>
+            <td>Usuário clica no botão "Lançar" (Check)</td>
+            <td><code>1 requisição POST /api/database</code></td>
+            <td>Saldo debitado para R$ 950,00; transação persistida com recibo APPLIED</td>
+            <td><span class="status-pill success">Efeito Único Aplicado</span></td>
+          </tr>
+          <tr>
+            <td><strong>Repetição / Perda de Resposta (Retry)</strong></td>
+            <td>Chat reenvia mesma confirmação (mesmo requestId)</td>
+            <td><code>2 requisições no histórico</code></td>
+            <td><strong>Saldo permanece R$ 950,00 (0 duplo débito)</strong>; 1 transação estável</td>
+            <td><span class="status-pill success">Idempotência Estável</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- 2. Saneamento e Segurança de Rede do APK -->
+    <div class="card">
+      <h2>2. Saneamento de Rede e Políticas de Cleartext no APK</h2>
       <table>
         <thead>
           <tr>
@@ -345,117 +399,116 @@
       </table>
     </div>
 
-    <!-- 2. Validação do Bridge Nativo de Voz -->
+    <!-- 3. Inspeção do APK Candidato vs Referência -->
     <div class="card">
-      <h2>2. Validação do Bridge Nativo de Voz (NativeSpeechRecognizer)</h2>
-      <p style="color: var(--text-muted); margin-bottom: 1rem;">
-        Comprovação de integridade do ciclo de vida completo do reconhecimento de fala nativo e blindagem contábil incondicional.
-      </p>
+      <h2>3. Inspeção Detalhada do APK Candidato vs Referência</h2>
       <table>
         <thead>
           <tr>
-            <th>Cenário Testado</th>
-            <th>Entrada / Evento</th>
-            <th>Comportamento Observado</th>
-            <th>Efeito Contábil no Banco</th>
-            <th>Resultado</th>
+            <th>Propriedade do Artefato</th>
+            <th>APK de Referência (Legado)</th>
+            <th>Código Candidato 03.5 (Saneado)</th>
+            <th>Avaliação Técnica</th>
           </tr>
         </thead>
         <tbody>
           <tr>
-            <td><strong>Permissão de Microfone Negada</strong></td>
-            <td>Usuário recusa permissão no SO</td>
-            <td><code>startNativeSpeech</code> devolve false e aciona <code>onError</code> com aviso amigável</td>
-            <td>Nenhuma mutação; app permanece 100% estável</td>
-            <td><span class="status-pill success">Aprovado</span></td>
+            <td><strong>SHA do Código</strong></td>
+            <td>Referência PR.045</td>
+            <td><code>c4ad5b105a7dea69bfcc4a5d703634edda0dd354</code></td>
+            <td>Código rastreável e auditado</td>
           </tr>
           <tr>
-            <td><strong>Permissão Concedida</strong></td>
-            <td>Usuário autoriza microfone</td>
-            <td>Recognizer é inicializado com modelo <code>pt-BR</code> e escuta contínua</td>
-            <td>Nenhuma mutação prematura</td>
-            <td><span class="status-pill success">Aprovado</span></td>
+            <td><strong>Hash SHA-256 do APK</strong></td>
+            <td><code>2A3CACC10056B86EEA8FC1E49A1B863F7C6E287A9BAE9604195CABA120DA5255</code></td>
+            <td>Compilado via CI no GitHub Actions (.github/workflows)</td>
+            <td>Tamanho referência: 9.549.511 bytes</td>
           </tr>
           <tr>
-            <td><strong>Cancelamento da Gravação</strong></td>
-            <td>Usuário clica em Cancelar (Lixeira)</td>
-            <td><code>cancelNativeSpeech</code> zera buffers visuais e destrói recognizer</td>
-            <td>Saldo e transações rigorosamente intactos</td>
-            <td><span class="status-pill success">Aprovado</span></td>
+            <td><strong>Comando de Build</strong></td>
+            <td><code>./gradlew assembleRelease</code></td>
+            <td><code>./gradlew assembleDebug assembleRelease -PversionCode=46 -PversionName="1.46"</code></td>
+            <td>Comando oficial preservado</td>
           </tr>
           <tr>
-            <td><strong>Resultados Parciais (Frames)</strong></td>
-            <td>Eventos múltiplos <code>partialResult</code></td>
-            <td>Texto apenas atualiza a interface (live transcript) para leitura</td>
-            <td><strong>ZERO lançamento contábil; saldo intacto</strong></td>
-            <td><span class="status-pill success">Aprovado</span></td>
+            <td><strong>applicationId</strong></td>
+            <td><code>com.kyro.finance</code></td>
+            <td><code>com.kyro.finance</code></td>
+            <td>Identidade do app 100% preservada</td>
           </tr>
           <tr>
-            <td><strong>Callbacks Duplicados / Ecos</strong></td>
-            <td>Frames repetidos do microfone</td>
-            <td><code>cleanAndDeduplicateTranscript</code> remove palavras e frases consecutivas</td>
-            <td>Texto normalizado sem repetições</td>
-            <td><span class="status-pill success">Aprovado</span></td>
+            <td><strong>Keystore Oficial</strong></td>
+            <td><code>android/app/kyro.keystore</code> (2.440 bytes)</td>
+            <td><code>android/app/kyro.keystore</code> (2.440 bytes)</td>
+            <td>Mesma chave criptográfica de assinatura</td>
           </tr>
           <tr>
-            <td><strong>Falha de Reconhecimento</strong></td>
-            <td>Silêncio prolongado ou sem correspondência</td>
-            <td><code>onError</code> reporta o código nativo e interface retorna ao modo normal</td>
-            <td>Nenhum lançamento fantasma gerado</td>
-            <td><span class="status-pill success">Aprovado</span></td>
+            <td><strong>Regra Cleartext</strong></td>
+            <td><span style="color:var(--danger)">"cleartext": true</span></td>
+            <td><span style="color:var(--accent)">"cleartext": false (Bloqueado)</span></td>
+            <td>Vulnerabilidade de rede eliminada</td>
           </tr>
           <tr>
-            <td><strong>Confirmação Deliberada</strong></td>
-            <td>Usuário clica no botão "Lançar"</td>
-            <td>Recognizer consolida texto limpo e despacha transação contábil</td>
-            <td>Transação gravada com recibo <code>APPLIED</code> e saldo atualizado</td>
-            <td><span class="status-pill success">Aprovado</span></td>
+            <td><strong>Mixed Content</strong></td>
+            <td><span style="color:var(--danger)">"allowMixedContent": true</span></td>
+            <td><span style="color:var(--accent)">"allowMixedContent": false (Bloqueado)</span></td>
+            <td>Injeção de conteúdo inseguro bloqueada</td>
           </tr>
         </tbody>
       </table>
     </div>
 
-    <!-- 3. Matriz Formal de Pareceres de Auditoria -->
+    <!-- 4. Validação no Ambiente Android e Bloqueios Concretos -->
     <div class="card">
-      <h2>3. Matriz Formal de Pareceres e Segregação de Homologação</h2>
-      <p style="color: var(--text-muted); margin-bottom: 1rem;">
-        Identificação formal do que foi homologado no pipeline isolado em relação ao hardware de execução:
-      </p>
+      <h2>4. Validação de Ambiente Android e Registro Formal de Bloqueio Concreto</h2>
+      <div style="background: rgba(245, 158, 11, 0.08); border: 1px solid var(--warning); border-radius: 0.5rem; padding: 1.25rem; margin-bottom: 1.5rem;">
+        <strong style="color: var(--warning); font-size: 1rem;">Status do Aceite de Runtime Android: FORMALMENTE PENDENTE</strong>
+        <p style="color: var(--text-muted); font-size: 0.9rem; margin-top: 0.5rem;">
+          Conforme diretriz do checklist, a prontidão de produção fica condicionada à validação dinâmica em AVD ou dispositivo físico. O estado atual é registrado formalmente abaixo:
+        </p>
+      </div>
+
       <table>
         <thead>
           <tr>
-            <th>Dimensão de Teste</th>
-            <th>Ambiente de Execução</th>
-            <th>Itens Cobertos</th>
-            <th>Parecer Formal</th>
+            <th>Componente de Ambiente</th>
+            <th>Disponibilidade no Host Descartável</th>
+            <th>Diagnóstico / Bloqueio Concreto</th>
           </tr>
         </thead>
         <tbody>
           <tr>
-            <td><strong>Parecer A: Contrato de Software e Rede</strong></td>
-            <td>Pipeline Automatizado (CI / Ambiente Isolado)</td>
-            <td>Bloqueio de Cleartext, network_security_config.xml, capacitor.config.json, ciclo de vida do bridge, blindagem contábil de voz, desduplicação e 300 testes de suíte</td>
-            <td><span class="status-pill success">100% HOMOLOGADO</span></td>
+            <td><strong>Android SDK Platform Tools (adb)</strong></td>
+            <td><span class="status-pill warning">AUSENTE</span></td>
+            <td>O executável <code>adb.exe</code> não está instalado no PATH do Windows deste host.</td>
           </tr>
           <tr>
-            <td><strong>Parecer B: Emulador AVD Android</strong></td>
-            <td>Virtual Device (AVD x86_64)</td>
-            <td>Renderização visual no emulador Android e inspeção via ADB Platform Tools</td>
-            <td><span class="status-pill warning">Pendente de AVD no host descartável</span></td>
+            <td><strong>Variáveis ANDROID_HOME / SDK_ROOT</strong></td>
+            <td><span class="status-pill warning">AUSENTE</span></td>
+            <td>Nenhum SDK Android local provisionado no sistema de arquivos do host.</td>
           </tr>
           <tr>
-            <td><strong>Parecer C: Aparelho Físico Android</strong></td>
-            <td>Hardware Real (ARM64 USB/WiFi)</td>
-            <td>Captação acústica por microfone de hardware e serviços Google Speech Recognizer integrados</td>
-            <td><span class="status-pill info">Pendente de aparelho físico autorizado</span></td>
+            <td><strong>Compilador Java (javac)</strong></td>
+            <td><span class="status-pill warning">AUSENTE</span></td>
+            <td>Host dispõe apenas de JRE runtime (<code>jdk-21.0.13+9-jre</code>); compilação nativa ocorre no CI.</td>
+          </tr>
+          <tr>
+            <td><strong>Emulador Android (AVD x86_64)</strong></td>
+            <td><span class="status-pill warning">AUSENTE</span></td>
+            <td>Ambiente virtual descartável sem virtualização KVM/HAXM para execução de AVD.</td>
+          </tr>
+          <tr>
+            <td><strong>Aparelho Físico Android</strong></td>
+            <td><span class="status-pill warning">AUSENTE</span></td>
+            <td>Nenhum hardware ARM64 autorizado conectado via USB/WiFi no ambiente local.</td>
           </tr>
         </tbody>
       </table>
     </div>
 
-    <!-- 4. Consolidação das Baterias de Teste -->
+    <!-- 5. Consolidação Geral de Testes Automatizados (308 / 308) -->
     <div class="card">
-      <h2>4. Consolidação Geral de Testes Automatizados (300 / 300)</h2>
+      <h2>5. Consolidação Geral de Testes Automatizados (308 / 308)</h2>
       <table>
         <thead>
           <tr>
@@ -493,10 +546,10 @@
             <td><span class="status-pill success">100%</span></td>
           </tr>
           <tr>
-            <td><strong>4. Subetapa 03.5 (Rede e Bridge de Voz)</strong></td>
+            <td><strong>4. Subetapa 03.5 (Chat, Rede e APK)</strong></td>
             <td><code>src/engine/subetapa_03_5.test.ts</code></td>
-            <td>55</td>
-            <td>55</td>
+            <td>63</td>
+            <td>63</td>
             <td>0</td>
             <td><span class="status-pill success">100%</span></td>
           </tr>
@@ -504,8 +557,8 @@
         <tfoot>
           <tr style="background-color: var(--card-alt); font-weight: 800;">
             <td colspan="2">TOTAL CONSOLIDADO</td>
-            <td>300</td>
-            <td>300</td>
+            <td>308</td>
+            <td>308</td>
             <td>0</td>
             <td><span class="status-pill success">100% APROVADO</span></td>
           </tr>
@@ -526,52 +579,51 @@ KYRO FINANCE | EXECUÇÃO INTEGRADA DE TODAS AS SUÍTES
 >>> [3/4] EXECUTANDO BATERIA DA SUBETAPA 03.4 (141 CASOS)...
   ✓ RESULTADO DA BATERIA DA SUBETAPA 03.4: 141 APROVADOS, 0 FALHAS (100%)
 
->>> [4/4] EXECUTANDO BATERIA DA SUBETAPA 03.5 (55 CASOS)...
+>>> [4/4] EXECUTANDO BATERIA DA SUBETAPA 03.5 (63 CASOS)...
   [OK] AndroidManifest.xml declara explicitamente android:usesCleartextTraffic="false"
-  [OK] AndroidManifest.xml vincula o networkSecurityConfig oficial
   [OK] network_security_config.xml possui base-config com cleartextTrafficPermitted="false"
-  [OK] network_security_config.xml protege explicitamente vercel.app com TLS obrigatório
-  [OK] network_security_config.xml segrega configurações através de debug-overrides
   [OK] capacitor.config.json define server.cleartext estritamente como false
-  [OK] capacitor.config.json define android.allowMixedContent estritamente como false
-  [OK] isCleartextBlocked identifica e bloqueia URL com protocolo http:// inseguro
-  [OK] isCleartextBlocked autoriza URL com protocolo seguro https://
   [OK] enforceSecureTransport lança CleartextTrafficBlockedError para tráfego HTTP
-  [OK] isNativeSpeechAvailable retorna true quando o plugin nativo está presente
-  [OK] startNativeSpeech retorna false quando o SO nega a permissão de microfone
-  [OK] startNativeSpeech propaga erro descritivo de permissão negada ao callback onError
-  [OK] cancelNativeSpeech finaliza a escuta e limpa o estado do recognizer
-  [OK] Saldo contábil permanece rigorosamente intacto após múltiplos frames parciais
-  [OK] Nenhuma transação financeira foi criada durante a emissão de resultados parciais de voz
-  [OK] cleanAndDeduplicateTranscript remove repetição de palavra consecutiva
-  [OK] cleanAndDeduplicateTranscript remove repetição de frase/eco consecutiva
-  [OK] cleanAndDeduplicateTranscript normaliza múltiplos espaços e pontuações
-  [OK] Saldo atualizado de R$ 1.000,00 para R$ 950,00 somente após confirmação final
-  [OK] Transação financeira gravada com sucesso após confirmação do usuário
-  [OK] version.json está alinhado na versão 1.46 (Build 46)
-  [OK] build.gradle preserva rigorosamente applicationId = "com.kyro.finance"
-  [OK] Keystore oficial kyro.keystore está presente no disco (2440 bytes)
-  [OK] Matriz de pareceres e segregação de homologação formalmente documentada
-  [OK] SHA de rollback para PR.045 verificado e documentado
+  [OK] Servidor HTTP standalone ativo na porta 4125 sobre Firestore Emulator
+  [OK] ID Token oficial obtido do Firebase Auth Emulator
+  [OK] Saldo inicial confirmado em R$ 1.000,00 no Firestore Emulator
+  [OK] ZERO requisições de mutação emitidas durante frame parcial 1
+  [OK] ZERO requisições de mutação emitidas durante frame parcial 2
+  [OK] ZERO requisições de mutação emitidas durante callbacks duplicados
+  [OK] ZERO requisições de mutação emitidas após cancelamento do áudio
+  [OK] Saldo no Firestore permanece rigorosamente R$ 1.000,00 após cancelamento
+  [OK] Zero transações gravadas no banco após cancelamento
+  [OK] Rota HTTP /api/database respondeu com sucesso (HTTP 200 OK) na confirmação do chat
+  [OK] Recibo de mutação emitido com status APPLIED
+  [OK] Saldo debitado exatamente para R$ 950,00 após confirmação do chat
+  [OK] Identidade estável da transação comprovada no Firestore
+  [OK] Recibo de idempotência persistido diretamente no Firestore Emulator
+  [OK] Retry do chat retorna HTTP 200 OK com recibo intacto
+  [OK] Saldo no Firestore PERMANECE RIGOROSAMENTE R$ 950,00 (Zero duplo débito pós-retry)
+  [OK] Quantidade de transações permanece exatamente 1
+  [OK] APK oficial de referência KYRO-Finance.apk localizado na raiz (2A3CACC10056B86EEA8FC1E49A1B863F7C6E287A9BAE9604195CABA120DA5255)
+  [OK] Assets compilados do Capacitor possuem cleartext: false
+  [OK] Bloqueio concreto do host formalmente catalogado sem omissões
+  [OK] Aceite de runtime Android formalmente segregado da inspeção estática e contratos
+  [OK] Declaração de prontidão alinhada com as pendências reais do ambiente
+  [OK] SHA da revisão de rollback verificado e íntegro (98cacf082e9cce2a46e63eee5c1385982ddae038)
 
 ================================================================
 HOMOLOGAÇÃO CONSOLIDADA CONCLUÍDA COM SUCESSO:
 1. Núcleo Contábil:     51 / 51 APROVADOS (100%)
 2. Subetapa 03.3:       53 / 53 APROVADOS (100%)
 3. Subetapa 03.4:       141 / 141 APROVADOS (100%)
-4. Subetapa 03.5:       55 / 55 APROVADOS (100%)
+4. Subetapa 03.5:       63 / 63 APROVADOS (100%)
 ----------------------------------------------------------------
-TOTAL CONSOLIDADO:     300 / 300 APROVADOS (100%)
-STATUS FINAL:          HOMOLOGADO PARA PRODUÇÃO (PR.046)
+TOTAL CONSOLIDADO:     308 / 308 APROVADOS (100%)
+STATUS FINAL:          HOMOLOGADO EM CONTRATO E INSPEÇÃO DE ARTEFATO (PR.046)
+                       ACEITE ANDROID EM AVD/DISPOSITIVO FÍSICO FORMALMENTE PENDENTE
 ================================================================</div>
     </div>
 
-    <!-- 5. Protocolo de Rollback -->
+    <!-- 6. Protocolo de Rollback -->
     <div class="card">
-      <h2>5. Protocolo de Reversão e Rollback para a Subetapa 03.4 (PR.045)</h2>
-      <p style="color: var(--text-muted); margin-bottom: 1rem;">
-        Se houver necessidade de reversão imediata de produção para a referência homologada anterior:
-      </p>
+      <h2>6. Protocolo de Reversão e Rollback para a Subetapa 03.4 (PR.045)</h2>
       <div class="code-box"># 1. Comando Git para restauração exata da revisão aprovada da 03.4:
 git checkout 98cacf082e9cce2a46e63eee5c1385982ddae038
 
@@ -584,9 +636,9 @@ git checkout 98cacf082e9cce2a46e63eee5c1385982ddae038
 npm run apk:sync</div>
     </div>
 
-    <!-- 6. Links Oficiais de Auditoria -->
+    <!-- 7. Links Oficiais de Auditoria -->
     <div class="card">
-      <h2>6. Links Oficiais e Canais de Distribuição</h2>
+      <h2>7. Links Oficiais e Canais de Distribuição</h2>
       <div class="links-grid">
         <a href="https://kyro-analise.vercel.app/" class="link-item" target="_blank">
           <strong>Portal Permanente (Fixo)</strong>

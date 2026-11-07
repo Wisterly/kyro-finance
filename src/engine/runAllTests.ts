@@ -4,9 +4,9 @@
  * 1. Núcleo Contábil (src/engine/engine.test.ts) - 51 testes
  * 2. Homologação da Subetapa 03.3 (src/engine/subetapa_03_3.test.ts) - 53 testes
  * 3. Homologação da Subetapa 03.4 (src/engine/subetapa_03_4.test.ts) - 141 testes
- * 4. Homologação da Subetapa 03.5 (src/engine/subetapa_03_5.test.ts) - 55 testes
+ * 4. Homologação da Subetapa 03.5 (src/engine/subetapa_03_5.test.ts) - 63 testes
  * 
- * Total Consolidado: 300 testes
+ * Total Consolidado: 308 testes
  */
 
 import { spawn } from 'child_process';
@@ -58,7 +58,7 @@ async function main() {
     process.exit(res3.exitCode);
   }
 
-  console.log('\n>>> [4/4] EXECUTANDO BATERIA DA SUBETAPA 03.5 (55 CASOS)...');
+  console.log('\n>>> [4/4] EXECUTANDO BATERIA DA SUBETAPA 03.5 (63 CASOS)...');
   await new Promise(r => setTimeout(r, 1000));
   const res4 = await runCommand('npx.cmd', ['tsx', 'src/engine/subetapa_03_5.test.ts']);
   if (res4.exitCode !== 0) {
@@ -71,10 +71,11 @@ async function main() {
   console.log('1. Núcleo Contábil:     51 / 51 APROVADOS (100%)');
   console.log('2. Subetapa 03.3:       53 / 53 APROVADOS (100%)');
   console.log('3. Subetapa 03.4:       141 / 141 APROVADOS (100%)');
-  console.log('4. Subetapa 03.5:       55 / 55 APROVADOS (100%)');
+  console.log('4. Subetapa 03.5:       63 / 63 APROVADOS (100%)');
   console.log('----------------------------------------------------------------');
-  console.log('TOTAL CONSOLIDADO:     300 / 300 APROVADOS (100%)');
-  console.log('STATUS FINAL:          HOMOLOGADO PARA PRODUÇÃO (PR.046)');
+  console.log('TOTAL CONSOLIDADO:     308 / 308 APROVADOS (100%)');
+  console.log('STATUS FINAL:          HOMOLOGADO EM CONTRATO E INSPEÇÃO DE ARTEFATO (PR.046)');
+  console.log('                       ACEITE ANDROID EM AVD/DISPOSITIVO FÍSICO FORMALMENTE PENDENTE');
   console.log('================================================================\n');
 
   process.exit(0);
