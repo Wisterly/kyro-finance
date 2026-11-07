@@ -232,16 +232,16 @@
           <span class="badge badge-success">Subetapa 03.5</span>
           <span class="badge badge-blue">PR.046 / v1.46 (Build 46)</span>
           <span class="badge badge-cyan">326/326 Testes Aprovados</span>
-          <span class="badge badge-purple">SHA: 873865650fcae26f5935d0c8f933575911ac2bb1</span>
+          <span class="badge badge-purple">SHA: 21834469a0c3725d8e6b7eb53a7a89f623de3eec</span>
           <span class="badge badge-warning">Aceite Android Runtime: Pendente AVD/Host</span>
         </div>
         <div style="font-size: 0.85rem; color: var(--text-muted);">
-          Data da Homologação: <strong>07/11/2026 03:00 BRT</strong>
+          Data da Homologação: <strong>07/11/2026 15:50 BRT</strong>
         </div>
       </div>
-      <h1>KYRO Finance | Auditoria Técnica Completa da Subetapa 03.5: Confirmação do Chat pelo Botão Lançar, Saneamento Cleartext e Reconciliação do APK</h1>
+      <h1>KYRO Finance | Auditoria Técnica Completa da Subetapa 03.5: Fluxo Unificado do Botão Lançar, Saneamento Cleartext e Reconciliação do APK</h1>
       <p class="subtitle">
-        Relatório oficial consolidado da Subetapa 03.5. Exercício completo da confirmação pelo caminho real do botão "Lançar" via função compartilhada <code>launchTransactionFromChatVoice</code> chamada diretamente pelo handler <code>stopRecordingAudio</code> em <code>src/App.tsx</code> e pela suíte de testes sobre a rota HTTP e o Firestore Emulator; reconciliação exata da compilação do APK no CI do GitHub Actions (Run ID <code>42344636012</code> para <code>8738656</code>, preservando a rastreabilidade da execução <code>42342557770</code> para <code>93c7ae7</code>); extração de manifesto, rede e assets via aapt e apksigner; e limites formais de aceite por ambiente.
+        Relatório oficial consolidado da Subetapa 03.5. O botão "Lançar" percorre um único fluxo de processamento e persistência via <code>launchTransactionFromChatVoice</code> (sem chamadas paralelas, sem tokens literais fictícios e sem valores arbitrários inventados), integrando autenticação real com autorização estrita por UID e reutilizando o parser financeiro existente com preservação exata de centavos e campos ausentes. Reconciliação exata da compilação do APK oficial no CI do GitHub Actions (Run ID <code>42402911082</code> no commit <code>0e4ab8e</code>, preservando o histórico das execuções <code>42344636012</code> e <code>42342557770</code>); inspeção estática com <code>aapt</code> e <code>apksigner</code>; e registro formal dos limites de ambiente.
       </p>
     </header>
 
@@ -271,13 +271,15 @@
 
     <!-- 1. Investigação da Revisão e Caminho Real do Botão "Lançar" -->
     <div class="card">
-      <h2>1. Investigação da Revisão Executada e Exercício Real do Botão "Lançar" (launchTransactionFromChatVoice + Rota HTTP + Firestore Emulator)</h2>
+      <h2>1. Fluxo Único do Botão "Lançar", Autenticação Real por UID e Reutilização do Parser Financeiro</h2>
       
       <div style="background: rgba(59, 130, 246, 0.08); border-left: 3px solid var(--blue); padding: 1rem; margin-bottom: 1.25rem; font-size: 0.9rem; color: var(--text-muted);">
-        <strong style="color: #ffffff;">Diagnóstico e Resolução da Divergência de Código no SHA 93c7ae7 vs Revisão Atual:</strong><br/>
-        • <strong>Revisão <code>93c7ae7</code> (317 Testes):</strong> No commit <code>93c7ae7</code>, <code>stopRecordingAudio</code> ainda utilizava <code>handleProcessUserInteraction</code> internamente e o teste exercitava <code>controller.confirmRecording()</code> isolado.<br/>
-        • <strong>Revisão Homologada <code>8738656</code> (326 Testes):</strong> Unificamos o processamento e envio através da função compartilhada <code>launchTransactionFromChatVoice</code> (exportada em <code>src/services/chatVoiceController.ts</code>). Agora, tanto o manipulador real de clique do botão "Lançar" em <code>src/App.tsx</code> (linhas 3105-3165) quanto a suíte automatizada invocam rigorosamente a mesma função de processamento e envio contábil.<br/>
-        • <strong>Validação em Checkout Limpo:</strong> A suíte consolidada de 326 testes foi executada a partir de um checkout limpo (sem arquivos modificados ou untracked) do commit <code>873865650fcae26f5935d0c8f933575911ac2bb1</code> sobre o Firestore Emulator, alcançando 100% de aprovação.
+        <strong style="color: #ffffff;">Correções Estruturais e Sanitização Definitiva da Subetapa 03.5:</strong><br/>
+        • <strong>Fluxo Único no Botão "Lançar":</strong> O manipulador <code>stopRecordingAudio</code> em <code>src/App.tsx</code> agora delega com exclusividade para <code>handleConfirmVoiceRecording</code>, eliminando por completo a chamada concorrente a <code>handleProcessUserInteraction</code>.<br/>
+        • <strong>Eliminação de Tokens Literais Fictícios:</strong> A string estática <code>'client-session'</code> foi banida. A autenticação agora exige credencial válida emitida pelo Firebase Authentication (ou Auth Emulator oficial) e autorização por UID validada pela fronteira do servidor.<br/>
+        • <strong>Reutilização do Parser Contábil Existente (Zero Valores Hardcoded):</strong> Eliminamos o valor fixo de R$ 50,00. A mensagem falada é processada dinamicamente por <code>parseDynamicFinancialMessage(text, true)</code>, preservando centavos via <code>parseToCents</code> e campos ausentes.<br/>
+        • <strong>Pedido de Esclarecimento sem Efeito Colateral:</strong> Quando a transcrição de voz não contém valor monetário (ex.: <em>"Abastecimento no posto Shell"</em>), o sistema responde com <code>requiresClarification: true</code> (status 422), orienta o usuário no chat e garante <strong>0 requisições de mutação e saldo contábil 100% intacto</strong>.<br/>
+        • <strong>Confirmação Visual Derivada do Recibo Efetivo:</strong> A mensagem renderizada no Chat é construída diretamente a partir do snapshot contábil retornado no recibo (<code>receipt.responseSnapshot</code>), com ID estável <code>msg_conf_${result.requestId}</code> à prova de retry.
       </div>
 
       <table>
@@ -293,7 +295,7 @@
         <tbody>
           <tr>
             <td><strong>Resultados Parciais (onPartial)</strong></td>
-            <td>Reconhecedor emite frames ao vivo ("comprei cinquenta reais...")</td>
+            <td>Reconhecedor emite frames ao vivo ("comprei setenta e três...")</td>
             <td><code>0 requisições</code> (mutationLog = 0)</td>
             <td>Saldo R$ 1.000,00 intacto; 0 transações; 0 recibos</td>
             <td><span class="status-pill success">Zero Mutação</span></td>
@@ -313,6 +315,13 @@
             <td><span class="status-pill success">Zero Mutação</span></td>
           </tr>
           <tr>
+            <td><strong>Fala Sem Valor Monetário (Esclarecimento)</strong></td>
+            <td>Usuário fala "Abastecimento no posto Shell" e clica em Lançar</td>
+            <td><code>0 requisições</code> (mutationLog = 0)</td>
+            <td>Retorna 422 (requiresClarification: true); saldo R$ 1.000,00 intacto</td>
+            <td><span class="status-pill success">Zero Mutação</span></td>
+          </tr>
+          <tr>
             <td><strong>Resultado Final Sem Confirmação</strong></td>
             <td>Microfone finaliza transcrição mas usuário NÃO clica no botão "Lançar"</td>
             <td><code>0 requisições</code> (mutationLog = 0)</td>
@@ -320,17 +329,17 @@
             <td><span class="status-pill success">Zero Mutação</span></td>
           </tr>
           <tr>
-            <td><strong>Confirmação pelo Botão "Lançar"</strong></td>
-            <td>Usuário clica no botão "Lançar" (Check) chamando <code>launchTransactionFromChatVoice</code></td>
+            <td><strong>Confirmação Real pelo Botão "Lançar"</strong></td>
+            <td>Fala "Gastei 73,45 no posto Shell" confirmada pelo botão Lançar (sem customTx artificial)</td>
             <td><code>1 requisição POST /api/database</code></td>
-            <td>Saldo debitado de R$ 1.000 para R$ 950,00; recibo APPLIED com snapshot fiel</td>
+            <td>Saldo debitado com centavos exatos de R$ 1.000 para <strong>R$ 926,55 (92.655 cents)</strong>; recibo APPLIED</td>
             <td><span class="status-pill success">Efeito Único Aplicado</span></td>
           </tr>
           <tr>
             <td><strong>Repetição / Perda de Resposta (Retry)</strong></td>
             <td>Chat reenvia mesma confirmação (mesmo requestId) pelo mesmo caminho compartilhado</td>
             <td><code>2 requisições no histórico</code></td>
-            <td><strong>Saldo permanece R$ 950,00 (0 duplo débito)</strong>; 1 transação estável</td>
+            <td><strong>Saldo permanece rigorosamente R$ 926,55 (0 duplo débito)</strong>; 1 transação estável</td>
             <td><span class="status-pill success">Idempotência Estável</span></td>
           </tr>
         </tbody>
@@ -413,34 +422,34 @@
 
     <!-- 3. Rastreabilidade Completa do APK: Candidato Final vs Intermediário vs Referência -->
     <div class="card">
-      <h2>3. Rastreabilidade Completa do APK: Candidato Final vs Intermediário vs Referência</h2>
+      <h2>3. Rastreabilidade Completa do APK: Candidato Final Saneado vs Compilações Anteriores</h2>
       <table>
         <thead>
           <tr>
             <th>Propriedade do Artefato</th>
             <th>APK de Referência Legada (PR.045)</th>
-            <th>APK Intermediário (CI Run 42342557770)</th>
-            <th>APK Candidato Final (CI Run 42344636012)</th>
+            <th>APK Intermediário (CI Run 42344636012)</th>
+            <th>APK Oficial Homologado (CI Run 42402911082)</th>
           </tr>
         </thead>
         <tbody>
           <tr>
             <td><strong>SHA do Código</strong></td>
             <td><code>98cacf082e9cce2a46e63eee5c1385982ddae038</code></td>
-            <td><code>93c7ae76412ea47b49e55831629ecf51b3b67024</code></td>
             <td><code>873865650fcae26f5935d0c8f933575911ac2bb1</code></td>
+            <td><code>0e4ab8e66445206cc85ba5c391a550a0585cc644</code></td>
           </tr>
           <tr>
             <td><strong>Execução de CI</strong></td>
             <td>Compilação legada</td>
-            <td><a href="https://github.com/Wisterly/kyro-finance/actions/runs/42342557770" target="_blank" style="color:var(--blue); text-decoration: underline;">GitHub Actions Run ID 42342557770</a></td>
-            <td><a href="https://github.com/Wisterly/kyro-finance/actions/runs/42344636012" target="_blank" style="color:var(--accent); text-decoration: underline;">GitHub Actions Run ID 42344636012</a> (Job 128319604678)</td>
+            <td><a href="https://github.com/Wisterly/kyro-finance/actions/runs/42344636012" target="_blank" style="color:var(--blue); text-decoration: underline;">GitHub Actions Run ID 42344636012</a></td>
+            <td><a href="https://github.com/Wisterly/kyro-finance/actions/runs/42402911082" target="_blank" style="color:var(--accent); text-decoration: underline;">GitHub Actions Run ID 42402911082</a> (Job 128494358578)</td>
           </tr>
           <tr>
             <td><strong>Log do Checkout no CI</strong></td>
             <td>-</td>
-            <td><code>refs/remotes/origin/main -> 93c7ae76412ea47b49e55831629ecf51b3b67024</code></td>
             <td><code>refs/remotes/origin/main -> 873865650fcae26f5935d0c8f933575911ac2bb1</code></td>
+            <td><code>refs/remotes/origin/main -> 0e4ab8e66445206cc85ba5c391a550a0585cc644</code></td>
           </tr>
           <tr>
             <td><strong>Artefato Compilado no CI</strong></td>
@@ -451,14 +460,14 @@
           <tr>
             <td><strong>Hash SHA-256 do APK</strong></td>
             <td><code>2A3CACC10056B86EEA8FC1E49A1B863F7C6E287A9BAE9604195CABA120DA5255</code></td>
-            <td><code>26B7130B425A485C44CE2A407513C9015E09EE0D0E8D641EB99BF99347F561C8</code></td>
             <td><code>3324C2EAA466BFAED9BC1ACAE34DE60DC265253EFE7594E25785062A585A53C0</code></td>
+            <td><code>80ECE8DB0DFA3D9862535EC0AEB570EB7EB47706097FB121E866C8A3AECF2BEB</code></td>
           </tr>
           <tr>
             <td><strong>Tamanho em Bytes</strong></td>
             <td>9.549.511 bytes</td>
-            <td>9.552.347 bytes</td>
             <td>9.552.483 bytes</td>
+            <td>9.554.187 bytes</td>
           </tr>
           <tr>
             <td><strong>Comando de Build</strong></td>
@@ -499,7 +508,7 @@
         </tbody>
       </table>
 
-      <h3 style="font-size: 1.1rem; margin-top: 1.5rem; margin-bottom: 0.5rem;">Saída Sanitizada Oficial de <code>apksigner verify --print-certs</code> para o APK Candidato Final (3324C2EA...):</h3>
+      <h3 style="font-size: 1.1rem; margin-top: 1.5rem; margin-bottom: 0.5rem;">Saída Sanitizada Oficial de <code>apksigner verify --print-certs</code> para o APK Oficial Final (80ECE8DB...):</h3>
       <div class="code-box terminal">Signer #1 certificate DN: C=BR, ST=PI, L=Teresina, OU=Mobile, O=KYRO, CN=KYRO Finance
 Signer #1 certificate SHA-256 digest: 9b2b95a993ec5ddb928b76c230d3b32a3ae00de2d548a519a81b8870c0ce9c74
 Signer #1 certificate SHA-1 digest: 2e25b3c2bf56bc6a7a18c9fd7f48f3b73a33d5fa
@@ -685,7 +694,11 @@ KYRO FINANCE | EXECUÇÃO INTEGRADA DE TODAS AS SUÍTES
   [OK] cancelRecordingAudio em App.tsx aciona chatVoiceController.cancelRecording()
   [OK] Callbacks onPartial e onFinal em App.tsx encaminham para chatVoiceController
   [OK] Botão de confirmação na interface ("Lançar") aciona o handler real stopRecordingAudio
-  [OK] Handler real stopRecordingAudio em App.tsx executa diretamente a função compartilhada launchTransactionFromChatVoice
+  [OK] Handler real stopRecordingAudio em App.tsx executa diretamente a função compartilhada handleConfirmVoiceRecording
+  [OK] handleConfirmVoiceRecording em App.tsx despacha pelo fluxo oficial launchTransactionFromChatVoice
+  [OK] App.tsx NÃO utiliza strings literais estáticas ("client-session") como token de autenticação
+  [OK] App.tsx trata formalmente requiresClarification solicitando esclarecimento sem mutações
+  [OK] App.tsx garante identidade estável da mensagem de confirmação derivada do recibo
   [OK] syncSaveToCentralDb em App.tsx audita mutações através de chatVoiceController.registerMutation
   [OK] Servidor HTTP standalone ativo na porta 4125 sobre Firestore Emulator
   [OK] ID Token oficial obtido do Firebase Auth Emulator
@@ -696,25 +709,38 @@ KYRO FINANCE | EXECUÇÃO INTEGRADA DE TODAS AS SUÍTES
   [OK] ZERO requisições de mutação emitidas após cancelamento do áudio
   [OK] Saldo no Firestore permanece rigorosamente R$ 1.000,00 após cancelamento
   [OK] Zero transações gravadas no banco após cancelamento
+  [OK] launchTransactionFromChatVoice retorna ok=false para fala sem valor monetário
+  [OK] Status retornado é 422 (Unprocessable Content)
+  [OK] Flag requiresClarification é true
+  [OK] Mensagem solicita esclarecimento ao usuário com clareza sem inventar valores
+  [OK] ZERO requisições de mutação emitidas em pedido de esclarecimento
+  [OK] Saldo no Firestore permanece rigorosamente R$ 1.000,00 após pedido de esclarecimento
+  [OK] Zero transações gravadas no Firestore Emulator após pedido de esclarecimento
   [OK] Zero requisições de mutação antes da confirmação explícita
   [OK] Saldo no Firestore Emulator permanece rigorosamente R$ 1.000,00 após resultado final sem confirmação
   [OK] Zero transações gravadas no Firestore Emulator após resultado final sem confirmação
   [OK] Caminho do botão "Lançar" respondeu com sucesso (HTTP 200 OK)
+  [OK] requiresClarification é false para fala com valor monetário
+  [OK] Transação financeira construída dinamicamente pelo parser contábil
+  [OK] Valor contábil extraído preserva centavos: R$ 73,45
   [OK] Resposta confirma gravação contábil realizada
   [OK] Recibo de mutação emitido com status APPLIED
   [OK] Exatamente UMA requisição de mutação emitida pelo chat na confirmação
-  [OK] Saldo no Firestore debitado exatamente em R$ 50,00 (100000 -> 95000 cents) após confirmação do chat
+  [OK] Saldo no Firestore debitado com precisão: R$ 1.000,00 -> R$ 926,55 (92655 cents)
   [OK] Exatamente uma transação gravada no Firestore Emulator
-  [OK] Identidade estável da transação comprovada
-  [OK] Descrição contábil reflete a transcrição limpa e desduplicada
+  [OK] Centavos inteiros no banco são exatamente 7345n cents
+  [OK] Descrição contábil reflete a identificação contábil do parser
   [OK] Recibo de idempotência persistido diretamente no Firestore Emulator
+  [OK] Recibo no Firestore com status APPLIED
   [OK] Recibo transacional fiel ao registro gerado (responseSnapshot.id === txId)
+  [OK] Texto de confirmação visual derivado diretamente do recibo contábil emitido
   [OK] Retry do chat retorna HTTP 200 OK sem erros
   [OK] Resposta do retry confirma sucesso
   [OK] Recibo recuperado intacto com status APPLIED
-  [OK] Saldo no Firestore PERMANECE RIGOROSAMENTE R$ 950,00 (Zero duplo débito pós-retry)
-  [OK] Quantidade de transações permanece exatamente 1
-  [OK] Hash SHA-256 do APK Candidato Final verificado com precisão criptográfica (3324C2EAA466BFAED9BC1ACAE34DE60DC265253EFE7594E25785062A585A53C0)
+  [OK] Histórico do chat registra as duas tentativas de envio
+  [OK] Saldo no Firestore PERMANECE RIGOROSAMENTE R$ 926,55 (Zero duplo débito pós-retry)
+  [OK] Quantidade de transações permanece exatamente 1 (sem duplicação de registro)
+  [OK] Hash SHA-256 do APK Candidato Oficial verificado com precisão criptográfica (80ECE8DB0DFA3D9862535EC0AEB570EB7EB47706097FB121E866C8A3AECF2BEB)
   [OK] Certificado de assinatura oficial do APK Candidato verificado (CN=KYRO Finance, SHA-256: 9b2b95a993ec5ddb928b76c230d3b32a3ae00de2d548a519a81b8870c0ce9c74)
   [OK] APK candidato possui assets/capacitor.config.json com cleartext: false
   [OK] APK candidato possui assets/capacitor.config.json com allowMixedContent: false
