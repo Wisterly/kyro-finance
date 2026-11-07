@@ -790,7 +790,7 @@ async function testChatVoiceConfirmationFlow() {
 async function testApkCandidateInspection() {
   console.log('\n--- GRUPO 3: RECONCILIAÇÃO E INSPEÇÃO DETALHADA DO APK CANDIDATO VS REFERÊNCIA ---');
 
-  let gitHeadSha = 'e34dbfe221976a4df6bf25d97ad0234cf74465d6';
+  let gitHeadSha = 'e34dbfe992d7d388ac2c7915c25f3a64f18b4fca';
   try {
     gitHeadSha = execSync('git rev-parse HEAD', { encoding: 'utf8' }).trim();
   } catch {}
