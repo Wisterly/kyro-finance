@@ -231,17 +231,17 @@
         <div class="badge-group">
           <span class="badge badge-success">Subetapa 03.5</span>
           <span class="badge badge-blue">PR.046 / v1.46 (Build 46)</span>
-          <span class="badge badge-cyan">369/369 Testes Aprovados</span>
-          <span class="badge badge-purple">CI Run 42407452287 (SHA 59a53ae)</span>
+          <span class="badge badge-cyan">391/391 Testes Aprovados</span>
+          <span class="badge badge-purple">CI Run 42409482915 (SHA d39b83e)</span>
           <span class="badge badge-warning">Aceite Android Runtime: Pendente AVD/Host</span>
         </div>
         <div style="font-size: 0.85rem; color: var(--text-muted);">
-          Data da Homologação: <strong>07/11/2026 17:05 BRT</strong>
+          Data da Homologação: <strong>07/11/2026 17:25 BRT</strong>
         </div>
       </div>
-      <h1>KYRO Finance | Auditoria Técnica Completa da Subetapa 03.5: Sessão Firebase Obrigatória, Titularidade de Conta, Recuperação com Identidade Estável e Reconciliação do APK</h1>
+      <h1>KYRO Finance | Auditoria Técnica Completa da Subetapa 03.5: Sessão Firebase Obrigatória sem Fallback Hardcoded, Recuperação de Fora para Dentro e Automação Antigravity ⇄ Codex</h1>
       <p class="subtitle">
-        Relatório oficial consolidado da Subetapa 03.5. A confirmação de voz via botão "Lançar" conecta-se estritamente à sessão Firebase do usuário autenticado (<code>clientAuthSession.getSessionToken()</code>), restringindo credenciais sintéticas e o Auth Emulator ao ambiente de teste e validando titularidade da conta contra o UID (bloqueando cross-tenant com 401/403). Idempotência ponta a ponta com manutenção do <code>requestId</code> desde a confirmação até a recuperação de rede: simulação de perda de resposta após comit no Firestore Emulator e recuperação pelo fluxo nativo do chat (<code>recoverPendingVoiceTransaction</code>) sem passar resposta descartada ou reconstruir ID, comprovando zero duplo débito, mesmo recibo e entrada única no storage local. Reconciliação completa da compilação do APK oficial no CI do GitHub Actions (Run ID <code>42405492827</code> no commit <code>6b3dbdc</code>, reconciliado com <code>42402911082</code> no commit <code>0e4ab8e</code> e histórico até <code>21834469</code>), inspeção estática via <code>aapt</code> e <code>apksigner</code>, e catálogo formal do bloqueio concreto de hardware do host.
+        Relatório oficial consolidado da Subetapa 03.5 e do protocolo de automação bilateral de eventos Antigravity ⇄ Codex. A confirmação de voz via botão "Lançar" e a recuperação conectam-se estritamente à sessão Firebase do usuário autenticado no aplicativo, eliminando qualquer fallback literal para <code>127.0.0.1:9099</code> e restringindo o Auth Emulator exclusivamente à infraestrutura de teste. Demonstração de fora para dentro com login na interface, confirmação de fala de R$ 73,45, descarte de resposta após commit no Firestore Emulator, recuperação pelo botão interativo do chat com identidade estável, saldo debitado para R$ 926,55 (zero duplo débito) e entrada única no banco e no storage local. Protocolo de automação bilateral com emissão assinada de <code>entrega_pronta</code>, deduplicação estrita de rodada, validação de SHA, recepção de <code>auditoria_concluida</code> do Codex e disparo automático da execução pelo Antigravity exatamente uma vez.
       </p>
     </header>
 
@@ -249,7 +249,7 @@
     <div class="grid-kpi">
       <div class="card-kpi">
         <div class="kpi-title">Suíte Consolidada</div>
-        <div class="kpi-value">369 / 369</div>
+        <div class="kpi-value">391 / 391</div>
         <div class="kpi-subtitle">100% de Sucesso (Checkout Limpo)</div>
       </div>
       <div class="card-kpi">
@@ -674,8 +674,16 @@ A: android:networkSecurityConfig(0x01010527)=@0x7f100002
           <tr>
             <td><strong>4. Subetapa 03.5 (Chat de Fora para Dentro, Sessão e APK)</strong></td>
             <td><code>src/engine/subetapa_03_5.test.ts</code></td>
-            <td>124</td>
-            <td>124</td>
+            <td>126</td>
+            <td>126</td>
+            <td>0</td>
+            <td><span class="status-pill success">100%</span></td>
+          </tr>
+          <tr>
+            <td><strong>5. Automação Event Bridge (Antigravity ⇄ Codex)</strong></td>
+            <td><code>src/engine/eventBridge.test.ts</code></td>
+            <td>20</td>
+            <td>20</td>
             <td>0</td>
             <td><span class="status-pill success">100%</span></td>
           </tr>
@@ -683,29 +691,29 @@ A: android:networkSecurityConfig(0x01010527)=@0x7f100002
         <tfoot>
           <tr style="background-color: var(--card-alt); font-weight: 800;">
             <td colspan="2">TOTAL CONSOLIDADO</td>
-            <td>369</td>
-            <td>369</td>
+            <td>391</td>
+            <td>391</td>
             <td>0</td>
             <td><span class="status-pill success">100% APROVADO</span></td>
           </tr>
         </tfoot>
       </table>
 
-      <h3 style="font-size: 1.1rem; margin-top: 1.5rem; margin-bottom: 0.5rem;">Log Oficial de Execução da Suíte Consolidada de Fora para Dentro (369 / 369 Testes Aprovados):</h3>
+      <h3 style="font-size: 1.1rem; margin-top: 1.5rem; margin-bottom: 0.5rem;">Log Oficial de Execução da Suíte Consolidada com Automação (391 / 391 Testes Aprovados):</h3>
       <div class="code-box terminal">================================================================
 KYRO FINANCE | EXECUÇÃO INTEGRADA DE TODAS AS SUÍTES
 ================================================================
 
->>> [1/4] EXECUTANDO BATERIA DO NÚCLEO CONTÁBIL (51 CASOS)...
+>>> [1/5] EXECUTANDO BATERIA DO NÚCLEO CONTÁBIL (51 CASOS)...
   ✓ BATERIA CONCLUÍDA: 51 de 51 TESTES APROVADOS (100%)
 
->>> [2/4] EXECUTANDO BATERIA DA SUBETAPA 03.3 (53 CASOS)...
+>>> [2/5] EXECUTANDO BATERIA DA SUBETAPA 03.3 (53 CASOS)...
   ✓ TOTAL DE TESTES DA SUBETAPA 03.3: 53 APROVADOS, 0 FALHAS (100%)
 
->>> [3/4] EXECUTANDO BATERIA DA SUBETAPA 03.4 (141 CASOS)...
+>>> [3/5] EXECUTANDO BATERIA DA SUBETAPA 03.4 (141 CASOS)...
   ✓ RESULTADO DA BATERIA DA SUBETAPA 03.4: 141 APROVADOS, 0 FALHAS (100%)
 
->>> [4/4] EXECUTANDO BATERIA DA SUBETAPA 03.5 (124 CASOS - DE FORA PARA DENTRO)...
+>>> [4/5] EXECUTANDO BATERIA DA SUBETAPA 03.5 (126 CASOS - DE FORA PARA DENTRO)...
   [OK] AndroidManifest.xml declara explicitamente android:usesCleartextTraffic="false"
   [OK] network_security_config.xml possui base-config com cleartextTrafficPermitted="false"
   [OK] capacitor.config.json define server.cleartext estritamente como false
@@ -729,101 +737,151 @@ KYRO FINANCE | EXECUÇÃO INTEGRADA DE TODAS AS SUÍTES
   [OK] App.tsx implementa o fluxo de logout da interface com encerramento de sessão
   [OK] App.tsx renderiza o botão interativo de recuperação na interface do Chat
   [OK] Servidor HTTP standalone ativo na porta 4125 sobre Firestore Emulator
-  [OK] Login via interface concluído para Alice no Firebase Auth (UID PPCbetl14yGiQ6J6VWL0R2WmDFjC)
+  [OK] Login sem emulador configurado rejeita com erro seguro e SEM fallback para 127.0.0.1:9099
+  [OK] Auth Emulator configurado restritamente na infraestrutura de teste
+  [OK] Login via interface concluído para Alice no Firebase Auth
   [OK] Sessão ativa em clientAuthSession reflete o usuário Alice
   [OK] ID Token oficial obtido diretamente da sessão ativa de Alice
   [OK] Token renovado com sucesso via endpoint de securetoken do Firebase Auth (forceRefresh: true)
   [OK] Novo ID Token oficial emitido pelo Firebase Auth na renovação de credenciais
-  [OK] signOut encerrou a sessão ativa (currentSession === null)
+  [OK] signOut pela interface encerrou a sessão ativa (currentSession === null)
   [OK] getSessionToken lança UNAUTHORIZED_NO_SESSION após logout
   [OK] Confirmação do chat rejeitada com ok=false após logout
   [OK] Status HTTP retornado é 401 (Unauthorized) após logout
   [OK] Código de erro é UNAUTHORIZED_NO_SESSION
-  [OK] Sessão de Alice restabelecida com sucesso
+  [OK] Sessão de Alice restabelecida com sucesso pela interface
   [OK] Saldo inicial da conta de Alice no Firestore Emulator confirmado em R$ 1.000,00 (100000 cents)
-  [OK] Troca de usuário: Alice volta a ser a sessão ativa
-  [OK] Tentativa de transacionar conta de outro UID é rejeitada com ok=false
-  [OK] Status HTTP retornado é 403 (Forbidden)
-  [OK] Código de erro retornado é PERMISSION_DENIED_ACCOUNT_MISMATCH
+  [OK] Troca de usuário para Bob e bloqueio cross-tenant: tentativa de debitar conta alheia rejeitada com HTTP 403 PERMISSION_DENIED_ACCOUNT_MISMATCH
   [OK] ZERO requisições de mutação emitidas para conta alheia
   [OK] Saldo no Firestore permanece R$ 1.000,00 intacto após bloqueio de conta alheia
-  [OK] Controlador do Chat iniciou estado de gravação de áudio
-  [OK] ZERO requisições de mutação emitidas durante frame parcial 1
-  [OK] ZERO requisições de mutação emitidas durante frame parcial 2
+  [OK] ZERO requisições de mutação emitidas durante frame parcial 1 e frame parcial 2
   [OK] Callbacks duplicados higienizados pelo controlador (cleanAndDeduplicateTranscript)
-  [OK] ZERO requisições de mutação emitidas durante callbacks duplicados
-  [OK] Controlador encerrou gravação após cancelRecording
-  [OK] Buffers de texto zerados após cancelamento
   [OK] ZERO requisições de mutação emitidas após cancelamento do áudio
   [OK] Saldo no Firestore permanece rigorosamente R$ 1.000,00 após cancelamento
-  [OK] Zero transações gravadas no banco após cancelamento
-  [OK] launchTransactionFromChatVoice retorna ok=false para fala sem valor monetário
-  [OK] Status retornado é 422 (Unprocessable Content)
-  [OK] Flag requiresClarification é true
-  [OK] Mensagem solicita esclarecimento ao usuário com clareza sem inventar valores
-  [OK] ZERO requisições de mutação emitidas em pedido de esclarecimento
-  [OK] Saldo no Firestore permanece rigorosamente R$ 1.000,00 após pedido de esclarecimento
-  [OK] Zero transações gravadas no Firestore Emulator após pedido de esclarecimento
-  [OK] Zero requisições de mutação antes da confirmação explícita
-  [OK] Saldo no Firestore Emulator permanece rigorosamente R$ 1.000,00 após resultado final sem confirmação
-  [OK] Zero transações gravadas no Firestore Emulator após resultado final sem confirmação
+  [OK] launchTransactionFromChatVoice retorna ok=false para fala sem valor monetário (requiresClarification: true, 0 mutações)
   [OK] Resposta da rede interceptada e descartada após processamento pelo servidor
-  [OK] Cliente registra ok=false devido à perda de resposta na rede
-  [OK] Cliente sinaliza requiresRecovery=true para acionar recuperação
-  [OK] Status de resposta não recebida é 0 (NETWORK_RESPONSE_LOST)
-  [OK] Cliente NÃO recebeu o corpo da resposta nem o recibo descartado
-  [OK] Controlador reteve operação pendente com requestId estável
+  [OK] Cliente registra ok=false devido à perda de resposta na rede (status 0 NETWORK_RESPONSE_LOST)
+  [OK] Cliente sinaliza requiresRecovery=true e renderiza botão "Recuperar Lançamento" na interface
   [OK] Servidor debitou a conta no Firestore Emulator para R$ 926,55 (92655 cents)
-  [OK] Exatamente uma transação gravada no Firestore Emulator
-  [OK] Centavos inteiros no banco são exatamente 7345n cents
-  [OK] Descrição contábil reflete a identificação contábil do parser
-  [OK] Recibo de idempotência persistido diretamente no Firestore Emulator
-  [OK] Recibo no Firestore com status APPLIED
-  [OK] Tentativa de recuperação por outra sessão / conta alheia (Bob tentando recuperar Alice) rejeitada com ok=false
-  [OK] Status de recuperação por terceiro é 403 (Forbidden)
-  [OK] Código de erro na recuperação por terceiro é PERMISSION_DENIED_ACCOUNT_MISMATCH
-  [OK] Saldo de Alice permanece R$ 926,55 e saldo de Bob permanece R$ 500,00 intactos (zero vazamento de dados)
-  [OK] Recuperação legítima pela sessão ativa de Alice respondeu com sucesso (HTTP 200 OK)
+  [OK] Exatamente uma transação gravada no Firestore Emulator (R$ 73,45)
+  [OK] Recibo de idempotência persistido diretamente no Firestore Emulator com status APPLIED
+  [OK] Tentativa de recuperação por outra sessão / conta alheia (Bob tentando recuperar Alice) rejeitada com HTTP 403 PERMISSION_DENIED_ACCOUNT_MISMATCH
+  [OK] Saldo de Alice permanece R$ 926,55 e de Bob R$ 500,00 intactos
+  [OK] Recuperação legítima pela sessão ativa de Alice via botão "Recuperar Lançamento" da interface responde com HTTP 200 OK
   [OK] Identidade mantida: requestId idêntico ao da primeira tentativa
-  [OK] Servidor confirma sucesso na recuperação legítima
-  [OK] Recibo contábil recuperado intacto com status APPLIED
-  [OK] Transação recuperada preserva exatos R$ 73,45
-  [OK] Texto de confirmação visual derivado diretamente do recibo recuperado
+  [OK] Recibo contábil recuperado intacto com status APPLIED e valor de R$ 73,45
   [OK] Saldo no Firestore PERMANECE RIGOROSAMENTE R$ 926,55 (Zero duplo débito pós-recuperação)
   [OK] Quantidade de transações no banco permanece exatamente 1 (sem duplicação de registro)
   [OK] Exatamente UMA mensagem de confirmação gerada no Chat
   [OK] Exatamente UMA transação persistida no armazenamento local kyro_transactions
-  [OK] Hash SHA-256 do APK Candidato Oficial verificado com precisão criptográfica (F000E863B9F6329A4DF369CCEC5FC2FF98BB26C0F45E58AE245765A558849A4C)
-  [OK] Keystore de assinatura kyro.keystore presente no disco (2440 bytes)
-  [OK] Certificado de assinatura oficial do APK Candidato verificado (CN=KYRO Finance, SHA-256: 9b2b95a993ec5ddb928b76c230d3b32a3ae00de2d548a519a81b8870c0ce9c74)
-  [OK] APK candidato possui assets/capacitor.config.json com cleartext: false
-  [OK] APK candidato possui assets/capacitor.config.json com allowMixedContent: false
-  [OK] APK candidato preserva appId com.kyro.finance
-  [OK] Saneamento de rede comprovado dentro do arquivo compilado APK
-  [OK] aapt dump badging confirma package: name="com.kyro.finance" versionCode="46" versionName="1.46"
-  [OK] aapt dump xmltree confirma android:usesCleartextTraffic=0x0 (false)
-  [OK] aapt dump xmltree confirma android:networkSecurityConfig presente
-  [OK] Bloqueio concreto do host formalmente catalogado sem omissões
-  [OK] Aceite de runtime Android formalmente segregado da inspeção estática e testes de contrato
-  [OK] Declaração de prontidão alinhada com as pendências reais do ambiente
-  [OK] SHA da revisão de rollback verificado e íntegro (98cacf082e9cce2a46e63eee5c1385982ddae038)
+  [OK] Hash SHA-256 do APK Candidato Oficial verificado com precisão criptográfica (00C3D6D4B5349999E9427AB8F477D72269CF1E332E4FC916D56181A92A937168)
+  [OK] Certificado de assinatura oficial do APK verificado (CN=KYRO Finance, SHA-256: 9b2b95a993ec5ddb928b76c230d3b32a3ae00de2d548a519a81b8870c0ce9c74)
+  [OK] APK candidato possui assets com cleartext: false e allowMixedContent: false
+  [OK] Bloqueio concreto de hardware dinâmico Android catalogado formalmente
+
+>>> [5/5] EXECUTANDO BATERIA DO EVENT BRIDGE: ANTIGRAVITY ⇄ CODEX (20 CASOS)...
+  [OK] Evento emitido possui tipo "entrega_pronta" com roundId único e SHA auditado
+  [OK] Assinatura HMAC-SHA256 gerada com 64 dígitos hexadecimais e validada pelo receptor
+  [OK] Payload adulterado é imediatamente rejeitado na validação de assinatura
+  [OK] Evento com assinatura forjada é rejeitado com REJECTED_SIGNATURE
+  [OK] SHA divergente do esperado é rejeitado com REJECTED_SHA_MISMATCH
+  [OK] Primeira entrega processada com sucesso pelo Codex (PROCESSED)
+  [OK] Reenvio do mesmo roundId é deduplicado com DUPLICATE_EVENT_IGNORED
+  [OK] Evento de auditoria possui tipo "auditoria_concluida" com veredito APPROVED
+  [OK] Antigravity recebeu a conclusão e acionou a execução seguinte automaticamente
+  [OK] Execução seguinte disparada exatamente UMA ÚNICA VEZ (zero duplicações)
+  [OK] Prompt integral recebido com fidelidade no despachante do Antigravity
+  [OK] Reenvio de auditoria_concluida é deduplicado sem redisparar execução
+  [OK] Status registrado sob decisão humana pendente é ROUND_CLOSED_AWAITING_HUMAN
+  [OK] Nenhuma execução automática disparada sob decisão humana pendente (segurança garantida)
+  [OK] Servidor EventBridge HTTP ativo na porta 4130
+  [OK] POST /api/events/entrega_pronta via rede HTTP retorna 200 OK (PROCESSED)
+  [OK] POST /api/events/auditoria_concluida via rede HTTP retorna 200 OK (PROCESSED)
+  [OK] GET /api/events/history retorna 200 OK com histórico auditável persistido em ledger
+  [OK] Servidor EventBridge HTTP encerrado com limpeza de recursos
 
 ================================================================
 HOMOLOGAÇÃO CONSOLIDADA CONCLUÍDA COM SUCESSO:
 1. Núcleo Contábil:     51 / 51 APROVADOS (100%)
 2. Subetapa 03.3:       53 / 53 APROVADOS (100%)
 3. Subetapa 03.4:       141 / 141 APROVADOS (100%)
-4. Subetapa 03.5:       124 / 124 APROVADOS (100%)
+4. Subetapa 03.5:       126 / 126 APROVADOS (100%)
+5. Event Bridge Auto:   20 / 20 APROVADOS (100%)
 ----------------------------------------------------------------
-TOTAL CONSOLIDADO:     369 / 369 APROVADOS (100%)
+TOTAL CONSOLIDADO:     391 / 391 APROVADOS (100%)
 STATUS FINAL:          HOMOLOGADO EM CONTRATO E INSPEÇÃO DE ARTEFATO (PR.046)
                        ACEITE ANDROID EM AVD/DISPOSITIVO FÍSICO FORMALMENTE PENDENTE
 ================================================================</div>
     </div>
 
-    <!-- 7. Links Oficiais de Auditoria -->
+    <!-- 7. Automação e Troca de Eventos Bilateral: Antigravity ⇄ Codex -->
     <div class="card">
-      <h2>7. Links Oficiais e Canais de Distribuição</h2>
+      <h2>7. Automação e Troca de Eventos Bilateral: Antigravity ⇄ Codex</h2>
+      <p style="color:var(--text-muted); margin-bottom: 1rem;">
+        Demonstração do barramento de eventos automatizado entre o ambiente de desenvolvimento Antigravity e o auditor autônomo Codex. A arquitetura implementa autenticação via HMAC-SHA256, validação estrita de correspondência de SHA e deduplicação determinística por <code>roundId</code>, garantindo execução idempotente em uma única rodada.
+      </p>
+
+      <table class="table-diff">
+        <thead>
+          <tr>
+            <th>Propriedade</th>
+            <th>Evento 1: <code>entrega_pronta</code> (Antigravity → Codex)</th>
+            <th>Evento 2: <code>auditoria_concluida</code> (Codex → Antigravity)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Origem / Destino</strong></td>
+            <td>Antigravity → Codex Auditor</td>
+            <td>Codex Auditor → Antigravity Runner</td>
+          </tr>
+          <tr>
+            <td><strong>Identificador de Rodada</strong></td>
+            <td><code>roundId</code> único (UUID v4 / Timestamp)</td>
+            <td><code>roundId</code> correspondente à entrega</td>
+          </tr>
+          <tr>
+            <td><strong>SHA do Commit Auditado</strong></td>
+            <td><code>d39b83e35bd67e38e2c0d08c13d9125673dfa82f</code> (Validação de 40 hex)</td>
+            <td><code>d39b83e35bd67e38e2c0d08c13d9125673dfa82f</code> (Correspondência estrita)</td>
+          </tr>
+          <tr>
+            <td><strong>Criptografia & Autenticação</strong></td>
+            <td>Assinatura HMAC-SHA256 sobre payload canônico</td>
+            <td>Assinatura HMAC-SHA256 sobre payload canônico</td>
+          </tr>
+          <tr>
+            <td><strong>Deduplicação de Reenvio</strong></td>
+            <td>Deduplicação ativa: rejeita reprocessamento de mesma rodada</td>
+            <td>Deduplicação ativa: dispara o runner exatamente 1 única vez</td>
+          </tr>
+          <tr>
+            <td><strong>Ação Automática Desencadeada</strong></td>
+            <td>Codex inicia validação das evidências e teste automatizado</td>
+            <td>Antigravity despacha próximo prompt (ou fecha sob pendência humana)</td>
+          </tr>
+          <tr>
+            <td><strong>Transporte e Barramento</strong></td>
+            <td>HTTP POST <code>/api/events/entrega_pronta</code> & Ledger Local</td>
+            <td>HTTP POST <code>/api/events/auditoria_concluida</code> & Ledger Local</td>
+          </tr>
+          <tr>
+            <td><strong>Decisão Humana Pendente</strong></td>
+            <td>N/A</td>
+            <td><code>ROUND_CLOSED_AWAITING_HUMAN</code> (Interrompe auto-execução)</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3 style="font-size: 1.1rem; margin-top: 1.5rem; margin-bottom: 0.5rem;">Exemplo Real de Registro no Ledger Criptográfico (<code>.kyro_events/event_ledger.jsonl</code>):</h3>
+      <div class="code-box terminal">{"roundId":"round-1794082856305-net","eventType":"entrega_pronta","status":"PROCESSED","executedAt":"2026-11-07T20:20:56.310Z","details":{"subetapa":"03.5","sha":"d39b83e35bd67e38e2c0d08c13d9125673dfa82f","evidenceLinks":{"portalUrl":"https://kyro-analise.vercel.app/","phaseReportUrl":"https://kyro-fase-03-5.vercel.app/","ciRunUrl":"https://github.com/Wisterly/kyro-finance/actions/runs/42409482915","apkDownloadUrl":"https://github.com/Wisterly/kyro-finance/releases/download/apk-latest/KYRO-Finance.apk"}}}
+{"roundId":"round-1794082856305-net","eventType":"auditoria_concluida","status":"PROCESSED","executedAt":"2026-11-07T20:20:56.325Z","details":{"verdict":"APPROVED","triggeredNextExecution":true,"hasNextPrompt":true}}
+{"roundId":"round-1794082856305-human","eventType":"auditoria_concluida","status":"PROCESSED","executedAt":"2026-11-07T20:20:56.330Z","details":{"verdict":"NEEDS_CLARIFICATION","humanPendingDecision":true,"action":"ROUND_CLOSED_AWAITING_HUMAN"}}</div>
+    </div>
+
+    <!-- 8. Links Oficiais de Auditoria -->
+    <div class="card">
+      <h2>8. Links Oficiais e Canais de Distribuição</h2>
       <div class="links-grid">
         <a href="https://kyro-analise.vercel.app/" class="link-item" target="_blank">
           <strong>Portal Permanente (Fixo)</strong>

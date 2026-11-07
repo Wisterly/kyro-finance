@@ -471,6 +471,22 @@ async function testChatVoiceConfirmationFlow() {
 
     const app = new MountedKyroApp(baseUrl);
 
+    // 2.1.1 Verificação de ausência de fallback para 127.0.0.1:9099 na aplicação
+    console.log('  -> Verificando ausência de fallback para 127.0.0.1:9099 sem emulador configurado...');
+    clientAuthSession.configureTestEmulator(null);
+    let rejectedNoEmulator = false;
+    try {
+      await app.uiLogin('sem_emulador@kyro.synthetic', 'senha123');
+    } catch (e: any) {
+      rejectedNoEmulator = e?.message?.includes('Provedor Firebase Authentication não inicializado');
+    }
+    assert(rejectedNoEmulator, 'Login sem emulador configurado rejeita com erro seguro e SEM fallback para 127.0.0.1:9099');
+
+    // 2.1.2 Configuração do Auth Emulator exclusivamente pela infraestrutura de teste
+    console.log('  -> Configurando Auth Emulator exclusivamente na infraestrutura de teste...');
+    clientAuthSession.configureTestEmulator('127.0.0.1:9099');
+    assert(clientAuthSession.getTestEmulatorHost() === '127.0.0.1:9099', 'Auth Emulator configurado restritamente na infraestrutura de teste');
+
     // 2.2 Prova: Login normal da usuária Alice acionado através da interface
     console.log('  -> Realizando login de Alice pelo fluxo de interface conectado ao Firebase Auth...');
     const sessionA = await app.uiLogin(userA_email, userA_pass);
@@ -765,7 +781,8 @@ async function testChatVoiceConfirmationFlow() {
     assert(storedTxs.length === 1, 'Exatamente UMA transação persistida no armazenamento local kyro_transactions');
 
   } finally {
-    console.log('  -> Finalizando servidor HTTP...');
+    console.log('  -> Finalizando servidor HTTP e resetando configuração de teste...');
+    clientAuthSession.configureTestEmulator(null);
     await killProcessSafely(proc);
   }
 }
@@ -773,12 +790,12 @@ async function testChatVoiceConfirmationFlow() {
 async function testApkCandidateInspection() {
   console.log('\n--- GRUPO 3: RECONCILIAÇÃO E INSPEÇÃO DETALHADA DO APK CANDIDATO VS REFERÊNCIA ---');
 
-  let gitHeadSha = '59a53ae018a4d4042853fb7e17623792de183144';
+  let gitHeadSha = 'd39b83e35bd67e38e2c0d08c13d9125673dfa82f';
   try {
     gitHeadSha = execSync('git rev-parse HEAD', { encoding: 'utf8' }).trim();
   } catch {}
-  const ciRunId = '42407452287';
-  const ciJobId = '128508112968';
+  const ciRunId = '42409482915';
+  const ciJobId = '128514289686';
   const apkPath = path.join(PROJECT_ROOT, 'KYRO-Finance.apk');
   assert(fs.existsSync(apkPath), 'APK candidato oficial KYRO-Finance.apk localizado na raiz');
 

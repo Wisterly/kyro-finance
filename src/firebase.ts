@@ -8,11 +8,13 @@ import {
   deleteDoc, 
   Firestore 
 } from 'firebase/firestore';
+import { getAuth, Auth, connectAuthEmulator } from 'firebase/auth';
 import { Transaction, RecurringExpense } from './types';
 
 class KyroCloudSync {
   private app: FirebaseApp | null = null;
   private db: Firestore | null = null;
+  private auth: Auth | null = null;
   public isConnected: boolean = false;
 
   constructor() {
@@ -43,6 +45,11 @@ class KyroCloudSync {
           this.app = getApp();
         }
         this.db = getFirestore(this.app);
+        try {
+          this.auth = getAuth(this.app);
+        } catch {
+          this.auth = null;
+        }
         this.isConnected = true;
         return true;
       } catch (err) {
@@ -70,6 +77,22 @@ class KyroCloudSync {
       return this.init();
     } catch {
       return false;
+    }
+  }
+
+  public getAuth(): Auth | null {
+    return this.auth;
+  }
+
+  public getApp(): FirebaseApp | null {
+    return this.app;
+  }
+
+  public connectTestAuthEmulator(host: string = '127.0.0.1:9099'): void {
+    if (this.auth) {
+      try {
+        connectAuthEmulator(this.auth, `http://${host}`, { disableWarnings: true });
+      } catch {}
     }
   }
 

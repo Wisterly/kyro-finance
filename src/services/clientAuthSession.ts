@@ -8,6 +8,9 @@
  * 4. Suporte nativo a renovação de credenciais (forceRefresh), logout (signOut), troca de usuário e bloqueio cross-tenant.
  */
 
+import { kyroCloud } from '../firebase';
+import { signInWithEmailAndPassword as fbSignIn, signOut as fbSignOut } from 'firebase/auth';
+
 export interface UserSession {
   uid: string;
   email: string;
@@ -36,6 +39,23 @@ export class AccountMismatchError extends Error {
 class ClientAuthSessionManager {
   private currentSession: UserSession | null = null;
   private testEnvironmentEnabled: boolean = false;
+  private testEmulatorHost: string | null = null;
+
+  /**
+   * Configura o host do Auth Emulator exclusivamente para a infraestrutura de testes.
+   * Não deve ser chamado em runtime de produção normal.
+   */
+  public configureTestEmulator(host: string | null): void {
+    this.testEmulatorHost = host;
+    this.testEnvironmentEnabled = !!host;
+    if (host) {
+      kyroCloud.connectTestAuthEmulator(host);
+    }
+  }
+
+  public getTestEmulatorHost(): string | null {
+    return this.testEmulatorHost;
+  }
 
   /**
    * Define manualmente a sessão do usuário autenticado (útil para injeção controlada de mocks em testes unitários).
@@ -74,7 +94,7 @@ class ClientAuthSessionManager {
   }
 
   /**
-   * Realiza o login normal com e-mail e senha no Firebase Authentication (ou Auth Emulator local).
+   * Realiza o login normal com e-mail e senha no Firebase Authentication (ou Auth Emulator configurado em teste).
    * Estabelece a sessão viva com capacidade de renovação dinâmica de credenciais.
    */
   public async signInWithEmailAndPassword(
@@ -82,70 +102,98 @@ class ClientAuthSessionManager {
     password: string,
     options?: { emulatorHost?: string }
   ): Promise<UserSession> {
-    const host = options?.emulatorHost || 
-      (typeof process !== 'undefined' && process.env?.FIREBASE_AUTH_EMULATOR_HOST) || 
-      '127.0.0.1:9099';
+    // 1. Prioridade para emulador explicitamente configurado pela infraestrutura de teste
+    const emulatorHost = options?.emulatorHost || this.testEmulatorHost || 
+      (this.isTestEnvironment() && typeof process !== 'undefined' ? process.env?.FIREBASE_AUTH_EMULATOR_HOST : null);
 
-    let resp = await fetch(`http://${host}/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=fake-api-key`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password, returnSecureToken: true })
-    });
-
-    if (!resp.ok) {
-      resp = await fetch(`http://${host}/identitytoolkit.googleapis.com/v1/accounts:signUp?key=fake-api-key`, {
+    if (emulatorHost) {
+      let resp = await fetch(`http://${emulatorHost}/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=fake-api-key`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password, returnSecureToken: true })
       });
-    }
 
-    if (!resp.ok) {
-      const errBody = await resp.json().catch(() => ({}));
-      throw new Error(`[ClientAuthSession] Falha ao autenticar com provedor Firebase: ${errBody?.error?.message || resp.statusText}`);
-    }
+      if (!resp.ok) {
+        resp = await fetch(`http://${emulatorHost}/identitytoolkit.googleapis.com/v1/accounts:signUp?key=fake-api-key`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password, returnSecureToken: true })
+        });
+      }
 
-    const authData = await resp.json();
-    let currentIdToken: string = authData.idToken;
-    let currentRefreshToken: string = authData.refreshToken;
-    const uid: string = authData.localId;
-    const userEmail: string = authData.email || email;
+      if (!resp.ok) {
+        const errBody = await resp.json().catch(() => ({}));
+        throw new Error(`[ClientAuthSession] Falha ao autenticar com provedor Firebase: ${errBody?.error?.message || resp.statusText}`);
+      }
 
-    const session: UserSession = {
-      uid,
-      email: userEmail,
-      refreshToken: currentRefreshToken,
-      getIdToken: async (forceRefresh: boolean = false): Promise<string> => {
-        if (forceRefresh && currentRefreshToken) {
-          const refreshResp = await fetch(`http://${host}/securetoken.googleapis.com/v1/token?key=fake-api-key`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: new URLSearchParams({
-              grant_type: 'refresh_token',
-              refresh_token: currentRefreshToken
-            })
-          });
+      const authData = await resp.json();
+      let currentIdToken: string = authData.idToken;
+      let currentRefreshToken: string = authData.refreshToken;
+      const uid: string = authData.localId;
+      const userEmail: string = authData.email || email;
 
-          if (refreshResp.ok) {
-            const refreshData = await refreshResp.json();
-            currentIdToken = refreshData.id_token;
-            if (refreshData.refresh_token) {
-              currentRefreshToken = refreshData.refresh_token;
+      const session: UserSession = {
+        uid,
+        email: userEmail,
+        refreshToken: currentRefreshToken,
+        getIdToken: async (forceRefresh: boolean = false): Promise<string> => {
+          if (forceRefresh && currentRefreshToken) {
+            const refreshResp = await fetch(`http://${emulatorHost}/securetoken.googleapis.com/v1/token?key=fake-api-key`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+              body: new URLSearchParams({
+                grant_type: 'refresh_token',
+                refresh_token: currentRefreshToken
+              })
+            });
+
+            if (refreshResp.ok) {
+              const refreshData = await refreshResp.json();
+              currentIdToken = refreshData.id_token;
+              if (refreshData.refresh_token) {
+                currentRefreshToken = refreshData.refresh_token;
+              }
             }
           }
+          return currentIdToken;
         }
-        return currentIdToken;
-      }
-    };
+      };
 
-    this.currentSession = session;
-    if (typeof window !== 'undefined') {
-      try {
-        window.sessionStorage?.setItem('kyro_auth_uid', uid);
-      } catch {}
+      this.currentSession = session;
+      if (typeof window !== 'undefined') {
+        try {
+          window.sessionStorage?.setItem('kyro_auth_uid', uid);
+        } catch {}
+      }
+
+      return session;
     }
 
-    return session;
+    // 2. Fluxo Normal da Aplicação via Provedor Firebase do Aplicativo
+    const appAuth = kyroCloud.getAuth();
+    if (appAuth) {
+      const userCredential = await fbSignIn(appAuth, email, password);
+      const fbUser = userCredential.user;
+      const session: UserSession = {
+        uid: fbUser.uid,
+        email: fbUser.email || email,
+        getIdToken: async (forceRefresh: boolean = false) => {
+          return await fbUser.getIdToken(forceRefresh);
+        }
+      };
+      this.currentSession = session;
+      if (typeof window !== 'undefined') {
+        try {
+          window.sessionStorage?.setItem('kyro_auth_uid', session.uid);
+        } catch {}
+      }
+      return session;
+    }
+
+    // 3. Ausência de emulador na infraestrutura de teste e ausência de Firebase ativo
+    throw new Error(
+      '[ClientAuthSession] Provedor Firebase Authentication não inicializado na aplicação. Configure as credenciais no app ou ative o Auth Emulator na infraestrutura de teste.'
+    );
   }
 
   /**
@@ -153,6 +201,12 @@ class ClientAuthSessionManager {
    */
   public async signOut(): Promise<void> {
     this.currentSession = null;
+    const appAuth = kyroCloud.getAuth();
+    if (appAuth) {
+      try {
+        await fbSignOut(appAuth);
+      } catch {}
+    }
     if (typeof window !== 'undefined') {
       try {
         window.sessionStorage?.removeItem('kyro_auth_uid');
