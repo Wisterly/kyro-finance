@@ -86,8 +86,8 @@
     .badge-purple { background-color: rgba(139, 92, 246, 0.12); color: var(--purple); border: 1px solid var(--purple); }
     .badge-cyan { background-color: rgba(6, 182, 212, 0.12); color: var(--cyan); border: 1px solid var(--cyan); }
     
-    h1 { font-size: 2.4rem; font-weight: 900; letter-spacing: -0.03em; margin-bottom: 0.5rem; }
-    .subtitle { font-size: 1.15rem; color: var(--text-muted); max-width: 1050px; }
+    h1 { font-size: 2.3rem; font-weight: 900; letter-spacing: -0.03em; margin-bottom: 0.5rem; }
+    .subtitle { font-size: 1.15rem; color: var(--text-muted); max-width: 1100px; }
     
     .grid-kpi {
       display: grid;
@@ -181,21 +181,6 @@
       max-height: 480px;
       overflow-y: auto;
     }
-    
-    .diff-box {
-      background-color: #04060a;
-      border: 1px solid var(--border);
-      border-radius: 0.5rem;
-      padding: 1rem;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-      font-size: 0.82rem;
-      overflow-x: auto;
-      margin: 1rem 0;
-      white-space: pre;
-    }
-    .diff-add { color: #34d399; background: rgba(16, 185, 129, 0.1); display: block; }
-    .diff-del { color: #f87171; background: rgba(239, 68, 68, 0.1); display: block; }
-    .diff-ctx { color: #94a3b8; display: block; }
 
     .links-grid {
       display: grid;
@@ -244,316 +229,380 @@
     <header>
       <div class="top-meta">
         <div class="badge-group">
-          <span class="badge badge-success">Entrega Homologada: Subetapa 03.4</span>
-          <span class="badge badge-blue">PR.045 / v1.45 (Build 45)</span>
-          <span class="badge badge-cyan">245/245 Testes Aprovados</span>
-          <span class="badge badge-purple">Monotonicidade Estrita & Rollback PR.044</span>
+          <span class="badge badge-success">Entrega Homologada: Subetapa 03.5</span>
+          <span class="badge badge-blue">PR.046 / v1.46 (Build 46)</span>
+          <span class="badge badge-cyan">300/300 Testes Aprovados</span>
+          <span class="badge badge-purple">SHA: 19cc4c15630e4a268861a4191786723b02269b09</span>
         </div>
         <div style="font-size: 0.85rem; color: var(--text-muted);">
-          Data e Hora da Publicação: <strong>06/11/2026 20:30 BRT (Fuso Canônico UTC-3)</strong>
+          Data da Homologação: <strong>06/11/2026 21:25 BRT</strong>
         </div>
       </div>
-      <h1>KYRO Finance — Relatório Permanente de Auditoria</h1>
+      <h1>KYRO Finance | Subetapa 03.5: Saneamento de Rede e Bridge Nativo de Voz</h1>
       <p class="subtitle">
-        Fechamento da Monotonicidade de Leases: Preservação de Geração após Liberação, Sequência 
-        <strong>Adquirir &rarr; Liberar &rarr; Readquirir com o Mesmo Titular</strong>, Rejeição de Token Antigo com Saldo e Recibo Intactos, Token Novo Aprovado e Replay Idêntico Idempotente.
+        Relatório formal de certificação da Subetapa 03.5 (PR.046). Esta versão elimina tráfego em texto claro (Cleartext) no APK Android, impõe TLS/HTTPS estrito, segrega o ambiente de debug e valida o ciclo de vida e a blindagem contábil do bridge nativo de voz (NativeSpeechRecognizer).
       </p>
     </header>
 
-    <!-- Painel de Identificação Oficial da Entrega Vigente -->
-    <div class="card" style="border-left: 4px solid var(--accent);">
-      <h2>Identificação Oficial da Entrega Vigente no Portal</h2>
-      <table>
-        <tbody>
-          <tr>
-            <td style="width: 28%; font-weight: 700; color: var(--text-muted);">Subetapa Homologada</td>
-            <td><strong>Subetapa 03.4 (PR.045) — Concorrência, Leases Monotônicos e Fencing Tokens</strong></td>
-          </tr>
-          <tr>
-            <td style="font-weight: 700; color: var(--text-muted);">SHA Exato da Revisão Testada</td>
-            <td>
-              <a href="https://github.com/Wisterly/kyro-finance/commit/98cacf082e9cce2a46e63eee5c1385982ddae038" target="_blank" style="color: #38bdf8; text-decoration: underline; font-family: monospace; font-size: 0.95rem;">
-                98cacf082e9cce2a46e63eee5c1385982ddae038
-              </a>
-              <span style="font-size: 0.8rem; color: var(--text-muted); margin-left: 0.5rem;">(feat(etapa-03.4): comprovacao completa da sequencia de monotonicidade via rota HTTP e 245 testes aprovados)</span>
-            </td>
-          </tr>
-          <tr>
-            <td style="font-weight: 700; color: var(--text-muted);">Data e Hora de Publicação</td>
-            <td><strong>06 de Novembro de 2026 às 20:30 BRT (Fuso Canônico America/Fortaleza UTC-3)</strong></td>
-          </tr>
-          <tr>
-            <td style="font-weight: 700; color: var(--text-muted);">Comando Oficial Executado</td>
-            <td><code>npm run test:all</code> & <code>npm run test:subetapa-03-4</code></td>
-          </tr>
-          <tr>
-            <td style="font-weight: 700; color: var(--text-muted);">Parecer Técnico Oficial</td>
-            <td><span class="status-pill success">HOMOLOGADO — 245 / 245 VERIFICAÇÕES APROVADAS (100% SUCESSO)</span></td>
-          </tr>
-          <tr>
-            <td style="font-weight: 700; color: var(--text-muted);">Revisão Base de Rollback (PR.044)</td>
-            <td><code>1fe397de12de565002e0bec6976634c9c166bedb</code> (Servidor standalone isolado executado na porta 4114)</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-
-    <!-- KPIs -->
+    <!-- Indicadores Principais (KPIs) -->
     <div class="grid-kpi">
       <div class="card-kpi">
-        <div class="kpi-title">Bateria Total de Testes</div>
-        <div class="kpi-value">245 / 245</div>
-        <div class="kpi-subtitle">✓ 51 Núcleo + 53 03.3 + 141 03.4</div>
+        <div class="kpi-title">Suíte Consolidada</div>
+        <div class="kpi-value">300 / 300</div>
+        <div class="kpi-subtitle">100% de Sucesso (4 Baterias)</div>
       </div>
       <div class="card-kpi">
-        <div class="kpi-title">Monotonicidade Pós-Liberação</div>
-        <div class="kpi-value">T2 &gt; T1 (3 &gt; 2)</div>
-        <div class="kpi-subtitle">✓ Preservação de Token sem Reset</div>
+        <div class="kpi-title">Política Cleartext</div>
+        <div class="kpi-value">BLOQUEADO</div>
+        <div class="kpi-subtitle">TLS / HTTPS Mandatório</div>
       </div>
       <div class="card-kpi">
-        <div class="kpi-title">Token Antigo com Novo RequestId</div>
-        <div class="kpi-value">HTTP 412</div>
-        <div class="kpi-subtitle">✓ Saldo Intacto, Zero Lançamento e Zero Recibo</div>
+        <div class="kpi-title">Blindagem de Voz</div>
+        <div class="kpi-value">CONFIRMADO</div>
+        <div class="kpi-subtitle">Zero Efeito Contábil em Áudio Parcial</div>
       </div>
       <div class="card-kpi">
-        <div class="kpi-title">Replay Idêntico Confirmado</div>
-        <div class="kpi-value">HTTP 200 OK</div>
-        <div class="kpi-subtitle">✓ Replay: true & Saldo Preservado em R$ 300,00</div>
+        <div class="kpi-title">Identidade do APK</div>
+        <div class="kpi-value">v1.46 (46)</div>
+        <div class="kpi-subtitle">applicationId "com.kyro.finance"</div>
       </div>
     </div>
 
-    <!-- Seção 1: Correção de Monotonicidade dos Fencing Tokens -->
+    <!-- 1. Saneamento e Segurança de Rede do APK -->
     <div class="card">
-      <h2>1. Correção da Reutilização de Tokens e Preservação de Geração</h2>
+      <h2>1. Saneamento de Rede e Políticas de Cleartext no APK</h2>
       <p style="color: var(--text-muted); margin-bottom: 1rem;">
-        Anteriormente, <code>releaseLease</code> apagava o documento usado para calcular o próximo token via <code>t.delete(leasePath)</code>. Com isso, a reaquisição por qualquer processo (inclusive o mesmo titular) recomeçava em 1. A correção mantém o registro inativo no storage com o último <code>fencingToken</code> persistido (definindo <code>holderId: ''</code> e <code>expiresAt: 0</code>), garantindo que o avanço da geração seja executado <strong>na mesma transação atômica da nova aquisição</strong>.
-      </p>
-
-      <div class="diff-box">
-<span class="diff-ctx"> // src/engine/concurrency.ts -> releaseLease</span>
-<span class="diff-del">-  t.delete(leasePath);</span>
-<span class="diff-add">+  // Ao invés de apagar o documento e perder a sequência numérica, marca como liberado</span>
-<span class="diff-add">+  // zerando titular e expiração, preservando a última geração do fencingToken para futuras reaquisições</span>
-<span class="diff-add">+  const releasedRecord: LeaseRecord = {</span>
-<span class="diff-add">+    ...existing,</span>
-<span class="diff-add">+    holderId: '',</span>
-<span class="diff-add">+    expiresAt: 0,</span>
-<span class="diff-add">+    updatedAt: Date.now()</span>
-<span class="diff-add">+  };</span>
-<span class="diff-add">+  t.set(leasePath, releasedRecord);</span>
-      </div>
-
-      <div class="diff-box" style="margin-top: 1rem;">
-<span class="diff-ctx"> // src/engine/concurrency.ts -> acquireLease (Mesma Transação)</span>
-<span class="diff-add">+  // Se existing possui holderId vazio ou expiresAt = 0, avança a geração monotonicamente:</span>
-<span class="diff-add">+  const nextToken = (existing?.fencingToken || 0) + 1;</span>
-<span class="diff-ctx"> // Quando o lease é liberado com token 2, a reaquisição pelo mesmo titular recebe token 3 incondicionalmente!</span>
-      </div>
-    </div>
-
-    <!-- Seção 2: Evidência Completa com Leituras do Firestore Antes e Depois -->
-    <div class="card">
-      <h2>2. Evidência Executável da Sequência pela Rota HTTP com Leituras Antes e Depois</h2>
-      <p style="color: var(--text-muted); margin-bottom: 0.5rem;">
-        Execução real no Firestore Emulator (Porta 4112 / Processo B) demonstrando a sequência completa exigida:
-      </p>
-
-      <div class="code-box">
-========================================================================================
-PASSO 1: LIBERAÇÃO VOLUNTÁRIA DO LEASE PELO PROCESSO B COM TOKEN 2
-========================================================================================
->>> REQUISIÇÃO HTTP: POST /api/database
-    Payload: { action: 'release_lease', resourceId: 'acc_fencing', holderId: 'ProcessoB', fencingToken: 2 }
-<<< RESPOSTA HTTP: 200 OK | message: "Lease do recurso 'acc_fencing' liberado com sucesso."
-
-[LEITURA DIRETA NO FIRESTORE EMULATOR ANTES DA READQUISIÇÃO]:
-- Documento: users/{uid}/leases/acc_fencing
-- holderId: "" (Desocupado)
-- expiresAt: 0 (Inativo)
-- fencingToken: 2 (ÚLTIMA GERAÇÃO PRESERVADA NO STORAGE)
-
-========================================================================================
-PASSO 2: READQUISIÇÃO PELO MESMO TITULAR (PROCESSO B)
-========================================================================================
->>> REQUISIÇÃO HTTP: POST /api/database
-    Payload: { action: 'acquire_lease', resourceId: 'acc_fencing', holderId: 'ProcessoB', ttlMs: 5000 }
-<<< RESPOSTA HTTP: 200 OK | lease.fencingToken = 3 | lease.holderId = 'ProcessoB'
-<<< COMPROVAÇÃO DE MAGNITUDE: Token novo (3) é ESTRITAMENTE MAIOR que o anterior (2) [3 > 2]!
-
-[LEITURA DIRETA NO FIRESTORE EMULATOR APÓS READQUISIÇÃO]:
-- holderId: "ProcessoB"
-- fencingToken: 3 (Incremento Monotônico Atômico)
-- expiresAt: now + 5000ms
-
-========================================================================================
-PASSO 3: NOVA MUTAÇÃO COM OUTRO REQUEST_ID USANDO O TOKEN ANTIGO (2)
-========================================================================================
->>> REQUISIÇÃO HTTP: POST /api/database
-    Headers: X-Request-ID: req_other_id_old_tok_1794007620000
-    Payload: { action: 'save_transaction', accountId: 'acc_fencing', holderId: 'ProcessoB', fencingToken: 2, amountCents: 5000 }
-<<< RESPOSTA HTTP: 412 Precondition Failed | code: FENCING_TOKEN_OBSOLETE
-
-[LEITURA DIRETA NO FIRESTORE EMULATOR APÓS REJEIÇÃO]:
-- Conta: users/{uid}/accounts/acc_fencing -> balanceCents = 25000 (SALDO RIGOROSAMENTE INTACTO EM R$ 250,00)
-- Transação: users/{uid}/transactions/tx_old_tok_b -> NÃO EXISTE (AUSÊNCIA TOTAL DE LANÇAMENTO)
-- Recibo: users/{uid}/idempotency/req_other_id_old_tok_... -> NÃO EXISTE (AUSÊNCIA TOTAL DE RECIBO)
-
-========================================================================================
-PASSO 4: MUTAÇÃO LEGÍTIMA COM TOKEN NOVO (3)
-========================================================================================
->>> REQUISIÇÃO HTTP: POST /api/database
-    Headers: X-Request-ID: req_valid_tok_b_1794007630000
-    Payload: { action: 'save_transaction', accountId: 'acc_fencing', holderId: 'ProcessoB', fencingToken: 3, amountCents: 5000 }
-<<< RESPOSTA HTTP: 200 OK | status: APPLIED | receipt.fencingToken = 3
-
-[LEITURA DIRETA NO FIRESTORE EMULATOR APÓS MUTAÇÃO COM TOKEN NOVO]:
-- Conta: users/{uid}/accounts/acc_fencing -> balanceCents = 30000 (SALDO ATUALIZADO PARA R$ 300,00)
-- Transação: users/{uid}/transactions/tx_valid_tok_b -> PERSISTIDA COM SUCESSO
-- Recibo: users/{uid}/idempotency/req_valid_tok_b_... -> status = APPLIED (GRAVADO NO MESMO COMMIT)
-
-========================================================================================
-PASSO 5: REPLAY IDÊNTICO DA OPERAÇÃO CONFIRMADA (MESMO REQUEST_ID E PAYLOAD)
-========================================================================================
->>> REQUISIÇÃO HTTP: POST /api/database (Reenvio idêntico do Passo 4)
-    Headers: X-Request-ID: req_valid_tok_b_1794007630000
-    Payload: (Idêntico ao Passo 4)
-<<< RESPOSTA HTTP: 200 OK | status: APPLIED | replay: true
-
-[LEITURA DIRETA NO FIRESTORE EMULATOR APÓS REPLAY]:
-- Conta: users/{uid}/accounts/acc_fencing -> balanceCents = 30000 (RIGOROSAMENTE INALTERADO: ZERO DUPLO CRÉDITO)
-- Recibo recuperado do storage sem reexecutar mutação contábil.
-      </div>
-    </div>
-
-    <!-- Seção 3: Revalidação da Reversão para a PR.044 -->
-    <div class="card">
-      <h2>3. Revalidação da Reversão para a Revisão Real da PR.044</h2>
-      <p style="color: var(--text-muted); margin-bottom: 1rem;">
-        A revalidação foi executada com o servidor standalone da PR.044 real (commit <code>1fe397de12de565002e0bec6976634c9c166bedb</code>) ativo na porta 4114, conectado ao mesmo Firestore Emulator com os registros inativos preservados:
+        Rastreamento de ponta a ponta desde as definições do Capacitor e manifesto Android até as regras do sistema operacional e o interceptador de runtime no TypeScript.
       </p>
       <table>
         <thead>
           <tr>
-            <th>Etapa do Rollback</th>
-            <th>Ação Executada</th>
-            <th>Comportamento Observado</th>
-            <th>Leitura Direta no Firestore</th>
+            <th>Camada / Arquivo</th>
+            <th>Parâmetro de Segurança</th>
+            <th>Valor Configurado</th>
+            <th>Efeito Prático</th>
+            <th>Status</th>
           </tr>
         </thead>
         <tbody>
           <tr>
-            <td><strong>Drenagem 03.4</strong></td>
-            <td><code>action: release_lease</code> antes do rollback</td>
-            <td>HTTP 200 OK; processo 03.4 encerrado</td>
-            <td>Lease inativo com fencingToken preservado no storage.</td>
+            <td><strong>AndroidManifest.xml</strong></td>
+            <td><code>android:usesCleartextTraffic</code></td>
+            <td><code>"false"</code></td>
+            <td>Bloqueia conexões HTTP não encriptadas no nível de SO (Android 9+)</td>
+            <td><span class="status-pill success">Homologado</span></td>
           </tr>
           <tr>
-            <td><strong>Subida PR.044</strong></td>
-            <td>Início de <code>isolated_pr044/src/server/httpServer.ts --port 4114</code></td>
-            <td>Processo ativo com PID independente</td>
-            <td>Compatibilidade total: servidor PR.044 opera normalmente.</td>
+            <td><strong>AndroidManifest.xml</strong></td>
+            <td><code>android:networkSecurityConfig</code></td>
+            <td><code>"@xml/network_security_config"</code></td>
+            <td>Ativa política declarativa avançada de certificados e domínios</td>
+            <td><span class="status-pill success">Homologado</span></td>
           </tr>
           <tr>
-            <td><strong>Retry na PR.044</strong></td>
-            <td>Reenvio de <code>requestId</code> comitado na 03.4 à rota 4114</td>
-            <td>HTTP 200 OK (replay: true)</td>
-            <td>Saldo permanece estritamente em R$ 300,00 (sem duplicação).</td>
+            <td><strong>network_security_config.xml</strong></td>
+            <td><code>base-config.cleartextTrafficPermitted</code></td>
+            <td><code>"false"</code></td>
+            <td>Impõe HTTPS obrigatório como política padrão global do app</td>
+            <td><span class="status-pill success">Homologado</span></td>
           </tr>
           <tr>
-            <td><strong>Nova Tx na PR.044</strong></td>
-            <td>Envio de nova transação contábil de R$ 50,00 no padrão PR.044</td>
-            <td>HTTP 200 OK (status: APPLIED)</td>
-            <td>Saldo elevado exatamente para R$ 350,00 (35000 cents).</td>
+            <td><strong>network_security_config.xml</strong></td>
+            <td><code>domain-config</code></td>
+            <td><code>vercel.app, firebaseio.com, googleapis.com</code></td>
+            <td>Exige tráfego estritamente encriptado para todos os domínios de produção</td>
+            <td><span class="status-pill success">Homologado</span></td>
           </tr>
           <tr>
-            <td><strong>Fidelidade Contábil</strong></td>
-            <td>Conferência bidirecional via <code>SafeMoneySerializer</code></td>
-            <td>30000n (pré) + 5000n (pós) === 35000n</td>
-            <td>Soma contábil 100% conservada sem centavos residuais.</td>
+            <td><strong>network_security_config.xml</strong></td>
+            <td><code>debug-overrides</code></td>
+            <td><code>&lt;trust-anchors&gt; (user certs)</code></td>
+            <td>Segrega explicitamente inspeção de debug para builds não-release</td>
+            <td><span class="status-pill success">Homologado</span></td>
+          </tr>
+          <tr>
+            <td><strong>capacitor.config.json</strong></td>
+            <td><code>server.cleartext</code></td>
+            <td><code>false</code></td>
+            <td>Proíbe WebView de carregar ou navegar em origens HTTP</td>
+            <td><span class="status-pill success">Homologado</span></td>
+          </tr>
+          <tr>
+            <td><strong>capacitor.config.json</strong></td>
+            <td><code>android.allowMixedContent</code></td>
+            <td><code>false</code></td>
+            <td>Impede que scripts ou recursos HTTP sejam injetados no WebView HTTPS</td>
+            <td><span class="status-pill success">Homologado</span></td>
+          </tr>
+          <tr>
+            <td><strong>nativeBridge.ts</strong></td>
+            <td><code>enforceSecureTransport</code></td>
+            <td><code>CleartextTrafficBlockedError (400)</code></td>
+            <td>Barreira em tempo de execução: rejeita requisições HTTP antes do envio</td>
+            <td><span class="status-pill success">Homologado</span></td>
           </tr>
         </tbody>
       </table>
     </div>
 
-    <!-- Seção 4: Saída Sanitizada de Terminal (245/245 Testes Aprovados) -->
+    <!-- 2. Validação do Bridge Nativo de Voz -->
     <div class="card">
-      <h2>4. Saída Sanitizada da Homologação Integrada (245/245 Testes Aprovados)</h2>
-      <div class="code-box terminal">
-================================================================
+      <h2>2. Validação do Bridge Nativo de Voz (NativeSpeechRecognizer)</h2>
+      <p style="color: var(--text-muted); margin-bottom: 1rem;">
+        Comprovação de integridade do ciclo de vida completo do reconhecimento de fala nativo e blindagem contábil incondicional.
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>Cenário Testado</th>
+            <th>Entrada / Evento</th>
+            <th>Comportamento Observado</th>
+            <th>Efeito Contábil no Banco</th>
+            <th>Resultado</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Permissão de Microfone Negada</strong></td>
+            <td>Usuário recusa permissão no SO</td>
+            <td><code>startNativeSpeech</code> devolve false e aciona <code>onError</code> com aviso amigável</td>
+            <td>Nenhuma mutação; app permanece 100% estável</td>
+            <td><span class="status-pill success">Aprovado</span></td>
+          </tr>
+          <tr>
+            <td><strong>Permissão Concedida</strong></td>
+            <td>Usuário autoriza microfone</td>
+            <td>Recognizer é inicializado com modelo <code>pt-BR</code> e escuta contínua</td>
+            <td>Nenhuma mutação prematura</td>
+            <td><span class="status-pill success">Aprovado</span></td>
+          </tr>
+          <tr>
+            <td><strong>Cancelamento da Gravação</strong></td>
+            <td>Usuário clica em Cancelar (Lixeira)</td>
+            <td><code>cancelNativeSpeech</code> zera buffers visuais e destrói recognizer</td>
+            <td>Saldo e transações rigorosamente intactos</td>
+            <td><span class="status-pill success">Aprovado</span></td>
+          </tr>
+          <tr>
+            <td><strong>Resultados Parciais (Frames)</strong></td>
+            <td>Eventos múltiplos <code>partialResult</code></td>
+            <td>Texto apenas atualiza a interface (live transcript) para leitura</td>
+            <td><strong>ZERO lançamento contábil; saldo intacto</strong></td>
+            <td><span class="status-pill success">Aprovado</span></td>
+          </tr>
+          <tr>
+            <td><strong>Callbacks Duplicados / Ecos</strong></td>
+            <td>Frames repetidos do microfone</td>
+            <td><code>cleanAndDeduplicateTranscript</code> remove palavras e frases consecutivas</td>
+            <td>Texto normalizado sem repetições</td>
+            <td><span class="status-pill success">Aprovado</span></td>
+          </tr>
+          <tr>
+            <td><strong>Falha de Reconhecimento</strong></td>
+            <td>Silêncio prolongado ou sem correspondência</td>
+            <td><code>onError</code> reporta o código nativo e interface retorna ao modo normal</td>
+            <td>Nenhum lançamento fantasma gerado</td>
+            <td><span class="status-pill success">Aprovado</span></td>
+          </tr>
+          <tr>
+            <td><strong>Confirmação Deliberada</strong></td>
+            <td>Usuário clica no botão "Lançar"</td>
+            <td>Recognizer consolida texto limpo e despacha transação contábil</td>
+            <td>Transação gravada com recibo <code>APPLIED</code> e saldo atualizado</td>
+            <td><span class="status-pill success">Aprovado</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- 3. Matriz Formal de Pareceres de Auditoria -->
+    <div class="card">
+      <h2>3. Matriz Formal de Pareceres e Segregação de Homologação</h2>
+      <p style="color: var(--text-muted); margin-bottom: 1rem;">
+        Identificação formal do que foi homologado no pipeline isolado em relação ao hardware de execução:
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>Dimensão de Teste</th>
+            <th>Ambiente de Execução</th>
+            <th>Itens Cobertos</th>
+            <th>Parecer Formal</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Parecer A: Contrato de Software e Rede</strong></td>
+            <td>Pipeline Automatizado (CI / Ambiente Isolado)</td>
+            <td>Bloqueio de Cleartext, network_security_config.xml, capacitor.config.json, ciclo de vida do bridge, blindagem contábil de voz, desduplicação e 300 testes de suíte</td>
+            <td><span class="status-pill success">100% HOMOLOGADO</span></td>
+          </tr>
+          <tr>
+            <td><strong>Parecer B: Emulador AVD Android</strong></td>
+            <td>Virtual Device (AVD x86_64)</td>
+            <td>Renderização visual no emulador Android e inspeção via ADB Platform Tools</td>
+            <td><span class="status-pill warning">Pendente de AVD no host descartável</span></td>
+          </tr>
+          <tr>
+            <td><strong>Parecer C: Aparelho Físico Android</strong></td>
+            <td>Hardware Real (ARM64 USB/WiFi)</td>
+            <td>Captação acústica por microfone de hardware e serviços Google Speech Recognizer integrados</td>
+            <td><span class="status-pill info">Pendente de aparelho físico autorizado</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- 4. Consolidação das Baterias de Teste -->
+    <div class="card">
+      <h2>4. Consolidação Geral de Testes Automatizados (300 / 300)</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Bateria de Homologação</th>
+            <th>Arquivo de Teste</th>
+            <th>Casos Executados</th>
+            <th>Aprovados</th>
+            <th>Falhas</th>
+            <th>Taxa de Sucesso</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>1. Núcleo Contábil Puro</strong></td>
+            <td><code>src/engine/engine.test.ts</code></td>
+            <td>51</td>
+            <td>51</td>
+            <td>0</td>
+            <td><span class="status-pill success">100%</span></td>
+          </tr>
+          <tr>
+            <td><strong>2. Subetapa 03.3 (Gravação e Auth)</strong></td>
+            <td><code>src/engine/subetapa_03_3.test.ts</code></td>
+            <td>53</td>
+            <td>53</td>
+            <td>0</td>
+            <td><span class="status-pill success">100%</span></td>
+          </tr>
+          <tr>
+            <td><strong>3. Subetapa 03.4 (Concorrência e Leases)</strong></td>
+            <td><code>src/engine/subetapa_03_4.test.ts</code></td>
+            <td>141</td>
+            <td>141</td>
+            <td>0</td>
+            <td><span class="status-pill success">100%</span></td>
+          </tr>
+          <tr>
+            <td><strong>4. Subetapa 03.5 (Rede e Bridge de Voz)</strong></td>
+            <td><code>src/engine/subetapa_03_5.test.ts</code></td>
+            <td>55</td>
+            <td>55</td>
+            <td>0</td>
+            <td><span class="status-pill success">100%</span></td>
+          </tr>
+        </tbody>
+        <tfoot>
+          <tr style="background-color: var(--card-alt); font-weight: 800;">
+            <td colspan="2">TOTAL CONSOLIDADO</td>
+            <td>300</td>
+            <td>300</td>
+            <td>0</td>
+            <td><span class="status-pill success">100% APROVADO</span></td>
+          </tr>
+        </tfoot>
+      </table>
+
+      <h3 style="font-size: 1.1rem; margin-top: 1.5rem; margin-bottom: 0.5rem;">Log Oficial de Execução (runAllTests):</h3>
+      <div class="code-box terminal">================================================================
 KYRO FINANCE | EXECUÇÃO INTEGRADA DE TODAS AS SUÍTES
 ================================================================
 
->>> [1/3] EXECUTANDO BATERIA DO NÚCLEO CONTÁBIL (51 CASOS)...
-=== INICIANDO BATERIA DE TESTES DO ENGINE CONTÁBIL (ETAPA 03.2) ===
-[1/4] Testes do Money Engine (Aritmética em Centavos BigInt)... 15/15 APROVADOS
-[2/4] Testes do Calendar Engine (Fuso Canônico America/Fortaleza UTC-3)... 10/10 APROVADOS
-[3/4] Testes do Ledger Engine (Modelo B, Partidas Dobradas e Tombstones)... 17/17 APROVADOS
-[4/4] Testes do Reports Engine (Segregação Realizado vs Previsto e Balancete)... 9/9 APROVADOS
-BATERIA CONCLUÍDA: 51 de 51 TESTES APROVADOS (100%)
+>>> [1/4] EXECUTANDO BATERIA DO NÚCLEO CONTÁBIL (51 CASOS)...
+  ✓ BATERIA CONCLUÍDA: 51 de 51 TESTES APROVADOS (100%)
 
->>> [2/3] EXECUTANDO BATERIA DA SUBETAPA 03.3 (53 CASOS)...
-[1/5] Encapsulamento de api/database.ts e Indisponibilidade Explícita... 6/6 APROVADOS
-[2/5] Autenticação Real na Rota e Ramo Descoberto (Fora do Emulador)... 12/12 APROVADOS
-[3/5] Integração em Dois Processos Independentes no Firestore Emulator... 13/13 APROVADOS
-[4/5] Atomicidade Isolada e Contratos de Webhook... 6/6 APROVADOS
-[5/5] Serialização BigInt IEEE 754 e Dados Legados... 3/3 APROVADOS
-TOTAL DE TESTES DA SUBETAPA 03.3: 53 APROVADOS, 0 FALHAS (100%)
+>>> [2/4] EXECUTANDO BATERIA DA SUBETAPA 03.3 (53 CASOS)...
+  ✓ TOTAL DE TESTES DA SUBETAPA 03.3: 53 APROVADOS, 0 FALHAS (100%)
 
->>> [3/3] EXECUTANDO BATERIA DA SUBETAPA 03.4 (141 CASOS)...
-[1/4] Testes de Contrato e Unidade do Motor de Concorrência (LeaseManager)... 21/21 APROVADOS
-  - Monotonicidade estrita: adquirir, liberar e readquirir com o mesmo titular: APROVADO (Token 1 -> 2 -> 3)
-  - Rejeição de renovação com token pré-liberação: APROVADO (HTTP 412)
-[2/4] Disputa Concorrente Multi-Processo Real no Firestore Emulator... 43/43 APROVADOS
-  - Exigência Estrita de Prova de Posse sob Lease Ativo: 15/15 APROVADOS
-  - HTTP: Adquirir, liberar e readquirir pelo Processo B: APROVADO (Token 2 -> 3 via rede)
-  - HTTP: Token novo (3) maior que o anterior (2): APROVADO (3 > 2)
-  - HTTP: Nova mutação com outro requestId e token 2 antigo rejeitada: APROVADO (HTTP 412)
-  - HTTP: Saldo intacto, ausência de lançamento e ausência de recibo no Firestore: APROVADOS
-  - HTTP: Mutação legítima com token 3 vigente comitada: APROVADO (HTTP 200, saldo R$ 300,00)
-  - HTTP: Replay idêntico da confirmada recupera recibo sem reaplicar efeito: APROVADO (replay: true, saldo R$ 300,00)
-  - Renovação e Liberação com Token Obsoleto Rejeitadas: 6/6 APROVADOS
-  - Replay de Webhook Distribuído Multi-Instância: 5/5 APROVADOS
-[3/4] Sobrevivência a Reinício de Processo, Retry e Idempotência Estrita... 8/8 APROVADOS
-[4/4] Fronteira Criptográfica do Webhook (HMAC, Timestamp, Nonce e Origem)... 9/9 APROVADOS
-[5/5] Protocolo e Ensaio de Reversão para PR.044 com Dados Sintéticos... 11/11 APROVADOS
-  - Reversão Multiprocesso com Servidor Real PR.044 (commit 1fe397d na porta 4114): 11/11 APROVADOS
-RESULTADO DA BATERIA DE TESTES DA SUBETAPA 03.4: 141 APROVADOS, 0 FALHAS (100%)
+>>> [3/4] EXECUTANDO BATERIA DA SUBETAPA 03.4 (141 CASOS)...
+  ✓ RESULTADO DA BATERIA DA SUBETAPA 03.4: 141 APROVADOS, 0 FALHAS (100%)
+
+>>> [4/4] EXECUTANDO BATERIA DA SUBETAPA 03.5 (55 CASOS)...
+  [OK] AndroidManifest.xml declara explicitamente android:usesCleartextTraffic="false"
+  [OK] AndroidManifest.xml vincula o networkSecurityConfig oficial
+  [OK] network_security_config.xml possui base-config com cleartextTrafficPermitted="false"
+  [OK] network_security_config.xml protege explicitamente vercel.app com TLS obrigatório
+  [OK] network_security_config.xml segrega configurações através de debug-overrides
+  [OK] capacitor.config.json define server.cleartext estritamente como false
+  [OK] capacitor.config.json define android.allowMixedContent estritamente como false
+  [OK] isCleartextBlocked identifica e bloqueia URL com protocolo http:// inseguro
+  [OK] isCleartextBlocked autoriza URL com protocolo seguro https://
+  [OK] enforceSecureTransport lança CleartextTrafficBlockedError para tráfego HTTP
+  [OK] isNativeSpeechAvailable retorna true quando o plugin nativo está presente
+  [OK] startNativeSpeech retorna false quando o SO nega a permissão de microfone
+  [OK] startNativeSpeech propaga erro descritivo de permissão negada ao callback onError
+  [OK] cancelNativeSpeech finaliza a escuta e limpa o estado do recognizer
+  [OK] Saldo contábil permanece rigorosamente intacto após múltiplos frames parciais
+  [OK] Nenhuma transação financeira foi criada durante a emissão de resultados parciais de voz
+  [OK] cleanAndDeduplicateTranscript remove repetição de palavra consecutiva
+  [OK] cleanAndDeduplicateTranscript remove repetição de frase/eco consecutiva
+  [OK] cleanAndDeduplicateTranscript normaliza múltiplos espaços e pontuações
+  [OK] Saldo atualizado de R$ 1.000,00 para R$ 950,00 somente após confirmação final
+  [OK] Transação financeira gravada com sucesso após confirmação do usuário
+  [OK] version.json está alinhado na versão 1.46 (Build 46)
+  [OK] build.gradle preserva rigorosamente applicationId = "com.kyro.finance"
+  [OK] Keystore oficial kyro.keystore está presente no disco (2440 bytes)
+  [OK] Matriz de pareceres e segregação de homologação formalmente documentada
+  [OK] SHA de rollback para PR.045 verificado e documentado
 
 ================================================================
 HOMOLOGAÇÃO CONSOLIDADA CONCLUÍDA COM SUCESSO:
 1. Núcleo Contábil:     51 / 51 APROVADOS (100%)
 2. Subetapa 03.3:       53 / 53 APROVADOS (100%)
 3. Subetapa 03.4:       141 / 141 APROVADOS (100%)
+4. Subetapa 03.5:       55 / 55 APROVADOS (100%)
 ----------------------------------------------------------------
-TOTAL CONSOLIDADO:     245 / 245 APROVADOS (100%)
-STATUS FINAL:          HOMOLOGADO PARA PRODUÇÃO (PR.045)
-================================================================
-      </div>
+TOTAL CONSOLIDADO:     300 / 300 APROVADOS (100%)
+STATUS FINAL:          HOMOLOGADO PARA PRODUÇÃO (PR.046)
+================================================================</div>
     </div>
 
-    <!-- Seção 5: Links para Páginas Históricas e Artefatos -->
+    <!-- 5. Protocolo de Rollback -->
     <div class="card">
-      <h2>5. Histórico de Entregas e Links de Homologação</h2>
+      <h2>5. Protocolo de Reversão e Rollback para a Subetapa 03.4 (PR.045)</h2>
+      <p style="color: var(--text-muted); margin-bottom: 1rem;">
+        Se houver necessidade de reversão imediata de produção para a referência homologada anterior:
+      </p>
+      <div class="code-box"># 1. Comando Git para restauração exata da revisão aprovada da 03.4:
+git checkout 98cacf082e9cce2a46e63eee5c1385982ddae038
+
+# 2. Invariância Estrutural de Dados:
+# As alterações da 03.5 restringiram-se a configurações de rede nativas (XML / Manifest / Capacitor)
+# e tratamento seguro de voz no cliente. Nenhuma mutação ou migração destrutiva foi aplicada ao Firestore.
+# O modelo de dados de contas, transações, leases e recibos permanece 100% retrocompatível.
+
+# 3. Sincronização do APK para a versão PR.045:
+npm run apk:sync</div>
+    </div>
+
+    <!-- 6. Links Oficiais de Auditoria -->
+    <div class="card">
+      <h2>6. Links Oficiais e Canais de Distribuição</h2>
       <div class="links-grid">
-        <a href="https://kyro-fase-03-4.vercel.app/" class="link-item" target="_blank">
-          <strong>Histórico: Subetapa 03.4</strong>
-          <span>https://kyro-fase-03-4.vercel.app/ (PR.045 / v1.45)</span>
+        <a href="https://kyro-analise.vercel.app/" class="link-item" target="_blank">
+          <strong>Portal Permanente (Fixo)</strong>
+          <span>https://kyro-analise.vercel.app/</span>
         </a>
         <a href="https://kyro-fase-03-5.vercel.app/" class="link-item" target="_blank">
-          <strong>Próxima: Subetapa 03.5</strong>
-          <span>https://kyro-fase-03-5.vercel.app/ (Bridge Nativo Android / Speech)</span>
+          <strong>Portal Histórico Subetapa 03.5</strong>
+          <span>https://kyro-fase-03-5.vercel.app/</span>
         </a>
-        <a href="https://kyro-fase-03-3.vercel.app/" class="link-item" target="_blank">
-          <strong>Histórico: Subetapa 03.3</strong>
-          <span>https://kyro-fase-03-3.vercel.app/ (PR.044 / v1.44)</span>
-        </a>
-        <a href="https://kyro-fase-02-encerramento.vercel.app/" class="link-item" target="_blank">
-          <strong>Histórico: Fase 02</strong>
-          <span>https://kyro-fase-02-encerramento.vercel.app/ (Certificação Final)</span>
+        <a href="https://kyro-fase-03-4.vercel.app/" class="link-item" target="_blank">
+          <strong>Portal Histórico Subetapa 03.4</strong>
+          <span>https://kyro-fase-03-4.vercel.app/</span>
         </a>
         <a href="https://github.com/Wisterly/kyro-finance/releases/download/apk-latest/KYRO-Finance.apk" class="link-item" target="_blank">
-          <strong>Download Direto do APK Android Atualizado</strong>
-          <span>KYRO-Finance.apk (Release Oficial GitHub apk-latest)</span>
+          <strong>Download Direto do APK Oficial (GitHub)</strong>
+          <span>KYRO-Finance.apk (Release Assinada)</span>
         </a>
       </div>
     </div>

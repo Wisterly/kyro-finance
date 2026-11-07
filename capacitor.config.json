@@ -5,7 +5,7 @@
   "bundledWebRuntime": false,
   "server": {
     "androidScheme": "https",
-    "cleartext": true,
+    "cleartext": false,
     "allowNavigation": [
       "kyro-finance.vercel.app",
       "*.vercel.app",
@@ -15,6 +15,6 @@
   },
   "android": {
     "backgroundColor": "#0B0F19",
-    "allowMixedContent": true
+    "allowMixedContent": false
   }
 }

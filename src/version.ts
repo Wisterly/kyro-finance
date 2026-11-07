@@ -1,12 +1,13 @@
 // Metadados Centrais de Versão e Auto-Update do KYRO Finance
-export const APP_VERSION = '1.45';
-export const APP_BUILD = 45;
+export const APP_VERSION = '1.46';
+export const APP_BUILD = 46;
 
 export const APP_CHANGELOG = [
-  'Subetapa 03.4: Motor de Concorrência, Leases Monotônicos e Fencing Tokens (Componente 04)',
-  'Validação Atômica no Commit do Firestore: Fencing tokens conferidos na mesma transação contábil',
-  'Proteção contra Escrita Obsoleta: Processos com lease expirado ou substituído falham com HTTP 412 sem tocar em saldos ou recibos',
-  'Sobrevivência Pós-Crash/Restart: Recuperação segura de recibos de idempotência e blindagem contra duplo débito',
-  'Fronteira Criptográfica do Webhook: Assinatura HMAC SHA-256 sobre raw body, controle temporal de timestamp (5 min) e barreira contra replay com nonce único',
-  'Homologação Completa: 168 testes aprovados (51 núcleo contábil + 53 rota 03.3 + 64 concorrência 03.4 = 100% sucesso)'
+  'Subetapa 03.5: Saneamento de Rede Cleartext e Validação do Bridge de Voz Nativo (PR.046)',
+  'Bloqueio Estrito de Cleartext: usesCleartextTraffic="false", cleartextTrafficPermitted="false" e allowMixedContent="false"',
+  'Segregação de Segurança: Configurações de rede com TLS obrigatório e debug-overrides isolado',
+  'Ponte Nativa de Voz Blindada: Ciclo de vida completo do NativeSpeechRecognizer com cancelamento seguro e retorno à UI',
+  'Proteção Contábil contra Áudio Parcial: Zero mutações de saldo ou transações em frames parciais e callbacks duplicados',
+  'Desduplicação e Limpeza de Voz: cleanAndDeduplicateTranscript eliminando repetições em tempo real',
+  'Preservação da Identidade do APK: applicationId "com.kyro.finance", keystore oficial e alinhamento de versão 1.46 (Build 46)'
 ];

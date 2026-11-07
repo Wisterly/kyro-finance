@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- Configuração Base: Bloqueia estritamente tráfego não criptografado (Cleartext HTTP) -->
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+
+    <!-- Domínios Oficiais Permitidos: Apenas HTTPS com TLS válido -->
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">vercel.app</domain>
+        <domain includeSubdomains="true">kyro-finance.vercel.app</domain>
+        <domain includeSubdomains="true">kyro-analise.vercel.app</domain>
+        <domain includeSubdomains="true">firebaseio.com</domain>
+        <domain includeSubdomains="true">googleapis.com</domain>
+        <domain includeSubdomains="true">github.com</domain>
+    </domain-config>
+
+    <!-- Separação Estrita de Desenvolvimento (Debug Overrides) -->
+    <debug-overrides>
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </debug-overrides>
+</network-security-config>

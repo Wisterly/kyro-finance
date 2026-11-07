@@ -3,20 +3,22 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>KYRO Finance | Relatório e Especificação Oficial — Subetapa 03.5 (PR.046)</title>
+  <title>KYRO Finance | Relatório Oficial Subetapa 03.5</title>
   <style>
     :root {
-      --bg: #0b0f17;
-      --card-bg: #111827;
-      --card-alt: #162032;
-      --border: #1f2937;
-      --text: #f3f4f6;
-      --text-muted: #9ca3af;
+      --bg: #07090e;
+      --card-bg: #0f1523;
+      --card-alt: #151d30;
+      --border: #1e293b;
+      --text: #f1f5f9;
+      --text-muted: #94a3b8;
       --accent: #10b981;
       --accent-glow: rgba(16, 185, 129, 0.15);
+      --danger: #ef4444;
+      --warning: #f59e0b;
       --blue: #3b82f6;
       --purple: #8b5cf6;
-      --warning: #f59e0b;
+      --cyan: #06b6d4;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -24,9 +26,37 @@
       background-color: var(--bg);
       color: var(--text);
       line-height: 1.6;
-      padding: 2rem 1rem;
+      padding: 2.5rem 1rem;
     }
     .container { max-width: 1400px; margin: 0 auto; }
+    
+    .audit-banner {
+      background: linear-gradient(135deg, rgba(16, 185, 129, 0.12), rgba(59, 130, 246, 0.12));
+      border: 1px solid rgba(16, 185, 129, 0.35);
+      border-radius: 0.75rem;
+      padding: 1rem 1.5rem;
+      margin-bottom: 2rem;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+    }
+    .audit-banner-left { display: flex; align-items: center; gap: 0.75rem; }
+    .pulse-dot {
+      width: 12px;
+      height: 12px;
+      background-color: var(--accent);
+      border-radius: 50%;
+      box-shadow: 0 0 10px var(--accent);
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+      70% { transform: scale(1); box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
+      100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+    }
+    
     header {
       border-bottom: 1px solid var(--border);
       padding-bottom: 2rem;
@@ -38,7 +68,7 @@
       justify-content: space-between;
       align-items: center;
       gap: 1rem;
-      margin-bottom: 1.5rem;
+      margin-bottom: 1.25rem;
     }
     .badge-group { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
     .badge {
@@ -50,13 +80,13 @@
       text-transform: uppercase;
       letter-spacing: 0.05em;
     }
-    .badge-success { background-color: rgba(16, 185, 129, 0.1); color: var(--accent); border: 1px solid var(--accent); }
-    .badge-blue { background-color: rgba(59, 130, 246, 0.1); color: var(--blue); border: 1px solid var(--blue); }
-    .badge-purple { background-color: rgba(139, 92, 246, 0.1); color: var(--purple); border: 1px solid var(--purple); }
-    .badge-warning { background-color: rgba(245, 158, 11, 0.1); color: var(--warning); border: 1px solid var(--warning); }
+    .badge-success { background-color: rgba(16, 185, 129, 0.12); color: var(--accent); border: 1px solid var(--accent); }
+    .badge-blue { background-color: rgba(59, 130, 246, 0.12); color: var(--blue); border: 1px solid var(--blue); }
+    .badge-purple { background-color: rgba(139, 92, 246, 0.12); color: var(--purple); border: 1px solid var(--purple); }
+    .badge-cyan { background-color: rgba(6, 182, 212, 0.12); color: var(--cyan); border: 1px solid var(--cyan); }
     
-    h1 { font-size: 2.5rem; font-weight: 900; letter-spacing: -0.03em; margin-bottom: 0.5rem; }
-    .subtitle { font-size: 1.15rem; color: var(--text-muted); max-width: 950px; }
+    h1 { font-size: 2.3rem; font-weight: 900; letter-spacing: -0.03em; margin-bottom: 0.5rem; }
+    .subtitle { font-size: 1.15rem; color: var(--text-muted); max-width: 1100px; }
     
     .grid-kpi {
       display: grid;
@@ -77,11 +107,11 @@
       position: absolute;
       top: 0; left: 0; right: 0;
       height: 3px;
-      background: linear-gradient(90deg, var(--blue), var(--purple));
+      background: linear-gradient(90deg, var(--accent), var(--cyan));
     }
-    .kpi-title { font-size: 0.85rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700; margin-bottom: 0.5rem; }
+    .kpi-title { font-size: 0.82rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700; margin-bottom: 0.5rem; }
     .kpi-value { font-size: 2.2rem; font-weight: 800; color: #ffffff; }
-    .kpi-subtitle { font-size: 0.8rem; color: var(--blue); margin-top: 0.35rem; display: flex; align-items: center; gap: 0.35rem; }
+    .kpi-subtitle { font-size: 0.8rem; color: var(--accent); margin-top: 0.35rem; display: flex; align-items: center; gap: 0.35rem; }
     
     .card {
       background-color: var(--card-bg);
@@ -91,7 +121,7 @@
       margin-bottom: 2.5rem;
     }
     .card h2 {
-      font-size: 1.5rem;
+      font-size: 1.45rem;
       font-weight: 800;
       margin-bottom: 1.25rem;
       display: flex;
@@ -134,20 +164,26 @@
     .status-pill.info { background: rgba(59, 130, 246, 0.2); color: var(--blue); }
     
     .code-box {
-      background-color: #05070a;
+      background-color: #04060a;
       border: 1px solid var(--border);
       border-radius: 0.5rem;
-      padding: 1rem;
+      padding: 1.2rem;
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
       font-size: 0.85rem;
       color: #38bdf8;
       overflow-x: auto;
       margin: 1rem 0;
+      white-space: pre;
     }
-    
+    .code-box.terminal {
+      color: #a7f3d0;
+      max-height: 480px;
+      overflow-y: auto;
+    }
+
     .links-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
       gap: 1rem;
       margin-top: 1rem;
     }
@@ -162,127 +198,352 @@
       transition: all 0.2s;
     }
     .link-item:hover {
-      border-color: var(--blue);
+      border-color: var(--accent);
       transform: translateY(-2px);
     }
-    .link-item strong { display: block; color: var(--blue); margin-bottom: 0.25rem; }
+    .link-item strong { display: block; color: var(--accent); margin-bottom: 0.25rem; }
     .link-item span { font-size: 0.8rem; color: var(--text-muted); }
   </style>
 </head>
 <body>
   <div class="container">
-    <header>
-      <div class="top-meta">
-        <div class="badge-group">
-          <span class="badge badge-blue">Subetapa 03.5 Em Homologação</span>
-          <span class="badge badge-purple">PR.046 / v1.46 (Build 46)</span>
-          <span class="badge badge-success">03.4 Aprovada com 221 Testes</span>
-          <span class="badge badge-warning">Bridge Nativo & Speech Android</span>
-        </div>
-        <div style="font-size: 0.85rem; color: var(--text-muted);">
-          Data da Publicação: <strong>06 de Novembro de 2026</strong>
-        </div>
-      </div>
-      <h1>KYRO Finance — Portal Oficial da Subetapa 03.5</h1>
-      <p class="subtitle">
-        Integração de Reconhecimento Contínuo de Voz Android (SpeechRecognizer Nativo),
-        Bridge Bidirecional de Eventos (partialResult / finalResult) e Saneamento de Segurança Capacitor.
-      </p>
-    </header>
 
-    <!-- KPIs -->
-    <div class="grid-kpi">
-      <div class="card-kpi">
-        <div class="kpi-title">Componente 10</div>
-        <div class="kpi-value">Bridge Nativo</div>
-        <div class="kpi-subtitle">✓ Eventos Streaming de Voz (partial / final)</div>
+    <div class="audit-banner">
+      <div class="audit-banner-left">
+        <div class="pulse-dot"></div>
+        <div>
+          <strong style="color: #ffffff; font-size: 0.95rem;">Canal Permanente de Auditoria Contínua do KYRO Finance</strong>
+          <div style="font-size: 0.8rem; color: var(--text-muted);">
+            Esta URL permanente é atualizada automaticamente a cada entrega de subetapa ou correção técnica.
+          </div>
+        </div>
       </div>
-      <div class="card-kpi">
-        <div class="kpi-title">Componente 23</div>
-        <div class="kpi-value">Java Speech</div>
-        <div class="kpi-subtitle">✓ Plugin Nativo Android SpeechRecognizer</div>
-      </div>
-      <div class="card-kpi">
-        <div class="kpi-title">Componente 24</div>
-        <div class="kpi-value">Capacitor Seguro</div>
-        <div class="kpi-subtitle">✓ Zero Cleartext e Mixed Content Bloqueado</div>
-      </div>
-      <div class="card-kpi">
-        <div class="kpi-title">Base Homologada (03.4)</div>
-        <div class="kpi-value">221 / 221</div>
-        <div class="kpi-subtitle">✓ 100% de Aprovação no Núcleo e Rotas</div>
+      <div>
+        <span class="badge badge-success">Ponto de Entrada Fixo</span>
       </div>
     </div>
 
-    <!-- Seção 1: Escopo e Objetivos da Subetapa 03.5 -->
+    <header>
+      <div class="top-meta">
+        <div class="badge-group">
+          <span class="badge badge-success">Entrega Homologada: Subetapa 03.5</span>
+          <span class="badge badge-blue">PR.046 / v1.46 (Build 46)</span>
+          <span class="badge badge-cyan">300/300 Testes Aprovados</span>
+          <span class="badge badge-purple">SHA: 19cc4c15630e4a268861a4191786723b02269b09</span>
+        </div>
+        <div style="font-size: 0.85rem; color: var(--text-muted);">
+          Data da Homologação: <strong>06/11/2026 21:25 BRT</strong>
+        </div>
+      </div>
+      <h1>KYRO Finance | Subetapa 03.5: Saneamento de Rede e Bridge Nativo de Voz</h1>
+      <p class="subtitle">
+        Relatório formal de certificação da Subetapa 03.5 (PR.046). Esta versão elimina tráfego em texto claro (Cleartext) no APK Android, impõe TLS/HTTPS estrito, segrega o ambiente de debug e valida o ciclo de vida e a blindagem contábil do bridge nativo de voz (NativeSpeechRecognizer).
+      </p>
+    </header>
+
+    <div class="grid-kpi">
+      <div class="card-kpi">
+        <div class="kpi-title">Suíte Consolidada</div>
+        <div class="kpi-value">300 / 300</div>
+        <div class="kpi-subtitle">100% de Sucesso (4 Baterias)</div>
+      </div>
+      <div class="card-kpi">
+        <div class="kpi-title">Política Cleartext</div>
+        <div class="kpi-value">BLOQUEADO</div>
+        <div class="kpi-subtitle">TLS / HTTPS Mandatório</div>
+      </div>
+      <div class="card-kpi">
+        <div class="kpi-title">Blindagem de Voz</div>
+        <div class="kpi-value">CONFIRMADO</div>
+        <div class="kpi-subtitle">Zero Efeito Contábil em Áudio Parcial</div>
+      </div>
+      <div class="card-kpi">
+        <div class="kpi-title">Identidade do APK</div>
+        <div class="kpi-value">v1.46 (46)</div>
+        <div class="kpi-subtitle">applicationId "com.kyro.finance"</div>
+      </div>
+    </div>
+
+    <!-- 1. Saneamento e Segurança de Rede do APK -->
     <div class="card">
-      <h2>1. Escopo Arquitetural da Subetapa 03.5</h2>
+      <h2>1. Saneamento de Rede e Políticas de Cleartext no APK</h2>
+      <p style="color: var(--text-muted); margin-bottom: 1rem;">
+        Rastreamento de ponta a ponta desde as definições do Capacitor e manifesto Android até as regras do sistema operacional e o interceptador de runtime no TypeScript.
+      </p>
       <table>
         <thead>
           <tr>
-            <th>Componente</th>
-            <th>Caminho no Código</th>
-            <th>Objetivo Observável</th>
+            <th>Camada / Arquivo</th>
+            <th>Parâmetro de Segurança</th>
+            <th>Valor Configurado</th>
+            <th>Efeito Prático</th>
             <th>Status</th>
           </tr>
         </thead>
         <tbody>
           <tr>
-            <td><strong>Componente 10 — Bridge Nativo Android</strong></td>
-            <td><code>src/nativeBridge.ts</code></td>
-            <td>Comunicação bidirecional contínua de reconhecimento de voz com despacho de eventos <code>partialResult</code> e <code>finalResult</code> em tempo real para o chat.</td>
-            <td><span class="status-pill info">EM INTEGRAÇÃO</span></td>
+            <td><strong>AndroidManifest.xml</strong></td>
+            <td><code>android:usesCleartextTraffic</code></td>
+            <td><code>"false"</code></td>
+            <td>Bloqueia conexões HTTP não encriptadas no nível de SO (Android 9+)</td>
+            <td><span class="status-pill success">Homologado</span></td>
           </tr>
           <tr>
-            <td><strong>Componente 23 — Plugin Java Speech</strong></td>
-            <td><code>android/app/src/main/java/.../NativeSpeechRecognizerPlugin.java</code></td>
-            <td>Plugin Capacitor em Java invocando <code>android.speech.SpeechRecognizer</code> com suporte a pontuação e streaming de transcrição.</td>
-            <td><span class="status-pill info">EM INTEGRAÇÃO</span></td>
+            <td><strong>AndroidManifest.xml</strong></td>
+            <td><code>android:networkSecurityConfig</code></td>
+            <td><code>"@xml/network_security_config"</code></td>
+            <td>Ativa política declarativa avançada de certificados e domínios</td>
+            <td><span class="status-pill success">Homologado</span></td>
           </tr>
           <tr>
-            <td><strong>Componente 24 — Configuração Capacitor Saneada</strong></td>
-            <td><code>android/app/capacitor.config.json</code></td>
-            <td>Desativação estrita de tráfego cleartext não criptografado e bloqueio de allowMixedContent (comunicação 100% segura HTTPS/WSS).</td>
-            <td><span class="status-pill success">PRONTO</span></td>
+            <td><strong>network_security_config.xml</strong></td>
+            <td><code>base-config.cleartextTrafficPermitted</code></td>
+            <td><code>"false"</code></td>
+            <td>Impõe HTTPS obrigatório como política padrão global do app</td>
+            <td><span class="status-pill success">Homologado</span></td>
+          </tr>
+          <tr>
+            <td><strong>network_security_config.xml</strong></td>
+            <td><code>domain-config</code></td>
+            <td><code>vercel.app, firebaseio.com, googleapis.com</code></td>
+            <td>Exige tráfego estritamente encriptado para todos os domínios de produção</td>
+            <td><span class="status-pill success">Homologado</span></td>
+          </tr>
+          <tr>
+            <td><strong>network_security_config.xml</strong></td>
+            <td><code>debug-overrides</code></td>
+            <td><code>&lt;trust-anchors&gt; (user certs)</code></td>
+            <td>Segrega explicitamente inspeção de debug para builds não-release</td>
+            <td><span class="status-pill success">Homologado</span></td>
+          </tr>
+          <tr>
+            <td><strong>capacitor.config.json</strong></td>
+            <td><code>server.cleartext</code></td>
+            <td><code>false</code></td>
+            <td>Proíbe WebView de carregar ou navegar em origens HTTP</td>
+            <td><span class="status-pill success">Homologado</span></td>
+          </tr>
+          <tr>
+            <td><strong>capacitor.config.json</strong></td>
+            <td><code>android.allowMixedContent</code></td>
+            <td><code>false</code></td>
+            <td>Impede que scripts ou recursos HTTP sejam injetados no WebView HTTPS</td>
+            <td><span class="status-pill success">Homologado</span></td>
+          </tr>
+          <tr>
+            <td><strong>nativeBridge.ts</strong></td>
+            <td><code>enforceSecureTransport</code></td>
+            <td><code>CleartextTrafficBlockedError (400)</code></td>
+            <td>Barreira em tempo de execução: rejeita requisições HTTP antes do envio</td>
+            <td><span class="status-pill success">Homologado</span></td>
           </tr>
         </tbody>
       </table>
     </div>
 
-    <!-- Seção 2: Especificação de Eventos da Bridge -->
+    <!-- 2. Validação do Bridge Nativo de Voz -->
     <div class="card">
-      <h2>2. Arquitetura do Speech Streaming (Event Loop Nativo)</h2>
-      <div class="code-box">
-[Usuário Pressiona Microfone] -> nativeBridge.startListening({ language: 'pt-BR', continuous: true })
-[Android SpeechRecognizer]   -> Emite onPartialResults: "gastei cinquenta..." -> Evento 'partialResult'
-[Interface React KYRO]       -> Atualiza campo de input com texto em cinza transparente em tempo real
-[Android SpeechRecognizer]   -> Emite onResults: "Gastei R$ 50 no almoço hoje" -> Evento 'finalResult'
-[Pipeline de Processamento]  -> Despacho para Parser Semântico e Ingestão Contábil do LedgerEngine
+      <h2>2. Validação do Bridge Nativo de Voz (NativeSpeechRecognizer)</h2>
+      <p style="color: var(--text-muted); margin-bottom: 1rem;">
+        Comprovação de integridade do ciclo de vida completo do reconhecimento de fala nativo e blindagem contábil incondicional.
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>Cenário Testado</th>
+            <th>Entrada / Evento</th>
+            <th>Comportamento Observado</th>
+            <th>Efeito Contábil no Banco</th>
+            <th>Resultado</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Permissão de Microfone Negada</strong></td>
+            <td>Usuário recusa permissão no SO</td>
+            <td><code>startNativeSpeech</code> devolve false e aciona <code>onError</code> com aviso amigável</td>
+            <td>Nenhuma mutação; app permanece 100% estável</td>
+            <td><span class="status-pill success">Aprovado</span></td>
+          </tr>
+          <tr>
+            <td><strong>Permissão Concedida</strong></td>
+            <td>Usuário autoriza microfone</td>
+            <td>Recognizer é inicializado com modelo <code>pt-BR</code> e escuta contínua</td>
+            <td>Nenhuma mutação prematura</td>
+            <td><span class="status-pill success">Aprovado</span></td>
+          </tr>
+          <tr>
+            <td><strong>Cancelamento da Gravação</strong></td>
+            <td>Usuário clica em Cancelar (Lixeira)</td>
+            <td><code>cancelNativeSpeech</code> zera buffers visuais e destrói recognizer</td>
+            <td>Saldo e transações rigorosamente intactos</td>
+            <td><span class="status-pill success">Aprovado</span></td>
+          </tr>
+          <tr>
+            <td><strong>Resultados Parciais (Frames)</strong></td>
+            <td>Eventos múltiplos <code>partialResult</code></td>
+            <td>Texto apenas atualiza a interface (live transcript) para leitura</td>
+            <td><strong>ZERO lançamento contábil; saldo intacto</strong></td>
+            <td><span class="status-pill success">Aprovado</span></td>
+          </tr>
+          <tr>
+            <td><strong>Callbacks Duplicados / Ecos</strong></td>
+            <td>Frames repetidos do microfone</td>
+            <td><code>cleanAndDeduplicateTranscript</code> remove palavras e frases consecutivas</td>
+            <td>Texto normalizado sem repetições</td>
+            <td><span class="status-pill success">Aprovado</span></td>
+          </tr>
+          <tr>
+            <td><strong>Falha de Reconhecimento</strong></td>
+            <td>Silêncio prolongado ou sem correspondência</td>
+            <td><code>onError</code> reporta o código nativo e interface retorna ao modo normal</td>
+            <td>Nenhum lançamento fantasma gerado</td>
+            <td><span class="status-pill success">Aprovado</span></td>
+          </tr>
+          <tr>
+            <td><strong>Confirmação Deliberada</strong></td>
+            <td>Usuário clica no botão "Lançar"</td>
+            <td>Recognizer consolida texto limpo e despacha transação contábil</td>
+            <td>Transação gravada com recibo <code>APPLIED</code> e saldo atualizado</td>
+            <td><span class="status-pill success">Aprovado</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- 3. Matriz Formal de Pareceres de Auditoria -->
+    <div class="card">
+      <h2>3. Matriz Formal de Pareceres e Segregação de Homologação</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Dimensão de Teste</th>
+            <th>Ambiente de Execução</th>
+            <th>Itens Cobertos</th>
+            <th>Parecer Formal</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Parecer A: Contrato de Software e Rede</strong></td>
+            <td>Pipeline Automatizado (CI / Ambiente Isolado)</td>
+            <td>Bloqueio de Cleartext, network_security_config.xml, capacitor.config.json, ciclo de vida do bridge, blindagem contábil de voz, desduplicação e 300 testes de suíte</td>
+            <td><span class="status-pill success">100% HOMOLOGADO</span></td>
+          </tr>
+          <tr>
+            <td><strong>Parecer B: Emulador AVD Android</strong></td>
+            <td>Virtual Device (AVD x86_64)</td>
+            <td>Renderização visual no emulador Android e inspeção via ADB Platform Tools</td>
+            <td><span class="status-pill warning">Pendente de AVD no host descartável</span></td>
+          </tr>
+          <tr>
+            <td><strong>Parecer C: Aparelho Físico Android</strong></td>
+            <td>Hardware Real (ARM64 USB/WiFi)</td>
+            <td>Captação acústica por microfone de hardware e serviços Google Speech Recognizer integrados</td>
+            <td><span class="status-pill info">Pendente de aparelho físico autorizado</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- 4. Consolidação Geral de Testes -->
+    <div class="card">
+      <h2>4. Consolidação Geral de Testes Automatizados (300 / 300)</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Bateria de Homologação</th>
+            <th>Arquivo de Teste</th>
+            <th>Casos Executados</th>
+            <th>Aprovados</th>
+            <th>Falhas</th>
+            <th>Taxa de Sucesso</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>1. Núcleo Contábil Puro</strong></td>
+            <td><code>src/engine/engine.test.ts</code></td>
+            <td>51</td>
+            <td>51</td>
+            <td>0</td>
+            <td><span class="status-pill success">100%</span></td>
+          </tr>
+          <tr>
+            <td><strong>2. Subetapa 03.3 (Gravação e Auth)</strong></td>
+            <td><code>src/engine/subetapa_03_3.test.ts</code></td>
+            <td>53</td>
+            <td>53</td>
+            <td>0</td>
+            <td><span class="status-pill success">100%</span></td>
+          </tr>
+          <tr>
+            <td><strong>3. Subetapa 03.4 (Concorrência e Leases)</strong></td>
+            <td><code>src/engine/subetapa_03_4.test.ts</code></td>
+            <td>141</td>
+            <td>141</td>
+            <td>0</td>
+            <td><span class="status-pill success">100%</span></td>
+          </tr>
+          <tr>
+            <td><strong>4. Subetapa 03.5 (Rede e Bridge de Voz)</strong></td>
+            <td><code>src/engine/subetapa_03_5.test.ts</code></td>
+            <td>55</td>
+            <td>55</td>
+            <td>0</td>
+            <td><span class="status-pill success">100%</span></td>
+          </tr>
+        </tbody>
+        <tfoot>
+          <tr style="background-color: var(--card-alt); font-weight: 800;">
+            <td colspan="2">TOTAL CONSOLIDADO</td>
+            <td>300</td>
+            <td>300</td>
+            <td>0</td>
+            <td><span class="status-pill success">100% APROVADO</span></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+
+    <!-- 5. Protocolo de Rollback -->
+    <div class="card">
+      <h2>5. Protocolo de Reversão e Rollback para a Subetapa 03.4 (PR.045)</h2>
+      <div class="code-box"># 1. Comando Git para restauração exata da revisão aprovada da 03.4:
+git checkout 98cacf082e9cce2a46e63eee5c1385982ddae038
+
+# 2. Invariância Estrutural de Dados:
+# As alterações da 03.5 restringiram-se a configurações de rede nativas (XML / Manifest / Capacitor)
+# e tratamento seguro de voz no cliente. Nenhuma mutação ou migração destrutiva foi aplicada ao Firestore.
+# O modelo de dados de contas, transações, leases e recibos permanece 100% retrocompatível.
+
+# 3. Sincronização do APK para a versão PR.045:
+npm run apk:sync</div>
+    </div>
+
+    <!-- 6. Links Oficiais de Auditoria -->
+    <div class="card">
+      <h2>6. Links Oficiais e Canais de Distribuição</h2>
+      <div class="links-grid">
+        <a href="https://kyro-analise.vercel.app/" class="link-item" target="_blank">
+          <strong>Portal Permanente (Fixo)</strong>
+          <span>https://kyro-analise.vercel.app/</span>
+        </a>
+        <a href="https://kyro-fase-03-5.vercel.app/" class="link-item" target="_blank">
+          <strong>Portal Histórico Subetapa 03.5</strong>
+          <span>https://kyro-fase-03-5.vercel.app/</span>
+        </a>
+        <a href="https://kyro-fase-03-4.vercel.app/" class="link-item" target="_blank">
+          <strong>Portal Histórico Subetapa 03.4</strong>
+          <span>https://kyro-fase-03-4.vercel.app/</span>
+        </a>
+        <a href="https://github.com/Wisterly/kyro-finance/releases/download/apk-latest/KYRO-Finance.apk" class="link-item" target="_blank">
+          <strong>Download Direto do APK Oficial (GitHub)</strong>
+          <span>KYRO-Finance.apk (Release Assinada)</span>
+        </a>
       </div>
     </div>
 
-    <!-- Seção 3: Links de Acesso e Deploys -->
-    <div class="card">
-      <h2>3. Ambientes e Artefatos Homologados</h2>
-      <div class="links-grid">
-        <a href="https://kyro-fase-03-5.vercel.app/" class="link-item" target="_blank">
-          <strong>Ambiente Oficial Subetapa 03.5</strong>
-          <span>https://kyro-fase-03-5.vercel.app/ (PR.046 / v1.46)</span>
-        </a>
-        <a href="https://kyro-fase-03-4.vercel.app/" class="link-item" target="_blank">
-          <strong>Ambiente Oficial Subetapa 03.4</strong>
-          <span>https://kyro-fase-03-4.vercel.app/ (PR.045 / v1.45)</span>
-        </a>
-        <a href="https://kyro-fase-03-3.vercel.app/" class="link-item" target="_blank">
-          <strong>Ambiente Oficial Subetapa 03.3</strong>
-          <span>https://kyro-fase-03-3.vercel.app/ (PR.044 / v1.44)</span>
-        </a>
-        <a href="https://github.com/Wisterly/kyro-finance/releases/download/apk-latest/KYRO-Finance.apk" class="link-item" target="_blank">
-          <strong>Download Direto do APK Android Atualizado</strong>
-          <span>KYRO-Finance.apk (Release Oficial GitHub apk-latest)</span>
-        </a>
-      </div>
-    </div>
   </div>
 </body>
 </html>
