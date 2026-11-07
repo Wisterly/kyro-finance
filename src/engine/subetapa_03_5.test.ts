@@ -239,8 +239,24 @@ async function testChatVoiceConfirmationFlow() {
     'Botão de confirmação na interface ("Lançar") aciona o handler real stopRecordingAudio'
   );
   assert(
+    appCode.includes('handleConfirmVoiceRecording(finalText)'),
+    'Handler real stopRecordingAudio em App.tsx executa diretamente a função compartilhada handleConfirmVoiceRecording'
+  );
+  assert(
     appCode.includes('launchTransactionFromChatVoice({'),
-    'Handler real stopRecordingAudio em App.tsx executa diretamente a função compartilhada launchTransactionFromChatVoice'
+    'handleConfirmVoiceRecording em App.tsx despacha pelo fluxo oficial launchTransactionFromChatVoice'
+  );
+  assert(
+    !appCode.includes("'client-session'"),
+    'App.tsx NÃO utiliza strings literais estáticas ("client-session") como token de autenticação'
+  );
+  assert(
+    appCode.includes('result.requiresClarification'),
+    'App.tsx trata formalmente requiresClarification solicitando esclarecimento sem mutações'
+  );
+  assert(
+    appCode.includes('msg_conf_${result.requestId}'),
+    'App.tsx garante identidade estável da mensagem de confirmação derivada do recibo'
   );
   assert(
     appCode.includes('chatVoiceController.registerMutation'),
@@ -332,10 +348,36 @@ async function testChatVoiceConfirmationFlow() {
     const txsAposCancel = await ledger.listUserTransactions(userId);
     assert(txsAposCancel.length === 0, 'Zero transações gravadas no banco após cancelamento');
 
-    // 2.5 Prova: Nova gravação, resultado final sem confirmação
+    // 2.5 Prova: Pedido de esclarecimento em fala sem valor monetário
+    console.log('  -> Testando fala sem valor contábil ("Abastecimento no posto Shell")...');
+    const clarifyResult = await launchTransactionFromChatVoice({
+      transcript: 'Abastecimento no posto Shell',
+      baseUrl,
+      authToken,
+      accountId
+    });
+
+    assert(clarifyResult.ok === false, 'launchTransactionFromChatVoice retorna ok=false para fala sem valor monetário');
+    assert(clarifyResult.status === 422, 'Status retornado é 422 (Unprocessable Content)');
+    assert(clarifyResult.requiresClarification === true, 'Flag requiresClarification é true');
+    assert(
+      clarifyResult.message.includes('Não identifiquei o valor do lançamento'),
+      'Mensagem solicita esclarecimento ao usuário com clareza sem inventar valores'
+    );
+    assert(controller.mutationLog.length === 0, 'ZERO requisições de mutação emitidas em pedido de esclarecimento');
+
+    const contaAposClarify = await ledger.getAccount(userId, accountId);
+    assert(
+      contaAposClarify !== null && contaAposClarify.balanceCents === 100000,
+      'Saldo no Firestore permanece rigorosamente R$ 1.000,00 após pedido de esclarecimento'
+    );
+    const txsAposClarify = await ledger.listUserTransactions(userId);
+    assert(txsAposClarify.length === 0, 'Zero transações gravadas no Firestore Emulator após pedido de esclarecimento');
+
+    // 2.6 Prova: Nova gravação, resultado final sem confirmação do botão Lançar
     await controller.startRecording();
-    controller.handlePartialResult('Abastecimento de cinquenta reais posto Shell');
-    controller.handleFinalResult('Abastecimento de cinquenta reais posto Shell');
+    controller.handlePartialResult('Gastei 73,45 no posto Shell');
+    controller.handleFinalResult('Gastei 73,45 no posto Shell');
     assert(controller.mutationLog.length === 0, 'Zero requisições de mutação antes da confirmação explícita');
 
     // Prova no Firestore Emulator: Ausência de mutação em resultados finais sem confirmação do botão "Lançar"
@@ -350,60 +392,61 @@ async function testChatVoiceConfirmationFlow() {
       'Zero transações gravadas no Firestore Emulator após resultado final sem confirmação'
     );
 
-    const txId = 'tx_voice_confirmed_035';
-    const requestId = 'req_voice_chat_035_unique';
+    // 2.7 Prova: Confirmação com fala contendo centavos reais (R$ 73,45) SEM passar customTx artificial
+    console.log('  -> Confirmando lançamento real ("Gastei 73,45 no posto Shell") com parser financeiro...');
+    const synthRequestId = `req_voice_chat_${Date.now()}`;
 
-    // Acionamento do caminho real exercitado pelo botão "Lançar"
     const launchResult = await launchTransactionFromChatVoice({
-      transcript: 'Abastecimento de cinquenta reais posto Shell',
+      transcript: 'Gastei 73,45 no posto Shell',
       baseUrl,
       authToken,
       accountId,
-      requestId,
-      customTx: {
-        id: txId,
-        amount: 50.0,
-        type: 'Saída',
-        category: 'Transporte'
-      }
+      requestId: synthRequestId
     });
 
     assert(launchResult.ok === true, 'Caminho do botão "Lançar" respondeu com sucesso (HTTP 200 OK)');
+    assert(launchResult.requiresClarification === false, 'requiresClarification é false para fala com valor monetário');
+    assert(launchResult.transaction !== null, 'Transação financeira construída dinamicamente pelo parser contábil');
+    assert(launchResult.transaction?.amount === 73.45, 'Valor contábil extraído preserva centavos: R$ 73,45');
     assert(launchResult.data?.success === true, 'Resposta confirma gravação contábil realizada');
     assert(launchResult.data?.receipt?.status === 'APPLIED', 'Recibo de mutação emitido com status APPLIED');
     assert(controller.mutationLog.length === 1, 'Exatamente UMA requisição de mutação emitida pelo chat na confirmação');
 
-    // Leitura direta no Firestore Emulator: comprovar lançamento e recibo persistidos
+    // Leitura direta no Firestore Emulator: comprovar débito exato de R$ 73,45 (100000 -> 92655 cents)
     const contaAposConfirm = await ledger.getAccount(userId, accountId);
     assert(
-      contaAposConfirm !== null && contaAposConfirm.balanceCents === 95000,
-      'Saldo no Firestore debitado exatamente em R$ 50,00 (100000 -> 95000 cents) após confirmação do chat'
+      contaAposConfirm !== null && contaAposConfirm.balanceCents === 92655,
+      'Saldo no Firestore debitado com precisão: R$ 1.000,00 -> R$ 926,55 (92655 cents)'
     );
 
     const txsAposConfirm = await ledger.listUserTransactions(userId);
     assert(txsAposConfirm.length === 1, 'Exatamente uma transação gravada no Firestore Emulator');
-    assert(txsAposConfirm[0].id === txId, `Identidade estável da transação comprovada: ${txId}`);
+    assert(txsAposConfirm[0].amountCents === 7345n, 'Centavos inteiros no banco são exatamente 7345n cents');
     assert(
-      txsAposConfirm[0].description === 'Abastecimento de cinquenta reais posto Shell',
-      'Descrição contábil reflete a transcrição limpa e desduplicada'
+      txsAposConfirm[0].description.toLowerCase().includes('shell') || txsAposConfirm[0].description.toLowerCase().includes('posto'),
+      'Descrição contábil reflete a identificação contábil do parser'
     );
 
-    const reciboDoc = await adminStore.getDocument(`users/${userId}/idempotency/${requestId}`);
+    const reciboDoc = await adminStore.getDocument(`users/${userId}/idempotency/${synthRequestId}`);
     assert(reciboDoc !== null, 'Recibo de idempotência persistido diretamente no Firestore Emulator');
     assert(reciboDoc.status === 'APPLIED', 'Recibo no Firestore com status APPLIED');
     assert(
-      reciboDoc.responseSnapshot?.id === txId,
+      reciboDoc.responseSnapshot?.id === launchResult.transaction?.id,
       'Recibo transacional fiel ao registro gerado (responseSnapshot.id === txId)'
     );
+    assert(
+      launchResult.confirmationText.includes('73,45') && launchResult.confirmationText.includes('APPLIED'),
+      'Texto de confirmação visual derivado diretamente do recibo contábil emitido'
+    );
 
-    // 2.6 Prova: Simulação de perda de resposta e retry idempotente pelo mesmo caminho
+    // 2.8 Prova: Simulação de perda de resposta e retry idempotente pelo mesmo caminho
     console.log('  -> Simulando perda de resposta de rede e retry pelo mesmo caminho compartilhado...');
     const retryResult = await controller.retryConfirmation({
       baseUrl,
       authToken,
       accountId,
-      requestId,
-      transaction: launchResult.transaction
+      requestId: synthRequestId,
+      transaction: launchResult.transaction!
     });
 
     assert(retryResult.ok === true, 'Retry do chat retorna HTTP 200 OK sem erros');
@@ -414,8 +457,8 @@ async function testChatVoiceConfirmationFlow() {
     // Conferência estrita no Firestore Emulator: único efeito com identidade estável
     const contaAposRetry = await ledger.getAccount(userId, accountId);
     assert(
-      contaAposRetry !== null && contaAposRetry.balanceCents === 95000,
-      'Saldo no Firestore PERMANECE RIGOROSAMENTE R$ 950,00 (Zero duplo débito pós-retry)'
+      contaAposRetry !== null && contaAposRetry.balanceCents === 92655,
+      'Saldo no Firestore PERMANECE RIGOROSAMENTE R$ 926,55 (Zero duplo débito pós-retry)'
     );
 
     const txsAposRetry = await ledger.listUserTransactions(userId);

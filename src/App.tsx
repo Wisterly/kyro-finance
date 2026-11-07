@@ -3085,6 +3085,87 @@ export default function App() {
     }
   };
 
+  const handleConfirmVoiceRecording = async (transcriptText: string) => {
+    const finalText = cleanAndDeduplicateTranscript(transcriptText);
+    if (!finalText || finalText.trim().length === 0) {
+      alert('⚠️ Nenhuma fala foi detectada com clareza. Fale próximo ao microfone e clique em Lançar.');
+      return;
+    }
+
+    // Exibe a fala transcrita no chat
+    const userMsgId = `msg_user_${Date.now()}`;
+    setMessages(prev => [...prev, {
+      id: userMsgId,
+      sender: 'user',
+      text: `🎙️ "${finalText}"`,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    }]);
+
+    setInputMessage('');
+    setLiveAudioTranscript('');
+    setIsAiLoading(true);
+
+    try {
+      const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'http://127.0.0.1:4125';
+      
+      // Chamada ÚNICA ao fluxo oficial de persistência financeira (zero chamada paralela, zero token estático fictício)
+      const result = await launchTransactionFromChatVoice({
+        transcript: finalText,
+        baseUrl,
+        accountId: 'acc_default'
+      });
+
+      if (result.requiresClarification) {
+        // Pedido de esclarecimento: nenhuma mutação foi realizada no backend e o saldo contábil permanece intacto
+        setMessages(prev => [...prev, {
+          id: `msg_clarify_${Date.now()}`,
+          sender: 'ia',
+          text: result.message,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        }]);
+      } else if (result.ok && result.transaction) {
+        // Lançamento confirmado com recibo formal emitido pelo servidor
+        const confMsgId = `msg_conf_${result.requestId}`;
+        setMessages(prev => [...prev, {
+          id: confMsgId,
+          sender: 'ia',
+          text: result.confirmationText,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        }]);
+
+        // Atualização reativa de estado local e persistência em storage
+        setTransactions(prev => [result.transaction!, ...prev]);
+        try {
+          const currentTxs = JSON.parse(localStorage.getItem('kyro_transactions') || '[]');
+          localStorage.setItem('kyro_transactions', JSON.stringify([result.transaction!, ...currentTxs]));
+        } catch (e) {}
+
+        setWhatsappSyncToast({
+          show: true,
+          text: `✅ ${result.transaction.description}: R$ ${result.transaction.amount.toFixed(2)} registrado!`
+        });
+        setTimeout(() => setWhatsappSyncToast(null), 4000);
+      } else {
+        // Erro no processamento pelo servidor
+        setMessages(prev => [...prev, {
+          id: `msg_err_${Date.now()}`,
+          sender: 'ia',
+          text: `⚠️ Não foi possível salvar o lançamento: ${result.message}`,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        }]);
+      }
+    } catch (err: any) {
+      setMessages(prev => [...prev, {
+        id: `msg_err_${Date.now()}`,
+        sender: 'ia',
+        text: `⚠️ Erro no processamento de voz: ${err?.message || err}`,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      }]);
+    } finally {
+      setIsAiLoading(false);
+    }
+  };
+
   const stopRecordingAudio = async () => {
     isRecordingAudioRef.current = false;
     setIsRecordingAudio(false);
@@ -3103,35 +3184,7 @@ export default function App() {
       await new Promise(r => setTimeout(r, 120));
 
       const finalText = cleanAndDeduplicateTranscript(recordedTextRef.current || liveAudioTranscript || inputMessage);
-      if (finalText && finalText.trim().length > 0) {
-        chatVoiceController.state.isRecording = false;
-        chatVoiceController.state.lastAction = 'confirmed';
-        chatVoiceController.state.recordedText = finalText;
-
-        // Vínculo formal do botão Lançar com a função compartilhada de confirmação
-        launchTransactionFromChatVoice({
-          transcript: finalText,
-          baseUrl: typeof window !== 'undefined' ? window.location.origin : 'http://127.0.0.1:4125',
-          authToken: 'client-session'
-        }).catch(() => {});
-
-        setMessages(prev => [...prev, {
-          id: Date.now().toString(),
-          sender: 'user',
-          text: `🎙️ "${finalText}"`,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        }]);
-        setInputMessage('');
-        setLiveAudioTranscript('');
-        setIsAiLoading(true);
-
-        await handleProcessUserInteraction({
-          type: 'audio',
-          text: finalText
-        });
-      } else {
-        alert('⚠️ Nenhuma fala foi detectada com clareza. Fale próximo ao microfone e clique em Lançar.');
-      }
+      await handleConfirmVoiceRecording(finalText);
       return;
     }
 
@@ -3147,38 +3200,15 @@ export default function App() {
 
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
       try { 
+        mediaRecorderRef.current.onstop = null;
         mediaRecorderRef.current.stop(); 
       } catch (e) {
         console.warn('[MediaRecorder Stop Erro]:', e);
       }
-    } else {
-      const finalText = cleanAndDeduplicateTranscript(recordedTextRef.current || liveAudioTranscript || inputMessage);
-      if (finalText) {
-        chatVoiceController.state.isRecording = false;
-        chatVoiceController.state.lastAction = 'confirmed';
-        chatVoiceController.state.recordedText = finalText;
-
-        // Vínculo formal do botão Lançar com a função compartilhada de confirmação
-        launchTransactionFromChatVoice({
-          transcript: finalText,
-          baseUrl: typeof window !== 'undefined' ? window.location.origin : 'http://127.0.0.1:4125',
-          authToken: 'client-session'
-        }).catch(() => {});
-
-        setMessages(prev => [...prev, {
-          id: Date.now().toString(),
-          sender: 'user',
-          text: `🎙️ "${finalText}"`,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        }]);
-        setInputMessage('');
-        setLiveAudioTranscript('');
-        await handleProcessUserInteraction({
-          type: 'audio',
-          text: finalText
-        });
-      }
     }
+
+    const finalText = cleanAndDeduplicateTranscript(recordedTextRef.current || liveAudioTranscript || inputMessage);
+    await handleConfirmVoiceRecording(finalText);
   };
 
   // Upload e Análise IA de Documento (Foto, Câmera ou PDF)
