@@ -231,17 +231,17 @@
         <div class="badge-group">
           <span class="badge badge-success">Subetapa 03.5</span>
           <span class="badge badge-blue">PR.046 / v1.46 (Build 46)</span>
-          <span class="badge badge-cyan">326/326 Testes Aprovados</span>
-          <span class="badge badge-purple">SHA: 21834469a0c3725d8e6b7eb53a7a89f623de3eec</span>
+          <span class="badge badge-cyan">354/354 Testes Aprovados</span>
+          <span class="badge badge-purple">SHA: 96c270ff5d6faebdfd52c1e48ff61df18f7f2b96</span>
           <span class="badge badge-warning">Aceite Android Runtime: Pendente AVD/Host</span>
         </div>
         <div style="font-size: 0.85rem; color: var(--text-muted);">
-          Data da Homologação: <strong>07/11/2026 15:50 BRT</strong>
+          Data da Homologação: <strong>07/11/2026 16:25 BRT</strong>
         </div>
       </div>
-      <h1>KYRO Finance | Auditoria Técnica Completa da Subetapa 03.5: Fluxo Unificado do Botão Lançar, Saneamento Cleartext e Reconciliação do APK</h1>
+      <h1>KYRO Finance | Auditoria Técnica Completa da Subetapa 03.5: Sessão Firebase Obrigatória, Titularidade de Conta, Recuperação com Identidade Estável e Reconciliação do APK</h1>
       <p class="subtitle">
-        Relatório oficial consolidado da Subetapa 03.5. O botão "Lançar" percorre um único fluxo de processamento e persistência via <code>launchTransactionFromChatVoice</code> (sem chamadas paralelas, sem tokens literais fictícios e sem valores arbitrários inventados), integrando autenticação real com autorização estrita por UID e reutilizando o parser financeiro existente com preservação exata de centavos e campos ausentes. Reconciliação exata da compilação do APK oficial no CI do GitHub Actions (Run ID <code>42402911082</code> no commit <code>0e4ab8e</code>, preservando o histórico das execuções <code>42344636012</code> e <code>42342557770</code>); inspeção estática com <code>aapt</code> e <code>apksigner</code>; e registro formal dos limites de ambiente.
+        Relatório oficial consolidado da Subetapa 03.5. A confirmação de voz via botão "Lançar" conecta-se estritamente à sessão Firebase do usuário autenticado (<code>clientAuthSession.getSessionToken()</code>), restringindo credenciais sintéticas e o Auth Emulator ao ambiente de teste e validando titularidade da conta contra o UID (bloqueando cross-tenant com 401/403). Idempotência ponta a ponta com manutenção do <code>requestId</code> desde a confirmação até a recuperação de rede: simulação de perda de resposta após comit no Firestore Emulator e recuperação pelo fluxo nativo do chat (<code>recoverPendingVoiceTransaction</code>) sem passar resposta descartada ou reconstruir ID, comprovando zero duplo débito, mesmo recibo e entrada única no storage local. Reconciliação completa da compilação do APK oficial no CI do GitHub Actions (Run ID <code>42405492827</code> no commit <code>6b3dbdc</code>, reconciliado com <code>42402911082</code> no commit <code>0e4ab8e</code> e histórico até <code>21834469</code>), inspeção estática via <code>aapt</code> e <code>apksigner</code>, e catálogo formal do bloqueio concreto de hardware do host.
       </p>
     </header>
 
@@ -249,18 +249,18 @@
     <div class="grid-kpi">
       <div class="card-kpi">
         <div class="kpi-title">Suíte Consolidada</div>
-        <div class="kpi-value">326 / 326</div>
+        <div class="kpi-value">354 / 354</div>
         <div class="kpi-subtitle">100% de Sucesso (Checkout Limpo)</div>
       </div>
       <div class="card-kpi">
-        <div class="kpi-title">Confirmação do Chat</div>
-        <div class="kpi-value">COMPROVADO</div>
-        <div class="kpi-subtitle">0 Mutação em Parcial/Final/Cancelamento / 1 no Lançar</div>
+        <div class="kpi-title">Sessão Firebase & Fronteira</div>
+        <div class="kpi-value">BLINDADO</div>
+        <div class="kpi-subtitle">401 Sem Sessão / 403 Conta Alheia (0 Mutações)</div>
       </div>
       <div class="card-kpi">
-        <div class="kpi-title">Política Cleartext</div>
-        <div class="kpi-value">BLOQUEADO</div>
-        <div class="kpi-subtitle">TLS / HTTPS Mandatório</div>
+        <div class="kpi-title">Recuperação de Resposta Perdida</div>
+        <div class="kpi-value">COMPROVADO</div>
+        <div class="kpi-subtitle">Mesmo RequestID / Zero Duplo Débito / Entrada Única</div>
       </div>
       <div class="card-kpi">
         <div class="kpi-title">Status Oficial</div>
@@ -271,15 +271,15 @@
 
     <!-- 1. Investigação da Revisão e Caminho Real do Botão "Lançar" -->
     <div class="card">
-      <h2>1. Fluxo Único do Botão "Lançar", Autenticação Real por UID e Reutilização do Parser Financeiro</h2>
+      <h2>1. Sessão Firebase do Usuário Autenticado, Fronteira de Contas e Recuperação Nativa no Chat</h2>
       
       <div style="background: rgba(59, 130, 246, 0.08); border-left: 3px solid var(--blue); padding: 1rem; margin-bottom: 1.25rem; font-size: 0.9rem; color: var(--text-muted);">
         <strong style="color: #ffffff;">Correções Estruturais e Sanitização Definitiva da Subetapa 03.5:</strong><br/>
-        • <strong>Fluxo Único no Botão "Lançar":</strong> O manipulador <code>stopRecordingAudio</code> em <code>src/App.tsx</code> agora delega com exclusividade para <code>handleConfirmVoiceRecording</code>, eliminando por completo a chamada concorrente a <code>handleProcessUserInteraction</code>.<br/>
-        • <strong>Eliminação de Tokens Literais Fictícios:</strong> A string estática <code>'client-session'</code> foi banida. A autenticação agora exige credencial válida emitida pelo Firebase Authentication (ou Auth Emulator oficial) e autorização por UID validada pela fronteira do servidor.<br/>
-        • <strong>Reutilização do Parser Contábil Existente (Zero Valores Hardcoded):</strong> Eliminamos o valor fixo de R$ 50,00. A mensagem falada é processada dinamicamente por <code>parseDynamicFinancialMessage(text, true)</code>, preservando centavos via <code>parseToCents</code> e campos ausentes.<br/>
-        • <strong>Pedido de Esclarecimento sem Efeito Colateral:</strong> Quando a transcrição de voz não contém valor monetário (ex.: <em>"Abastecimento no posto Shell"</em>), o sistema responde com <code>requiresClarification: true</code> (status 422), orienta o usuário no chat e garante <strong>0 requisições de mutação e saldo contábil 100% intacto</strong>.<br/>
-        • <strong>Confirmação Visual Derivada do Recibo Efetivo:</strong> A mensagem renderizada no Chat é construída diretamente a partir do snapshot contábil retornado no recibo (<code>receipt.responseSnapshot</code>), com ID estável <code>msg_conf_${result.requestId}</code> à prova de retry.
+        • <strong>Sessão Firebase Obrigatória (ClientAuthSession):</strong> A credencial oficial de autenticação é obtida e renovada exclusivamente pelo fluxo normal da aplicação (<code>clientAuthSession.getSessionToken()</code>). Acesso ao Auth Emulator e credenciais sintéticas são <strong>estritamente restritos ao ambiente de teste</strong>.<br/>
+        • <strong>Rejeição de Sessão Ausente (401):</strong> Se não houver sessão ativa do Firebase, qualquer tentativa no chat é barrada imediatamente com <code>UNAUTHORIZED_NO_SESSION</code>, garantindo <strong>zero requisições de mutação e saldo intacto</strong>.<br/>
+        • <strong>Validação Estrita de Titularidade da Conta (403):</strong> Validada em duas camadas (cliente em <code>resolveAndValidateAccount</code> e servidor no <code>POST /api/database</code>). Se a conta solicitada não pertencer ao UID autenticado, a operação é rejeitada com <code>PERMISSION_DENIED_ACCOUNT_MISMATCH</code> com zero mutações.<br/>
+        • <strong>Perda de Resposta de Rede e Recuperação Nativa:</strong> Quando o servidor conclui a gravação contábil no Firestore Emulator mas a resposta é perdida na rede, o chat retém a operação com seu <code>requestId</code> estável. O fluxo de recuperação (<code>recoverPendingVoiceTransaction</code>) é acionado pelo chat <strong>sem que o cliente tenha recebido o recibo ou reconstruído o identificador</strong>, comprovando o mesmo <code>requestId</code>, zero duplo débito, mesmo recibo e <strong>entrada única na interface e no localStorage</strong>.<br/>
+        • <strong>Parser Financeiro Dinâmico com Centavos Reais:</strong> Fala de teste real com centavos (R$ 73,45) sem injeção de valores artificiais e pedido de esclarecimento (422) sem mutações quando ausente valor monetário.
       </div>
 
       <table>
@@ -293,6 +293,20 @@
           </tr>
         </thead>
         <tbody>
+          <tr>
+            <td><strong>Sessão Ausente / Expirada</strong></td>
+            <td>Usuário tenta lançar sem login ativo no Firebase</td>
+            <td><code>0 requisições</code> (mutationLog = 0)</td>
+            <td>Rejeitado com 401 UNAUTHORIZED_NO_SESSION; saldo intacto</td>
+            <td><span class="status-pill warning">401 Sem Mutação</span></td>
+          </tr>
+          <tr>
+            <td><strong>Conta de Outro UID (Cross-Tenant)</strong></td>
+            <td>Tentativa de transacionar conta não pertencente ao UID</td>
+            <td><code>0 requisições</code> (mutationLog = 0)</td>
+            <td>Rejeitado com 403 PERMISSION_DENIED_ACCOUNT_MISMATCH; saldo intacto</td>
+            <td><span class="status-pill warning">403 Sem Mutação</span></td>
+          </tr>
           <tr>
             <td><strong>Resultados Parciais (onPartial)</strong></td>
             <td>Reconhecedor emite frames ao vivo ("comprei setenta e três...")</td>
@@ -329,18 +343,18 @@
             <td><span class="status-pill success">Zero Mutação</span></td>
           </tr>
           <tr>
-            <td><strong>Confirmação Real pelo Botão "Lançar"</strong></td>
-            <td>Fala "Gastei 73,45 no posto Shell" confirmada pelo botão Lançar (sem customTx artificial)</td>
-            <td><code>1 requisição POST /api/database</code></td>
-            <td>Saldo debitado com centavos exatos de R$ 1.000 para <strong>R$ 926,55 (92.655 cents)</strong>; recibo APPLIED</td>
-            <td><span class="status-pill success">Efeito Único Aplicado</span></td>
+            <td><strong>Confirmação e Queda de Conexão na Resposta</strong></td>
+            <td>Servidor comita no Firestore Emulator mas a resposta é perdida na rede antes de entregar o recibo</td>
+            <td><code>1 requisição POST inicial</code></td>
+            <td>Servidor debita para R$ 926,55 (92.655 cents) e salva recibo APPLIED; cliente retém operação pendente</td>
+            <td><span class="status-pill success">requiresRecovery: true</span></td>
           </tr>
           <tr>
-            <td><strong>Repetição / Perda de Resposta (Retry)</strong></td>
-            <td>Chat reenvia mesma confirmação (mesmo requestId) pelo mesmo caminho compartilhado</td>
-            <td><code>2 requisições no histórico</code></td>
-            <td><strong>Saldo permanece rigorosamente R$ 926,55 (0 duplo débito)</strong>; 1 transação estável</td>
-            <td><span class="status-pill success">Idempotência Estável</span></td>
+            <td><strong>Recuperação Nativa pelo Chat (recoverPendingVoiceTransaction)</strong></td>
+            <td>Chat dispara recuperação automática sem receber recibo anterior nem reconstruir requestId</td>
+            <td><code>Reenvio com mesmo requestId</code></td>
+            <td><strong>Saldo permanece rigorosamente R$ 926,55 (0 duplo débito)</strong>; 1 lançamento no banco; entrada única no localStorage</td>
+            <td><span class="status-pill success">Identidade Preservada</span></td>
           </tr>
         </tbody>
       </table>
@@ -428,46 +442,46 @@
           <tr>
             <th>Propriedade do Artefato</th>
             <th>APK de Referência Legada (PR.045)</th>
-            <th>APK Intermediário (CI Run 42344636012)</th>
-            <th>APK Oficial Homologado (CI Run 42402911082)</th>
+            <th>APK Homologado PR.046 (CI Run 42402911082)</th>
+            <th>APK Oficial Final (CI Run 42405492827)</th>
           </tr>
         </thead>
         <tbody>
           <tr>
             <td><strong>SHA do Código</strong></td>
             <td><code>98cacf082e9cce2a46e63eee5c1385982ddae038</code></td>
-            <td><code>873865650fcae26f5935d0c8f933575911ac2bb1</code></td>
             <td><code>0e4ab8e66445206cc85ba5c391a550a0585cc644</code></td>
+            <td><code>6b3dbdc9fa679fb8ecf5dfdfb768e7c10b7b1348</code></td>
           </tr>
           <tr>
             <td><strong>Execução de CI</strong></td>
             <td>Compilação legada</td>
-            <td><a href="https://github.com/Wisterly/kyro-finance/actions/runs/42344636012" target="_blank" style="color:var(--blue); text-decoration: underline;">GitHub Actions Run ID 42344636012</a></td>
-            <td><a href="https://github.com/Wisterly/kyro-finance/actions/runs/42402911082" target="_blank" style="color:var(--accent); text-decoration: underline;">GitHub Actions Run ID 42402911082</a> (Job 128494358578)</td>
+            <td><a href="https://github.com/Wisterly/kyro-finance/actions/runs/42402911082" target="_blank" style="color:var(--blue); text-decoration: underline;">GitHub Actions Run ID 42402911082</a> (Job 128494358578)</td>
+            <td><a href="https://github.com/Wisterly/kyro-finance/actions/runs/42405492827" target="_blank" style="color:var(--accent); text-decoration: underline;">GitHub Actions Run ID 42405492827</a> (Job 128502177576)</td>
           </tr>
           <tr>
             <td><strong>Log do Checkout no CI</strong></td>
             <td>-</td>
-            <td><code>refs/remotes/origin/main -> 873865650fcae26f5935d0c8f933575911ac2bb1</code></td>
             <td><code>refs/remotes/origin/main -> 0e4ab8e66445206cc85ba5c391a550a0585cc644</code></td>
+            <td><code>refs/remotes/origin/main -> 6b3dbdc9fa679fb8ecf5dfdfb768e7c10b7b1348</code></td>
           </tr>
           <tr>
             <td><strong>Artefato Compilado no CI</strong></td>
             <td>KYRO-Finance.apk</td>
-            <td>KYRO-Finance-1.46.apk</td>
+            <td><code>KYRO-Finance-APK / KYRO-Finance-1.46.apk</code></td>
             <td><code>KYRO-Finance-APK / KYRO-Finance-1.46.apk</code></td>
           </tr>
           <tr>
             <td><strong>Hash SHA-256 do APK</strong></td>
             <td><code>2A3CACC10056B86EEA8FC1E49A1B863F7C6E287A9BAE9604195CABA120DA5255</code></td>
-            <td><code>3324C2EAA466BFAED9BC1ACAE34DE60DC265253EFE7594E25785062A585A53C0</code></td>
             <td><code>80ECE8DB0DFA3D9862535EC0AEB570EB7EB47706097FB121E866C8A3AECF2BEB</code></td>
+            <td><code>F000E863B9F6329A4DF369CCEC5FC2FF98BB26C0F45E58AE245765A558849A4C</code></td>
           </tr>
           <tr>
             <td><strong>Tamanho em Bytes</strong></td>
             <td>9.549.511 bytes</td>
-            <td>9.552.483 bytes</td>
             <td>9.554.187 bytes</td>
+            <td>9.555.855 bytes</td>
           </tr>
           <tr>
             <td><strong>Comando de Build</strong></td>
@@ -508,7 +522,7 @@
         </tbody>
       </table>
 
-      <h3 style="font-size: 1.1rem; margin-top: 1.5rem; margin-bottom: 0.5rem;">Saída Sanitizada Oficial de <code>apksigner verify --print-certs</code> para o APK Oficial Final (80ECE8DB...):</h3>
+      <h3 style="font-size: 1.1rem; margin-top: 1.5rem; margin-bottom: 0.5rem;">Saída Sanitizada Oficial de <code>apksigner verify --print-certs</code> para o APK Oficial Final (F000E863...):</h3>
       <div class="code-box terminal">Signer #1 certificate DN: C=BR, ST=PI, L=Teresina, OU=Mobile, O=KYRO, CN=KYRO Finance
 Signer #1 certificate SHA-256 digest: 9b2b95a993ec5ddb928b76c230d3b32a3ae00de2d548a519a81b8870c0ce9c74
 Signer #1 certificate SHA-1 digest: 2e25b3c2bf56bc6a7a18c9fd7f48f3b73a33d5fa
@@ -651,10 +665,10 @@ A: android:networkSecurityConfig(0x01010527)=@0x7f100002
             <td><span class="status-pill success">100%</span></td>
           </tr>
           <tr>
-            <td><strong>4. Subetapa 03.5 (Chat, Rede e APK)</strong></td>
+            <td><strong>4. Subetapa 03.5 (Chat, Sessão Firebase, Rede e APK)</strong></td>
             <td><code>src/engine/subetapa_03_5.test.ts</code></td>
-            <td>81</td>
-            <td>81</td>
+            <td>109</td>
+            <td>109</td>
             <td>0</td>
             <td><span class="status-pill success">100%</span></td>
           </tr>
@@ -662,15 +676,15 @@ A: android:networkSecurityConfig(0x01010527)=@0x7f100002
         <tfoot>
           <tr style="background-color: var(--card-alt); font-weight: 800;">
             <td colspan="2">TOTAL CONSOLIDADO</td>
-            <td>326</td>
-            <td>326</td>
+            <td>354</td>
+            <td>354</td>
             <td>0</td>
             <td><span class="status-pill success">100% APROVADO</span></td>
           </tr>
         </tfoot>
       </table>
 
-      <h3 style="font-size: 1.1rem; margin-top: 1.5rem; margin-bottom: 0.5rem;">Log Oficial de Execução em Checkout Limpo do SHA 87386565:</h3>
+      <h3 style="font-size: 1.1rem; margin-top: 1.5rem; margin-bottom: 0.5rem;">Log Oficial de Execução em Checkout Limpo do SHA 6b3dbdc9fa679fb8ecf5dfdfb768e7c10b7b1348 (Reconciliação 03.5):</h3>
       <div class="code-box terminal">================================================================
 KYRO FINANCE | EXECUÇÃO INTEGRADA DE TODAS AS SUÍTES
 ================================================================
@@ -684,28 +698,45 @@ KYRO FINANCE | EXECUÇÃO INTEGRADA DE TODAS AS SUÍTES
 >>> [3/4] EXECUTANDO BATERIA DA SUBETAPA 03.4 (141 CASOS)...
   ✓ RESULTADO DA BATERIA DA SUBETAPA 03.4: 141 APROVADOS, 0 FALHAS (100%)
 
->>> [4/4] EXECUTANDO BATERIA DA SUBETAPA 03.5 (81 CASOS)...
+>>> [4/4] EXECUTANDO BATERIA DA SUBETAPA 03.5 (109 CASOS)...
   [OK] AndroidManifest.xml declara explicitamente android:usesCleartextTraffic="false"
   [OK] network_security_config.xml possui base-config com cleartextTrafficPermitted="false"
   [OK] capacitor.config.json define server.cleartext estritamente como false
   [OK] enforceSecureTransport lança CleartextTrafficBlockedError para tráfego HTTP
-  [OK] App.tsx importa formalmente a função compartilhada launchTransactionFromChatVoice
+  [OK] App.tsx importa formalmente launchTransactionFromChatVoice e recoverPendingVoiceTransaction
   [OK] startRecordingAudio em App.tsx aciona chatVoiceController.startRecording()
   [OK] cancelRecordingAudio em App.tsx aciona chatVoiceController.cancelRecording()
   [OK] Callbacks onPartial e onFinal em App.tsx encaminham para chatVoiceController
   [OK] Botão de confirmação na interface ("Lançar") aciona o handler real stopRecordingAudio
   [OK] Handler real stopRecordingAudio em App.tsx executa diretamente a função compartilhada handleConfirmVoiceRecording
+  [OK] App.tsx implementa o fluxo nativo handleRecoverPendingVoiceRecording para recuperação de operações pendentes
   [OK] handleConfirmVoiceRecording em App.tsx despacha pelo fluxo oficial launchTransactionFromChatVoice
   [OK] App.tsx NÃO utiliza strings literais estáticas ("client-session") como token de autenticação
   [OK] App.tsx trata formalmente requiresClarification solicitando esclarecimento sem mutações
+  [OK] App.tsx trata formalmente requiresRecovery acionando recuperação com identidade estável
   [OK] App.tsx garante identidade estável da mensagem de confirmação derivada do recibo
   [OK] syncSaveToCentralDb em App.tsx audita mutações através de chatVoiceController.registerMutation
   [OK] Servidor HTTP standalone ativo na porta 4125 sobre Firestore Emulator
   [OK] ID Token oficial obtido do Firebase Auth Emulator
-  [OK] Saldo inicial confirmado em R$ 1.000,00 no Firestore Emulator
+  [OK] UID sintético autenticado: yPFkEfZgBtZbGl5H8FSWtulRL8nE
+  [OK] Saldo inicial da conta no Firestore Emulator confirmado em R$ 1.000,00 (100000 cents)
+  [OK] Sem sessão ativa, confirmação de voz é rejeitada com ok=false
+  [OK] Status HTTP retornado é 401 (Unauthorized)
+  [OK] Código de erro retornado é UNAUTHORIZED_NO_SESSION
+  [OK] ZERO requisições de mutação emitidas sem sessão de usuário
+  [OK] Saldo no Firestore permanece R$ 1.000,00 intacto após rejeição por ausência de sessão
+  [OK] Tentativa de transacionar conta de outro UID é rejeitada com ok=false
+  [OK] Status HTTP retornado é 403 (Forbidden)
+  [OK] Código de erro retornado é PERMISSION_DENIED_ACCOUNT_MISMATCH
+  [OK] ZERO requisições de mutação emitidas para conta alheia
+  [OK] Saldo no Firestore permanece R$ 1.000,00 intacto após bloqueio de conta alheia
+  [OK] Controlador do Chat iniciou estado de gravação de áudio
   [OK] ZERO requisições de mutação emitidas durante frame parcial 1
   [OK] ZERO requisições de mutação emitidas durante frame parcial 2
+  [OK] Callbacks duplicados higienizados pelo controlador (cleanAndDeduplicateTranscript)
   [OK] ZERO requisições de mutação emitidas durante callbacks duplicados
+  [OK] Controlador encerrou gravação após cancelRecording
+  [OK] Buffers de texto zerados após cancelamento
   [OK] ZERO requisições de mutação emitidas após cancelamento do áudio
   [OK] Saldo no Firestore permanece rigorosamente R$ 1.000,00 após cancelamento
   [OK] Zero transações gravadas no banco após cancelamento
@@ -719,28 +750,29 @@ KYRO FINANCE | EXECUÇÃO INTEGRADA DE TODAS AS SUÍTES
   [OK] Zero requisições de mutação antes da confirmação explícita
   [OK] Saldo no Firestore Emulator permanece rigorosamente R$ 1.000,00 após resultado final sem confirmação
   [OK] Zero transações gravadas no Firestore Emulator após resultado final sem confirmação
-  [OK] Caminho do botão "Lançar" respondeu com sucesso (HTTP 200 OK)
-  [OK] requiresClarification é false para fala com valor monetário
-  [OK] Transação financeira construída dinamicamente pelo parser contábil
-  [OK] Valor contábil extraído preserva centavos: R$ 73,45
-  [OK] Resposta confirma gravação contábil realizada
-  [OK] Recibo de mutação emitido com status APPLIED
-  [OK] Exatamente UMA requisição de mutação emitida pelo chat na confirmação
-  [OK] Saldo no Firestore debitado com precisão: R$ 1.000,00 -> R$ 926,55 (92655 cents)
+  [OK] Resposta da rede interceptada e descartada após processamento pelo servidor
+  [OK] Cliente registra ok=false devido à perda de resposta na rede
+  [OK] Cliente sinaliza requiresRecovery=true para acionar recuperação
+  [OK] Status de resposta não recebida é 0 (NETWORK_RESPONSE_LOST)
+  [OK] Cliente NÃO recebeu o corpo da resposta nem o recibo descartado
+  [OK] Controlador reteve operação pendente com requestId estável
+  [OK] Servidor debitou a conta no Firestore Emulator para R$ 926,55 (92655 cents)
   [OK] Exatamente uma transação gravada no Firestore Emulator
   [OK] Centavos inteiros no banco são exatamente 7345n cents
   [OK] Descrição contábil reflete a identificação contábil do parser
   [OK] Recibo de idempotência persistido diretamente no Firestore Emulator
   [OK] Recibo no Firestore com status APPLIED
-  [OK] Recibo transacional fiel ao registro gerado (responseSnapshot.id === txId)
-  [OK] Texto de confirmação visual derivado diretamente do recibo contábil emitido
-  [OK] Retry do chat retorna HTTP 200 OK sem erros
-  [OK] Resposta do retry confirma sucesso
-  [OK] Recibo recuperado intacto com status APPLIED
-  [OK] Histórico do chat registra as duas tentativas de envio
-  [OK] Saldo no Firestore PERMANECE RIGOROSAMENTE R$ 926,55 (Zero duplo débito pós-retry)
-  [OK] Quantidade de transações permanece exatamente 1 (sem duplicação de registro)
-  [OK] Hash SHA-256 do APK Candidato Oficial verificado com precisão criptográfica (80ECE8DB0DFA3D9862535EC0AEB570EB7EB47706097FB121E866C8A3AECF2BEB)
+  [OK] Recuperação pelo fluxo nativo do chat respondeu com sucesso (HTTP 200 OK)
+  [OK] Identidade mantida: requestId idêntico ao da primeira tentativa
+  [OK] Servidor confirma sucesso na recuperação
+  [OK] Recibo contábil recuperado intacto com status APPLIED
+  [OK] Transação recuperada preserva exatos R$ 73,45
+  [OK] Texto de confirmação visual derivado diretamente do recibo recuperado
+  [OK] Saldo no Firestore PERMANECE RIGOROSAMENTE R$ 926,55 (Zero duplo débito pós-recuperação)
+  [OK] Quantidade de transações no banco permanece exatamente 1 (sem duplicação de registro)
+  [OK] Exatamente UMA mensagem de confirmação gerada no Chat
+  [OK] Exatamente UMA transação persistida no armazenamento local kyro_transactions
+  [OK] Hash SHA-256 do APK Candidato Oficial verificado com precisão criptográfica (F000E863B9F6329A4DF369CCEC5FC2FF98BB26C0F45E58AE245765A558849A4C)
   [OK] Certificado de assinatura oficial do APK Candidato verificado (CN=KYRO Finance, SHA-256: 9b2b95a993ec5ddb928b76c230d3b32a3ae00de2d548a519a81b8870c0ce9c74)
   [OK] APK candidato possui assets/capacitor.config.json com cleartext: false
   [OK] APK candidato possui assets/capacitor.config.json com allowMixedContent: false
@@ -761,9 +793,9 @@ HOMOLOGAÇÃO CONSOLIDADA CONCLUÍDA COM SUCESSO:
 1. Núcleo Contábil:     51 / 51 APROVADOS (100%)
 2. Subetapa 03.3:       53 / 53 APROVADOS (100%)
 3. Subetapa 03.4:       141 / 141 APROVADOS (100%)
-4. Subetapa 03.5:       81 / 81 APROVADOS (100%)
+4. Subetapa 03.5:       109 / 109 APROVADOS (100%)
 ----------------------------------------------------------------
-TOTAL CONSOLIDADO:     326 / 326 APROVADOS (100%)
+TOTAL CONSOLIDADO:     354 / 354 APROVADOS (100%)
 STATUS FINAL:          HOMOLOGADO EM CONTRATO E INSPEÇÃO DE ARTEFATO (PR.046)
                        ACEITE ANDROID EM AVD/DISPOSITIVO FÍSICO FORMALMENTE PENDENTE
 ================================================================</div>
