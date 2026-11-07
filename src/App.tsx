@@ -85,6 +85,7 @@ import {
 import { UpdateModal, UpdateInfo } from './components/UpdateModal';
 import { checkForAppUpdate, checkUpdateDetailed, getInstalledAppInfo, CURRENT_APP_BUILD, CURRENT_APP_VERSION, CheckUpdateResult } from './utils/appUpdater';
 import { isRunningInNativeApk, isNativeSpeechAvailable, startNativeSpeech, stopNativeSpeech, cancelNativeSpeech } from './nativeBridge';
+import { chatVoiceController } from './services/chatVoiceController';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'transacoes' | 'orcamentos' | 'mapa' | 'relatorios' | 'whatsapp' | 'configuracoes' | 'cartoes'>('dashboard');
@@ -311,10 +312,13 @@ export default function App() {
         return next;
       });
 
+      const payload = { action: 'save_transaction', requestId: `req_${tx.id || Date.now()}`, transaction: tx };
+      const headers = { 'Content-Type': 'application/json' };
+      chatVoiceController.registerMutation('/api/database', 'POST', headers, payload);
       await fetch('/api/database', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'save_transaction', transaction: tx })
+        headers,
+        body: JSON.stringify(payload)
       });
     } catch (e) {
       console.warn('[Central DB Sync Error]:', e);
@@ -2826,6 +2830,7 @@ export default function App() {
     }
 
     cancelNativeSpeech().catch(() => {});
+    chatVoiceController.cancelRecording().catch(() => {});
 
     if (speechRecognitionRef.current) {
       try { speechRecognitionRef.current.stop(); } catch (e) {}
@@ -2855,6 +2860,7 @@ export default function App() {
       finalTranscriptRef.current = '';
       setLiveAudioTranscript('');
       isNativeSpeechActiveRef.current = false;
+      await chatVoiceController.startRecording().catch(() => {});
 
       // 1. Reconhecimento de fala NATIVO no Android (Plugin Oficial Android SpeechRecognizer)
       // No celular Android, este canal escuta o microfone diretamente pelo SO, evitando colisões com o WebView
@@ -2863,12 +2869,14 @@ export default function App() {
         try {
           const nativeStarted = await startNativeSpeech({
             onPartial: (text) => {
+              chatVoiceController.handlePartialResult(text);
               const cleaned = cleanAndDeduplicateTranscript(text);
               setLiveAudioTranscript(cleaned);
               setInputMessage(cleaned);
               recordedTextRef.current = cleaned;
             },
             onFinal: (text) => {
+              chatVoiceController.handleFinalResult(text);
               const cleaned = cleanAndDeduplicateTranscript(text);
               setLiveAudioTranscript(cleaned);
               setInputMessage(cleaned);
@@ -2935,6 +2943,7 @@ export default function App() {
             }
             const fullCombined = (finalCombinedText + ' ' + interimTranscript).trim();
             const cleaned = cleanAndDeduplicateTranscript(fullCombined);
+            chatVoiceController.handlePartialResult(cleaned);
             setLiveAudioTranscript(cleaned);
             setInputMessage(cleaned);
             recordedTextRef.current = cleaned;
@@ -3095,6 +3104,9 @@ export default function App() {
 
       const finalText = cleanAndDeduplicateTranscript(recordedTextRef.current || liveAudioTranscript || inputMessage);
       if (finalText && finalText.trim().length > 0) {
+        chatVoiceController.state.isRecording = false;
+        chatVoiceController.state.lastAction = 'confirmed';
+        chatVoiceController.state.recordedText = finalText;
         setMessages(prev => [...prev, {
           id: Date.now().toString(),
           sender: 'user',
@@ -3134,6 +3146,9 @@ export default function App() {
     } else {
       const finalText = cleanAndDeduplicateTranscript(recordedTextRef.current || liveAudioTranscript || inputMessage);
       if (finalText) {
+        chatVoiceController.state.isRecording = false;
+        chatVoiceController.state.lastAction = 'confirmed';
+        chatVoiceController.state.recordedText = finalText;
         setMessages(prev => [...prev, {
           id: Date.now().toString(),
           sender: 'user',

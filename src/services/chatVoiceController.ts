@@ -263,4 +263,21 @@ export class ChatVoiceController {
       data
     };
   }
+
+  /**
+   * Registra manualmente uma requisição de mutação contábil para auditoria de tráfego.
+   */
+  public registerMutation(url: string, method: string, headers: Record<string, string>, body: any): void {
+    this.mutationLog.push({
+      timestamp: new Date().toISOString(),
+      url,
+      method,
+      headers,
+      body
+    });
+  }
 }
+
+// Instância singleton conectada ao ciclo de vida de App.tsx e à suíte de testes
+export const chatVoiceController = new ChatVoiceController();
+

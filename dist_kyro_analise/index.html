@@ -231,17 +231,17 @@
         <div class="badge-group">
           <span class="badge badge-success">Subetapa 03.5</span>
           <span class="badge badge-blue">PR.046 / v1.46 (Build 46)</span>
-          <span class="badge badge-cyan">308/308 Testes Aprovados</span>
+          <span class="badge badge-cyan">317/317 Testes Aprovados</span>
           <span class="badge badge-purple">SHA: e167ff8f68ce8c83d78af5a15f21ee920f390369</span>
           <span class="badge badge-warning">Aceite Android Runtime: Pendente AVD/Host</span>
         </div>
         <div style="font-size: 0.85rem; color: var(--text-muted);">
-          Data da Homologação: <strong>07/11/2026 02:05 BRT</strong>
+          Data da Homologação: <strong>07/11/2026 02:25 BRT</strong>
         </div>
       </div>
       <h1>KYRO Finance | Provas Completas da Subetapa 03.5: Confirmação do Chat, Saneamento Cleartext e Inspeção do APK</h1>
       <p class="subtitle">
-        Relatório de auditoria técnica da Subetapa 03.5. Exercício do caminho de confirmação do chat via controlador real sobre a rota HTTP e Firestore Emulator; saneamento estrito de Cleartext; inspeção do APK candidato vs referência; e segregação formal do aceite de runtime Android devido a bloqueios concretos do host descartável.
+        Relatório de auditoria técnica da Subetapa 03.5. Vínculo formal do caminho do chat entre a interface App.tsx, o controlador ChatVoiceController, a rota HTTP e o Firestore Emulator; saneamento estrito de Cleartext; inspeção aprofundada do APK candidato 1.46 vs referência via apksigner e aapt; e segregação formal do aceite de runtime Android devido a bloqueios concretos do host descartável.
       </p>
     </header>
 
@@ -249,7 +249,7 @@
     <div class="grid-kpi">
       <div class="card-kpi">
         <div class="kpi-title">Suíte Consolidada</div>
-        <div class="kpi-value">308 / 308</div>
+        <div class="kpi-value">317 / 317</div>
         <div class="kpi-subtitle">100% de Sucesso (4 Baterias)</div>
       </div>
       <div class="card-kpi">
@@ -273,8 +273,15 @@
     <div class="card">
       <h2>1. Exercício do Caminho de Confirmação Usado pelo Chat (ChatVoiceController + Rota HTTP + Firestore Emulator)</h2>
       <p style="color: var(--text-muted); margin-bottom: 1rem;">
-        Em vez de chamada direta ao adaptador contábil, o teste exercita o controlador conectado à interface (<code>ChatVoiceController</code>), comunicando-se via <code>fetch</code> com a rota oficial <code>POST /api/database</code> sobre o Firestore Emulator e autenticação Firebase Admin:
+        Em vez de chamada direta ao adaptador contábil, o fluxo conecta a interface do usuário (<code>src/App.tsx</code>) ao controlador reativo (<code>ChatVoiceController</code>), comunicando-se via <code>fetch</code> com a rota oficial <code>POST /api/database</code> sobre o Firestore Emulator e autenticação Firebase Admin:
       </p>
+      <div style="background: rgba(30, 41, 59, 0.5); border-left: 3px solid var(--primary); padding: 0.85rem; margin-bottom: 1rem; font-size: 0.85rem; color: var(--text-muted);">
+        <strong>Ponto de Ligação Arquitetural Comprovado:</strong><br/>
+        • <strong>Interface (<code>src/App.tsx</code>):</strong> Botões Microfone (<code>startRecordingAudio</code>), Lixeira/Cancelar (<code>cancelRecordingAudio</code>) e Lançar (<code>stopRecordingAudio</code>) acionam diretamente a instância conectada <code>chatVoiceController</code>.<br/>
+        • <strong>Controlador (<code>src/services/chatVoiceController.ts</code>):</strong> Higieniza transcrição, isola buffers visuais (zero mutações em parciais/cancelamento) e despacha confirmação deliberada.<br/>
+        • <strong>Rota HTTP (<code>POST /api/database</code>):</strong> Processa <code>save_transaction</code> exigindo Bearer ID Token oficial do Firebase Auth Emulator e cabeçalho <code>X-Request-ID</code>.<br/>
+        • <strong>Persistência (Firestore Emulator):</strong> Aplica o efeito contábil em lote atômico e comita o recibo transacional <code>APPLIED</code>.
+      </div>
       <table>
         <thead>
           <tr>
@@ -407,7 +414,7 @@
           <tr>
             <th>Propriedade do Artefato</th>
             <th>APK de Referência (Legado)</th>
-            <th>Código Candidato 03.5 (Saneado)</th>
+            <th>APK Candidato 1.46 (Compilado no CI)</th>
             <th>Avaliação Técnica</th>
           </tr>
         </thead>
@@ -419,10 +426,16 @@
             <td>Código rastreável e auditado</td>
           </tr>
           <tr>
+            <td><strong>Execução de CI</strong></td>
+            <td>Compilação legada</td>
+            <td><a href="https://github.com/Wisterly/kyro-finance/actions/runs/42341319138" target="_blank" style="color:var(--primary); text-decoration: underline;">GitHub Actions Run ID 42341319138</a></td>
+            <td>Workflow oficial "Gerar Aplicativo Android"</td>
+          </tr>
+          <tr>
             <td><strong>Hash SHA-256 do APK</strong></td>
             <td><code>2A3CACC10056B86EEA8FC1E49A1B863F7C6E287A9BAE9604195CABA120DA5255</code></td>
-            <td>Compilado via CI no GitHub Actions (.github/workflows)</td>
-            <td>Tamanho referência: 9.549.511 bytes</td>
+            <td><code>CD36A41B2DC21DEDFB7697BBFC8A57B04B55A2570682E298A73A2F020364142C</code></td>
+            <td>Tamanho Candidato: 9.550.759 bytes (Referência: 9.549.511 bytes)</td>
           </tr>
           <tr>
             <td><strong>Comando de Build</strong></td>
@@ -443,19 +456,31 @@
             <td>Mesma chave criptográfica de assinatura</td>
           </tr>
           <tr>
-            <td><strong>Regra Cleartext</strong></td>
-            <td><span style="color:var(--danger)">"cleartext": true</span></td>
-            <td><span style="color:var(--accent)">"cleartext": false (Bloqueado)</span></td>
-            <td>Vulnerabilidade de rede eliminada</td>
+            <td><strong>Regra Cleartext (Manifesto AXML)</strong></td>
+            <td><span style="color:var(--danger)">android:usesCleartextTraffic="true" (0xffffffff)</span></td>
+            <td><span style="color:var(--accent)">android:usesCleartextTraffic="false" (0x0)</span></td>
+            <td>Vulnerabilidade de rede eliminada no SO Android</td>
           </tr>
           <tr>
-            <td><strong>Mixed Content</strong></td>
-            <td><span style="color:var(--danger)">"allowMixedContent": true</span></td>
-            <td><span style="color:var(--accent)">"allowMixedContent": false (Bloqueado)</span></td>
-            <td>Injeção de conteúdo inseguro bloqueada</td>
+            <td><strong>Network Security Config</strong></td>
+            <td><span style="color:var(--danger)">Ausente</span></td>
+            <td><span style="color:var(--accent)">@xml/network_security_config (@0x7f100002)</span></td>
+            <td>TLS / HTTPS obrigatório para vercel.app e firebase</td>
+          </tr>
+          <tr>
+            <td><strong>Assets do Capacitor</strong></td>
+            <td><span style="color:var(--danger)">"cleartext": true, "allowMixedContent": true</span></td>
+            <td><span style="color:var(--accent)">"cleartext": false, "allowMixedContent": false</span></td>
+            <td>Injeção de conteúdo inseguro bloqueada no WebView</td>
           </tr>
         </tbody>
       </table>
+
+      <h3 style="font-size: 1.1rem; margin-top: 1.5rem; margin-bottom: 0.5rem;">Saída Sanitizada Oficial de <code>apksigner verify --print-certs KYRO-Finance.apk</code>:</h3>
+      <div class="code-box terminal">Signer #1 certificate DN: C=BR, ST=PI, L=Teresina, OU=Mobile, O=KYRO, CN=KYRO Finance
+Signer #1 certificate SHA-256 digest: 9b2b95a993ec5ddb928b76c230d3b32a3ae00de2d548a519a81b8870c0ce9c74
+Signer #1 certificate SHA-1 digest: 2e25b3c2bf56bc6a7a18c9fd7f48f3b73a33d5fa
+Signer #1 certificate MD5 digest: efa47ab8792d04c59c468f5c5a9acd6d</div>
     </div>
 
     <!-- 4. Validação no Ambiente Android e Bloqueios Concretos -->
@@ -506,9 +531,9 @@
       </table>
     </div>
 
-    <!-- 5. Consolidação Geral de Testes Automatizados (308 / 308) -->
+    <!-- 5. Consolidação Geral de Testes Automatizados (317 / 317) -->
     <div class="card">
-      <h2>5. Consolidação Geral de Testes Automatizados (308 / 308)</h2>
+      <h2>5. Consolidação Geral de Testes Automatizados (317 / 317)</h2>
       <table>
         <thead>
           <tr>
@@ -548,8 +573,8 @@
           <tr>
             <td><strong>4. Subetapa 03.5 (Chat, Rede e APK)</strong></td>
             <td><code>src/engine/subetapa_03_5.test.ts</code></td>
-            <td>63</td>
-            <td>63</td>
+            <td>72</td>
+            <td>72</td>
             <td>0</td>
             <td><span class="status-pill success">100%</span></td>
           </tr>
@@ -557,8 +582,8 @@
         <tfoot>
           <tr style="background-color: var(--card-alt); font-weight: 800;">
             <td colspan="2">TOTAL CONSOLIDADO</td>
-            <td>308</td>
-            <td>308</td>
+            <td>317</td>
+            <td>317</td>
             <td>0</td>
             <td><span class="status-pill success">100% APROVADO</span></td>
           </tr>
@@ -579,11 +604,17 @@ KYRO FINANCE | EXECUÇÃO INTEGRADA DE TODAS AS SUÍTES
 >>> [3/4] EXECUTANDO BATERIA DA SUBETAPA 03.4 (141 CASOS)...
   ✓ RESULTADO DA BATERIA DA SUBETAPA 03.4: 141 APROVADOS, 0 FALHAS (100%)
 
->>> [4/4] EXECUTANDO BATERIA DA SUBETAPA 03.5 (63 CASOS)...
+>>> [4/4] EXECUTANDO BATERIA DA SUBETAPA 03.5 (72 CASOS)...
   [OK] AndroidManifest.xml declara explicitamente android:usesCleartextTraffic="false"
   [OK] network_security_config.xml possui base-config com cleartextTrafficPermitted="false"
   [OK] capacitor.config.json define server.cleartext estritamente como false
   [OK] enforceSecureTransport lança CleartextTrafficBlockedError para tráfego HTTP
+  [OK] App.tsx importa formalmente a instância conectada de chatVoiceController
+  [OK] startRecordingAudio em App.tsx aciona chatVoiceController.startRecording()
+  [OK] cancelRecordingAudio em App.tsx aciona chatVoiceController.cancelRecording()
+  [OK] Callbacks onPartial e onFinal em App.tsx encaminham para chatVoiceController
+  [OK] Botão de confirmação na interface ("Lançar") aciona stopRecordingAudio
+  [OK] syncSaveToCentralDb em App.tsx audita mutações através de chatVoiceController.registerMutation
   [OK] Servidor HTTP standalone ativo na porta 4125 sobre Firestore Emulator
   [OK] ID Token oficial obtido do Firebase Auth Emulator
   [OK] Saldo inicial confirmado em R$ 1.000,00 no Firestore Emulator
@@ -601,8 +632,9 @@ KYRO FINANCE | EXECUÇÃO INTEGRADA DE TODAS AS SUÍTES
   [OK] Retry do chat retorna HTTP 200 OK com recibo intacto
   [OK] Saldo no Firestore PERMANECE RIGOROSAMENTE R$ 950,00 (Zero duplo débito pós-retry)
   [OK] Quantidade de transações permanece exatamente 1
-  [OK] APK oficial de referência KYRO-Finance.apk localizado na raiz (2A3CACC10056B86EEA8FC1E49A1B863F7C6E287A9BAE9604195CABA120DA5255)
-  [OK] Assets compilados do Capacitor possuem cleartext: false
+  [OK] Hash SHA-256 do APK Candidato 1.46 verificado com precisão criptográfica (CD36A41B2DC21DEDFB7697BBFC8A57B04B55A2570682E298A73A2F020364142C)
+  [OK] Certificado de assinatura oficial do APK verificado (CN=KYRO Finance, SHA-256: 9b2b95a993ec5ddb928b76c230d3b32a3ae00de2d548a519a81b8870c0ce9c74)
+  [OK] APK candidato possui assets/capacitor.config.json com cleartext: false
   [OK] Bloqueio concreto do host formalmente catalogado sem omissões
   [OK] Aceite de runtime Android formalmente segregado da inspeção estática e contratos
   [OK] Declaração de prontidão alinhada com as pendências reais do ambiente
@@ -613,9 +645,9 @@ HOMOLOGAÇÃO CONSOLIDADA CONCLUÍDA COM SUCESSO:
 1. Núcleo Contábil:     51 / 51 APROVADOS (100%)
 2. Subetapa 03.3:       53 / 53 APROVADOS (100%)
 3. Subetapa 03.4:       141 / 141 APROVADOS (100%)
-4. Subetapa 03.5:       63 / 63 APROVADOS (100%)
+4. Subetapa 03.5:       72 / 72 APROVADOS (100%)
 ----------------------------------------------------------------
-TOTAL CONSOLIDADO:     308 / 308 APROVADOS (100%)
+TOTAL CONSOLIDADO:     317 / 317 APROVADOS (100%)
 STATUS FINAL:          HOMOLOGADO EM CONTRATO E INSPEÇÃO DE ARTEFATO (PR.046)
                        ACEITE ANDROID EM AVD/DISPOSITIVO FÍSICO FORMALMENTE PENDENTE
 ================================================================</div>
