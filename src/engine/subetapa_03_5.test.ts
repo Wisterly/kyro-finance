@@ -790,12 +790,12 @@ async function testChatVoiceConfirmationFlow() {
 async function testApkCandidateInspection() {
   console.log('\n--- GRUPO 3: RECONCILIAÇÃO E INSPEÇÃO DETALHADA DO APK CANDIDATO VS REFERÊNCIA ---');
 
-  let gitHeadSha = 'd39b83e35bd67e38e2c0d08c13d9125673dfa82f';
+  let gitHeadSha = 'e34dbfe221976a4df6bf25d97ad0234cf74465d6';
   try {
     gitHeadSha = execSync('git rev-parse HEAD', { encoding: 'utf8' }).trim();
   } catch {}
-  const ciRunId = '42409482915';
-  const ciJobId = '128514289686';
+  const ciRunId = '42411151138';
+  const ciJobId = '128519377910';
   const apkPath = path.join(PROJECT_ROOT, 'KYRO-Finance.apk');
   assert(fs.existsSync(apkPath), 'APK candidato oficial KYRO-Finance.apk localizado na raiz');
 
@@ -814,7 +814,8 @@ async function testApkCandidateInspection() {
   console.log(`  ApplicationId Oficial:      com.kyro.finance`);
 
   const validHashes = [
-    '00C3D6D4B5349999E9427AB8F477D72269CF1E332E4FC916D56181A92A937168', // Compilação Final Oficial CI 42409482915 (SHA d39b83e - Subetapa 03.5 De Fora para Dentro)
+    '8CDFB55B21A23566BC03FF24DC5722F551C608167A53785ED311AC3AEA77F638', // Compilação Final Oficial CI 42411151138 (SHA e34dbfe - EventBridge e Auth Emulator saneado)
+    '00C3D6D4B5349999E9427AB8F477D72269CF1E332E4FC916D56181A92A937168', // Compilação Intermediária CI 42409482915 (SHA d39b83e)
     'AA19ADE397BECD44290AA69A90B43C564C8BA496D754B869DA8222622A4545D5', // Compilação Intermediária Oficial CI 42407452287 (SHA 59a53ae - Subetapa 03.5)
     'F000E863B9F6329A4DF369CCEC5FC2FF98BB26C0F45E58AE245765A558849A4C', // Compilação CI 42405492827 (SHA 6b3dbdc - Subetapa 03.5)
     '80ECE8DB0DFA3D9862535EC0AEB570EB7EB47706097FB121E866C8A3AECF2BEB', // Compilação Oficial CI 42402911082 (SHA 0e4ab8e)
