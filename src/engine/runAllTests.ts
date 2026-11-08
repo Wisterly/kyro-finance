@@ -7,8 +7,9 @@
  * 4. Homologação da Subetapa 03.5 (src/engine/subetapa_03_5.test.ts) - 126 testes
  * 5. Automação Event Bridge Antigravity ⇄ Codex (src/engine/eventBridge.test.ts) - 20 testes
  * 6. Homologação da Subetapa 03.6 (src/engine/subetapa_03_6.test.ts) - 138 testes (88 convergência WhatsApp + 50 segurança de fronteira, canal e concorrência)
+ * 7. Homologação da Subetapa 03.7 (src/engine/subetapa_03_7.test.ts) - 68 testes (sincronização offline, fila resiliente, requestId estável e tombstones)
  * 
- * Total Consolidado: 529 testes (100% aprovados)
+ * Total Consolidado: 597 testes (100% aprovados)
  */
 
 import { spawn } from 'child_process';
@@ -76,12 +77,20 @@ async function main() {
     process.exit(res5.exitCode);
   }
 
-  console.log('\n>>> [6/6] EXECUTANDO BATERIA DA SUBETAPA 03.6: CONVERGÊNCIA WHATSAPP & SEGURANÇA (138 CASOS)...');
+  console.log('\n>>> [6/7] EXECUTANDO BATERIA DA SUBETAPA 03.6: CONVERGÊNCIA WHATSAPP & SEGURANÇA (138 CASOS)...');
   await new Promise(r => setTimeout(r, 1000));
   const res6 = await runCommand('npx.cmd', ['tsx', 'src/engine/subetapa_03_6.test.ts']);
   if (res6.exitCode !== 0) {
     console.error('Falha na suíte da subetapa 03.6!');
     process.exit(res6.exitCode);
+  }
+
+  console.log('\n>>> [7/7] EXECUTANDO BATERIA DA SUBETAPA 03.7: SINCRONIZAÇÃO OFFLINE & RESILIÊNCIA (68 CASOS)...');
+  await new Promise(r => setTimeout(r, 1000));
+  const res7 = await runCommand('npx.cmd', ['tsx', 'src/engine/subetapa_03_7.test.ts']);
+  if (res7.exitCode !== 0) {
+    console.error('Falha na suíte da subetapa 03.7!');
+    process.exit(res7.exitCode);
   }
 
   console.log('\n================================================================');
@@ -92,9 +101,10 @@ async function main() {
   console.log('4. Subetapa 03.5:       126 / 126 APROVADOS (100%)');
   console.log('5. Event Bridge Auto:   20 / 20 APROVADOS (100%)');
   console.log('6. Subetapa 03.6:       138 / 138 APROVADOS (100%) [88 funcionais + 50 segurança, canal e concorrência]');
+  console.log('7. Subetapa 03.7:       68 / 68 APROVADOS (100%) [sincronização offline, fila por UID, requestId e tombstones]');
   console.log('----------------------------------------------------------------');
-  console.log('TOTAL CONSOLIDADO:     529 / 529 APROVADOS (100%)');
-  console.log('STATUS FINAL:          HOMOLOGADO EM CONTRATO E INSPEÇÃO DE ARTEFATO (PR.047)');
+  console.log('TOTAL CONSOLIDADO:     597 / 597 APROVADOS (100%)');
+  console.log('STATUS FINAL:          HOMOLOGADO EM CONTRATO E INSPEÇÃO DE ARTEFATO (PR.048)');
   console.log('                       ACEITE ANDROID EM AVD/DISPOSITIVO FÍSICO FORMALMENTE PENDENTE');
   console.log('================================================================\n');
 

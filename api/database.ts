@@ -426,7 +426,57 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               code: 'LEASE_ALREADY_HELD'
             });
           }
+          if (commitErr?.code === 'TOMBSTONED_NO_RESURRECTION' || commitErr?.code === 'TRANSACTION_ALREADY_EXISTS') {
+            return res.status(409).json({
+              success: false,
+              error: commitErr.message,
+              code: commitErr.code
+            });
+          }
           throw commitErr;
+        }
+      }
+
+      // Ação: Estorno de Transação com Registro de Tombstone (reverse_transaction)
+      if (action === 'reverse_transaction') {
+        const originalTxId = payload.originalTxId || payload.id;
+        const reason = payload.reason || 'Estorno solicitado pelo usuário';
+        if (!originalTxId) {
+          return res.status(400).json({
+            success: false,
+            error: 'originalTxId é obrigatório para estorno.',
+            code: 'MISSING_ORIGINAL_TX_ID'
+          });
+        }
+        try {
+          const receipt = await adapter.reverseTransaction(authUid, {
+            requestId,
+            originalTxId: String(originalTxId),
+            reason: String(reason),
+            fencingToken: payload.fencingToken !== undefined ? Number(payload.fencingToken) : undefined
+          });
+          return res.status(200).json({
+            success: true,
+            receipt,
+            userId: authUid,
+            reversedTransactionId: String(originalTxId)
+          });
+        } catch (revErr: any) {
+          if (revErr?.code === 'ALREADY_REVERSED') {
+            return res.status(409).json({
+              success: false,
+              error: revErr.message,
+              code: 'ALREADY_REVERSED'
+            });
+          }
+          if (revErr?.code === 'ORIGINAL_TX_NOT_FOUND') {
+            return res.status(404).json({
+              success: false,
+              error: revErr.message,
+              code: 'ORIGINAL_TX_NOT_FOUND'
+            });
+          }
+          throw revErr;
         }
       }
 
@@ -477,6 +527,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           success: false,
           error: e.message,
           code: 'LEASE_NOT_FOUND'
+        });
+      }
+      if (e?.code === 'TOMBSTONED_NO_RESURRECTION' || e?.code === 'TRANSACTION_ALREADY_EXISTS' || e?.code === 'ALREADY_REVERSED') {
+        return res.status(409).json({
+          success: false,
+          error: e.message,
+          code: e.code
         });
       }
 

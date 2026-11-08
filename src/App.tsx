@@ -87,6 +87,7 @@ import { checkForAppUpdate, checkUpdateDetailed, getInstalledAppInfo, CURRENT_AP
 import { isRunningInNativeApk, isNativeSpeechAvailable, startNativeSpeech, stopNativeSpeech, cancelNativeSpeech } from './nativeBridge';
 import { chatVoiceController, launchTransactionFromChatVoice, recoverPendingVoiceTransaction } from './services/chatVoiceController';
 import { clientAuthSession, UserSession } from './services/clientAuthSession';
+import { offlineSyncEngine } from './services/offlineSyncEngine';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'transacoes' | 'orcamentos' | 'mapa' | 'relatorios' | 'whatsapp' | 'configuracoes' | 'cartoes'>('dashboard');
@@ -354,18 +355,60 @@ export default function App() {
         return next;
       });
 
-      const payload = { action: 'save_transaction', requestId: `req_${tx.id || Date.now()}`, transaction: tx };
+      const currentUid = clientAuthSession.getCurrentSession()?.uid || 
+        (typeof window !== 'undefined' ? window.sessionStorage?.getItem('kyro_auth_uid') : null) || 
+        'user_default';
+
+      // Enfileira com requestId estável e persistência local por UID
+      const queuedItem = await offlineSyncEngine.enqueueTransaction({
+        userId: currentUid,
+        id: String(tx.id),
+        requestId: `req_${tx.id || Date.now()}`,
+        type: tx.type === 'Entrada' ? 'INCOME' : 'EXPENSE',
+        amount: tx.amount,
+        description: tx.description,
+        category: tx.category,
+        date: tx.date,
+        method: tx.method,
+        product: tx.product,
+        establishment: tx.establishment,
+        city: tx.city
+      });
+
+      const payload = { action: 'save_transaction', requestId: queuedItem.requestId, transaction: tx };
       const headers = { 'Content-Type': 'application/json' };
       chatVoiceController.registerMutation('/api/database', 'POST', headers, payload);
-      await fetch('/api/database', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(payload)
-      });
+
+      // Sincroniza em segundo plano através do OfflineSyncEngine
+      if (typeof window !== 'undefined') {
+        offlineSyncEngine.sync({
+          baseUrl: window.location.origin,
+          userId: currentUid
+        }).catch((syncErr) => {
+          console.warn('[OfflineSyncEngine Sync Deferred]:', syncErr);
+        });
+      }
     } catch (e) {
       console.warn('[Central DB Sync Error]:', e);
     }
   };
+
+  useEffect(() => {
+    const handleOnline = () => {
+      const currentUid = clientAuthSession.getCurrentSession()?.uid || 
+        (typeof window !== 'undefined' ? window.sessionStorage?.getItem('kyro_auth_uid') : null);
+      if (currentUid && typeof window !== 'undefined') {
+        offlineSyncEngine.sync({
+          baseUrl: window.location.origin,
+          userId: currentUid
+        }).catch(() => {});
+      }
+    };
+    if (typeof window !== 'undefined') {
+      window.addEventListener('online', handleOnline);
+      return () => window.removeEventListener('online', handleOnline);
+    }
+  }, []);
 
   const syncDeleteFromCentralDb = async (id: string) => {
     try {
