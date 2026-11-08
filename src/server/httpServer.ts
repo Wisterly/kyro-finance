@@ -11,11 +11,15 @@ import { parse as parseUrl } from 'url';
 import databaseHandler from '../../api/database';
 import webhookHandler, {
   setTestBatchFailureIndex,
+  setTestBatchFailureTarget,
   clearTestBatchFailureIndex,
   getCapturedWhatsAppReplies,
   clearCapturedWhatsAppReplies,
   getAudioPipelineTrace,
-  clearAudioPipelineTrace
+  clearAudioPipelineTrace,
+  getServerChannelPolicy,
+  setServerChannelPolicy,
+  resetServerChannelPolicy
 } from '../../api/webhook';
 import chatHandler from '../../api/chat';
 
@@ -110,13 +114,32 @@ export function createHttpApp() {
           const payload = vercelReq.body || {};
           const action = payload.action || vercelReq.query?.action;
 
-          if (action === 'set_test_batch_failure_index') {
-            setTestBatchFailureIndex(payload.failureIndex !== undefined ? Number(payload.failureIndex) : undefined);
-            return vercelRes.status(200).json({ success: true, failureIndex: payload.failureIndex });
+          if (action === 'set_test_batch_failure_index' || action === 'set_test_targeted_batch_failure') {
+            const hasTarget = payload.targetMessageId || payload.targetRequestId || payload.targetPhone || payload.targetAuthUid;
+            if (hasTarget) {
+              setTestBatchFailureTarget({
+                failureIndex: payload.failureIndex !== undefined ? Number(payload.failureIndex) : 0,
+                targetMessageId: payload.targetMessageId,
+                targetRequestId: payload.targetRequestId,
+                targetPhone: payload.targetPhone,
+                targetAuthUid: payload.targetAuthUid
+              });
+            } else {
+              setTestBatchFailureIndex(payload.failureIndex !== undefined ? Number(payload.failureIndex) : undefined);
+            }
+            return vercelRes.status(200).json({ success: true, failureIndex: payload.failureIndex, hasTarget: !!hasTarget });
           }
           if (action === 'clear_test_batch_failure_index') {
             clearTestBatchFailureIndex();
             return vercelRes.status(200).json({ success: true });
+          }
+          if (action === 'set_channel_policy') {
+            setServerChannelPolicy(payload.policy || {});
+            return vercelRes.status(200).json({ success: true, policy: getServerChannelPolicy() });
+          }
+          if (action === 'reset_channel_policy') {
+            resetServerChannelPolicy();
+            return vercelRes.status(200).json({ success: true, policy: getServerChannelPolicy() });
           }
           if (action === 'set_test_audio_mocks') {
             const globalAny = global as any;

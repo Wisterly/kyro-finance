@@ -809,12 +809,60 @@ export function clearCapturedWhatsAppReplies(): void {
   globalAny.__KYRO_CAPTURED_WHATSAPP_REPLIES__ = [];
 }
 
+export interface TestBatchFailureRule {
+  targetRequestId?: string;
+  targetMessageId?: string;
+  targetPhone?: string;
+  targetAuthUid?: string;
+  failureIndex: number;
+}
+
+export function setTestBatchFailureTarget(rule: TestBatchFailureRule | number | undefined): void {
+  if (typeof rule === 'number') {
+    globalAny.__KYRO_TEST_TARGETED_BATCH_FAILURE_RULES__ = [{ failureIndex: rule }];
+  } else if (rule && typeof rule === 'object') {
+    if (!globalAny.__KYRO_TEST_TARGETED_BATCH_FAILURE_RULES__) {
+      globalAny.__KYRO_TEST_TARGETED_BATCH_FAILURE_RULES__ = [];
+    }
+    globalAny.__KYRO_TEST_TARGETED_BATCH_FAILURE_RULES__.push(rule);
+  } else {
+    globalAny.__KYRO_TEST_TARGETED_BATCH_FAILURE_RULES__ = [];
+  }
+}
+
 export function setTestBatchFailureIndex(index: number | undefined): void {
-  globalAny.__KYRO_TEST_SIMULATE_BATCH_FAILURE_INDEX__ = index;
+  setTestBatchFailureTarget(index);
 }
 
 export function clearTestBatchFailureIndex(): void {
+  globalAny.__KYRO_TEST_TARGETED_BATCH_FAILURE_RULES__ = [];
   globalAny.__KYRO_TEST_SIMULATE_BATCH_FAILURE_INDEX__ = undefined;
+}
+
+export interface ServerChannelPolicy {
+  allowDirectMessages: boolean;
+  monitoredGroupJid?: string;
+}
+
+export function getServerChannelPolicy(): ServerChannelPolicy {
+  const envAllowDm = process.env.KYRO_ALLOW_DIRECT_MESSAGES === 'true' || process.env.ALLOW_DIRECT_MESSAGES === 'true';
+  const customPolicy = globalAny.__KYRO_SERVER_CHANNEL_POLICY__;
+  const monitored = globalAny.__KYRO_MONITORED_GROUP__;
+  return {
+    allowDirectMessages: customPolicy?.allowDirectMessages !== undefined ? !!customPolicy.allowDirectMessages : envAllowDm,
+    monitoredGroupJid: customPolicy?.monitoredGroupJid || monitored?.groupJid
+  };
+}
+
+export function setServerChannelPolicy(policy: Partial<ServerChannelPolicy>): void {
+  globalAny.__KYRO_SERVER_CHANNEL_POLICY__ = {
+    ...getServerChannelPolicy(),
+    ...policy
+  };
+}
+
+export function resetServerChannelPolicy(): void {
+  globalAny.__KYRO_SERVER_CHANNEL_POLICY__ = undefined;
 }
 
 export function buildWhatsAppConfirmationMessage(params: {
@@ -1263,12 +1311,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // 2. Operações Administrativas Legítimas (Protegidas por Autorização Administrativa Estrita)
-    const adminActions = ['register_provider_binding', 'clear_provider_bindings', 'sync_bot_status', 'request_reset_qr'];
+    const adminActions = [
+      'register_provider_binding', 
+      'clear_provider_bindings', 
+      'sync_bot_status', 
+      'request_reset_qr',
+      'set_monitored_group',
+      'set_channel_policy'
+    ];
     if (payload?.action && adminActions.includes(payload.action)) {
       if (!validateAdminAuthorization(req.headers)) {
         return res.status(403).json({
           success: false,
-          error: 'Acesso negado: operação de gerenciamento de vínculos e configuração de bot requer autorização administrativa.',
+          error: 'Acesso negado: operação administrativa requer autorização com credencial de administração válida.',
           code: 'ADMIN_PERMISSION_REQUIRED'
         });
       }
@@ -1318,10 +1373,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           message: 'Solicitação de novo QR Code oficial enviada ao servidor WhatsApp.'
         });
       }
+
+      if (payload.action === 'set_monitored_group') {
+        const g = payload.monitoredGroup || { 
+          inviteLink: payload.inviteLink, 
+          groupName: payload.groupName || 'Finanças Kyro',
+          groupJid: payload.groupJid,
+          lockedByUser: true
+        };
+        globalAny.__KYRO_MONITORED_GROUP__ = g;
+        if (!payload.monitoredGroup) {
+          globalAny.__KYRO_PENDING_GROUP_UPDATE__ = g;
+        }
+        return res.status(200).json({ status: 'saved', monitoredGroup: g });
+      }
+
+      if (payload.action === 'set_channel_policy') {
+        setServerChannelPolicy(payload.policy || {});
+        return res.status(200).json({ status: 'saved', channelPolicy: getServerChannelPolicy() });
+      }
     }
 
     // 3. Suporte a Ping de Diagnóstico Operacional
-    if (payload?.action === 'ping' || payload?.testPing === true) {
+    if (payload?.action === 'ping') {
       return res.status(200).json({
         status: 'pong',
         ok: true,
@@ -1417,31 +1491,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // Suporte a salvar/configurar o grupo monitorado
-    if (payload?.action === 'set_monitored_group') {
-      const g = payload.monitoredGroup || { 
-        inviteLink: payload.inviteLink, 
-        groupName: payload.groupName || 'Finanças Kyro',
-        groupJid: payload.groupJid,
-        lockedByUser: true
-      };
-      globalAny.__KYRO_MONITORED_GROUP__ = g;
-      if (!payload.monitoredGroup) {
-        globalAny.__KYRO_PENDING_GROUP_UPDATE__ = g;
-      }
-      return res.status(200).json({ status: 'saved', monitoredGroup: g });
-    }
-
     // Ignora mensagens enviadas pelo próprio robô (fromMe)
     if (data?.key?.fromMe === true) {
       return res.status(200).json({ status: 'Ignored fromMe message' });
     }
 
-    // FILTRO ESTRITO DE CANAL: Permite mensagens de grupo ou mensagens com flag de teste
-    if (!isGroup && payload?.testPing !== true && payload?.action !== 'ping' && !payload?.allowDirectMessage && !payload?.testMode && !payload?.isTest) {
-      return res.status(200).json({ 
-        status: 'ignored_private_message', 
-        message: 'Apenas mensagens vindas do grupo oficial Finanças Kyro são processadas.' 
+    // FILTRO ESTRITO DE CANAL: Depende exclusivamente de configuração confiável do servidor.
+    // Campos do payload (ex: testPing, allowDirectMessage, testMode, isTest) NÃO concedem autorização para mensagens privadas.
+    const channelPolicy = getServerChannelPolicy();
+    if (!isGroup) {
+      if (!channelPolicy.allowDirectMessages) {
+        return res.status(200).json({ 
+          status: 'ignored_private_message', 
+          message: 'Apenas mensagens vindas do grupo oficial Finanças Kyro são processadas. Mensagens privadas estão desabilitadas na política do servidor.' 
+        });
+      }
+    } else if (channelPolicy.monitoredGroupJid && String(remoteJid).endsWith('@g.us') && remoteJid !== channelPolicy.monitoredGroupJid) {
+      return res.status(200).json({
+        status: 'ignored_unmonitored_group',
+        message: 'Mensagem recebida de grupo não monitorado pelo KYRO Finance.'
       });
     }
 
@@ -1689,10 +1757,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     let batchResult: any;
     try {
-      // Injeção de falha permitida exclusivamente através da infraestrutura de teste controlada
+      // Injeção de falha permitida exclusivamente através da infraestrutura de teste controlada vinculada ao alvo
       // NUNCA aceita simulateItemFailureIndex a partir do payload de mensagens comuns do webhook
-      const testFailureIndex = globalAny.__KYRO_TEST_SIMULATE_BATCH_FAILURE_INDEX__;
-      globalAny.__KYRO_TEST_SIMULATE_BATCH_FAILURE_INDEX__ = undefined; // Consumo estrito one-shot para teste
+      let testFailureIndex: number | undefined = undefined;
+      const failureRules: TestBatchFailureRule[] = globalAny.__KYRO_TEST_TARGETED_BATCH_FAILURE_RULES__ || [];
+      if (failureRules.length > 0) {
+        const matchIdx = failureRules.findIndex(r => {
+          if (r.targetRequestId && r.targetRequestId !== batchRequestId) return false;
+          if (r.targetMessageId && r.targetMessageId !== messageId) return false;
+          if (r.targetPhone && r.targetPhone !== phoneNumber) return false;
+          if (r.targetAuthUid && r.targetAuthUid !== authUid) return false;
+          return true;
+        });
+        if (matchIdx !== -1) {
+          testFailureIndex = failureRules[matchIdx].failureIndex;
+          failureRules.splice(matchIdx, 1); // Consumo one-shot direcionado estrito
+        }
+      } else if (globalAny.__KYRO_TEST_SIMULATE_BATCH_FAILURE_INDEX__ !== undefined) {
+        testFailureIndex = globalAny.__KYRO_TEST_SIMULATE_BATCH_FAILURE_INDEX__;
+        globalAny.__KYRO_TEST_SIMULATE_BATCH_FAILURE_INDEX__ = undefined; // Consumo estrito one-shot para teste
+      }
 
       batchResult = await adapter.commitBatchTransactions(authUid, {
         batchRequestId,
@@ -1765,6 +1849,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({
       status: 'success',
       isComposite,
+      isReplay: isAnyReplay,
       replySent: finalReply,
       receipts,
       receipt: receipts[0],

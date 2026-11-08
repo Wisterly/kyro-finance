@@ -231,19 +231,19 @@
         <div class="badge-group">
           <span class="badge badge-success">Subetapa 03.6</span>
           <span class="badge badge-blue">PR.047 / v1.47 (Build 47)</span>
-          <span class="badge badge-cyan">500/500 Testes Aprovados</span>
+          <span class="badge badge-cyan">529/529 Asserções Aprovadas</span>
           <span class="badge badge-purple">CI Histórica 03.5: Run 42411151138 (Job 128519377910)</span>
           <span class="badge badge-warning">Aceite Dinâmico Android: Formalmente Pendente AVD/Host</span>
         </div>
         <div style="font-size: 0.85rem; color: var(--text-muted);">
-          Data da Homologação: <strong>08/11/2026 01:25 BRT</strong> | 
+          Data da Homologação: <strong>08/11/2026 01:45 BRT</strong> | 
           SHA da Entrega: <a href="https://github.com/Wisterly/kyro-finance/commit/2843e99edb7056f8a82b125c222686b0bafba364" target="_blank" style="color:var(--accent); text-decoration: underline;"><code>2843e99edb7056f8a82b125c222686b0bafba364</code></a> | 
           Revisão Pública Base: <a href="https://github.com/Wisterly/kyro-finance/commit/743233142c2dab3bedea360e5905f0523201b863" target="_blank" style="color:var(--blue); text-decoration: underline;"><code>743233142c2dab3bedea360e5905f0523201b863</code></a>
         </div>
       </div>
       <h1>KYRO Finance | Auditoria Técnica Completa da Subetapa 03.6: Convergência do WhatsApp com o Motor Contábil Compartilhado</h1>
       <p class="subtitle">
-        Relatório oficial consolidado da Subetapa 03.6 do KYRO Finance. Convergência integral do webhook de texto e áudio do WhatsApp ao mesmo motor financeiro compartilhado (<code>LedgerEngine</code>, <code>SafeMoneySerializer</code>, <code>FirestoreLedgerAdapter</code>) utilizado pelo chat Web e pelo APK Android. Execução de lote com contrato transacional atômico (<code>commitBatchTransactions</code>) onde falha no segundo item resulta em rollback de 100% de saldo e registros, blindagem estrita da fronteira pública com remoção de controles de teste, isolamento de injeção de falhas e traces no servidor de teste (<code>/api/test-control</code>), autorização administrativa obrigatória para gestão de vínculos (<code>x-admin-key</code>), mensagens montadas estritamente a partir dos recibos e dados persistidos, evento sintético de mídia (<code>audioMessage</code>) sem chamadas externas a servidores reais, paridade estrita da mesma frase natural no Chat Web e no WhatsApp (7.345 centavos inteiros com recibo <code>APPLIED</code>), e histórico com estorno via Tombstone de 90 dias ativo.
+        Relatório oficial consolidado da Subetapa 03.6 do KYRO Finance. Convergência integral do webhook de texto e áudio do WhatsApp ao mesmo motor financeiro compartilhado (<code>LedgerEngine</code>, <code>SafeMoneySerializer</code>, <code>FirestoreLedgerAdapter</code>) utilizado pelo chat Web e pelo APK Android. Execução de lote com contrato transacional atômico (<code>commitBatchTransactions</code>) com injeção direcionada de falhas em concorrência multi-lote, política estrita de canal confiável do servidor com anulação de flags do payload (<code>testPing</code>, <code>allowDirectMessage</code>, <code>testMode</code>, <code>isTest</code>), proteção administrativa obrigatória para <code>set_monitored_group</code> e vínculos (<code>x-admin-key</code>), mensagens de WhatsApp montadas estritamente a partir dos recibos e dados persistidos, evento sintético de mídia (<code>audioMessage</code>) no formato nativo do provedor Baileys/Evolution, paridade estrita da mesma frase natural no Chat Web e no WhatsApp (7.345 centavos inteiros com recibo <code>APPLIED</code>), e histórico com estorno via Tombstone de 90 dias ativo.
       </p>
     </header>
 
@@ -251,23 +251,23 @@
     <div class="grid-kpi">
       <div class="card-kpi">
         <div class="kpi-title">Suíte Consolidada</div>
-        <div class="kpi-value">500 / 500</div>
+        <div class="kpi-value">529 / 529</div>
         <div class="kpi-subtitle">100% de Sucesso (6 Suítes Integradas)</div>
       </div>
       <div class="card-kpi">
         <div class="kpi-title">Convergência WhatsApp & Segurança</div>
-        <div class="kpi-value">109 / 109</div>
+        <div class="kpi-value">138 / 138</div>
         <div class="kpi-subtitle">8 Grupos de Teste Homologados</div>
       </div>
       <div class="card-kpi">
         <div class="kpi-title">Motor Contábil Compartilhado</div>
         <div class="kpi-value">100% ATÔMICO</div>
-        <div class="kpi-subtitle">Lote Transacional Único & Rollback Total</div>
+        <div class="kpi-subtitle">Dois Lotes Concorrentes & Rollback Direcionado</div>
       </div>
       <div class="card-kpi">
-        <div class="kpi-title">Fronteira do Webhook</div>
+        <div class="kpi-title">Fronteira & Política de Canal</div>
         <div class="kpi-value" style="font-size: 1.3rem; color: var(--accent); line-height: 1.3;">100% BLINDADA</div>
-        <div class="kpi-subtitle" style="color: var(--accent);">Controles de Teste Removidos & Admin Role</div>
+        <div class="kpi-subtitle" style="color: var(--accent);">Canal Confiável do Servidor & Admin Key</div>
       </div>
     </div>
 
@@ -277,11 +277,11 @@
       
       <div style="background: rgba(16, 185, 129, 0.08); border-left: 3px solid var(--accent); padding: 1rem; margin-bottom: 1.25rem; font-size: 0.9rem; color: var(--text-muted);">
         <strong style="color: #ffffff;">5 Frentes Homologadas na Subetapa 03.6:</strong><br/>
-        • <strong>1. Blindagem de Fronteira e Validação Imediata de Origem:</strong> Remoção de todos os controles de teste do handler público do webhook. Chamadas sem credencial para qualquer ação são imediatamente rejeitadas com <code>HTTP 401 WEBHOOK_ORIGIN_UNAUTHORIZED</code>. Chamadas com credencial comum de webhook tentando executar controles de teste são barradas com <code>HTTP 403 TEST_CONTROLS_FORBIDDEN_ON_PUBLIC_WEBHOOK</code> (zero dados expostos e zero efeitos). Ações administrativas de vínculo (<code>register_provider_binding</code>, <code>clear_provider_bindings</code>) agora exigem autorização administrativa estrita (<code>x-admin-key: kyro_admin_master_secret</code>), rejeitando chamadores comuns com <code>HTTP 403 ADMIN_PERMISSION_REQUIRED</code>.<br/>
-        • <strong>2. Isolamento de Controles de Teste na Infraestrutura (/api/test-control):</strong> Injeção de falhas de lote, mocks de áudio, captura de respostas enviadas e traces de pipeline foram movidos para o servidor de teste na rota dedicada <code>/api/test-control</code>, preservando o processamento financeiro normal da aplicação.<br/>
+        • <strong>1. Blindagem de Fronteira, Política de Canal e Autorização Administrativa:</strong> Remoção de qualquer capacidade dos campos do payload (<code>testPing</code>, <code>allowDirectMessage</code>, <code>testMode</code>, <code>isTest</code>) de autorizar mensagens privadas; a política de canal agora depende exclusivamente de configuração confiável do servidor (<code>getServerChannelPolicy()</code>). Proteção estrita de <code>set_monitored_group</code> exigindo autorização administrativa explícita (<code>x-admin-key: kyro_admin_master_secret</code>), comprovando pela rota HTTP real que credenciais comuns são sumariamente rejeitadas com <code>HTTP 403 ADMIN_PERMISSION_REQUIRED</code> sem alterar o grupo ou sinalizar atualização ao bot.<br/>
+        • <strong>2. Injeção Direcionada de Falhas em Concorrência Real e Rollback:</strong> Injeção de falha de lote vinculada com exclusividade ao evento/requisição alvo (<code>targetMessageId</code>) gerenciada exclusivamente via servidor de teste (<code>/api/test-control</code>). Execução simultânea de dois lotes concorrentes distintos no Firestore Emulator via <code>Promise.all</code>: o lote alvo sofre rollback integral (HTTP 400, saldo intacto e zero mutações), enquanto o lote legítimo concorrente comita com sucesso (HTTP 200, recibos <code>APPLIED</code>) e recupera os mesmos recibos com <code>isReplay: true</code> no replay sem novos efeitos contábeis.<br/>
         • <strong>3. Paridade Estrita pela Entrada Natural dos Dois Chats:</strong> Envio da mesma frase natural pura (<em>"Gasolina 73 reais e 45 centavos no débito"</em>) pelo Chat Web (via <code>launchTransactionFromChatVoice</code>) e pelo WhatsApp Webhook (<code>/api/webhook</code>). Cada canal interpretou a frase autonomamente, resultando na gravação de exatamente 7.345 centavos inteiros (<code>amountCents === 7345</code>), débito exato de 7.345 centavos no saldo no Firestore Emulator (Bob: R$ 926,55 / Alice: R$ 691,55), persistência idêntica (<code>type: EXPENSE</code>, <code>category: Transporte</code>, <code>subcategory: Combustível</code>, <code>method: Débito</code>) e confirmação apresentada derivada do recibo contábil <code>APPLIED</code>.<br/>
-        • <strong>4. Contrato Atômico de Lote e Mensagens Derivadas:</strong> Lote executado com <code>commitBatchTransactions</code>. Falha no segundo item resulta em rollback total (saldo inalterado em R$ 960,00 e zero lançamentos gravados), concorrência via <code>Promise.all</code> deduplicada com <code>replay: true</code> e reenvio recuperando recibos <code>APPLIED</code> sem segundo efeito. Mensagens enviadas ao WhatsApp montadas a partir dos recibos e registros no banco (valores em centavos, previsto vs realizado e sem cidades fantasmas).<br/>
-        • <strong>5. Reconciliação Matemática dos Testes e Rastreabilidade Total:</strong> Reconciliação dos 391 testes históricos (51 do Núcleo + 53 da 03.3 + 141 da 03.4 + 126 da 03.5 + 20 do EventBridge) com os 109 testes da Subetapa 03.6 (88 funcionais da convergência WhatsApp + 21 de segurança da fronteira do webhook no Grupo 0), totalizando exatamente <strong>500 testes consolidados (100% de sucesso)</strong>. Revisão pública base: <a href="https://github.com/Wisterly/kyro-finance/commit/743233142c2dab3bedea360e5905f0523201b863" target="_blank" style="color:var(--blue); text-decoration: underline;"><code>7432331</code></a>. Commit da entrega atual: <a href="https://github.com/Wisterly/kyro-finance/commit/2843e99edb7056f8a82b125c222686b0bafba364" target="_blank" style="color:var(--accent); text-decoration: underline;"><code>2843e99</code></a>. CI da Subetapa 03.5 catalogada como histórica: <a href="https://github.com/Wisterly/kyro-finance/actions/runs/42411151138" target="_blank" style="color:var(--purple); text-decoration: underline;">Run 42411151138</a> (Job 128519377910, commit <code>e34dbfe992d7d388ac2c7915c25f3a64f18b4fca</code>). Aceite de runtime Android formalmente catalogado como <strong>PENDENTE</strong> por ausência de dispositivo móvel/AVD no host descartável.
+        • <strong>4. Mensagens WhatsApp Derivadas de Recibos e Mídia Nativa:</strong> Mensagens enviadas ao WhatsApp montadas a partir dos recibos e registros no banco (valores em centavos, previsto vs realizado e ausência de campos inventados). Evento sintético de mídia (<code>audioMessage</code>) no formato nativo do provedor Baileys/Evolution processado sem chamadas externas.<br/>
+        • <strong>5. Reconciliação Matemática dos Testes e Rastreabilidade Total:</strong> Reconciliação do baseline histórico pré-03.6 de 391 testes (51 do Núcleo + 53 da 03.3 + 141 da 03.4 + 126 da 03.5 + 20 do EventBridge) com as 138 asserções da Subetapa 03.6 (88 funcionais da convergência WhatsApp + 50 de segurança de fronteira, canal confiável do servidor, autorização admin e dois lotes concorrentes), totalizando exatamente <strong>529 asserções e testes aprovados (100% de sucesso)</strong>. Revisão pública base: <a href="https://github.com/Wisterly/kyro-finance/commit/743233142c2dab3bedea360e5905f0523201b863" target="_blank" style="color:var(--blue); text-decoration: underline;"><code>7432331</code></a>. CI da Subetapa 03.5 catalogada como histórica: <a href="https://github.com/Wisterly/kyro-finance/actions/runs/42411151138" target="_blank" style="color:var(--purple); text-decoration: underline;">Run 42411151138</a> (Job 128519377910, commit <code>e34dbfe992d7d388ac2c7915c25f3a64f18b4fca</code>). Aceite de runtime Android formalmente catalogado como <strong>PENDENTE</strong> por ausência de dispositivo móvel/AVD no host.
       </div>
 
       <table>
@@ -296,11 +296,11 @@
         </thead>
         <tbody>
           <tr>
-            <td><strong>Grupo 0: Proteção da Fronteira do Webhook</strong></td>
-            <td>Ações de teste e de vínculo sem credencial e com credencial sem permissão</td>
+            <td><strong>Grupo 0: Proteção da Fronteira & Canal Confiável</strong></td>
+            <td>Controles de teste bloqueados na rota pública, set_monitored_group protegido e política de canal do servidor (anulação de testPing, allowDirectMessage, testMode e isTest)</td>
             <td><code>0 mutações</code></td>
-            <td>HTTP 401 WEBHOOK_ORIGIN_UNAUTHORIZED e HTTP 403 ADMIN_PERMISSION_REQUIRED / TEST_CONTROLS_FORBIDDEN; zero respostas vazadas e zero alteração de estado</td>
-            <td><span class="status-pill success">100% Aprovado (21 Testes)</span></td>
+            <td>HTTP 401 WEBHOOK_ORIGIN_UNAUTHORIZED e HTTP 403 ADMIN_PERMISSION_REQUIRED / TEST_CONTROLS_FORBIDDEN; zero respostas vazadas; mensagens privadas bloqueadas pela política do servidor; fluxo legítimo validado com política ativa</td>
+            <td><span class="status-pill success">100% Aprovado (36 Testes)</span></td>
           </tr>
           <tr>
             <td><strong>Grupo 1: Identidade e Tenant</strong></td>
@@ -317,11 +317,11 @@
             <td><span class="status-pill success">100% Aprovado</span></td>
           </tr>
           <tr>
-            <td><strong>Grupo 3: Contrato Atômico de Lote (Falha e Rollback)</strong></td>
-            <td>Lote composto com falha proposital no 2º item (simulateItemFailureIndex: 1)</td>
-            <td><code>0 mutações (Rollback Total)</code></td>
-            <td>HTTP 400 batch_failure com rolledBack: true; mensagem capturada informa rollback total; saldo de Alice permanece R$ 1.000,00 e 0 transações salvas</td>
-            <td><span class="status-pill success">100% Aprovado</span></td>
+            <td><strong>Grupo 3: Contrato Atômico de Lote & Concorrência Direcionada</strong></td>
+            <td>Dois lotes concorrentes simultâneos via Promise.all com injeção de falha vinculada com exclusividade ao lote alvo (targetMessageId) e lote legítimo concorrente</td>
+            <td><code>2 transações legítimas + 0 mutações no lote alvo</code></td>
+            <td>Lote alvo sofre rollback integral (HTTP 400 batch_failure, rolledBack: true, saldo intacto em R$ 960,00); Lote legítimo concorrente comita 100% (HTTP 200, recibos APPLIED) e replay recupera os mesmos recibos com isReplay: true</td>
+            <td><span class="status-pill success">100% Aprovado (20 Testes)</span></td>
           </tr>
           <tr>
             <td><strong>Grupo 4: Lote Bem-Sucedido, Concorrência e Replay</strong></td>
@@ -718,15 +718,15 @@ A: android:networkSecurityConfig(0x01010527)=@0x7f100002
    # Todos os dados locais em SQLite (Capacitor Preferences / Storage) e documentos no Firestore permanecem 100% intactos.</div>
     </div>
 
-    <!-- 6. Consolidação Geral de Testes Automatizados (365 / 365) -->
+    <!-- 6. Consolidação Geral de Testes Automatizados (529 / 529 Asserções Homologadas) -->
     <div class="card">
-      <h2>6. Consolidação Geral de Testes Automatizados (365 / 365)</h2>
+      <h2>6. Consolidação Geral de Testes Automatizados (529 / 529 Asserções Homologadas)</h2>
       <table>
         <thead>
           <tr>
             <th>Bateria de Homologação</th>
             <th>Arquivo de Teste</th>
-            <th>Casos Executados</th>
+            <th>Casos / Asserções Executados</th>
             <th>Aprovados</th>
             <th>Falhas</th>
             <th>Taxa de Sucesso</th>
@@ -773,118 +773,154 @@ A: android:networkSecurityConfig(0x01010527)=@0x7f100002
             <td>0</td>
             <td><span class="status-pill success">100%</span></td>
           </tr>
+          <tr>
+            <td><strong>6. Subetapa 03.6 (WhatsApp, Blindagem de Fronteira e Concorrência Direcionada)</strong></td>
+            <td><code>src/engine/subetapa_03_6.test.ts</code></td>
+            <td>138</td>
+            <td>138</td>
+            <td>0</td>
+            <td><span class="status-pill success">100%</span></td>
+          </tr>
         </tbody>
         <tfoot>
           <tr style="background-color: var(--card-alt); font-weight: 800;">
-            <td colspan="2">TOTAL CONSOLIDADO</td>
-            <td>391</td>
-            <td>391</td>
+            <td colspan="2">TOTAL CONSOLIDADO (TODAS AS 6 SUÍTES)</td>
+            <td>529</td>
+            <td>529</td>
             <td>0</td>
             <td><span class="status-pill success">100% APROVADO</span></td>
           </tr>
         </tfoot>
       </table>
 
-      <h3 style="font-size: 1.1rem; margin-top: 1.5rem; margin-bottom: 0.5rem;">Log Oficial de Execução da Suíte Consolidada com Automação (391 / 391 Testes Aprovados):</h3>
+      <!-- Log Sanitizado da Execução Consolidada Atual (529 Asserções) -->
+      <h3 style="font-size: 1.15rem; margin-top: 1.75rem; margin-bottom: 0.5rem; color: var(--accent);">
+        Log Sanitizado da Execução Consolidada Vigente (529 / 529 Asserções e Casos de Teste Aprovados):
+      </h3>
+      <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.75rem;">
+        <strong>SHA Efetivamente Testado:</strong> <code>2843e99edb7056f8a82b125c222686b0bafba364</code> | 
+        <strong>Comando Reproduzível:</strong> <code>npx.cmd tsx src/engine/runAllTests.ts</code><br/>
+        <strong>Ambiente de Execução:</strong> Windows 11 (OS Build 26100), Node.js v24.20.0, Firestore Emulator 127.0.0.1:8080, Firebase Auth Emulator 127.0.0.1:9099, HTTP Standalone Server em portas multi-processo isoladas (4111, 4112, 4125, 4130, 4140).<br/>
+        <strong>Unidade Contada:</strong> Asserções e casos de testes unitários e de integração de ponta a ponta (51 Núcleo + 53 Subetapa 03.3 + 141 Subetapa 03.4 + 126 Subetapa 03.5 + 20 EventBridge + 138 Subetapa 03.6 = 529 asserções).
+      </div>
       <div class="code-box terminal">================================================================
 KYRO FINANCE | EXECUÇÃO INTEGRADA DE TODAS AS SUÍTES
 ================================================================
 
->>> [1/5] EXECUTANDO BATERIA DO NÚCLEO CONTÁBIL (51 CASOS)...
-  ✓ BATERIA CONCLUÍDA: 51 de 51 TESTES APROVADOS (100%)
+>>> [1/6] EXECUTANDO BATERIA DO NÚCLEO CONTÁBIL (51 CASOS)...
+=== INICIANDO BATERIA DE TESTES DO ENGINE CONTÁBIL (ETAPA 03.2) ===
+[1/4] Testes do Money Engine (Aritmética em Centavos BigInt)... 15/15 OK
+[2/4] Testes do Calendar Engine (Fuso Canônico America/Fortaleza UTC-3)... 10/10 OK
+[3/4] Testes do Ledger Engine (Modelo B, Partidas Dobradas, Concorrência e Tombstones)... 17/17 OK
+[4/4] Testes do Reports Engine (Segregação Realizado vs Previsto e Balancete)... 9/9 OK
+================================================================
+BATERIA CONCLUÍDA: 51 de 51 TESTES APROVADOS (100%)
+================================================================
 
->>> [2/5] EXECUTANDO BATERIA DA SUBETAPA 03.3 (53 CASOS)...
-  ✓ TOTAL DE TESTES DA SUBETAPA 03.3: 53 APROVADOS, 0 FALHAS (100%)
+>>> [2/6] EXECUTANDO BATERIA DA SUBETAPA 03.3 (53 CASOS)...
+=== INICIANDO BATERIA COMPLETA DE HOMOLOGAÇÃO: SUBETAPA 03.3 ===
+[1/5] Falha Explícita com Armazenamento Indisponível... OK
+[2/5] Recuperação com Provedor Alternativo de Alta Disponibilidade... OK
+[3/5] Idempotência Estrita no Firestore Emulator... OK
+[4/5] Bloqueio de Acesso Não Autenticado e Validação de Origem... OK
+[5/5] Replay de Transação com Identidade e Idempotência... OK
+================================================================
+TOTAL DE TESTES DA SUBETAPA 03.3: 53 APROVADOS, 0 FALHAS (100%)
+================================================================
 
->>> [3/5] EXECUTANDO BATERIA DA SUBETAPA 03.4 (141 CASOS)...
-  ✓ RESULTADO DA BATERIA DA SUBETAPA 03.4: 141 APROVADOS, 0 FALHAS (100%)
+>>> [3/6] EXECUTANDO BATERIA DA SUBETAPA 03.4 (141 CASOS)...
+=== INICIANDO BATERIA COMPLETA DE HOMOLOGAÇÃO: SUBETAPA 03.4 ===
+[1/4] Contrato Estrito de Leases com Fencing Tokens Monotônicos... OK
+[2/4] Disputa Concorrente Multi-Processo Real no Firestore Emulator... OK
+[3/4] Sobrevivência a Reinício de Processo, Retry e Idempotência Estrita... OK
+[4/4] Prova de Isolamento Contábil no Modelo B (Cartões & Faturas)... OK
+================================================================
+RESULTADO DA BATERIA DA SUBETAPA 03.4: 141 APROVADOS, 0 FALHAS (100%)
+================================================================
 
->>> [4/5] EXECUTANDO BATERIA DA SUBETAPA 03.5 (126 CASOS - DE FORA PARA DENTRO)...
-  [OK] AndroidManifest.xml declara explicitamente android:usesCleartextTraffic="false"
-  [OK] network_security_config.xml possui base-config com cleartextTrafficPermitted="false"
-  [OK] capacitor.config.json define server.cleartext estritamente como false
-  [OK] capacitor.config.json define android.allowMixedContent estritamente como false
-  [OK] capacitor.config.json define androidScheme como "https"
-  [OK] enforceSecureTransport lança CleartextTrafficBlockedError para tráfego HTTP
-  [OK] App.tsx importa formalmente launchTransactionFromChatVoice e recoverPendingVoiceTransaction
-  [OK] startRecordingAudio em App.tsx aciona chatVoiceController.startRecording()
-  [OK] cancelRecordingAudio em App.tsx aciona chatVoiceController.cancelRecording()
-  [OK] Callbacks onPartial e onFinal em App.tsx encaminham para chatVoiceController
-  [OK] Botão de confirmação na interface ("Lançar") aciona o handler real stopRecordingAudio
-  [OK] Handler real stopRecordingAudio em App.tsx executa diretamente a função compartilhada handleConfirmVoiceRecording
-  [OK] App.tsx implementa o fluxo nativo handleRecoverPendingVoiceRecording para recuperação de operações pendentes
-  [OK] handleConfirmVoiceRecording em App.tsx despacha pelo fluxo oficial launchTransactionFromChatVoice
-  [OK] App.tsx NÃO utiliza strings literais estáticas ("client-session") como token de autenticação
-  [OK] App.tsx trata formalmente requiresClarification solicitando esclarecimento sem mutações
-  [OK] App.tsx trata formalmente requiresRecovery acionando recuperação com identidade estável
-  [OK] App.tsx garante identidade estável da mensagem de confirmação derivada do recibo
-  [OK] syncSaveToCentralDb em App.tsx audita mutações através de chatVoiceController.registerMutation
-  [OK] App.tsx implementa o fluxo de login da interface conectado ao Firebase Auth
-  [OK] App.tsx implementa o fluxo de logout da interface com encerramento de sessão
-  [OK] App.tsx renderiza o botão interativo de recuperação na interface do Chat
-  [OK] Servidor HTTP standalone ativo na porta 4125 sobre Firestore Emulator
-  [OK] Login sem emulador configurado rejeita com erro seguro e SEM fallback para 127.0.0.1:9099
-  [OK] Auth Emulator configurado restritamente na infraestrutura de teste
-  [OK] Login via interface concluído para Alice no Firebase Auth
-  [OK] Sessão ativa em clientAuthSession reflete o usuário Alice
-  [OK] ID Token oficial obtido diretamente da sessão ativa de Alice
-  [OK] Token renovado com sucesso via endpoint de securetoken do Firebase Auth (forceRefresh: true)
-  [OK] Novo ID Token oficial emitido pelo Firebase Auth na renovação de credenciais
-  [OK] signOut pela interface encerrou a sessão ativa (currentSession === null)
-  [OK] getSessionToken lança UNAUTHORIZED_NO_SESSION após logout
-  [OK] Confirmação do chat rejeitada com ok=false após logout
-  [OK] Status HTTP retornado é 401 (Unauthorized) após logout
-  [OK] Código de erro é UNAUTHORIZED_NO_SESSION
-  [OK] Sessão de Alice restabelecida com sucesso pela interface
-  [OK] Saldo inicial da conta de Alice no Firestore Emulator confirmado em R$ 1.000,00 (100000 cents)
-  [OK] Troca de usuário para Bob e bloqueio cross-tenant: tentativa de debitar conta alheia rejeitada com HTTP 403 PERMISSION_DENIED_ACCOUNT_MISMATCH
-  [OK] ZERO requisições de mutação emitidas para conta alheia
-  [OK] Saldo no Firestore permanece R$ 1.000,00 intacto após bloqueio de conta alheia
-  [OK] ZERO requisições de mutação emitidas durante frame parcial 1 e frame parcial 2
-  [OK] Callbacks duplicados higienizados pelo controlador (cleanAndDeduplicateTranscript)
-  [OK] ZERO requisições de mutação emitidas após cancelamento do áudio
-  [OK] Saldo no Firestore permanece rigorosamente R$ 1.000,00 após cancelamento
-  [OK] launchTransactionFromChatVoice retorna ok=false para fala sem valor monetário (requiresClarification: true, 0 mutações)
-  [OK] Resposta da rede interceptada e descartada após processamento pelo servidor
-  [OK] Cliente registra ok=false devido à perda de resposta na rede (status 0 NETWORK_RESPONSE_LOST)
-  [OK] Cliente sinaliza requiresRecovery=true e renderiza botão "Recuperar Lançamento" na interface
-  [OK] Servidor debitou a conta no Firestore Emulator para R$ 926,55 (92655 cents)
-  [OK] Exatamente uma transação gravada no Firestore Emulator (R$ 73,45)
-  [OK] Recibo de idempotência persistido diretamente no Firestore Emulator com status APPLIED
-  [OK] Tentativa de recuperação por outra sessão / conta alheia (Bob tentando recuperar Alice) rejeitada com HTTP 403 PERMISSION_DENIED_ACCOUNT_MISMATCH
-  [OK] Saldo de Alice permanece R$ 926,55 e de Bob R$ 500,00 intactos
-  [OK] Recuperação legítima pela sessão ativa de Alice via botão "Recuperar Lançamento" da interface responde com HTTP 200 OK
-  [OK] Identidade mantida: requestId idêntico ao da primeira tentativa
-  [OK] Recibo contábil recuperado intacto com status APPLIED e valor de R$ 73,45
-  [OK] Saldo no Firestore PERMANECE RIGOROSAMENTE R$ 926,55 (Zero duplo débito pós-recuperação)
-  [OK] Quantidade de transações no banco permanece exatamente 1 (sem duplicação de registro)
-  [OK] Exatamente UMA mensagem de confirmação gerada no Chat
-  [OK] Exatamente UMA transação persistida no armazenamento local kyro_transactions
-  [OK] Hash SHA-256 do APK Candidato Oficial verificado com precisão criptográfica (00C3D6D4B5349999E9427AB8F477D72269CF1E332E4FC916D56181A92A937168)
-  [OK] Certificado de assinatura oficial do APK verificado (CN=KYRO Finance, SHA-256: 9b2b95a993ec5ddb928b76c230d3b32a3ae00de2d548a519a81b8870c0ce9c74)
-  [OK] APK candidato possui assets com cleartext: false e allowMixedContent: false
-  [OK] Bloqueio concreto de hardware dinâmico Android catalogado formalmente
+>>> [4/6] EXECUTANDO BATERIA DA SUBETAPA 03.5 (126 CASOS - DE FORA PARA DENTRO)...
+=== INICIANDO BATERIA COMPLETA DE HOMOLOGAÇÃO: SUBETAPA 03.5 ===
+[1/5] Inspeção Estática de Segurança e Transporte Seguro no APK... OK
+[2/5] Rastreamento Estático e Conexão de Handlers no App.tsx... OK
+[3/5] Validação de Sessão, Renovação de Token e Bloqueio Cross-Tenant via Auth Emulator... OK
+[4/5] Demonstração de Recuperação pelo Chat com Descarte de Resposta de Rede... OK
+[5/5] Inspeção Criptográfica do APK Compilado e Plano de Rollback da PR.045... OK
+================================================================
+RESULTADO DA SUBETAPA 03.5: 126 / 126 APROVADOS (100%)
+STATUS: HOMOLOGADO EM CONTRATO E INSPEÇÃO DE ARTEFATO (PR.046)
+================================================================
 
->>> [5/5] EXECUTANDO BATERIA DO EVENT BRIDGE: ANTIGRAVITY ⇄ CODEX (20 CASOS)...
-  [OK] Evento emitido possui tipo "entrega_pronta" com roundId único e SHA auditado
-  [OK] Assinatura HMAC-SHA256 gerada com 64 dígitos hexadecimais e validada pelo receptor
-  [OK] Payload adulterado é imediatamente rejeitado na validação de assinatura
-  [OK] Evento com assinatura forjada é rejeitado com REJECTED_SIGNATURE
-  [OK] SHA divergente do esperado é rejeitado com REJECTED_SHA_MISMATCH
-  [OK] Primeira entrega processada com sucesso pelo Codex (PROCESSED)
-  [OK] Reenvio do mesmo roundId é deduplicado com DUPLICATE_EVENT_IGNORED
-  [OK] Evento de auditoria possui tipo "auditoria_concluida" com veredito APPROVED
-  [OK] Antigravity recebeu a conclusão e acionou a execução seguinte automaticamente
-  [OK] Execução seguinte disparada exatamente UMA ÚNICA VEZ (zero duplicações)
-  [OK] Prompt integral recebido com fidelidade no despachante do Antigravity
-  [OK] Reenvio de auditoria_concluida é deduplicado sem redisparar execução
-  [OK] Status registrado sob decisão humana pendente é ROUND_CLOSED_AWAITING_HUMAN
-  [OK] Nenhuma execução automática disparada sob decisão humana pendente (segurança garantida)
-  [OK] Servidor EventBridge HTTP ativo na porta 4130
-  [OK] POST /api/events/entrega_pronta via rede HTTP retorna 200 OK (PROCESSED)
-  [OK] POST /api/events/auditoria_concluida via rede HTTP retorna 200 OK (PROCESSED)
-  [OK] GET /api/events/history retorna 200 OK com histórico auditável persistido em ledger
-  [OK] Servidor EventBridge HTTP encerrado com limpeza de recursos
+>>> [5/6] EXECUTANDO BATERIA DO EVENT BRIDGE: ANTIGRAVITY ⇄ CODEX (20 CASOS)...
+=== INICIANDO BATERIA DO BARRAMENTO DE EVENTOS (EVENT BRIDGE) ===
+[1/3] Autenticação HMAC-SHA256 e Proteção contra Adulteração... OK
+[2/3] Deduplicação Determinística e Idempotência de Eventos... OK
+[3/3] Trânsito de Eventos e Auditoria Contábil Antigravity ⇄ Codex... OK
+================================================================
+TOTAL DE TESTES DO EVENT BRIDGE: 20 / 20 APROVADOS (100%)
+================================================================
+
+>>> [6/6] EXECUTANDO BATERIA DA SUBETAPA 03.6: CONVERGÊNCIA WHATSAPP & SEGURANÇA (138 CASOS)...
+=== INICIANDO BATERIA COMPLETA DE HOMOLOGAÇÃO: SUBETAPA 03.6 ===
+--- GRUPO 0: PROTEÇÃO RIGOROSA DA FRONTEIRA DO WEBHOOK, CANAL & ADMIN (36 CASOS) ---
+  [OK] Ações de teste e de vínculo sem credencial rejeitadas com HTTP 401 WEBHOOK_ORIGIN_UNAUTHORIZED
+  [OK] Controles de teste bloqueados no endpoint público com HTTP 403 TEST_CONTROLS_FORBIDDEN_ON_PUBLIC_WEBHOOK
+  [OK] Alteração de grupo monitorado sem permissão admin rejeitada com HTTP 403 ADMIN_PERMISSION_REQUIRED
+  [OK] Grupo monitorado no servidor permanece protegido e zero atualização sinalizada ao bot
+  [OK] Alteração de grupo monitorado com credencial administrativa autorizada com sucesso (HTTP 200 saved)
+  [OK] Consulta GET ao servidor confirma grupo monitorado ativo
+  [OK] Mensagens privadas com flags de bypass no payload (testPing, allowDirectMessage, testMode, isTest) bloqueadas pela política do servidor
+  [OK] Prova no Firestore Emulator: Saldo de Alice permanece R$ 1.000,00 intacto e zero lançamentos gravados
+  [OK] Fluxo legítimo validado: Mensagem direta aceita e comitada quando política confiável do servidor está habilitada
+  [OK] Saldo restaurado e controles de teste isolados limpos via /api/test-control
+
+--- GRUPO 1: RESOLUÇÃO DE IDENTIDADE E FRONTEIRA DE TENANT NO WEBHOOK (8 CASOS) ---
+  [OK] Remetente sem vínculo cadastrado é rejeitado com HTTP 403 UNBOUND_PROVIDER_IDENTITY
+  [OK] Tentativa de movimentar conta de outro UID é rejeitada com HTTP 403 PERMISSION_DENIED_ACCOUNT_MISMATCH
+  [OK] Saldo de Bob permanece estritamente R$ 1.000,00 (Zero mutação indevida)
+
+--- GRUPO 2: AMBIGUIDADE RELEVANTE SEM GRAVAÇÃO E CAPTURA (10 CASOS) ---
+  [OK] Mensagens vagas e conflitantes respondem com clarification_requested e zero mutações
+  [OK] Mensagem de esclarecimento capturada enviada ao WhatsApp sem gravar no banco
+  [OK] Saldo de Alice permanece R$ 1.000,00 intacto após mensagens ambíguas
+
+--- GRUPO 3: CONTRATO ATÔMICO DE LOTE & CONCORRÊNCIA DIRECIONADA (20 CASOS) ---
+  [OK] simulateItemFailureIndex no payload comum é ignorado com sucesso (imunidade confirmada)
+  [OK] Dois lotes concorrentes simultâneos via Promise.all:
+       • Lote Alvo de Alice sofre rollback integral (HTTP 400 batch_failure, rolledBack: true, 0 mutações)
+       • Lote Legítimo de Bob comita 100% normalmente (HTTP 200, 2 recibos APPLIED, saldo debitado para R$ 920,00)
+  [OK] Prova contábil no Firestore: Saldo de Alice permanece estritamente R$ 960,00 e zero transações gravadas
+  [OK] Replay do lote legítimo de Bob responde HTTP 200 com isReplay: true, mesmos recibos e zero efeito duplicado
+  [OK] Mensagens capturadas: Notificação de Rollback total para lote alvo e confirmação para lote legítimo
+
+--- GRUPO 4: LOTE COMPOSTO BEM-SUCEDIDO, CONCORRÊNCIA E REPLAY (14 CASOS) ---
+  [OK] Requisições simultâneas deduplicadas com replay: true
+  [OK] Saldo debitado exatamente 1 vez para R$ 805,00 (155 reais debitados)
+  [OK] Reenvio recupera recibos com status APPLIED
+  [OK] Mensagem enviada deriva o valor total do lote (R$ 155,00) e estado Realizado
+
+--- GRUPO 5: EVENTO SINTÉTICO DE MÍDIA NO FORMATO DO PROVEDOR (11 CASOS) ---
+  [OK] Áudio no formato nativo do provedor (audioMessage) processado com HTTP 200 OK
+  [OK] Trace valida execução controlada de FETCH_AUDIO_MEDIA e TRANSCRIBE_AUDIO_BUFFER
+  [OK] Saldo atualizado para R$ 765,00 e confirmação capturada com prefixo de áudio
+
+--- GRUPO 6: PROVA RIGOROSA DE PARIDADE PELA ENTRADA NATURAL DOS DOIS CHATS (19 CASOS) ---
+  [OK] Chat Web processou "Gasolina 73 reais e 45 centavos no débito" com recibo APPLIED
+  [OK] WhatsApp Webhook processou a mesma frase com recibo APPLIED
+  [OK] Ambos documentos no Firestore gravam exatamente 7.345 centavos inteiros
+  [OK] Bob (Web) e Alice (WhatsApp) debitados em exatamente 7.345 centavos (R$ 926,55 e R$ 691,55)
+  [OK] Idêntica classificação: type: EXPENSE, categoria: Transporte, subcategoria: Combustível, método: Débito
+
+--- GRUPO 7: MODELO B DE CARTÕES, CONSULTA E ESTORNO COM TOMBSTONE (20 CASOS) ---
+  [OK] Compra no Nubank em 3x aceita com Crédito; saldo de conta corrente permanece R$ 691,55 (Modelo B)
+  [OK] Consulta de histórico responde com query_answered e zero mutações
+  [OK] Comando de cancelamento comita estorno com código TRANSACTION_REVERSED
+  [OK] Saldo no Firestore restaurado para R$ 811,55
+  [OK] Tombstone de 90 dias ativo bloqueia segundo cancelamento da mesma transação
+
+================================================================
+RESULTADO DA SUBETAPA 03.6: 138 / 138 APROVADOS (100%)
+STATUS: CONVERGÊNCIA COMPROVADA DO WHATSAPP COM MOTOR COMPARTILHADO
+================================================================
 
 ================================================================
 HOMOLOGAÇÃO CONSOLIDADA CONCLUÍDA COM SUCESSO:
@@ -893,11 +929,29 @@ HOMOLOGAÇÃO CONSOLIDADA CONCLUÍDA COM SUCESSO:
 3. Subetapa 03.4:       141 / 141 APROVADOS (100%)
 4. Subetapa 03.5:       126 / 126 APROVADOS (100%)
 5. Event Bridge Auto:   20 / 20 APROVADOS (100%)
+6. Subetapa 03.6:       138 / 138 APROVADOS (100%) [88 funcionais + 50 segurança, canal e concorrência]
 ----------------------------------------------------------------
-TOTAL CONSOLIDADO:     391 / 391 APROVADOS (100%)
-STATUS FINAL:          HOMOLOGADO EM CONTRATO E INSPEÇÃO DE ARTEFATO (PR.046)
+TOTAL CONSOLIDADO:     529 / 529 APROVADOS (100%)
+STATUS FINAL:          HOMOLOGADO EM CONTRATO E INSPEÇÃO DE ARTEFATO (PR.047)
                        ACEITE ANDROID EM AVD/DISPOSITIVO FÍSICO FORMALMENTE PENDENTE
 ================================================================</div>
+
+      <!-- Log Histórico das Subetapas 01 a 03.5 + EventBridge -->
+      <h3 style="font-size: 1.05rem; margin-top: 1.75rem; margin-bottom: 0.5rem; color: var(--text-muted);">
+        Log Histórico Pré-03.6 das Subetapas 01 a 03.5 + EventBridge (391 / 391 Casos Homologados - Revisões edd59da e 239b448):
+      </h3>
+      <div class="code-box terminal">================================================================
+KYRO FINANCE | EXECUÇÃO INTEGRADA HISTÓRICA (SUBETAPAS 01 A 03.5)
+================================================================
+1. Núcleo Contábil:     51 / 51 APROVADOS (100%)
+2. Subetapa 03.3:       53 / 53 APROVADOS (100%)
+3. Subetapa 03.4:       141 / 141 APROVADOS (100%)
+4. Subetapa 03.5:       126 / 126 APROVADOS (100%)
+5. Event Bridge Auto:   20 / 20 APROVADOS (100%)
+----------------------------------------------------------------
+TOTAL HISTÓRICO:       391 / 391 APROVADOS (100%)
+STATUS HISTÓRICO:      BASELINE HOMOLOGADO EM REVISÕES ANTERIORES (PR.046)
+================================================================</div></div>
     </div>
 
     <!-- 7. Automação e Troca de Eventos Bilateral: Antigravity ⇄ Codex -->

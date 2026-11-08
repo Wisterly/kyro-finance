@@ -293,7 +293,116 @@ export async function runSubetapa036Tests() {
       assert(respAdminBind.status === 200, `Vínculo de ${b.providerPhone} cadastrado com sucesso sob fronteira administrativa`);
     }
 
-    // 0.11 Limpeza inicial dos controles de teste isolados via servidor de teste (/api/test-control)
+    // 0.11 Tentativa de alterar grupo monitorado COM credencial de webhook COMUM (sem permissão de admin) -> Rejeição 403 ADMIN_PERMISSION_REQUIRED
+    const respForbiddenGroup = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: WEBHOOK_HEADERS,
+      body: JSON.stringify({
+        action: 'set_monitored_group',
+        groupName: 'Grupo Malicioso Injetado',
+        groupJid: '123456789-malicious@g.us'
+      })
+    });
+    const jsonForbiddenGroup = await respForbiddenGroup.json();
+    assert(respForbiddenGroup.status === 403, 'Alteração de grupo monitorado sem permissão de admin rejeitada com HTTP 403');
+    assert(jsonForbiddenGroup.code === 'ADMIN_PERMISSION_REQUIRED', 'Código retornado é ADMIN_PERMISSION_REQUIRED');
+    const respGetCheck1 = await fetch(webhookUrl, { method: 'GET' });
+    const jsonGetCheck1 = await respGetCheck1.json();
+    assert(jsonGetCheck1.monitoredGroup?.groupName !== 'Grupo Malicioso Injetado', 'Grupo monitorado no servidor permanece protegido e inalterado');
+    assert(jsonForbiddenGroup.monitoredGroup === undefined, 'Zero objeto de grupo retornado na resposta rejeitada');
+
+    // 0.12 Alteração legítima de grupo monitorado COM credencial administrativa autorizada -> HTTP 200 saved
+    const respAdminGroup = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: ADMIN_HEADERS,
+      body: JSON.stringify({
+        action: 'set_monitored_group',
+        groupName: 'Finanças Kyro Oficial',
+        groupJid: '120363040000000000@g.us'
+      })
+    });
+    const jsonAdminGroup = await respAdminGroup.json();
+    assert(respAdminGroup.status === 200, 'Alteração de grupo monitorado com credencial administrativa autorizada com sucesso');
+    assert(jsonAdminGroup.status === 'saved', 'Status retornado confirma grupo salvo');
+    assert(jsonAdminGroup.monitoredGroup?.groupName === 'Finanças Kyro Oficial', 'Grupo monitorado atualizado confiavelmente no servidor');
+    const respGetCheck2 = await fetch(webhookUrl, { method: 'GET' });
+    const jsonGetCheck2 = await respGetCheck2.json();
+    assert(jsonGetCheck2.monitoredGroup?.groupName === 'Finanças Kyro Oficial', 'Consulta GET ao servidor confirma grupo monitorado ativo');
+
+    // Restaura grupo padrão para os testes subsequentes
+    await fetch(webhookUrl, {
+      method: 'POST',
+      headers: ADMIN_HEADERS,
+      body: JSON.stringify({
+        action: 'set_monitored_group',
+        groupName: 'Finanças Kyro',
+        groupJid: ''
+      })
+    });
+
+    // 0.13 Tentativa de bypass de mensagem privada via campos do payload (testPing, allowDirectMessage, testMode, isTest)
+    // Política confiável do servidor com allowDirectMessages=false (padrão seguro)
+    const respPrivateBypass = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: WEBHOOK_HEADERS,
+      body: JSON.stringify({
+        sender: `${ALICE_PHONE}@s.whatsapp.net`,
+        remoteJid: `${ALICE_PHONE}@s.whatsapp.net`,
+        isGroup: false,
+        testPing: true,
+        allowDirectMessage: true,
+        testMode: true,
+        isTest: true,
+        message: 'Tentativa de injeção privada 50 reais'
+      })
+    });
+    const jsonPrivateBypass = await respPrivateBypass.json();
+    assert(respPrivateBypass.status === 200, 'Webhook responde sem erro interno para mensagem privada não autorizada');
+    assert(jsonPrivateBypass.status === 'ignored_private_message', 'Filtro confiável do servidor ignora a mensagem privada e anula as flags do payload');
+    assert(jsonPrivateBypass.mutations === undefined || jsonPrivateBypass.mutations === 0, 'Zero mutações contábeis autorizadas');
+    
+    // Prova no Firestore Emulator: Saldo de Alice permanece R$ 1.000,00 intacto e zero lançamentos gravados
+    const accAliceCheckPrivate = await adapter.getAccount(ALICE_UID, `acc_${ALICE_UID}`);
+    assert(accAliceCheckPrivate?.balanceCents === 100000, 'Saldo de Alice permanece R$ 1.000,00 intacto após tentativa de bypass privado');
+    const txsAliceCheckPrivate = await adapter.listUserTransactions(ALICE_UID);
+    assert(!txsAliceCheckPrivate.some(t => t.description && t.description.includes('injeção privada')), 'Nenhum lançamento gravado no banco a partir de payload privado não autorizado');
+
+    // 0.14 Fluxo legítimo dependente da configuração confiável do servidor: Ativação controlada de mensagens privadas
+    await fetch(testControlUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'set_channel_policy',
+        policy: { allowDirectMessages: true }
+      })
+    });
+
+    const respLegitDirect = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: WEBHOOK_HEADERS,
+      body: JSON.stringify({
+        sender: `${ALICE_PHONE}@s.whatsapp.net`,
+        remoteJid: `${ALICE_PHONE}@s.whatsapp.net`,
+        isGroup: false,
+        message: 'Café da manhã 20 reais no débito'
+      })
+    });
+    const jsonLegitDirect = await respLegitDirect.json();
+    assert(respLegitDirect.status === 200, 'Mensagem direta legítima aceita quando política confiável do servidor está habilitada');
+    assert(jsonLegitDirect.status === 'success', 'Status da operação direta legítima é success');
+    assert(jsonLegitDirect.receipt?.status === 'APPLIED', 'Recibo APPLIED emitido para mensagem direta autorizada');
+
+    // Reverte saldo de Alice para 100.000 cents (R$ 1.000,00) e restaura política padrão estrita
+    await adapter.seedAccount({ ...aliceAccount, balanceCents: 100000, rev: 2 });
+    await fetch(testControlUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'reset_channel_policy' })
+    });
+    const accAliceReset = await adapter.getAccount(ALICE_UID, `acc_${ALICE_UID}`);
+    assert(accAliceReset?.balanceCents === 100000, 'Saldo de Alice restaurado para R$ 1.000,00 após teste de política');
+
+    // 0.15 Limpeza inicial dos controles de teste isolados via servidor de teste (/api/test-control)
     await fetch(testControlUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -444,51 +553,111 @@ export async function runSubetapa036Tests() {
     const accAliceAfterCommon = await adapter.getAccount(ALICE_UID, `acc_${ALICE_UID}`);
     assert(accAliceAfterCommon?.balanceCents === 96000, 'Saldo de Alice atualizado para R$ 960,00 (96.000 cents): payload comum não abortou o lote');
 
-    // 3.2 Prova de Rollback por Injeção de Falha Controlada na Infraestrutura de Teste
+    // 3.2 Prova de Rollback Direcionado em Dois Lotes Concorrentes Distintos no Firestore Emulator
+    const msgIdTargetFail = `msg_wa_target_fail_${Date.now()}`;
+    const msgIdLegitBatch = `msg_wa_legit_batch_${Date.now()}`;
+
+    // Configura injeção de falha vinculada com exclusividade ao messageId do lote alvo
     await fetch(testControlUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'set_test_batch_failure_index', failureIndex: 1 })
-    });
-
-    const msgIdFalhaLote = `msg_wa_lote_fail_${Date.now()}`;
-    const respLoteFalha = await fetch(webhookUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'apikey': 'kyro_webhook_secret_dev' },
       body: JSON.stringify({
-        sender: `${ALICE_PHONE}@s.whatsapp.net`,
-        messageId: msgIdFalhaLote,
-        message: 'Jantar 60 reais e uber 20 reais',
-        isGroup: true
+        action: 'set_test_targeted_batch_failure',
+        failureIndex: 1,
+        targetMessageId: msgIdTargetFail
       })
     });
-    const jsonLoteFalha = await respLoteFalha.json();
 
-    assert(respLoteFalha.status === 400, 'Falha injetada na infraestrutura de teste retorna HTTP 400');
-    assert(jsonLoteFalha.status === 'batch_failure', 'Status reportado é batch_failure');
-    assert(jsonLoteFalha.rolledBack === true, 'Flag rolledBack confirma reversão de todos os efeitos');
-    assert(jsonLoteFalha.mutations === 0, 'Mutations no lote com falha é estritamente 0');
+    // Dispara dois lotes concorrentes simultaneamente via Promise.all
+    const [respTargetFail, respLegitBatch] = await Promise.all([
+      fetch(webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': 'kyro_webhook_secret_dev' },
+        body: JSON.stringify({
+          sender: `${ALICE_PHONE}@s.whatsapp.net`,
+          messageId: msgIdTargetFail,
+          message: 'Jantar 60 reais e uber 20 reais',
+          isGroup: true
+        })
+      }),
+      fetch(webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': 'kyro_webhook_secret_dev' },
+        body: JSON.stringify({
+          sender: `${BOB_PHONE}@s.whatsapp.net`,
+          messageId: msgIdLegitBatch,
+          message: 'Mercado 50 reais e farmacia 30 reais',
+          isGroup: true
+        })
+      })
+    ]);
 
-    // 3.3 Captura do envio da mensagem de erro e rollback para o WhatsApp
-    const respCapturedFail = await fetch(testControlUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'get_captured_replies' })
-    });
-    const jsonCapturedFail = await respCapturedFail.json();
-    assert(jsonCapturedFail.replies.length >= 1, 'Mensagem de falha do lote foi enviada ao WhatsApp');
-    const lastReplyFail = jsonCapturedFail.replies[jsonCapturedFail.replies.length - 1].message;
-    assert(lastReplyFail.includes('Rollback total'), 'Mensagem capturada comunica Rollback total e integridade do saldo');
+    const jsonTargetFail = await respTargetFail.json();
+    const jsonLegitBatch = await respLegitBatch.json();
 
-    // 3.4 Prova contábil no Firestore: Saldo permanece estritamente R$ 960,00 (ZERO dedução) e ZERO registros órfãos
+    // Validação 1: Lote alvo sofreu rollback integral
+    assert(respTargetFail.status === 400, 'Lote alvo com injeção direcionada falhou com HTTP 400');
+    assert(jsonTargetFail.status === 'batch_failure', 'Status reportado no lote alvo é batch_failure');
+    assert(jsonTargetFail.rolledBack === true, 'Flag rolledBack confirma reversão integral do lote alvo');
+    assert(jsonTargetFail.mutations === 0, 'Mutations no lote com falha é estritamente 0');
+
+    // Validação 2: Lote legítimo concorrente comitou com sucesso (imunidade confirmada)
+    assert(respLegitBatch.status === 200, 'Lote legítimo concorrente comitou normalmente com HTTP 200 OK');
+    assert(jsonLegitBatch.status === 'success', 'Status da operação no lote legítimo concorrente é success');
+    assert(jsonLegitBatch.receipts?.length === 2, 'Dois recibos emitidos no lote legítimo concorrente');
+    assert(jsonLegitBatch.receipts[0]?.status === 'APPLIED' && jsonLegitBatch.receipts[1]?.status === 'APPLIED', 'Recibos do lote concorrente emitidos com status APPLIED');
+
+    // Validação 3: Saldo de Alice no Firestore permanece R$ 960,00 intacto (zero efeito da falha)
     const accAliceAfterFail = await adapter.getAccount(ALICE_UID, `acc_${ALICE_UID}`);
-    assert(accAliceAfterFail?.balanceCents === 96000, 'Saldo de Alice no Firestore permanece estritamente R$ 960,00 (zero efeito da falha)');
-
+    assert(accAliceAfterFail?.balanceCents === 96000, 'Saldo de Alice no Firestore permanece estritamente R$ 960,00 intacto');
     const txsAliceAfterFail = await adapter.listUserTransactions(ALICE_UID);
     const hasJantarOrUber = txsAliceAfterFail.some((t: any) => 
       (t.description && (t.description.toLowerCase().includes('jantar') || t.description.toLowerCase().includes('uber')))
     );
-    assert(!hasJantarOrUber, 'Zero transações de Jantar ou Uber gravadas no Firestore Emulator após falha no lote (Rollback Total)');
+    assert(!hasJantarOrUber, 'Zero transações de Jantar ou Uber gravadas no Firestore para Alice (Rollback Total)');
+
+    // Validação 4: Saldo de Bob debitado corretamente de R$ 1.000,00 para R$ 920,00 (100.000 - 5.000 - 3.000 = 92.000 cents)
+    const accBobAfterConcurr = await adapter.getAccount(BOB_UID, `acc_${BOB_UID}`);
+    assert(accBobAfterConcurr?.balanceCents === 92000, 'Saldo de Bob debitado exatamente em 8.000 centavos para R$ 920,00');
+
+    // Validação 5: Replay do lote legítimo recupera exatamente os mesmos recibos sem efeitos colaterais
+    const respReplayLegit = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': 'kyro_webhook_secret_dev' },
+      body: JSON.stringify({
+        sender: `${BOB_PHONE}@s.whatsapp.net`,
+        messageId: msgIdLegitBatch,
+        message: 'Mercado 50 reais e farmacia 30 reais',
+        isGroup: true
+      })
+    });
+    const jsonReplayLegit = await respReplayLegit.json();
+    assert(respReplayLegit.status === 200, 'Replay do lote legítimo responde com HTTP 200 OK');
+    assert(jsonReplayLegit.isReplay === true, 'Flag isReplay confirma deduplicação idempotente do lote');
+    assert(jsonReplayLegit.receipts[0]?.id === jsonLegitBatch.receipts[0]?.id, 'Replay recupera exatamente o mesmo recibo do item 1');
+    assert(jsonReplayLegit.receipts[1]?.id === jsonLegitBatch.receipts[1]?.id, 'Replay recupera exatamente o mesmo recibo do item 2');
+
+    // Saldo de Bob permanece 92.000 centavos após replay
+    const accBobAfterReplay = await adapter.getAccount(BOB_UID, `acc_${BOB_UID}`);
+    assert(accBobAfterReplay?.balanceCents === 92000, 'Saldo de Bob permanece estritamente em R$ 920,00 após replay (zero novo efeito contábil)');
+
+    // Restaura saldo de Bob para 100.000 centavos (R$ 1.000,00) para manter o baseline das baterias seguintes
+    await adapter.seedAccount({ ...bobAccount, balanceCents: 100000, rev: 2 });
+    const accBobRestored = await adapter.getAccount(BOB_UID, `acc_${BOB_UID}`);
+    assert(accBobRestored?.balanceCents === 100000, 'Saldo de Bob restaurado perfeitamente para R$ 1.000,00 para as baterias de paridade');
+
+    // 3.3 Captura das mensagens de WhatsApp enviadas para ambos os lotes
+    const respCapturedBatches = await fetch(testControlUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'get_captured_replies' })
+    });
+    const jsonCapturedBatches = await respCapturedBatches.json();
+    assert(jsonCapturedBatches.replies.length >= 2, 'Mensagens enviadas para ambos os lotes foram capturadas');
+    const hasRollbackMsg = jsonCapturedBatches.replies.some((r: any) => r.message.includes('Rollback total'));
+    const hasSuccessBatchMsg = jsonCapturedBatches.replies.some((r: any) => r.message.includes('Mercado') && r.message.includes('farmacia'));
+    assert(hasRollbackMsg, 'Mensagem comunicando Rollback total enviada ao WhatsApp do lote alvo com falha');
+    assert(hasSuccessBatchMsg, 'Mensagem confirmando lançamentos enviada ao WhatsApp do lote legítimo concorrente');
 
     // ------------------------------------------------------------------------
     // GRUPO 4: LOTE COMPOSTO BEM-SUCEDIDO, CONCORRÊNCIA E REPLAY

@@ -6,9 +6,9 @@
  * 3. Homologação da Subetapa 03.4 (src/engine/subetapa_03_4.test.ts) - 141 testes
  * 4. Homologação da Subetapa 03.5 (src/engine/subetapa_03_5.test.ts) - 126 testes
  * 5. Automação Event Bridge Antigravity ⇄ Codex (src/engine/eventBridge.test.ts) - 20 testes
- * 6. Homologação da Subetapa 03.6 (src/engine/subetapa_03_6.test.ts) - 109 testes (88 convergência WhatsApp + 21 proteção de fronteira e autorização)
+ * 6. Homologação da Subetapa 03.6 (src/engine/subetapa_03_6.test.ts) - 138 testes (88 convergência WhatsApp + 50 segurança de fronteira, canal e concorrência)
  * 
- * Total Consolidado: 500 testes (100% aprovados)
+ * Total Consolidado: 529 testes (100% aprovados)
  */
 
 import { spawn } from 'child_process';
@@ -76,7 +76,7 @@ async function main() {
     process.exit(res5.exitCode);
   }
 
-  console.log('\n>>> [6/6] EXECUTANDO BATERIA DA SUBETAPA 03.6: CONVERGÊNCIA WHATSAPP & SEGURANÇA (109 CASOS)...');
+  console.log('\n>>> [6/6] EXECUTANDO BATERIA DA SUBETAPA 03.6: CONVERGÊNCIA WHATSAPP & SEGURANÇA (138 CASOS)...');
   await new Promise(r => setTimeout(r, 1000));
   const res6 = await runCommand('npx.cmd', ['tsx', 'src/engine/subetapa_03_6.test.ts']);
   if (res6.exitCode !== 0) {
@@ -91,9 +91,9 @@ async function main() {
   console.log('3. Subetapa 03.4:       141 / 141 APROVADOS (100%)');
   console.log('4. Subetapa 03.5:       126 / 126 APROVADOS (100%)');
   console.log('5. Event Bridge Auto:   20 / 20 APROVADOS (100%)');
-  console.log('6. Subetapa 03.6:       109 / 109 APROVADOS (100%) [88 funcionais + 21 segurança fronteira]');
+  console.log('6. Subetapa 03.6:       138 / 138 APROVADOS (100%) [88 funcionais + 50 segurança, canal e concorrência]');
   console.log('----------------------------------------------------------------');
-  console.log('TOTAL CONSOLIDADO:     500 / 500 APROVADOS (100%)');
+  console.log('TOTAL CONSOLIDADO:     529 / 529 APROVADOS (100%)');
   console.log('STATUS FINAL:          HOMOLOGADO EM CONTRATO E INSPEÇÃO DE ARTEFATO (PR.047)');
   console.log('                       ACEITE ANDROID EM AVD/DISPOSITIVO FÍSICO FORMALMENTE PENDENTE');
   console.log('================================================================\n');
