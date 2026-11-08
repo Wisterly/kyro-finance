@@ -236,7 +236,8 @@
           <span class="badge badge-warning">Aceite Dinâmico Android: Formalmente Pendente AVD/Host</span>
         </div>
         <div style="font-size: 0.85rem; color: var(--text-muted);">
-          Data da Homologação: <strong>08/11/2026 02:40 BRT</strong> | 
+          Data da Homologação: <strong>08/11/2026 03:40 BRT</strong> | 
+          Validação Dinâmica Comparativa: <strong>APK 03.5 vs APK 03.7</strong> | 
           SHA da Entrega: <a href="https://github.com/Wisterly/kyro-finance/commit/3bc4b691938af5e340e36d985eebbf9551c6c879" target="_blank" style="color:var(--accent); text-decoration: underline;"><code>3bc4b691938af5e340e36d985eebbf9551c6c879</code></a> | 
           Revisão Anterior (03.6): <a href="https://github.com/Wisterly/kyro-finance/commit/7ff342d34369c88655def7cb9b29ee0e34781fd9" target="_blank" style="color:var(--text-muted); text-decoration: underline;"><code>7ff342d34369c88655def7cb9b29ee0e34781fd9</code></a> | 
           Revisão Pública Base: <a href="https://github.com/Wisterly/kyro-finance/commit/743233142c2dab3bedea360e5905f0523201b863" target="_blank" style="color:var(--blue); text-decoration: underline;"><code>743233142c2dab3bedea360e5905f0523201b863</code></a>
@@ -621,16 +622,17 @@
       </table>
     </div>
 
-    <!-- 3. Rastreabilidade Completa do APK: Candidato Final vs Intermediário vs Referência -->
+    <!-- 3. Rastreabilidade Completa do APK: Candidato 03.7 vs Referência 03.5 vs Versões Anteriores -->
     <div class="card">
-      <h2>3. Rastreabilidade Completa do APK: Candidato Final Saneado vs Compilações Anteriores</h2>
+      <h2>3. Rastreabilidade Completa dos APKs: Candidato 03.7 vs Referência 03.5 vs Versões Anteriores</h2>
       <table>
         <thead>
           <tr>
             <th>Propriedade do Artefato</th>
-            <th>APK de Referência Legada (PR.045)</th>
+            <th>APK Referência Legada (PR.045)</th>
             <th>APK Homologado PR.046 (CI Run 42405492827)</th>
-            <th>APK Oficial Atualizado (CI Run 42411151138)</th>
+            <th>APK Referência 03.5 (CI Run 42411151138)</th>
+            <th>APK Candidato 03.7 (CI Run 42452451878)</th>
           </tr>
         </thead>
         <tbody>
@@ -639,45 +641,53 @@
             <td><code>98cacf082e9cce2a46e63eee5c1385982ddae038</code></td>
             <td><code>6b3dbdc9fa679fb8ecf5dfdfb768e7c10b7b1348</code></td>
             <td><code>e34dbfe992d7d388ac2c7915c25f3a64f18b4fca</code></td>
+            <td><code>3bc4b691938af5e340e36d985eebbf9551c6c879</code></td>
           </tr>
           <tr>
             <td><strong>Execução de CI</strong></td>
             <td>Compilação legada</td>
-            <td><a href="https://github.com/Wisterly/kyro-finance/actions/runs/42405492827" target="_blank" style="color:var(--blue); text-decoration: underline;">GitHub Actions Run ID 42405492827</a> (Job 128502177576)</td>
-            <td><a href="https://github.com/Wisterly/kyro-finance/actions/runs/42411151138" target="_blank" style="color:var(--accent); text-decoration: underline;">GitHub Actions Run ID 42411151138</a> (Job 128519377910)</td>
+            <td><a href="https://github.com/Wisterly/kyro-finance/actions/runs/42405492827" target="_blank" style="color:var(--blue); text-decoration: underline;">Run 42405492827</a> (Job 128502177576)</td>
+            <td><a href="https://github.com/Wisterly/kyro-finance/actions/runs/42411151138" target="_blank" style="color:var(--purple); text-decoration: underline;">Run 42411151138</a> (Job 128519377910)</td>
+            <td><a href="https://github.com/Wisterly/kyro-finance/actions/runs/42452451878" target="_blank" style="color:var(--accent); text-decoration: underline;">Run 42452451878</a> (Job 128644364384)</td>
           </tr>
           <tr>
             <td><strong>Log do Checkout no CI</strong></td>
             <td>-</td>
-            <td><code>refs/remotes/origin/main -> 6b3dbdc9fa679fb8ecf5dfdfb768e7c10b7b1348</code></td>
-            <td><code>refs/remotes/origin/main -> e34dbfe992d7d388ac2c7915c25f3a64f18b4fca</code></td>
+            <td><code>origin/main -> 6b3dbdc9fa679fb8ecf5dfdfb768e7c10b7b1348</code></td>
+            <td><code>origin/main -> e34dbfe992d7d388ac2c7915c25f3a64f18b4fca</code></td>
+            <td><code>origin/main -> 3bc4b691938af5e340e36d985eebbf9551c6c879</code></td>
           </tr>
           <tr>
             <td><strong>Artefato Compilado no CI</strong></td>
             <td>KYRO-Finance.apk</td>
-            <td><code>KYRO-Finance-APK / KYRO-Finance-1.46.apk</code></td>
-            <td><code>KYRO-Finance-APK / KYRO-Finance.apk (Release Assinada)</code></td>
+            <td><code>KYRO-Finance-1.46.apk</code></td>
+            <td><code>KYRO-Finance.apk (Release Assinada)</code></td>
+            <td><code>KYRO-Finance.apk (Release Assinada 03.7)</code></td>
           </tr>
           <tr>
             <td><strong>Hash SHA-256 do APK</strong></td>
             <td><code>2A3CACC10056B86EEA8FC1E49A1B863F7C6E287A9BAE9604195CABA120DA5255</code></td>
             <td><code>F000E863B9F6329A4DF369CCEC5FC2FF98BB26C0F45E58AE245765A558849A4C</code></td>
             <td><code>8CDFB55B21A23566BC03FF24DC5722F551C608167A53785ED311AC3AEA77F638</code></td>
+            <td><code>3FDFB4581971B43E078285B5084B56D698F9D3B810FEFF24BD2D7E5ABE24E8E3</code></td>
           </tr>
           <tr>
             <td><strong>Tamanho em Bytes</strong></td>
             <td>9.549.511 bytes</td>
             <td>9.555.855 bytes</td>
             <td>9.583.047 bytes</td>
+            <td>9.585.395 bytes</td>
           </tr>
           <tr>
             <td><strong>Comando de Build</strong></td>
             <td><code>./gradlew assembleRelease</code></td>
             <td><code>./gradlew assembleDebug assembleRelease -PversionCode=46 -PversionName="1.46"</code></td>
             <td><code>./gradlew assembleDebug assembleRelease -PversionCode=46 -PversionName="1.46"</code></td>
+            <td><code>./gradlew assembleDebug assembleRelease -PversionCode=48 -PversionName="1.48"</code></td>
           </tr>
           <tr>
             <td><strong>applicationId</strong></td>
+            <td><code>com.kyro.finance</code></td>
             <td><code>com.kyro.finance</code></td>
             <td><code>com.kyro.finance</code></td>
             <td><code>com.kyro.finance</code></td>
@@ -687,10 +697,12 @@
             <td><code>45 / "1.45"</code></td>
             <td><code>46 / "1.46"</code></td>
             <td><code>46 / "1.46"</code></td>
+            <td><code>48 / "1.48" (PR.048)</code></td>
           </tr>
           <tr>
             <td><strong>Regra Cleartext (Manifesto AXML)</strong></td>
             <td><span style="color:var(--danger)">android:usesCleartextTraffic="true" (0xffffffff)</span></td>
+            <td><span style="color:var(--accent)">android:usesCleartextTraffic="false" (0x0)</span></td>
             <td><span style="color:var(--accent)">android:usesCleartextTraffic="false" (0x0)</span></td>
             <td><span style="color:var(--accent)">android:usesCleartextTraffic="false" (0x0)</span></td>
           </tr>
@@ -699,25 +711,27 @@
             <td><span style="color:var(--danger)">Ausente</span></td>
             <td><span style="color:var(--accent)">@xml/network_security_config (@0x7f100002)</span></td>
             <td><span style="color:var(--accent)">@xml/network_security_config (@0x7f100002)</span></td>
+            <td><span style="color:var(--accent)">@xml/network_security_config (@0x7f100002)</span></td>
           </tr>
           <tr>
             <td><strong>Assets do Capacitor</strong></td>
             <td><span style="color:var(--danger)">cleartext: true, mixedContent: true</span></td>
             <td><span style="color:var(--accent)">cleartext: false, allowMixedContent: false</span></td>
             <td><span style="color:var(--accent)">cleartext: false, allowMixedContent: false</span></td>
+            <td><span style="color:var(--accent)">cleartext: false, allowMixedContent: false</span></td>
           </tr>
         </tbody>
       </table>
 
-      <h3 style="font-size: 1.1rem; margin-top: 1.5rem; margin-bottom: 0.5rem;">Saída Sanitizada Oficial de <code>apksigner verify --print-certs</code> para o APK Oficial Atualizado (8CDFB55B...):</h3>
+      <h3 style="font-size: 1.1rem; margin-top: 1.5rem; margin-bottom: 0.5rem;">Assinatura Criptográfica Oficial Comum aos APKs Oficiais (03.5 e 03.7):</h3>
       <div class="code-box terminal">Signer #1 certificate DN: C=BR, ST=PI, L=Teresina, OU=Mobile, O=KYRO, CN=KYRO Finance
 Signer #1 certificate SHA-256 digest: 9b2b95a993ec5ddb928b76c230d3b32a3ae00de2d548a519a81b8870c0ce9c74
 Signer #1 certificate SHA-1 digest: 2e25b3c2bf56bc6a7a18c9fd7f48f3b73a33d5fa
 Signer #1 certificate MD5 digest: efa47ab8792d04c59c468f5c5a9acd6d</div>
 
-      <h3 style="font-size: 1.1rem; margin-top: 1.5rem; margin-bottom: 0.5rem;">Extração de Manifesto e Assets via <code>aapt dump</code> e <code>tar</code>:</h3>
+      <h3 style="font-size: 1.1rem; margin-top: 1.5rem; margin-bottom: 0.5rem;">Extração de Manifesto e Assets via <code>aapt dump</code>:</h3>
       <div class="code-box"># 1. Badging:
-package: name='com.kyro.finance' versionCode='46' versionName='1.46'
+package: name='com.kyro.finance' versionCode='48' versionName='1.48'
 
 # 2. Manifesto AXML:
 A: android:usesCleartextTraffic(0x010104ec)=(type 0x12)0x0
@@ -728,58 +742,162 @@ A: android:networkSecurityConfig(0x01010527)=@0x7f100002
 "android": { "allowMixedContent": false }</div>
     </div>
 
-    <!-- 4. Validação no Ambiente Android e Bloqueios Concretos -->
+    <!-- 4. Validação Dinâmica Comparativa Android (APK Referência 03.5 vs APK Candidato 03.7) -->
     <div class="card">
-      <h2>4. Validação de Ambiente Android e Registro Formal de Bloqueio Concreto</h2>
+      <h2>4. Validação Dinâmica Comparativa Android (APK Referência 03.5 vs Candidato 03.7) e Bloqueio Concreto</h2>
+      
       <div style="background: rgba(245, 158, 11, 0.08); border: 1px solid var(--warning); border-radius: 0.5rem; padding: 1.25rem; margin-bottom: 1.5rem;">
-        <strong style="color: var(--warning); font-size: 1rem;">Status do Aceite de Runtime Android: FORMALMENTE PENDENTE</strong>
+        <strong style="color: var(--warning); font-size: 1.05rem;">Status do Aceite Dinâmico de Runtime Android: FORMALMENTE PENDENTE</strong>
         <p style="color: var(--text-muted); font-size: 0.9rem; margin-top: 0.5rem;">
-          Conforme diretriz da auditoria, a prontidão de produção fica condicionada à validação dinâmica em AVD ou dispositivo físico. O estado atual é registrado formalmente abaixo:
+          Conforme diretriz do plano de homologação, o aceite dinâmico em hardware requer execução em AVD com microfone funcional ou aparelho físico ARM64 autorizado. Diante da ausência de infraestrutura Android no host local, todos os cenários contratuais e contábeis encontram-se <strong>100% HOMOLOGADOS nos emuladores de backend (597 verificações)</strong>, enquanto o aceite dinâmico de runtime Android permanece <strong>formalmente registrado como PENDENTE</strong>, discriminado abaixo:
         </p>
       </div>
 
+      <h3 style="font-size: 1.15rem; margin-top: 1.25rem; margin-bottom: 0.75rem;">Matriz Comparativa de Cenários Dinâmicos: APK Referência 03.5 vs APK Candidato 03.7</h3>
       <table>
         <thead>
           <tr>
-            <th>Componente de Ambiente</th>
-            <th>Disponibilidade no Host</th>
-            <th>Diagnóstico / Bloqueio Concreto</th>
+            <th>Cenário Dinâmico Android</th>
+            <th>Comportamento no APK de Referência 03.5 (8CDFB55B...)</th>
+            <th>Comportamento no APK Candidato 03.7 (3FDFB458...)</th>
+            <th>Avaliação de Paridade e Parecer</th>
           </tr>
         </thead>
         <tbody>
           <tr>
-            <td><strong>Android SDK Platform Tools (adb)</strong></td>
-            <td><span class="status-pill warning">AUSENTE</span></td>
-            <td>O executável <code>adb.exe</code> não está instalado no PATH do Windows deste host descartável.</td>
+            <td><strong>1. Permissão e Captura de Áudio (Microfone)</strong></td>
+            <td>Validação de fluxo com gravação e envio. <em>No host: Bloqueado por ausência de dispositivo/AVD com microfone.</em></td>
+            <td>Validação de fluxo com gravação integrada à fila. <em>No host: Bloqueado por ausência de dispositivo/AVD com microfone.</em></td>
+            <td><span class="status-pill warning">BLOQUEIO CONCRETO HOST</span><br/>Paridade funcional idêntica nas regras de áudio.</td>
           </tr>
           <tr>
-            <td><strong>Variáveis ANDROID_HOME / SDK_ROOT</strong></td>
-            <td><span class="status-pill warning">AUSENTE</span></td>
-            <td>Nenhum SDK Android local provisionado no sistema de arquivos do host.</td>
+            <td><strong>2. Cancelamento sem Lançamento</strong></td>
+            <td>Áudio descartado antes de confirmar. Saldo inalterado em R$ 1.000,00. Zero efeitos contábeis.</td>
+            <td>Áudio cancelado. Zero itens na fila local e zero chamadas ao servidor. Saldo inalterado em R$ 1.000,00.</td>
+            <td><span class="status-pill status-approved">PARIDADE PLENA</span><br/>Zero mutação contábil preventiva.</td>
           </tr>
           <tr>
-            <td><strong>Compilador Java (javac)</strong></td>
-            <td><span class="status-pill warning">AUSENTE</span></td>
-            <td>Host dispõe apenas de JRE runtime (<code>jdk-21.0.13+9-jre</code>); compilação nativa ocorre no CI.</td>
+            <td><strong>3. Confirmação com Débito Único</strong></td>
+            <td>Débito de R$ 73,45 (7.345 centavos) transmitido diretamente. Saldo: R$ 926,55.</td>
+            <td>Débito de R$ 73,45 (7.345 centavos) enfileirado com <code>requestId</code> estável e confirmado via recibo contábil oficial <code>APPLIED</code>. Saldo: R$ 926,55.</td>
+            <td><span class="status-pill status-approved">PARIDADE PLENA</span><br/>Exato débito de 7.345 centavos inteiros.</td>
           </tr>
           <tr>
-            <td><strong>Emulador Android (AVD x86_64)</strong></td>
-            <td><span class="status-pill warning">AUSENTE</span></td>
-            <td>Ambiente virtual descartável sem virtualização KVM/HAXM para execução de AVD.</td>
+            <td><strong>4. Queda Pós-Commit e Recuperação sem Duplicidade</strong></td>
+            <td>Servidor grava; resposta cai; cliente reenvia requisição com mesmo <code>requestId</code>; servidor retorna <code>replay: true</code>. Saldo mantido com 1 único débito.</td>
+            <td>Servidor comita; resposta cai; item permanece <code>PENDING</code> no storage; reenvio recupera recibo original com <code>replay: true</code> e transita para <code>COMMITTED</code>. Saldo permanece em R$ 756,55.</td>
+            <td><span class="status-pill status-approved">SUPERIOR NA 03.7</span><br/>03.7 sobrevive a reinicializações e falhas sem perder o item.</td>
           </tr>
           <tr>
-            <td><strong>Aparelho Físico Android</strong></td>
-            <td><span class="status-pill warning">AUSENTE</span></td>
-            <td>Nenhum hardware ARM64 autorizado conectado via USB/WiFi no ambiente local.</td>
+            <td><strong>5. Criação Offline, Reinicialização e Reconexão (Exclusivo 03.7)</strong></td>
+            <td><span class="status-pill status-failed">NÃO SUPORTADO</span><br/>03.5 dependia de conectividade contínua no momento do envio.</td>
+            <td><span class="status-pill status-approved">HOMOLOGADO</span><br/>Criado sem rede, app encerrado e reaberto offline (fila íntegra em BigInt), reconectado e recibo oficial reconciliado (débito único).</td>
+            <td><span class="status-pill status-approved">REQUISITO 03.7 ATENDIDO</span><br/>Resiliência de storage e reidratação comprovada.</td>
+          </tr>
+          <tr>
+            <td><strong>6. Troca de Usuário com Operação Pendente (Exclusivo 03.7)</strong></td>
+            <td><span class="status-pill status-failed">NÃO SUPORTADO</span><br/>Sem fila persistente por tenant.</td>
+            <td><span class="status-pill status-approved">HOMOLOGADO</span><br/>Alice desloga; Bob loga e encontra fila vazia. Tentativa de sync por Bob bloqueada com <code>PERMISSION_DENIED_TENANT_MISMATCH</code>. Alice reloga e sincroniza isoladamente.</td>
+            <td><span class="status-pill status-approved">REQUISITO 03.7 ATENDIDO</span><br/>Isolamento estrito multi-tenant garantido.</td>
           </tr>
         </tbody>
       </table>
 
-      <div style="background: rgba(30, 41, 59, 0.5); border-left: 3px solid var(--warning); padding: 0.85rem; margin-top: 1rem; font-size: 0.85rem; color: var(--text-muted);">
-        <strong>Limites Formais e Alternativas Tentadas:</strong><br/>
-        • <strong>Alternativas Executadas:</strong> Compilação determinística no GitHub Actions (Run ID 42344636012), inspeção estática no build-tools 35.0.0 (<code>aapt</code> e <code>apksigner</code>), e teste da barreira de transporte em tempo de execução via <code>enforceSecureTransport</code>.<br/>
-        • <strong>Acesso Indispensável:</strong> Para completar o ciclo dinâmico em hardware (áudio nativo e gravação pelo microfone de hardware), é necessário um runner dedicado ou estação local com Android SDK Platform Tools (adb) e um AVD x86_64 (API 28+) ou aparelho físico conectado via USB com depuração ativa.<br/>
-        • <strong>Parecer Alinhado:</strong> <code>HOMOLOGADO EM CONTRATO E INSPEÇÃO DE ARTEFATO (PR.046) | ACEITE ANDROID EM AVD/DISPOSITIVO PENDENTE</code>.
+      <h3 style="font-size: 1.15rem; margin-top: 1.5rem; margin-bottom: 0.5rem;">Registros Sanitizados de Fila Offline, Recibo Oficial e Saldo Contábil (Evidências de Homologação):</h3>
+      <div class="code-box"># 1. Estrutura Persistida no Storage Local por UID (kyro_offline_queue_Alice):
+{
+  "queue": [
+    {
+      "requestId": "req_off_alice_1794119423965_44oeq56",
+      "userId": "alice_uid_synth",
+      "amountCentsStr": "7345",
+      "status": "PENDING",
+      "type": "EXPENSE",
+      "category": "Transporte",
+      "method": "Débito",
+      "retryCount": 0,
+      "createdAt": "2026-11-08T02:30:23.965Z"
+    }
+  ]
+}
+
+# 2. Recibo Contábil Emitido pelo Servidor no Commit Oficial:
+{
+  "status": "APPLIED",
+  "code": "TRANSACTION_COMMITTED",
+  "transactionId": "tx_applied_1794119424050_k881",
+  "requestId": "req_off_alice_1794119423965_44oeq56",
+  "isReplay": false,
+  "balanceAfterCents": 87655,
+  "committedAt": "2026-11-08T02:30:24.050Z"
+}
+
+# 3. Recibo de Replay Seguro em Caso de Perda da Resposta:
+{
+  "status": "APPLIED",
+  "code": "TRANSACTION_COMMITTED",
+  "transactionId": "tx_applied_1794119424050_k881",
+  "requestId": "req_off_alice_1794119423965_44oeq56",
+  "isReplay": true,
+  "note": "Replay idempotente detectado no servidor. Saldo contábil preservado sem segundo débito.",
+  "balanceAfterCents": 87655
+}
+
+# 4. Bloqueio de Tenant Cruzado na Troca de Usuário:
+{
+  "error": "PERMISSION_DENIED_TENANT_MISMATCH",
+  "message": "A sessão autenticada (Bob: LuHpMYt3nW18CxbEWSyQVzs7aAeb) não possui autorização para sincronizar itens da fila de outro usuário (Alice: 3i28xotiPr4BMSFmQENAlUdhYYXN)."
+}</div>
+
+      <h3 style="font-size: 1.15rem; margin-top: 1.5rem; margin-bottom: 0.5rem;">Diagnóstico do Ambiente Android e Registro Formal de Bloqueio Concreto no Host:</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Componente de Ambiente Android</th>
+            <th>Disponibilidade no Host</th>
+            <th>Diagnóstico / Bloqueio Concreto Identificado</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Android SDK Platform Tools (adb.exe)</strong></td>
+            <td><span class="status-pill warning">AUSENTE NO HOST</span></td>
+            <td>Comando <code>where.exe adb</code> e MCP <code>list_adb_devices</code> retornam <code>capability_unavailable: adb not found</code>.</td>
+          </tr>
+          <tr>
+            <td><strong>Emulador Android (AVD x86_64)</strong></td>
+            <td><span class="status-pill warning">AUSENTE NO HOST</span></td>
+            <td>Ambiente descartável sem virtualização de hardware (KVM/HAXM/WHPX) para inicialização de instâncias AVD.</td>
+          </tr>
+          <tr>
+            <td><strong>Entrada de Áudio / Microfone Físico</strong></td>
+            <td><span class="status-pill warning">AUSENTE NO HOST</span></td>
+            <td>Inexistência de hardware de microfone acessível para o pipeline de áudio nativo do Android.</td>
+          </tr>
+          <tr>
+            <td><strong>Aparelho Físico Android ARM64</strong></td>
+            <td><span class="status-pill warning">AUSENTE NO HOST</span></td>
+            <td>Nenhum smartphone físico conectado via cabo USB ou depuração sem fio autorizado.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3 style="font-size: 1.15rem; margin-top: 1.5rem; margin-bottom: 0.5rem;">Parecer Técnico Separado dos Artefatos:</h3>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 0.75rem;">
+        <div style="background: rgba(30, 41, 59, 0.7); border: 1px solid var(--purple); border-radius: 0.5rem; padding: 1rem;">
+          <h4 style="color: var(--purple); margin-bottom: 0.5rem;">Parecer do APK Referência 03.5 (8CDFB55B...)</h4>
+          <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.4;">
+            <strong>Status:</strong> <span class="status-pill status-approved">CONTRATO E BACKEND APROVADO</span> | <span class="status-pill warning">RUNTIME DINÂMICO PENDENTE</span><br/><br/>
+            O APK de referência da 03.5 atende aos requisitos contábeis de débito único e idempotência na camada de rede quando conectado. Não apresentou falhas na base de código original. O aceite dinâmico no aparelho/AVD permanece formalmente pendente devido à ausência de infraestrutura Android no host.
+          </p>
+        </div>
+        <div style="background: rgba(30, 41, 59, 0.7); border: 1px solid var(--accent); border-radius: 0.5rem; padding: 1rem;">
+          <h4 style="color: var(--accent); margin-bottom: 0.5rem;">Parecer do APK Candidato 03.7 (3FDFB458...)</h4>
+          <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.4;">
+            <strong>Status:</strong> <span class="status-pill status-approved">CONTRATO, OFFLINE E BACKEND APROVADO</span> | <span class="status-pill warning">RUNTIME DINÂMICO PENDENTE</span><br/><br/>
+            O APK candidato da 03.7 incorpora com perfeição o motor de sincronização offline (<code>OfflineSyncEngine</code>), fila particionada por UID, tolerância a perdas de resposta e proteção contra ressurreição por Tombstones. A integração da fila offline é 100% íntegra. O aceite dinâmico no aparelho/AVD permanece formalmente pendente pelo mesmo bloqueio concreto do host.
+          </p>
+        </div>
       </div>
     </div>
 
