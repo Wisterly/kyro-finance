@@ -956,19 +956,23 @@ CHECKOUT TESTADO: 8bbb987ecec60d5f2650e8e35da10f731e76757e
           <tr>
             <td><strong>SHA de Origem do Código</strong></td>
             <td><a href="https://github.com/Wisterly/kyro-finance/commit/8bbb987ecec60d5f2650e8e35da10f731e76757e" target="_blank" style="color:var(--accent); text-decoration: underline;"><code>8bbb987ecec60d5f2650e8e35da10f731e76757e</code></a></td>
-            <td><a href="https://github.com/Wisterly/kyro-finance/commit/8bbb987ecec60d5f2650e8e35da10f731e76757e" target="_blank" style="color:var(--accent); text-decoration: underline;"><code>8bbb987ecec60d5f2650e8e35da10f731e76757e</code></a></td>
+            <td><strong>Compilado no CI:</strong> <a href="https://github.com/Wisterly/kyro-finance/commit/3bc4b691938af5e340e36d985eebbf9551c6c879" target="_blank" style="color:var(--text-muted); text-decoration: underline;"><code>3bc4b69</code></a><br/>
+                <strong>Disparador do Workflow:</strong> <a href="https://github.com/Wisterly/kyro-finance/commit/8bcfe195dff9f0199596ae74f6868646f2f6826f" target="_blank" style="color:var(--blue); text-decoration: underline;"><code>8bcfe19</code></a><br/>
+                <strong>Estabilização Aceita:</strong> <a href="https://github.com/Wisterly/kyro-finance/commit/8bbb987ecec60d5f2650e8e35da10f731e76757e" target="_blank" style="color:var(--accent); text-decoration: underline;"><code>8bbb987</code></a> (100% paridade estática em <code>android/</code>)</td>
           </tr>
           <tr>
             <td><strong>Identificador de Deployment / Execução</strong></td>
             <td><strong>Deployment ID:</strong> <code>dpl_4SAa8mVTadPkLUqP6C3FCsWEvByf</code><br/>
-                <strong>Status:</strong> READY (Target: Preview Isolado, sem promoção)</td>
+                <strong>Status:</strong> READY (Target: Preview Isolado, sem promoção)<br/>
+                <strong>Proteção:</strong> Vercel Authentication / Deployment Protection Ativa</td>
             <td><strong>CI Run GitHub Actions:</strong> <a href="https://github.com/Wisterly/kyro-finance/actions/runs/42452451878" target="_blank" style="color:var(--accent); text-decoration: underline;">Run 42452451878</a><br/>
-                <strong>Job ID:</strong> <code>128644364384</code> (Commit base <code>3bc4b69</code>, sincronizado no checkout <code>8bbb987</code>)</td>
+                <strong>Job ID:</strong> <code>128644364384</code><br/>
+                <strong>Nome do Artefato no CI:</strong> <code>KYRO-Finance-APK</code></td>
           </tr>
           <tr>
             <td><strong>Paridade com o Checkout Atual</strong></td>
             <td><code>git diff 8bbb987 HEAD</code>: Zero diferenças em arquivos de código (<code>src/</code>, <code>api/</code>, <code>android/</code>).</td>
-            <td>Assets do Capacitor perfeitamente sincronizados via <code>npx cap sync android</code> no mesmo checkout.</td>
+            <td><code>git diff 3bc4b69 8bbb987 -- android/</code>: Zero diferenças. Assets do Capacitor sincronizados via <code>apk:sync</code>.</td>
           </tr>
           <tr>
             <td><strong>Comandos de Build Executados</strong></td>
@@ -1017,10 +1021,37 @@ CHECKOUT TESTADO: 8bbb987ecec60d5f2650e8e35da10f731e76757e
             <td><a href="https://kyro-finance-2x1oaung0-wisterly-s.vercel.app" target="_blank" style="color:var(--accent); text-decoration: underline;">Preview Isolado: kyro-finance-2x1oaung0-wisterly-s.vercel.app</a><br/>
                 <a href="https://vercel.com/wisterly-s/kyro-finance/4SAa8mVTadPkLUqP6C3FCsWEvByf" target="_blank" style="color:var(--text-muted); font-size:0.8rem; text-decoration: underline;">Inspetor Vercel do Deployment</a></td>
             <td><a href="https://github.com/Wisterly/kyro-finance/releases/download/apk-latest/KYRO-Finance.apk" target="_blank" style="color:var(--accent); text-decoration: underline;">Download do APK Atualizado (apk-latest)</a><br/>
-                <a href="https://github.com/Wisterly/kyro-finance/actions/runs/42452451878" target="_blank" style="color:var(--text-muted); font-size:0.8rem; text-decoration: underline;">Artefato Oficial CI Run 42452451878</a></td>
+                <a href="https://github.com/Wisterly/kyro-finance/actions/runs/42452451878" target="_blank" style="color:var(--text-muted); font-size:0.8rem; text-decoration: underline;">Artefato Oficial CI Run 42452451878 (Job 128644364384)</a></td>
           </tr>
         </tbody>
       </table>
+
+      <!-- Evidência Sanitizada do Deployment Preview Web -->
+      <h4 style="font-size: 0.95rem; margin-top: 1.5rem; margin-bottom: 0.35rem; color: var(--cyan);">
+        Evidência Sanitizada de Verificação Básica Executada no Próprio Preview Isolado (Vercel):
+      </h4>
+      <div class="code-box terminal"># 1. Inspecao de Estado do Deployment:
+vercel inspect kyro-finance-2x1oaung0-wisterly-s.vercel.app
+  id:          dpl_4SAa8mVTadPkLUqP6C3FCsWEvByf
+  name:        kyro-finance
+  target:      preview (Deployment Protection Ativa)
+  status:      ● Ready (build duration: 1m 4s)
+  rotas:       λ api/app-version, λ api/chat, λ api/database, λ api/group-join, etc.
+
+# 2. Verificacao HTTP Direta com Bypass Token Autorizado:
+vercel curl https://kyro-finance-2x1oaung0-wisterly-s.vercel.app
+  HTTP/2 200 OK
+  content-type: text/html; charset=utf-8
+  assets carregados no HTML:
+    - &lt;script type="module" crossorigin src="/assets/index-C83TRdZR.js"&gt;&lt;/script&gt;
+    - &lt;link rel="stylesheet" crossorigin href="/assets/index-hryFF2WY.css"&gt;
+    - data-deployment-id="dpl_4SAa8mVTadPkLUqP6C3FCsWEvByf"
+  (Paridade de bundle confirmada com a compilacao local da Etapa 08)
+
+# 3. Verificacao de Rota Serverless no Preview:
+vercel curl https://kyro-finance-2x1oaung0-wisterly-s.vercel.app/api/app-version
+  HTTP/2 200 OK
+  {"latestVersion":"1.46","buildNumber":46,"apkUrl":"https://github.com/Wisterly/kyro-finance/releases/download/apk-latest/KYRO-Finance-v1.46.apk"}</div>
 
       <!-- 3. Protocolo de Atualização e Reversão -->
       <h3 style="font-size: 1.15rem; margin-top: 2rem; margin-bottom: 0.75rem; color: #ffffff;">
@@ -1033,7 +1064,7 @@ CHECKOUT TESTADO: 8bbb987ecec60d5f2650e8e35da10f731e76757e
         3. <strong>Preservação Integral de Dados Locais:</strong> A instalação in-place preserva 100% do banco de dados SQLite nativo do Capacitor, as credenciais salvas em <code>localStorage</code> / <code>sessionStorage</code> e as filas pendentes de sincronização do <code>offlineSyncEngine</code> (particionadas por <code>kyro_offline_queue_${userId}</code>).<br/>
         <br/>
         <strong style="color: #ffffff; font-size: 0.95rem;">B. Procedimento de Reversão Estável (Rollback Seguro sem Downgrade Forçado):</strong><br/>
-        1. <strong>Retirada de Garantia via Flag -d:</strong> Em estrito alinhamento com a auditoria do OpenAI Codex, <strong>retira-se expressamente qualquer garantia de reversão via flag arriscada <code>adb install -r -d</code> para o APK em ambiente de produção</strong> enquanto carecer de comprovação prática em hardware/AVD autorizado.<br/>
+        1. <strong>Retirada Formal de Garantia via Flag -d:</strong> Em estrito alinhamento com a auditoria do OpenAI Codex, <strong>retira-se expressamente qualquer garantia de reversão via flag arriscada <code>adb install -r -d</code> para o APK em ambiente de produção</strong> enquanto carecer de comprovação prática em hardware/AVD autorizado.<br/>
         2. <strong>Procedimento Oficial por Rollback Forward (versionCode Superior):</strong> O procedimento oficial e seguro de reversão consiste em empacotar o código de referência estável (ex: commit da 03.5 <code>e34dbfe992d7d388ac2c7915c25f3a64f18b4fca</code>), mantendo o <strong>mesmo <code>applicationId</code></strong> (<code>com.kyro.finance</code>) e a <strong>mesma assinatura oficial</strong> (keystore com digest <code>9b2b95a9...</code>), porém incrementando o <code>versionCode</code> para um valor estritamente superior ao instalado (ex: <code>versionCode = 49</code> ou <code>50</code>). Isso assegura aceitação transparente e nativa pelo Android Package Manager via <code>adb install -r</code>, sem rejeições de versão ou necessidade de flags de downgrade de baixo nível.<br/>
         3. <strong>Compatibilidade de Dados Locais e da Fila Offline:</strong> O formato de persistência local da fila offline no <code>offlineSyncEngine</code> (armazenado sob as chaves <code>kyro_offline_queue_${userId}</code>) utiliza esquemas universais serializados em JSON com campos imutáveis (<code>requestId</code>, <code>amountCents</code> BigInt serializado em string, <code>status</code> e <code>receipt</code>). A versão de reversão lê perfeitamente essa estrutura; caso haja transações pendentes enfileiradas pelo usuário, o motor continua descarregando-as com idempotência atômica pelo <code>requestId</code> contra <code>/api/database</code>, sem duplicidade nem descarte de operações.<br/>
         4. <strong>Status do Procedimento:</strong> Na ausência de AVD ou dispositivo móvel com áudio funcional no host, o procedimento dinâmico de reversão permanece <strong>formalmente registrado como PENDENTE DE VALIDAÇÃO DINÂMICA EM HARDWARE</strong>, mantendo-se estritamente separados os resultados de auditoria estática dos APKs da 03.5 (<code>8CDFB55B...</code>) e da 03.7 (<code>3FDFB458...</code>).<br/>
