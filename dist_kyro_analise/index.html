@@ -232,15 +232,15 @@
           <span class="badge badge-success">Etapa 08: Testes e Estabilização</span>
           <span class="badge badge-blue">PR.048 / v1.48 (Build 48)</span>
           <span class="badge badge-cyan">Suíte Consolidada: 644/644 (100% Sucesso)</span>
-          <span class="badge badge-purple">Browser E2E Chrome Real: 39/39 (100% Sucesso)</span>
-          <span class="badge badge-success">Total Automatizado: 683/683 (100% Sucesso)</span>
+          <span class="badge badge-purple">Browser E2E Chrome Real: 47/47 (100% Sucesso)</span>
+          <span class="badge badge-success">Total Automatizado: 691/691 (100% Sucesso)</span>
           <span class="badge badge-warning">Aceite Dinâmico Android: Formalmente Pendente AVD/Host</span>
         </div>
         <div style="font-size: 0.85rem; color: var(--text-muted);">
-          Data da Homologação: <strong>08/11/2026 15:10 BRT</strong> | 
+          Data da Homologação: <strong>08/11/2026 16:45 BRT</strong> | 
           Escopo: <strong>Etapa 08 — Testes, Regressão e Estabilização Global de Ponta a Ponta</strong><br/>
-          <strong>SHA Consolidado Efetivamente Testado:</strong> <a href="https://github.com/Wisterly/kyro-finance/commit/0ad6e5fbc4fb9cc2f8320c02706e47bba11f2293" target="_blank" style="color:var(--accent); text-decoration: underline;"><code>0ad6e5fbc4fb9cc2f8320c02706e47bba11f2293</code></a> (Checkout LIMPO) | 
-          <strong>Sucessores Auditados:</strong> <code>0ad6e5f</code> ⇄ <code>fd9bbe4</code> ⇄ <code>543e8ab</code> | 
+          <strong>SHA do Código Efetivamente Testado:</strong> <a href="https://github.com/Wisterly/kyro-finance/commit/8bbb987ecec60d5f2650e8e35da10f731e76757e" target="_blank" style="color:var(--accent); text-decoration: underline;"><code>8bbb987ecec60d5f2650e8e35da10f731e76757e</code></a> (Checkout LIMPO) | 
+          <strong>Sucessores Auditados:</strong> <code>8bbb987</code> ⇄ <code>5f75782</code> ⇄ <code>0ad6e5f</code> ⇄ <code>fd9bbe4</code> ⇄ <code>543e8ab</code> | 
           <strong>Ambiente:</strong> Firestore Emulator (127.0.0.1:8080) & Auth Emulator (127.0.0.1:9099) + Chrome Real (Puppeteer-Core)<br/>
           <strong>Comparativo Android (03.5 vs 03.7):</strong> <a href="https://github.com/Wisterly/kyro-finance/commit/28715884e70cc87fdb41524d33e39e3d6f8dc3e8" target="_blank" style="color:var(--text-muted); text-decoration: underline;"><code>2871588</code></a> | 
           <strong>Revisão Base 03.7:</strong> <a href="https://github.com/Wisterly/kyro-finance/commit/3bc4b691938af5e340e36d985eebbf9551c6c879" target="_blank" style="color:var(--text-muted); text-decoration: underline;"><code>3bc4b69</code></a> | 
@@ -249,7 +249,7 @@
       </div>
       <h1>KYRO Finance | Relatório Oficial de Testes, Regressão e Estabilização Global (Etapa 08)</h1>
       <p class="subtitle">
-        Relatório oficial de estabilização do KYRO Financial Intelligence Engine cobrindo a totalidade das regressões do sistema em checkout limpo (SHA <code>0ad6e5f</code>). Homologação de ponta a ponta da <strong>regressão do Chat Web no Google Chrome real com Puppeteer-Core</strong> (comprovando em cada lançamento válido a <strong>correlação quádrupla entre a requisição emitida pela interface, o recibo oficial APPLIED, o requestId persistido e a confirmação exibida</strong>, com exatamente um único lançamento e efeito único no saldo), execução integral da suíte consolidada (644 asserções em 8 baterias cobrindo Money Engine, isolamento multi-tenant, fila offline, idempotência, replay, rollback atômico e tombstones), auditoria de builds (<code>tsc</code>, <code>vite</code>, <code>apk:sync</code>) e mapeamento formal das condições para a Etapa 09, totalizando <strong>683 asserções automatizadas com 100% de aprovação</strong>.
+        Relatório oficial de estabilização do KYRO Financial Intelligence Engine cobrindo a totalidade das regressões do sistema em checkout limpo (SHA do Código Testado: <code>8bbb987</code>). Homologação de ponta a ponta da <strong>regressão do Chat Web no Google Chrome real com Puppeteer-Core</strong> (comprovando em cada lançamento válido a <strong>captura separada de sentRequestId e receivedRequestId, igualdade estrita entre ambos e com o requestId no Firestore, busca EXCLUSIVA por requestId sem busca alternativa por valor monetário, e nova confirmação renderizada no DOM após o recibo oficial APPLIED</strong>, com exatamente um único lançamento e efeito único no saldo), execução integral da suíte consolidada (644 asserções em 8 baterias cobrindo Money Engine, isolamento multi-tenant, fila offline, idempotência, replay, rollback atômico e tombstones), auditoria de builds (<code>tsc</code>, <code>vite</code>, <code>apk:sync</code>) e mapeamento formal das condições para a Etapa 09, totalizando <strong>691 asserções automatizadas com 100% de aprovação</strong>.
       </p>
     </header>
 
@@ -262,8 +262,8 @@
       </div>
       <div class="card-kpi">
         <div class="kpi-title">Browser Real E2E (Chrome)</div>
-        <div class="kpi-value">39 / 39</div>
-        <div class="kpi-subtitle">Correlação Quádrupla & Unicidade Contábil</div>
+        <div class="kpi-value">47 / 47</div>
+        <div class="kpi-subtitle">Busca Exclusiva por RequestId & Unicidade</div>
       </div>
       <div class="card-kpi">
         <div class="kpi-title">Chat Web Contratos (04)</div>
@@ -544,10 +544,10 @@
 
       <!-- 0.1.B Suíte E2E Navegador Real -->
       <h3 style="font-size: 1.15rem; margin-top: 2rem; margin-bottom: 0.5rem; color: var(--cyan);">
-        0.1.B — Validação Dinâmica de Interface em Navegador Real (E2E Browser - <code>src/engine/etapa_04_browser_chat.test.ts</code> - 39 Asserções)
+        0.1.B — Validação Dinâmica de Interface em Navegador Real (E2E Browser - <code>src/engine/etapa_04_browser_chat.test.ts</code> - 47 Asserções)
       </h3>
       <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 0.75rem;">
-        Esta suíte abre o aplicativo renderizado no <strong>Google Chrome nativo</strong> (via <code>puppeteer-core</code>) contra o <strong>Vite Dev Server (porta 3160)</strong>, <strong>Backend HTTP (porta 3001)</strong>, <strong>Firebase Auth Emulator (porta 9099)</strong> e <strong>Firestore Emulator (porta 8080)</strong>, exercitando o chat exclusivamente pelas ações reais da interface no DOM, sem qualquer chamada artificial a <code>adapter.commitTransaction</code>, comprovando em cada lançamento válido a <strong>correlação quádrupla estrita</strong> (Requisição da Interface ⇄ Recibo Oficial APPLIED ⇄ RequestId Persistido ⇄ Confirmação no DOM) e a <strong>unicidade contábil</strong> (exatamente 1 único lançamento e 1 único débito no saldo):
+        Esta suíte abre o aplicativo renderizado no <strong>Google Chrome nativo</strong> (via <code>puppeteer-core</code>) contra o <strong>Vite Dev Server (porta 3160)</strong>, <strong>Backend HTTP (porta 3001)</strong>, <strong>Firebase Auth Emulator (porta 9099)</strong> e <strong>Firestore Emulator (porta 8080)</strong>, exercitando o chat exclusivamente pelas ações reais da interface no DOM, sem qualquer chamada artificial a <code>adapter.commitTransaction</code>, comprovando em cada lançamento válido a <strong>captura separada de sentRequestId e receivedRequestId</strong>, a <strong>igualdade estrita entre ambos e com o documento no Firestore</strong>, a <strong>localização no banco EXCLUSIVAMENTE pelo requestId (sem busca alternativa por valor monetário)</strong>, a <strong>renderização de nova confirmação no DOM após o recibo oficial APPLIED</strong> e a <strong>unicidade contábil</strong> (exatamente 1 único lançamento e 1 único débito no saldo):
       </p>
 
       <table>
@@ -556,7 +556,7 @@
             <th>Cenário em Navegador Real</th>
             <th>Ação Executada no DOM da Interface</th>
             <th>Resposta Visual Renderizada no Chat</th>
-            <th>Correlação Quádrupla & Unicidade no Firestore</th>
+            <th>Correlação Estrita & Busca Exclusiva por RequestId no Firestore</th>
             <th>Status E2E</th>
           </tr>
         </thead>
@@ -564,15 +564,15 @@
           <tr>
             <td><strong>1. Texto Digitado no Input do Chat</strong></td>
             <td>Digitação de <em>"Gasolina 73 reais e 45 centavos no débito"</em> no elemento <code>[data-testid="input-chat-message"]</code> e clique no botão <code>[data-testid="btn-chat-send"]</code>.</td>
-            <td>Bolha <code>[data-testid="chat-message-bubble"][data-sender="ia"]</code> renderizada no DOM contendo confirmação de R$ 73,45 e Gasolina.</td>
-            <td><strong>Correlação Quádrupla Comprovada:</strong> Requisição emitida capturada ➔ Recibo <code>APPLIED</code> emitido ➔ <code>requestId</code> persistido idêntico (<code>req_tx_1794161315832_59fr8</code>) ➔ Confirmação no DOM ➔ <strong>Unicidade:</strong> exatamente 1 lançamento gravado e saldo debitado de R$ 1.000,00 para <strong>R$ 926,55</strong> (débito único de 7.345 centavos).</td>
+            <td>Bolha <code>[data-testid="chat-message-bubble"][data-sender="ia"]</code> renderizada no DOM contendo confirmação de R$ 73,45 e Gasolina após recibo APPLIED.</td>
+            <td><strong>Correlação Estrita Comprovada:</strong> <code>sentRequestId</code> capturado ➔ <code>receivedRequestId</code> presente no recibo <code>APPLIED</code> ➔ Ambos idênticos (<code>req_tx_1794166891899_tpsw7</code>) ➔ <strong>Busca no Firestore EXCLUSIVAMENTE pelo requestId</strong> ➔ <code>amountCents: 7345n</code> ➔ <strong>Unicidade:</strong> exatamente 1 lançamento gravado e saldo debitado de R$ 1.000,00 para <strong>R$ 926,55</strong> (débito único de 7.345 centavos).</td>
             <td><span class="status-pill status-approved">APROVADO (CHROME REAL)</span></td>
           </tr>
           <tr>
             <td><strong>2. Entrada de Voz com Botão "Lançar"</strong></td>
             <td>Substituição estrita na fronteira do reconhecedor de voz (<em>"Almoço executivo 42 reais e 50 centavos no débito"</em>) e acionamento do botão <strong>"Lançar"</strong> (<code>[data-testid="btn-voice-launch"]</code>) renderizado na barra de áudio.</td>
-            <td>Resposta visual confirmada no chat; bolha renderizada com R$ 42,50 e Almoço.</td>
-            <td><strong>Correlação Quádrupla de Voz:</strong> Requisição originada pelo clique capturada ➔ Recibo oficial <code>APPLIED</code> ➔ <code>requestId</code> de voz persistido ➔ Confirmação no DOM ➔ <strong>Unicidade:</strong> exatamente 1 único lançamento de voz e saldo debitado com precisão para <strong>R$ 884,05</strong> (4.250 centavos).</td>
+            <td>Resposta visual confirmada no chat; bolha renderizada com R$ 42,50 e Almoço após recibo APPLIED.</td>
+            <td><strong>Correlação Estrita de Voz Comprovada:</strong> <code>sentRequestId</code> capturado na mutação da interface ➔ <code>receivedRequestId</code> no recibo <code>APPLIED</code> ➔ Ambos idênticos (<code>req_voice_1794166897356</code>) ➔ <strong>Busca no Firestore EXCLUSIVAMENTE pelo requestId</strong> ➔ <code>amountCents: 4250n</code> ➔ <strong>Unicidade:</strong> exatamente 1 único lançamento de voz e saldo debitado para <strong>R$ 884,05</strong> (4.250 centavos).</td>
             <td><span class="status-pill status-approved">APROVADO (CHROME REAL)</span></td>
           </tr>
           <tr>
@@ -585,8 +585,8 @@
           <tr>
             <td><strong>4. Campos Ausentes: Método e Cidade Não Ditos</strong></td>
             <td>Digitação e envio de <em>"Padaria 15 reais"</em> no chat da interface.</td>
-            <td><strong>REGRAS 10.1 & 10.2 CUMPRIDAS NO DOM:</strong> Bolha da IA NÃO contém "PIX" e NÃO inventa "Teresina".</td>
-            <td><strong>Correlação Quádrupla & Regras de Ausência:</strong> Requisição capturada ➔ Recibo <code>APPLIED</code> ➔ Registro persistido no Firestore com <code>method: "Outro"</code> e <code>city: ""</code> ➔ <strong>Unicidade:</strong> exatamente 1 lançamento gravado e saldo debitado de R$ 884,05 para <strong>R$ 869,05</strong> (1.500 centavos).</td>
+            <td><strong>REGRAS 10.1 & 10.2 CUMPRIDAS NO DOM:</strong> Bolha da IA NÃO contém "PIX" e NÃO inventa "Teresina" após recibo APPLIED.</td>
+            <td><strong>Correlação Estrita & Regras de Ausência:</strong> <code>sentRequestId</code> e <code>receivedRequestId</code> iguais (<code>req_tx_1794166899489_j5gft</code>) ➔ Recibo oficial <code>APPLIED</code> ➔ <strong>Busca EXCLUSIVA por requestId</strong> ➔ Registro no Firestore com <code>method: "Outro"</code> e <code>city: ""</code> ➔ <strong>Unicidade:</strong> exatamente 1 lançamento gravado e saldo debitado de R$ 884,05 para <strong>R$ 869,05</strong> (1.500 centavos).</td>
             <td><span class="status-pill status-approved">APROVADO (CHROME REAL)</span></td>
           </tr>
         </tbody>
@@ -598,7 +598,7 @@
       </h4>
       <div class="code-box terminal">================================================================
 KYRO FINANCE | VALIDAÇÃO DE INTERFACE EM NAVEGADOR REAL (ETAPA 04)
-CHECKOUT SHA:    0ad6e5fbc4fb9cc2f8320c02706e47bba11f2293
+CHECKOUT SHA:    8bbb987ecec60d5f2650e8e35da10f731e76757e
 Ambiente: Chrome Headless + Vite Dev Server + Emuladores Firebase
 Regra: Mutação produzida pela própria aplicação no navegador
 ================================================================
@@ -616,27 +616,31 @@ Regra: Mutação produzida pela própria aplicação no navegador
 
 --- [CENÁRIO 1: NAVEGADOR] Texto Digitado no Input do Chat ---
   [OK - BROWSER] Mensagem digitada e submetida pelo botão de envio da interface
-  [OK - BROWSER] Confirmação visual do lançamento exibida na bolha de resposta da interface
-  [OK - BROWSER] Saldo no Firestore Emulator debitado para R$ 926,55 pela própria aplicação (zero commit artificial)
-  [OK - BROWSER] Lançamento de Gasolina (7.345 centavos) persistido no Firestore Emulator pela aplicação
-  [OK - BROWSER] RequestId estável comprovado no documento do Firestore: req_tx_1794161315832_59fr8
-  [OK - BROWSER] Valor contábil persistido corresponde a exatamente 7.345 centavos BigInt
-  [OK - BROWSER] CORRELAÇÃO QUADRUPLA (1/4): Requisição financeira emitida pela interface web capturada
-  [OK - BROWSER] CORRELAÇÃO QUADRUPLA (2/4): Recibo oficial do servidor emitido com status estrito APPLIED
-  [OK - BROWSER] CORRELAÇÃO QUADRUPLA (3/4): RequestId estável persistido idêntico ao emitido pela interface e ao recibo
-  [OK - BROWSER] CORRELAÇÃO QUADRUPLA (4/4): Confirmação visual no DOM derivada do lançamento oficial
-  [OK - BROWSER] UNICIDADE CONTÁBIL: Exatamente um único lançamento de Gasolina registrado no Firestore (sem duplicação)
+  [OK - BROWSER] Requisição financeira emitida pela interface web capturada
+  [OK - BROWSER] sentRequestId presente na requisição emitida pela interface: req_tx_1794166891899_tpsw7
+  [OK - BROWSER] receivedRequestId presente no recibo oficial devolvido: req_tx_1794166891899_tpsw7
+  [OK - BROWSER] sentRequestId enviado é estritamente igual ao receivedRequestId devolvido no recibo
+  [OK - BROWSER] Recibo oficial do servidor emitido com status estrito APPLIED
+  [OK - BROWSER] Lançamento de Gasolina localizado no Firestore exclusivamente pelo requestId: req_tx_1794166891899_tpsw7
+  [OK - BROWSER] requestId persistido no documento do Firestore é idêntico ao enviado e ao do recibo
+  [OK - BROWSER] Valor contábil do lançamento localizado por requestId é de exatos 7.345 centavos BigInt
+  [OK - BROWSER] UNICIDADE CONTÁBIL: Exatamente um único lançamento com este requestId gravado no Firestore (sem duplicação)
+  [OK - BROWSER] Nova confirmação visual renderizada no DOM após o recibo APPLIED
+  [OK - BROWSER] Saldo debitado exatamente em 7.345 centavos para R$ 926,55 (efeito contábil único)
 
 --- [CENÁRIO 2: NAVEGADOR] Entrada por Voz e Clique no Botão "Lançar" Renderizado ---
   [OK - BROWSER] Botão "Lançar" renderizado no DOM foi acionado pelo clique do usuário
-  [OK - BROWSER] Confirmação visual da operação de voz exibida na bolha de resposta do chat
+  [OK - BROWSER] Requisição originada pelo botão "Lançar" capturada
+  [OK - BROWSER] sentRequestId de voz presente na requisição emitida pela interface: req_voice_1794166897356
+  [OK - BROWSER] receivedRequestId de voz presente no recibo oficial devolvido: req_voice_1794166897356
+  [OK - BROWSER] sentRequestId de voz enviado é estritamente igual ao receivedRequestId devolvido no recibo
+  [OK - BROWSER] Recibo oficial de voz emitido com status estrito APPLIED
+  [OK - BROWSER] Lançamento de voz localizado no Firestore exclusivamente pelo requestId: req_voice_1794166897356
+  [OK - BROWSER] requestId de voz no Firestore é idêntico ao enviado e ao do recibo
+  [OK - BROWSER] Valor contábil da voz localizado por requestId é de exatos 4.250 centavos BigInt
+  [OK - BROWSER] VOZ - UNICIDADE CONTÁBIL: Exatamente um único lançamento de voz com este requestId no Firestore
+  [OK - BROWSER] Nova confirmação visual de voz renderizada no DOM após o recibo APPLIED
   [OK - BROWSER] Saldo no Firestore Emulator debitado com precisão para R$ 884,05 pela ação na UI (88.405 centavos)
-  [OK - BROWSER] Lançamento de voz persistido no Firestore Emulator
-  [OK - BROWSER] Valor contábil da voz persistido em exatos 4.250 centavos (R$ 42,50)
-  [OK - BROWSER] VOZ - CORRELAÇÃO QUADRUPLA (1/4): Requisição originada pelo botão "Lançar" capturada
-  [OK - BROWSER] VOZ - CORRELAÇÃO QUADRUPLA (2/4): Recibo oficial de voz emitido com status APPLIED
-  [OK - BROWSER] VOZ - CORRELAÇÃO QUADRUPLA (3/4): RequestId de voz persistido no Firestore idêntico ao do recibo
-  [OK - BROWSER] VOZ - UNICIDADE CONTÁBIL: Exatamente um único lançamento de voz no Firestore (sem efeito duplo)
 
 --- [CENÁRIO 3: NAVEGADOR] Entrada Ambígua sem Valor no Chat ---
   [OK - BROWSER] Interface do chat solicita expressamente esclarecimento ao usuário sobre o valor faltante
@@ -644,21 +648,25 @@ Regra: Mutação produzida pela própria aplicação no navegador
   [OK - BROWSER] SALDO RIGOROSAMENTE INTACTO: Permanece R$ 884,05 no banco (zero mutação por ambiguidade)
 
 --- [CENÁRIO 4: NAVEGADOR] Campos Ausentes: Método e Cidade Não Informados ---
-  [OK - BROWSER] REGRA 10.1 CUMPRIDA NO DOM: Forma de pagamento NÃO foi inferida cegamente como PIX
-  [OK - BROWSER] REGRA 10.2 CUMPRIDA NO DOM: Cidade NÃO foi inventada como Teresina, PI
-  [OK - BROWSER] Saldo debitado exatamente em 1.500 centavos para R$ 869,05 pelo app
-  [OK - BROWSER] Lançamento de Padaria criado pela aplicação persistido no banco
+  [OK - BROWSER] Requisição de campos ausentes emitida pela interface web capturada
+  [OK - BROWSER] sentRequestId de campos ausentes presente na requisição: req_tx_1794166899489_j5gft
+  [OK - BROWSER] receivedRequestId de campos ausentes presente no recibo devolvido: req_tx_1794166899489_j5gft
+  [OK - BROWSER] sentRequestId de campos ausentes enviado é estritamente igual ao receivedRequestId devolvido no recibo
+  [OK - BROWSER] Recibo oficial emitido com status estrito APPLIED
+  [OK - BROWSER] Lançamento de Padaria localizado no Firestore exclusivamente pelo requestId: req_tx_1794166899489_j5gft
+  [OK - BROWSER] requestId de Padaria no Firestore é idêntico ao enviado e ao do recibo
   [OK - BROWSER] REGRA 10.1 NO BANCO: Campo method registrado estritamente como "Outro" (sem PIX presumido)
   [OK - BROWSER] REGRA 10.2 NO BANCO: Campo city registrado vazio "" (sem Teresina presumida)
   [OK - BROWSER] Valor contábil registrado como exatos 1.500 centavos BigInt
-  [OK - BROWSER] CAMPOS AUSENTES - CORRELAÇÃO QUADRUPLA (1/4): Requisição da interface sem método/cidade capturada
-  [OK - BROWSER] CAMPOS AUSENTES - CORRELAÇÃO QUADRUPLA (2/4): Recibo oficial emitido com status APPLIED
-  [OK - BROWSER] CAMPOS AUSENTES - CORRELAÇÃO QUADRUPLA (3/4): RequestId estável persistido idêntico ao do recibo
-  [OK - BROWSER] CAMPOS AUSENTES - UNICIDADE CONTÁBIL: Exatamente um único lançamento de Padaria no Firestore (sem efeito duplo)
+  [OK - BROWSER] CAMPOS AUSENTES - UNICIDADE CONTÁBIL: Exatamente um único lançamento de Padaria com este requestId no Firestore
+  [OK - BROWSER] REGRA 10.1 CUMPRIDA NO DOM: Forma de pagamento NÃO foi inferida cegamente como PIX
+  [OK - BROWSER] REGRA 10.2 CUMPRIDA NO DOM: Cidade NÃO foi inventada como Teresina, PI
+  [OK - BROWSER] Nova confirmação visual renderizada no DOM após o recibo APPLIED
+  [OK - BROWSER] Saldo debitado exatamente em 1.500 centavos para R$ 869,05 pelo app (efeito contábil único)
 
 ================================================================
-SUÍTE DE NAVEGADOR CONCLUÍDA: 39 de 39 ASSERÇÕES APROVADAS (100% SUCESSO)
-CHECKOUT TESTADO: 0ad6e5fbc4fb9cc2f8320c02706e47bba11f2293
+SUÍTE DE NAVEGADOR CONCLUÍDA: 47 de 47 ASSERÇÕES APROVADAS (100% SUCESSO)
+CHECKOUT TESTADO: 8bbb987ecec60d5f2650e8e35da10f731e76757e
 ================================================================</div>
 
       <!-- Discriminação de Camada das 47 Verificações da Etapa 04 -->
@@ -760,7 +768,7 @@ CHECKOUT TESTADO: 0ad6e5fbc4fb9cc2f8320c02706e47bba11f2293
     <div class="card">
       <h2>0.2 Relatório Oficial de Estabilização e Regressão Global (Etapa 08 — Testes e Estabilização)</h2>
       <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1.25rem;">
-        Consolidação da bateria de testes e regressão de ponta a ponta executada em checkout limpo (SHA <code>0ad6e5fbc4fb9cc2f8320c02706e47bba11f2293</code>), unificando a suíte contratual do motor compartilhado (644 asserções) e a suíte de navegador real no Google Chrome (39 asserções), totalizando <strong>683 asserções automatizadas 100% aprovadas</strong>:
+        Consolidação da bateria de testes e regressão de ponta a ponta executada em checkout limpo (SHA do Código Testado: <code>8bbb987ecec60d5f2650e8e35da10f731e76757e</code>), unificando a suíte contratual do motor compartilhado (644 asserções) e a suíte de navegador real no Google Chrome (47 asserções), totalizando <strong>691 asserções automatizadas 100% aprovadas</strong>:
       </p>
 
       <table>
@@ -812,16 +820,16 @@ CHECKOUT TESTADO: 0ad6e5fbc4fb9cc2f8320c02706e47bba11f2293
           <tr>
             <td><strong>6. Chat Web: Regressão em Navegador Real (Chrome E2E)</strong></td>
             <td><code>etapa_04_browser_chat.test.ts</code> (Puppeteer-Core + Vite 3160 + Emuladores)</td>
-            <td><strong>39 asserções</strong></td>
-            <td>A própria aplicação no navegador dispara as mutações reais pela interface gráfica no DOM. <strong>Correlação Quádrupla Comprovada:</strong> Requisição emitida ➔ Recibo oficial <code>APPLIED</code> ➔ <code>requestId</code> estável persistido ➔ Confirmação visual no DOM. <strong>Unicidade Contábil:</strong> exatamente 1 lançamento e 1 débito único no saldo por cenário. Preservação de voz pelo botão "Lançar", ambiguidade com saldo intacto e regras de campos ausentes.</td>
+            <td><strong>47 asserções</strong></td>
+            <td>A própria aplicação no navegador dispara as mutações reais pela interface gráfica no DOM. <strong>Correlação Estrita Comprovada:</strong> Captura separada de <code>sentRequestId</code> e <code>receivedRequestId</code> ➔ Igualdade com recibo oficial <code>APPLIED</code> ➔ <strong>Localização no Firestore EXCLUSIVAMENTE pelo requestId (elimina busca por valor)</strong> ➔ Confirmação visual no DOM após o recibo. <strong>Unicidade Contábil:</strong> exatamente 1 lançamento e 1 débito único no saldo por cenário. Preservação de voz pelo botão "Lançar", ambiguidade com saldo intacto e regras de campos ausentes.</td>
             <td><span class="status-pill status-approved">ESTABILIZADO (100%)</span></td>
           </tr>
         </tbody>
         <tfoot>
           <tr style="background-color: var(--card-alt); font-weight: 800;">
             <td colspan="2">TOTAL CONSOLIDADO DE ESTABILIZAÇÃO (ETAPA 08)</td>
-            <td>683</td>
-            <td colspan="2">644 na Suíte Consolidada de Backend/Contrato + 39 no Navegador Chrome Real (100% de Sucesso)</td>
+            <td>691</td>
+            <td colspan="2">644 na Suíte Consolidada de Backend/Contrato + 47 no Navegador Chrome Real (100% de Sucesso)</td>
           </tr>
         </tfoot>
       </table>
@@ -1994,10 +2002,16 @@ tokens used: 23.408</div>
             <td>Execução automatizada no Google Chrome real com Puppeteer-Core, Vite e emuladores Firebase com efeito contábil direto pela aplicação.</td>
           </tr>
           <tr>
-            <td><strong>Etapa 08: Testes, Regressão e Estabilização Global</strong></td>
+            <td><strong>Código Candidato da Etapa 08 Efetivamente Testado em Checkout Limpo</strong></td>
+            <td><a href="https://github.com/Wisterly/kyro-finance/commit/8bbb987ecec60d5f2650e8e35da10f731e76757e" target="_blank" style="color:var(--accent); text-decoration: underline;"><code>8bbb987ecec60d5f2650e8e35da10f731e76757e</code></a></td>
+            <td>Suíte E2E Chrome Real (47 asserções) + 644 Consolidadas = 691 Asserções</td>
+            <td>Regressão global de ponta a ponta com comprovação da correlação estrita por requestId (captura separada de sent/received, igualdade estrita e busca EXCLUSIVA por id sem busca por valor monetário) no Chat Web, validação de invariantes contábeis, idempotência e isolamento multi-tenant.</td>
+          </tr>
+          <tr>
+            <td><strong>Relatório Oficial e Portal de Análise (Publicação Final)</strong></td>
             <td><code>HEAD</code> (Ponto de Restauração PR.048)</td>
-            <td>Suíte E2E Chrome Real (39 asserções) + 644 Consolidadas = 683 Asserções</td>
-            <td>Regressão global de ponta a ponta com comprovação da correlação quádrupla e unicidade contábil estrita no Chat Web, validação de invariantes contábeis, idempotência e isolamento multi-tenant.</td>
+            <td>Documentação Unificada e Homologada (691 Asserções)</td>
+            <td>Portal analítico Vercel atualizado com logs sanitizados de execução no SHA <code>8bbb987</code>, separação formal entre SHA testado e SHA de documentação, e aceite de runtime Android catalogado como formalmente pendente.</td>
           </tr>
         </tbody>
       </table>
