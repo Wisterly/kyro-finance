@@ -231,19 +231,19 @@
         <div class="badge-group">
           <span class="badge badge-success">Subetapa 03.6</span>
           <span class="badge badge-blue">PR.047 / v1.47 (Build 47)</span>
-          <span class="badge badge-cyan">460/460 Testes Aprovados</span>
+          <span class="badge badge-cyan">500/500 Testes Aprovados</span>
           <span class="badge badge-purple">CI Histórica 03.5: Run 42411151138 (Job 128519377910)</span>
           <span class="badge badge-warning">Aceite Dinâmico Android: Formalmente Pendente AVD/Host</span>
         </div>
         <div style="font-size: 0.85rem; color: var(--text-muted);">
-          Data da Homologação: <strong>07/11/2026 23:59 BRT</strong> | 
-          SHA da Entrega: <a href="https://github.com/Wisterly/kyro-finance/commit/743233142c2dab3bedea360e5905f0523201b863" target="_blank" style="color:var(--accent); text-decoration: underline;"><code>743233142c2dab3bedea360e5905f0523201b863</code></a> | 
-          Revisão Pública Base: <a href="https://github.com/Wisterly/kyro-finance/commit/e4f233e3acd49680138957504f484b9c6122769a" target="_blank" style="color:var(--blue); text-decoration: underline;"><code>e4f233e3acd49680138957504f484b9c6122769a</code></a>
+          Data da Homologação: <strong>08/11/2026 01:25 BRT</strong> | 
+          SHA da Entrega: <a href="https://github.com/Wisterly/kyro-finance/commit/2843e99edb7056f8a82b125c222686b0bafba364" target="_blank" style="color:var(--accent); text-decoration: underline;"><code>2843e99edb7056f8a82b125c222686b0bafba364</code></a> | 
+          Revisão Pública Base: <a href="https://github.com/Wisterly/kyro-finance/commit/743233142c2dab3bedea360e5905f0523201b863" target="_blank" style="color:var(--blue); text-decoration: underline;"><code>743233142c2dab3bedea360e5905f0523201b863</code></a>
         </div>
       </div>
       <h1>KYRO Finance | Auditoria Técnica Completa da Subetapa 03.6: Convergência do WhatsApp com o Motor Contábil Compartilhado</h1>
       <p class="subtitle">
-        Relatório oficial consolidado da Subetapa 03.6 do KYRO Finance. Convergência integral do webhook de texto e áudio do WhatsApp ao mesmo motor financeiro compartilhado (<code>LedgerEngine</code>, <code>SafeMoneySerializer</code>, <code>FirestoreLedgerAdapter</code>) utilizado pelo chat Web e pelo APK Android. Execução de lote com contrato transacional atômico (<code>commitBatchTransactions</code>) onde falha no segundo item resulta em rollback de 100% de saldo e registros, imunidade total do payload público contra injeção de parâmetros de teste, mensagens de WhatsApp montadas estritamente a partir dos recibos e dados persistidos (previsto vs realizado e ausência de campos inventados), evento sintético de mídia no formato nativo do provedor Baileys/Evolution (<code>audioMessage</code>) sem chamadas externas a servidores reais, paridade estrita da mesma frase natural no Chat Web e no WhatsApp (7.345 centavos inteiros com recibo <code>APPLIED</code>), e histórico com estorno via Tombstone de 90 dias ativo.
+        Relatório oficial consolidado da Subetapa 03.6 do KYRO Finance. Convergência integral do webhook de texto e áudio do WhatsApp ao mesmo motor financeiro compartilhado (<code>LedgerEngine</code>, <code>SafeMoneySerializer</code>, <code>FirestoreLedgerAdapter</code>) utilizado pelo chat Web e pelo APK Android. Execução de lote com contrato transacional atômico (<code>commitBatchTransactions</code>) onde falha no segundo item resulta em rollback de 100% de saldo e registros, blindagem estrita da fronteira pública com remoção de controles de teste, isolamento de injeção de falhas e traces no servidor de teste (<code>/api/test-control</code>), autorização administrativa obrigatória para gestão de vínculos (<code>x-admin-key</code>), mensagens montadas estritamente a partir dos recibos e dados persistidos, evento sintético de mídia (<code>audioMessage</code>) sem chamadas externas a servidores reais, paridade estrita da mesma frase natural no Chat Web e no WhatsApp (7.345 centavos inteiros com recibo <code>APPLIED</code>), e histórico com estorno via Tombstone de 90 dias ativo.
       </p>
     </header>
 
@@ -251,13 +251,13 @@
     <div class="grid-kpi">
       <div class="card-kpi">
         <div class="kpi-title">Suíte Consolidada</div>
-        <div class="kpi-value">460 / 460</div>
+        <div class="kpi-value">500 / 500</div>
         <div class="kpi-subtitle">100% de Sucesso (6 Suítes Integradas)</div>
       </div>
       <div class="card-kpi">
-        <div class="kpi-title">Convergência WhatsApp</div>
-        <div class="kpi-value">88 / 88</div>
-        <div class="kpi-subtitle">7 Grupos de Teste Homologados</div>
+        <div class="kpi-title">Convergência WhatsApp & Segurança</div>
+        <div class="kpi-value">109 / 109</div>
+        <div class="kpi-subtitle">8 Grupos de Teste Homologados</div>
       </div>
       <div class="card-kpi">
         <div class="kpi-title">Motor Contábil Compartilhado</div>
@@ -265,9 +265,9 @@
         <div class="kpi-subtitle">Lote Transacional Único & Rollback Total</div>
       </div>
       <div class="card-kpi">
-        <div class="kpi-title">Status Oficial</div>
-        <div class="kpi-value" style="font-size: 1.3rem; color: var(--warning); line-height: 1.3;">CONTRATO HOMOLOGADO</div>
-        <div class="kpi-subtitle" style="color: var(--warning);">Runtime Android Pendente de AVD/Hardware</div>
+        <div class="kpi-title">Fronteira do Webhook</div>
+        <div class="kpi-value" style="font-size: 1.3rem; color: var(--accent); line-height: 1.3;">100% BLINDADA</div>
+        <div class="kpi-subtitle" style="color: var(--accent);">Controles de Teste Removidos & Admin Role</div>
       </div>
     </div>
 
@@ -276,11 +276,12 @@
       <h2>0. Subetapa 03.6: Convergência Total do WhatsApp com o Motor Contábil Compartilhado</h2>
       
       <div style="background: rgba(16, 185, 129, 0.08); border-left: 3px solid var(--accent); padding: 1rem; margin-bottom: 1.25rem; font-size: 0.9rem; color: var(--text-muted);">
-        <strong style="color: #ffffff;">4 Frentes Homologadas na Subetapa 03.6:</strong><br/>
-        • <strong>1. Paridade Estrita pela Entrada Natural dos Dois Chats:</strong> Envio da mesma frase natural pura (<em>"Gasolina 73 reais e 45 centavos no débito"</em>) pelo Chat Web (via <code>launchTransactionFromChatVoice</code>) e pelo WhatsApp Webhook (<code>/api/webhook</code>). Cada canal interpretou a frase autonomamente, resultando na gravação de exatamente 7.345 centavos inteiros (<code>amountCents === 7345</code>), débito exato de 7.345 centavos no saldo no Firestore Emulator (Bob: R$ 926,55 / Alice: R$ 691,55), persistência idêntica (<code>type: EXPENSE</code>, <code>category: Transporte</code>, <code>subcategory: Combustível</code>, <code>method: Débito</code>) e confirmação apresentada derivada do recibo contábil <code>APPLIED</code>. Teste de mídia nativa (<code>audioMessage</code>) validado com substituição controlada das fronteiras <code>FETCH_AUDIO_MEDIA</code> e <code>TRANSCRIBE_AUDIO_BUFFER</code>.<br/>
-        • <strong>2. Contrato Atômico de Lote e Imunidade de Payload:</strong> Remoção de <code>simulateItemFailureIndex</code> do payload público aceito pelo webhook: requisições com esse campo são aceitas e o lote comita normalmente (imunidade total). A prova de rollback é realizada exclusivamente via infraestrutura de teste (<code>set_test_batch_failure_index</code>), demonstrando HTTP 400 <code>batch_failure</code> (<code>rolledBack: true</code>), saldo intacto em R$ 960,00, zero transações órfãs e mensagem enviada ao WhatsApp comunicando rollback total. Concorrência com <code>Promise.all</code> deduplicada com <code>replay: true</code> e reenvio recuperando recibos <code>APPLIED</code> sem segundo efeito.<br/>
-        • <strong>3. Mensagem Derivada dos Recibos e Dados Persistidos:</strong> Mensagem montada por <code>buildWhatsAppConfirmationMessage</code> a partir dos recibos e registros no banco, refletindo total R$ 155,00, itens de R$ 35,00 e R$ 120,00 em centavos, estado <code>🟢 Realizado / Debitado em conta</code> vs <code>🟡 Previsto</code>, preservação de campos ausentes sem cidades fantasmas e cobertura de sucesso, replay e rollback.<br/>
-        • <strong>4. Reconciliação do SHA e Rastreabilidade Total:</strong> Revisão pública base de partida: <a href="https://github.com/Wisterly/kyro-finance/commit/e4f233e3acd49680138957504f484b9c6122769a" target="_blank" style="color:var(--blue); text-decoration: underline;"><code>e4f233e</code></a>. Commit da entrega atual: <a href="https://github.com/Wisterly/kyro-finance/commit/743233142c2dab3bedea360e5905f0523201b863" target="_blank" style="color:var(--accent); text-decoration: underline;"><code>7432331</code></a>. CI da Subetapa 03.5 catalogada como histórica: <a href="https://github.com/Wisterly/kyro-finance/actions/runs/42411151138" target="_blank" style="color:var(--purple); text-decoration: underline;">Run 42411151138</a> (Job 128519377910, commit <code>e34dbfe992d7d388ac2c7915c25f3a64f18b4fca</code>). Aceite de runtime Android formalmente catalogado como <strong>PENDENTE</strong> por ausência de dispositivo móvel/AVD no host de CI descartável.
+        <strong style="color: #ffffff;">5 Frentes Homologadas na Subetapa 03.6:</strong><br/>
+        • <strong>1. Blindagem de Fronteira e Validação Imediata de Origem:</strong> Remoção de todos os controles de teste do handler público do webhook. Chamadas sem credencial para qualquer ação são imediatamente rejeitadas com <code>HTTP 401 WEBHOOK_ORIGIN_UNAUTHORIZED</code>. Chamadas com credencial comum de webhook tentando executar controles de teste são barradas com <code>HTTP 403 TEST_CONTROLS_FORBIDDEN_ON_PUBLIC_WEBHOOK</code> (zero dados expostos e zero efeitos). Ações administrativas de vínculo (<code>register_provider_binding</code>, <code>clear_provider_bindings</code>) agora exigem autorização administrativa estrita (<code>x-admin-key: kyro_admin_master_secret</code>), rejeitando chamadores comuns com <code>HTTP 403 ADMIN_PERMISSION_REQUIRED</code>.<br/>
+        • <strong>2. Isolamento de Controles de Teste na Infraestrutura (/api/test-control):</strong> Injeção de falhas de lote, mocks de áudio, captura de respostas enviadas e traces de pipeline foram movidos para o servidor de teste na rota dedicada <code>/api/test-control</code>, preservando o processamento financeiro normal da aplicação.<br/>
+        • <strong>3. Paridade Estrita pela Entrada Natural dos Dois Chats:</strong> Envio da mesma frase natural pura (<em>"Gasolina 73 reais e 45 centavos no débito"</em>) pelo Chat Web (via <code>launchTransactionFromChatVoice</code>) e pelo WhatsApp Webhook (<code>/api/webhook</code>). Cada canal interpretou a frase autonomamente, resultando na gravação de exatamente 7.345 centavos inteiros (<code>amountCents === 7345</code>), débito exato de 7.345 centavos no saldo no Firestore Emulator (Bob: R$ 926,55 / Alice: R$ 691,55), persistência idêntica (<code>type: EXPENSE</code>, <code>category: Transporte</code>, <code>subcategory: Combustível</code>, <code>method: Débito</code>) e confirmação apresentada derivada do recibo contábil <code>APPLIED</code>.<br/>
+        • <strong>4. Contrato Atômico de Lote e Mensagens Derivadas:</strong> Lote executado com <code>commitBatchTransactions</code>. Falha no segundo item resulta em rollback total (saldo inalterado em R$ 960,00 e zero lançamentos gravados), concorrência via <code>Promise.all</code> deduplicada com <code>replay: true</code> e reenvio recuperando recibos <code>APPLIED</code> sem segundo efeito. Mensagens enviadas ao WhatsApp montadas a partir dos recibos e registros no banco (valores em centavos, previsto vs realizado e sem cidades fantasmas).<br/>
+        • <strong>5. Reconciliação Matemática dos Testes e Rastreabilidade Total:</strong> Reconciliação dos 391 testes históricos (51 do Núcleo + 53 da 03.3 + 141 da 03.4 + 126 da 03.5 + 20 do EventBridge) com os 109 testes da Subetapa 03.6 (88 funcionais da convergência WhatsApp + 21 de segurança da fronteira do webhook no Grupo 0), totalizando exatamente <strong>500 testes consolidados (100% de sucesso)</strong>. Revisão pública base: <a href="https://github.com/Wisterly/kyro-finance/commit/743233142c2dab3bedea360e5905f0523201b863" target="_blank" style="color:var(--blue); text-decoration: underline;"><code>7432331</code></a>. Commit da entrega atual: <a href="https://github.com/Wisterly/kyro-finance/commit/2843e99edb7056f8a82b125c222686b0bafba364" target="_blank" style="color:var(--accent); text-decoration: underline;"><code>2843e99</code></a>. CI da Subetapa 03.5 catalogada como histórica: <a href="https://github.com/Wisterly/kyro-finance/actions/runs/42411151138" target="_blank" style="color:var(--purple); text-decoration: underline;">Run 42411151138</a> (Job 128519377910, commit <code>e34dbfe992d7d388ac2c7915c25f3a64f18b4fca</code>). Aceite de runtime Android formalmente catalogado como <strong>PENDENTE</strong> por ausência de dispositivo móvel/AVD no host descartável.
       </div>
 
       <table>
@@ -295,10 +296,17 @@
         </thead>
         <tbody>
           <tr>
+            <td><strong>Grupo 0: Proteção da Fronteira do Webhook</strong></td>
+            <td>Ações de teste e de vínculo sem credencial e com credencial sem permissão</td>
+            <td><code>0 mutações</code></td>
+            <td>HTTP 401 WEBHOOK_ORIGIN_UNAUTHORIZED e HTTP 403 ADMIN_PERMISSION_REQUIRED / TEST_CONTROLS_FORBIDDEN; zero respostas vazadas e zero alteração de estado</td>
+            <td><span class="status-pill success">100% Aprovado (21 Testes)</span></td>
+          </tr>
+          <tr>
             <td><strong>Grupo 1: Identidade e Tenant</strong></td>
             <td>Remetente sem vínculo ou tentativa de movimentar conta de outro UID</td>
             <td><code>0 mutações</code></td>
-            <td>HTTP 403 (UNBOUND_PROVIDER_IDENTITY e PERMISSION_DENIED_ACCOUNT_MISMATCH); saldo de Bob intacto em R$ 500,00</td>
+            <td>HTTP 403 (UNBOUND_PROVIDER_IDENTITY e PERMISSION_DENIED_ACCOUNT_MISMATCH); saldo de Bob intacto em R$ 1.000,00</td>
             <td><span class="status-pill success">100% Aprovado</span></td>
           </tr>
           <tr>
@@ -1117,15 +1125,15 @@ tokens used: 23.408</div>
           </tr>
           <tr>
             <td><strong>Revisão Pública Base da Subetapa 03.6</strong></td>
-            <td><a href="https://github.com/Wisterly/kyro-finance/commit/e4f233e3acd49680138957504f484b9c6122769a" target="_blank" style="color:var(--blue); text-decoration: underline;"><code>e4f233e3acd49680138957504f484b9c6122769a</code></a></td>
-            <td>Suíte e lote transacional no motor compartilhado</td>
-            <td>Lote atômico com rollback e evento de áudio nativo do provedor.</td>
+            <td><a href="https://github.com/Wisterly/kyro-finance/commit/743233142c2dab3bedea360e5905f0523201b863" target="_blank" style="color:var(--blue); text-decoration: underline;"><code>743233142c2dab3bedea360e5905f0523201b863</code></a></td>
+            <td>Suíte consolidada e paridade de linguagem natural</td>
+            <td>Paridade rigorosa de frase natural nos dois chats, imunidade pública do webhook contra <code>simulateItemFailureIndex</code> e persistência de método/categoria.</td>
           </tr>
           <tr>
-            <td><strong>Entrega Final da Subetapa 03.6 (PR.047)</strong></td>
-            <td><a href="https://github.com/Wisterly/kyro-finance/commit/743233142c2dab3bedea360e5905f0523201b863" target="_blank" style="color:var(--accent); text-decoration: underline;"><code>743233142c2dab3bedea360e5905f0523201b863</code></a></td>
-            <td>Suíte consolidada (460/460 testes aprovados)</td>
-            <td>Paridade rigorosa de frase natural nos dois chats, imunidade pública do webhook contra <code>simulateItemFailureIndex</code> e persistência de método/categoria.</td>
+            <td><strong>Blindagem de Fronteira e Conclusão da Subetapa 03.6</strong></td>
+            <td><a href="https://github.com/Wisterly/kyro-finance/commit/2843e99edb7056f8a82b125c222686b0bafba364" target="_blank" style="color:var(--accent); text-decoration: underline;"><code>2843e99edb7056f8a82b125c222686b0bafba364</code></a></td>
+            <td>Suíte consolidada (500/500 testes aprovados)</td>
+            <td>Remoção de controles de teste do webhook público (HTTP 403), isolamento em <code>/api/test-control</code>, autenticação de origem (HTTP 401), gestão administrativa estrita (<code>x-admin-key</code>, HTTP 403) e reconciliação dos 500 testes (391 históricos + 109 da 03.6).</td>
           </tr>
         </tbody>
       </table>
