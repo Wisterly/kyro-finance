@@ -236,9 +236,10 @@
           <span class="badge badge-warning">Aceite Dinâmico Android: Formalmente Pendente AVD/Host</span>
         </div>
         <div style="font-size: 0.85rem; color: var(--text-muted);">
-          Data da Homologação: <strong>08/11/2026 01:45 BRT</strong> | 
-          SHA da Entrega: <a href="https://github.com/Wisterly/kyro-finance/commit/2843e99edb7056f8a82b125c222686b0bafba364" target="_blank" style="color:var(--accent); text-decoration: underline;"><code>2843e99edb7056f8a82b125c222686b0bafba364</code></a> | 
-          Revisão Pública Base: <a href="https://github.com/Wisterly/kyro-finance/commit/743233142c2dab3bedea360e5905f0523201b863" target="_blank" style="color:var(--blue); text-decoration: underline;"><code>743233142c2dab3bedea360e5905f0523201b863</code></a>
+          Data da Homologação: <strong>08/11/2026 01:54 BRT</strong> | 
+          SHA da Entrega: <a href="https://github.com/Wisterly/kyro-finance/commit/7ff342d34369c88655def7cb9b29ee0e34781fd9" target="_blank" style="color:var(--accent); text-decoration: underline;"><code>7ff342d34369c88655def7cb9b29ee0e34781fd9</code></a> | 
+          Revisão Anterior: <a href="https://github.com/Wisterly/kyro-finance/commit/2843e99edb7056f8a82b125c222686b0bafba364" target="_blank" style="color:var(--text-muted); text-decoration: underline;"><code>2843e99edb7056f8a82b125c222686b0bafba364</code></a> | 
+          Revisão Base 03.6: <a href="https://github.com/Wisterly/kyro-finance/commit/743233142c2dab3bedea360e5905f0523201b863" target="_blank" style="color:var(--blue); text-decoration: underline;"><code>743233142c2dab3bedea360e5905f0523201b863</code></a>
         </div>
       </div>
       <h1>KYRO Finance | Auditoria Técnica Completa da Subetapa 03.6: Convergência do WhatsApp com o Motor Contábil Compartilhado</h1>
@@ -281,7 +282,7 @@
         • <strong>2. Injeção Direcionada de Falhas em Concorrência Real e Rollback:</strong> Injeção de falha de lote vinculada com exclusividade ao evento/requisição alvo (<code>targetMessageId</code>) gerenciada exclusivamente via servidor de teste (<code>/api/test-control</code>). Execução simultânea de dois lotes concorrentes distintos no Firestore Emulator via <code>Promise.all</code>: o lote alvo sofre rollback integral (HTTP 400, saldo intacto e zero mutações), enquanto o lote legítimo concorrente comita com sucesso (HTTP 200, recibos <code>APPLIED</code>) e recupera os mesmos recibos com <code>isReplay: true</code> no replay sem novos efeitos contábeis.<br/>
         • <strong>3. Paridade Estrita pela Entrada Natural dos Dois Chats:</strong> Envio da mesma frase natural pura (<em>"Gasolina 73 reais e 45 centavos no débito"</em>) pelo Chat Web (via <code>launchTransactionFromChatVoice</code>) e pelo WhatsApp Webhook (<code>/api/webhook</code>). Cada canal interpretou a frase autonomamente, resultando na gravação de exatamente 7.345 centavos inteiros (<code>amountCents === 7345</code>), débito exato de 7.345 centavos no saldo no Firestore Emulator (Bob: R$ 926,55 / Alice: R$ 691,55), persistência idêntica (<code>type: EXPENSE</code>, <code>category: Transporte</code>, <code>subcategory: Combustível</code>, <code>method: Débito</code>) e confirmação apresentada derivada do recibo contábil <code>APPLIED</code>.<br/>
         • <strong>4. Mensagens WhatsApp Derivadas de Recibos e Mídia Nativa:</strong> Mensagens enviadas ao WhatsApp montadas a partir dos recibos e registros no banco (valores em centavos, previsto vs realizado e ausência de campos inventados). Evento sintético de mídia (<code>audioMessage</code>) no formato nativo do provedor Baileys/Evolution processado sem chamadas externas.<br/>
-        • <strong>5. Reconciliação Matemática dos Testes e Rastreabilidade Total:</strong> Reconciliação do baseline histórico pré-03.6 de 391 testes (51 do Núcleo + 53 da 03.3 + 141 da 03.4 + 126 da 03.5 + 20 do EventBridge) com as 138 asserções da Subetapa 03.6 (88 funcionais da convergência WhatsApp + 50 de segurança de fronteira, canal confiável do servidor, autorização admin e dois lotes concorrentes), totalizando exatamente <strong>529 asserções e testes aprovados (100% de sucesso)</strong>. Revisão pública base: <a href="https://github.com/Wisterly/kyro-finance/commit/743233142c2dab3bedea360e5905f0523201b863" target="_blank" style="color:var(--blue); text-decoration: underline;"><code>7432331</code></a>. CI da Subetapa 03.5 catalogada como histórica: <a href="https://github.com/Wisterly/kyro-finance/actions/runs/42411151138" target="_blank" style="color:var(--purple); text-decoration: underline;">Run 42411151138</a> (Job 128519377910, commit <code>e34dbfe992d7d388ac2c7915c25f3a64f18b4fca</code>). Aceite de runtime Android formalmente catalogado como <strong>PENDENTE</strong> por ausência de dispositivo móvel/AVD no host.
+        • <strong>5. Reconciliação Matemática dos Testes e Rastreabilidade Total:</strong> Reconciliação do baseline histórico pré-03.6 de 391 testes (51 do Núcleo + 53 da 03.3 + 141 da 03.4 + 126 da 03.5 + 20 do EventBridge) com as 138 asserções da Subetapa 03.6 (88 funcionais da convergência WhatsApp + 50 de segurança de fronteira, canal confiável do servidor, autorização admin e dois lotes concorrentes), totalizando exatamente <strong>529 asserções e testes aprovados (100% de sucesso)</strong>. SHA da entrega final: <a href="https://github.com/Wisterly/kyro-finance/commit/7ff342d34369c88655def7cb9b29ee0e34781fd9" target="_blank" style="color:var(--accent); text-decoration: underline;"><code>7ff342d</code></a>. Revisão anterior imediata: <a href="https://github.com/Wisterly/kyro-finance/commit/2843e99edb7056f8a82b125c222686b0bafba364" target="_blank" style="color:var(--text-muted); text-decoration: underline;"><code>2843e99</code></a>. Revisão pública base da 03.6: <a href="https://github.com/Wisterly/kyro-finance/commit/743233142c2dab3bedea360e5905f0523201b863" target="_blank" style="color:var(--blue); text-decoration: underline;"><code>7432331</code></a>. CI da Subetapa 03.5 catalogada como histórica: <a href="https://github.com/Wisterly/kyro-finance/actions/runs/42411151138" target="_blank" style="color:var(--purple); text-decoration: underline;">Run 42411151138</a> (Job 128519377910, commit <code>e34dbfe992d7d388ac2c7915c25f3a64f18b4fca</code>). Aceite de runtime Android formalmente catalogado como <strong>PENDENTE</strong> por ausência de dispositivo móvel/AVD no host.
       </div>
 
       <table>
@@ -798,12 +799,14 @@ A: android:networkSecurityConfig(0x01010527)=@0x7f100002
         Log Sanitizado da Execução Consolidada Vigente (529 / 529 Asserções e Casos de Teste Aprovados):
       </h3>
       <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.75rem;">
-        <strong>SHA Efetivamente Testado:</strong> <code>2843e99edb7056f8a82b125c222686b0bafba364</code> | 
-        <strong>Comando Reproduzível:</strong> <code>npx.cmd tsx src/engine/runAllTests.ts</code><br/>
+        <strong>SHA Efetivamente Testado:</strong> <a href="https://github.com/Wisterly/kyro-finance/commit/7ff342d34369c88655def7cb9b29ee0e34781fd9" target="_blank" style="color:var(--accent); text-decoration: underline;"><code>7ff342d34369c88655def7cb9b29ee0e34781fd9</code></a> | 
+        <strong>Revisão Anterior:</strong> <a href="https://github.com/Wisterly/kyro-finance/commit/2843e99edb7056f8a82b125c222686b0bafba364" target="_blank" style="color:var(--text-muted); text-decoration: underline;"><code>2843e99edb7056f8a82b125c222686b0bafba364</code></a><br/>
+        <strong>Comando Reproduzível:</strong> <code>git rev-parse HEAD; npx.cmd tsx src/engine/runAllTests.ts</code><br/>
         <strong>Ambiente de Execução:</strong> Windows 11 (OS Build 26100), Node.js v24.20.0, Firestore Emulator 127.0.0.1:8080, Firebase Auth Emulator 127.0.0.1:9099, HTTP Standalone Server em portas multi-processo isoladas (4111, 4112, 4125, 4130, 4140).<br/>
         <strong>Unidade Contada:</strong> Asserções e casos de testes unitários e de integração de ponta a ponta (51 Núcleo + 53 Subetapa 03.3 + 141 Subetapa 03.4 + 126 Subetapa 03.5 + 20 EventBridge + 138 Subetapa 03.6 = 529 asserções).
       </div>
-      <div class="code-box terminal">================================================================
+      <div class="code-box terminal">7ff342d34369c88655def7cb9b29ee0e34781fd9
+================================================================
 KYRO FINANCE | EXECUÇÃO INTEGRADA DE TODAS AS SUÍTES
 ================================================================
 
@@ -1184,10 +1187,16 @@ tokens used: 23.408</div>
             <td>Paridade rigorosa de frase natural nos dois chats, imunidade pública do webhook contra <code>simulateItemFailureIndex</code> e persistência de método/categoria.</td>
           </tr>
           <tr>
-            <td><strong>Blindagem de Fronteira e Conclusão da Subetapa 03.6</strong></td>
-            <td><a href="https://github.com/Wisterly/kyro-finance/commit/2843e99edb7056f8a82b125c222686b0bafba364" target="_blank" style="color:var(--accent); text-decoration: underline;"><code>2843e99edb7056f8a82b125c222686b0bafba364</code></a></td>
-            <td>Suíte consolidada (500/500 testes aprovados)</td>
-            <td>Remoção de controles de teste do webhook público (HTTP 403), isolamento em <code>/api/test-control</code>, autenticação de origem (HTTP 401), gestão administrativa estrita (<code>x-admin-key</code>, HTTP 403) e reconciliação dos 500 testes (391 históricos + 109 da 03.6).</td>
+            <td><strong>Revisão Anterior da Subetapa 03.6</strong></td>
+            <td><a href="https://github.com/Wisterly/kyro-finance/commit/2843e99edb7056f8a82b125c222686b0bafba364" target="_blank" style="color:var(--text-muted); text-decoration: underline;"><code>2843e99edb7056f8a82b125c222686b0bafba364</code></a></td>
+            <td>Suíte consolidada preliminar (500/500 testes)</td>
+            <td>Remoção de controles de teste do webhook público (HTTP 403), isolamento em <code>/api/test-control</code>, autenticação de origem (HTTP 401) e gestão administrativa de vínculos (<code>x-admin-key</code>).</td>
+          </tr>
+          <tr>
+            <td><strong>Homologação Definitiva da Subetapa 03.6 (PR.047)</strong></td>
+            <td><a href="https://github.com/Wisterly/kyro-finance/commit/7ff342d34369c88655def7cb9b29ee0e34781fd9" target="_blank" style="color:var(--accent); text-decoration: underline;"><code>7ff342d34369c88655def7cb9b29ee0e34781fd9</code></a></td>
+            <td>Suíte consolidada completa (529/529 asserções aprovadas)</td>
+            <td>Política estrita de canal confiável do servidor com anulação de flags do payload (<code>testPing</code>, <code>allowDirectMessage</code>, <code>testMode</code>, <code>isTest</code>), proteção administrativa de <code>set_monitored_group</code> (HTTP 403 / 200), injeção direcionada de falha de lote (<code>targetMessageId</code>) e concorrência real multi-lote com rollback isolado ao alvo e replay idempotente sem novo efeito contábil.</td>
           </tr>
         </tbody>
       </table>
