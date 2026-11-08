@@ -379,7 +379,11 @@ export class ChatVoiceController {
         amountCents: Number(amountCents),
         type: transaction.type === 'Entrada' ? 'INCOME' : 'EXPENSE',
         category: transaction.category,
-        date: transaction.date
+        date: transaction.date,
+        method: transaction.method,
+        product: transaction.product,
+        establishment: transaction.establishment,
+        city: transaction.city
       }
     };
 

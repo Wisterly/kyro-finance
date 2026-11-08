@@ -1,7 +1,7 @@
 /**
- * KYRO FINANCE - SUBETAPA 03.6 (PR.046)
+ * KYRO FINANCE - SUBETAPA 03.6 (PR.047)
  * BATERIA DE HOMOLOGAÇÃO: CONVERGÊNCIA DO WHATSAPP COM O MOTOR FINANCEIRO COMPARTILHADO
- * (LOTE ATÔMICO COM ROLLBACK, MENSAGEM DERIVADA DO RECIBO, MÍDIA EMULADA DO PROVEDOR E PARIDADE WEB/WHATSAPP)
+ * (PARIDADE NATURAL DOS DOIS CHATS, LOTE ATÔMICO COM ROLLBACK, IMUNIDADE DO PAYLOAD COMUM E MÍDIA DO PROVEDOR)
  */
 
 process.env.FIRESTORE_EMULATOR_HOST = '127.0.0.1:8080';
@@ -33,6 +33,8 @@ import {
 } from '../utils/aiCopilot';
 import { ProviderBinding } from '../services/authBoundary';
 import { getAdminAuth } from '../services/firebaseAdminAuth';
+import { launchTransactionFromChatVoice } from '../services/chatVoiceController';
+import { clientAuthSession } from '../services/clientAuthSession';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -140,12 +142,12 @@ export async function runSubetapa036Tests() {
   // Contas sintéticas de teste com isolamento por runId
   const runSuffix = Date.now();
   const ALICE_UID = `usr_alice_wa_036_${runSuffix}`;
-  const BOB_UID = `usr_bob_wa_036_${runSuffix}`;
+  const BOB_UID = `usr_bob_web_036_${runSuffix}`;
   const ALICE_PHONE = `558699411${String(runSuffix).slice(-4)}`;
   const BOB_PHONE = `558699412${String(runSuffix).slice(-4)}`;
   const UNBOUND_PHONE = `558699999${String(runSuffix).slice(-4)}`;
 
-  // Configura saldos iniciais no Firestore Emulator
+  // Ambas as contas iniciam com saldo sintético equivalente de R$ 1.000,00 (100.000 centavos)
   const aliceAccount = {
     id: `acc_${ALICE_UID}`,
     userId: ALICE_UID,
@@ -160,8 +162,8 @@ export async function runSubetapa036Tests() {
   const bobAccount = {
     id: `acc_${BOB_UID}`,
     userId: BOB_UID,
-    name: 'Conta Corrente Bob (WhatsApp)',
-    balanceCents: 50000, // R$ 500,00
+    name: 'Conta Corrente Bob (Chat Web)',
+    balanceCents: 100000, // R$ 1.000,00
     rev: 1,
     fencingToken: 1,
     updatedAt: new Date().toISOString()
@@ -188,7 +190,7 @@ export async function runSubetapa036Tests() {
     });
   }
 
-  // Limpa mensagens capturadas e traces de áudio
+  // Limpa mensagens capturadas, traces de áudio e injeção de falhas
   await fetch(webhookUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -199,6 +201,12 @@ export async function runSubetapa036Tests() {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ action: 'clear_audio_pipeline_trace' })
+  });
+
+  await fetch(webhookUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'clear_test_batch_failure_index' })
   });
 
   try {
@@ -239,7 +247,7 @@ export async function runSubetapa036Tests() {
 
     // 1.3 Confere integridade dos saldos no Firestore após tentativas ilegais
     const accBobAfterCross = await adapter.getAccount(BOB_UID, `acc_${BOB_UID}`);
-    assert(accBobAfterCross?.balanceCents === 50000, 'Saldo de Bob permanece estritamente R$ 500,00 (Zero mutação indevida)');
+    assert(accBobAfterCross?.balanceCents === 100000, 'Saldo de Bob permanece estritamente R$ 1.000,00 (Zero mutação indevida)');
 
     // ------------------------------------------------------------------------
     // GRUPO 2: AMBIGUIDADE RELEVANTE SEM GRAVAÇÃO (ZERO MUTAÇÕES) E CAPTURA DE ENVIO
@@ -298,14 +306,45 @@ export async function runSubetapa036Tests() {
     assert(accAliceAfterAmb?.balanceCents === 100000, 'Saldo de Alice permanece R$ 1.000,00 intacto após mensagens ambíguas');
 
     // ------------------------------------------------------------------------
-    // GRUPO 3: CONTRATO ATÔMICO REAL DO LOTE NO MOTOR COMPARTILHADO (FALHA NO 2º ITEM E ROLLBACK)
+    // GRUPO 3: CONTRATO ATÔMICO DO LOTE E IMUNIDADE A simulateItemFailureIndex NO PAYLOAD COMUM
     // ------------------------------------------------------------------------
-    console.log('\n--- GRUPO 3: CONTRATO ATÔMICO REAL DO LOTE NO MOTOR COMPARTILHADO (FALHA E ROLLBACK) ---');
+    console.log('\n--- GRUPO 3: CONTRATO ATÔMICO DO LOTE E IMUNIDADE A simulateItemFailureIndex ---');
 
     await fetch(webhookUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'clear_captured_replies' })
+    });
+
+    // 3.1 Prova de que simulateItemFailureIndex no payload comum do webhook é TOTALMENTE IGNORADO
+    const msgIdCommon = `msg_wa_common_ignore_${Date.now()}`;
+    const respCommon = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': 'kyro_webhook_secret_dev' },
+      body: JSON.stringify({
+        sender: `${ALICE_PHONE}@s.whatsapp.net`,
+        messageId: msgIdCommon,
+        message: 'Padaria 15 reais e farmacia 25 reais',
+        simulateItemFailureIndex: 1, // Enviado no payload comum: DEVE ser ignorado pelo webhook normal!
+        isGroup: true
+      })
+    });
+    const jsonCommon = await respCommon.json();
+
+    assert(respCommon.status === 200, 'Payload comum com simulateItemFailureIndex é aceito com HTTP 200 OK (imunidade confirmada)');
+    assert(jsonCommon.status === 'success', 'Status da operação é success: o parâmetro do payload comum foi ignorado');
+    assert(jsonCommon.receipts?.length === 2, 'Ambos os itens foram comitados normalmente');
+    assert(jsonCommon.receipts[0]?.status === 'APPLIED' && jsonCommon.receipts[1]?.status === 'APPLIED', 'Recibos emitidos com status APPLIED');
+
+    // Saldo atualizado: 100.000 - 1.500 - 2.500 = 96.000 centavos (R$ 960,00)
+    const accAliceAfterCommon = await adapter.getAccount(ALICE_UID, `acc_${ALICE_UID}`);
+    assert(accAliceAfterCommon?.balanceCents === 96000, 'Saldo de Alice atualizado para R$ 960,00 (96.000 cents): payload comum não abortou o lote');
+
+    // 3.2 Prova de Rollback por Injeção de Falha Controlada na Infraestrutura de Teste
+    await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'set_test_batch_failure_index', failureIndex: 1 })
     });
 
     const msgIdFalhaLote = `msg_wa_lote_fail_${Date.now()}`;
@@ -315,19 +354,18 @@ export async function runSubetapa036Tests() {
       body: JSON.stringify({
         sender: `${ALICE_PHONE}@s.whatsapp.net`,
         messageId: msgIdFalhaLote,
-        message: 'Almoço 35 reais e abasteci 120 reais no posto',
-        simulateItemFailureIndex: 1, // Falha simulada exatamente no 2º item do lote
+        message: 'Jantar 60 reais e uber 20 reais',
         isGroup: true
       })
     });
     const jsonLoteFalha = await respLoteFalha.json();
 
-    assert(respLoteFalha.status === 400, 'Falha no lote retorna HTTP 400');
+    assert(respLoteFalha.status === 400, 'Falha injetada na infraestrutura de teste retorna HTTP 400');
     assert(jsonLoteFalha.status === 'batch_failure', 'Status reportado é batch_failure');
     assert(jsonLoteFalha.rolledBack === true, 'Flag rolledBack confirma reversão de todos os efeitos');
     assert(jsonLoteFalha.mutations === 0, 'Mutations no lote com falha é estritamente 0');
 
-    // 3.2 Captura do envio da mensagem de erro e rollback para o WhatsApp
+    // 3.3 Captura do envio da mensagem de erro e rollback para o WhatsApp
     const respCapturedFail = await fetch(webhookUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -338,15 +376,18 @@ export async function runSubetapa036Tests() {
     const lastReplyFail = jsonCapturedFail.replies[jsonCapturedFail.replies.length - 1].message;
     assert(lastReplyFail.includes('Rollback total'), 'Mensagem capturada comunica Rollback total e integridade do saldo');
 
-    // 3.3 Prova contábil no Firestore: Saldo permanece estritamente R$ 1.000,00 e ZERO transações gravadas
+    // 3.4 Prova contábil no Firestore: Saldo permanece estritamente R$ 960,00 (ZERO dedução) e ZERO registros órfãos
     const accAliceAfterFail = await adapter.getAccount(ALICE_UID, `acc_${ALICE_UID}`);
-    assert(accAliceAfterFail?.balanceCents === 100000, 'Saldo de Alice no Firestore permanece estritamente R$ 1.000,00 (100.000 cents)');
+    assert(accAliceAfterFail?.balanceCents === 96000, 'Saldo de Alice no Firestore permanece estritamente R$ 960,00 (zero efeito da falha)');
 
     const txsAliceAfterFail = await adapter.listUserTransactions(ALICE_UID);
-    assert(txsAliceAfterFail.length === 0, 'Zero transações gravadas no Firestore Emulator após falha atômica no 2º item');
+    const hasJantarOrUber = txsAliceAfterFail.some((t: any) => 
+      (t.description && (t.description.toLowerCase().includes('jantar') || t.description.toLowerCase().includes('uber')))
+    );
+    assert(!hasJantarOrUber, 'Zero transações de Jantar ou Uber gravadas no Firestore Emulator após falha no lote (Rollback Total)');
 
     // ------------------------------------------------------------------------
-    // GRUPO 4: LOTE COMPOSTO BEM-SUCEDIDO, CONCORRÊNCIA, DESCARTE E REPLAY
+    // GRUPO 4: LOTE COMPOSTO BEM-SUCEDIDO, CONCORRÊNCIA E REPLAY
     // ------------------------------------------------------------------------
     console.log('\n--- GRUPO 4: LOTE COMPOSTO BEM-SUCEDIDO, CONCORRÊNCIA E REPLAY ---');
 
@@ -388,9 +429,9 @@ export async function runSubetapa036Tests() {
     assert(hasReplayBatch, 'Idempotência atômica interceptou a requisição concorrente marcando replay = true');
 
     // 4.2 Saldo no Firestore Emulator atualizado exatamente uma vez:
-    // 100.000 - 3.500 - 12.000 = 84.500 centavos (R$ 845,00)
+    // 96.000 - 3.500 - 12.000 = 80.500 centavos (R$ 805,00)
     const accAliceAfterLote = await adapter.getAccount(ALICE_UID, `acc_${ALICE_UID}`);
-    assert(accAliceAfterLote?.balanceCents === 84500, 'Saldo no Firestore debitado exatamente uma vez para R$ 845,00 (84.500 cents)');
+    assert(accAliceAfterLote?.balanceCents === 80500, 'Saldo no Firestore debitado exatamente uma vez para R$ 805,00 (80.500 cents)');
 
     // 4.3 Descarte de resposta pós-commit e retry pelo cliente
     const respLoteRetry = await fetch(webhookUrl, {
@@ -405,7 +446,7 @@ export async function runSubetapa036Tests() {
     assert(jsonLoteRetry.receipts.every((r: any) => r.status === 'APPLIED'), 'Status de todos os recibos recuperados é APPLIED');
 
     const accAliceAfterRetry = await adapter.getAccount(ALICE_UID, `acc_${ALICE_UID}`);
-    assert(accAliceAfterRetry?.balanceCents === 84500, 'Saldo no Firestore mantido estritamente em R$ 845,00 após retry');
+    assert(accAliceAfterRetry?.balanceCents === 80500, 'Saldo no Firestore mantido estritamente em R$ 805,00 após retry');
 
     // 4.4 Captura e inspeção da mensagem efetivamente enviada ao WhatsApp a partir dos recibos
     const respCapturedLote = await fetch(webhookUrl, {
@@ -434,7 +475,7 @@ export async function runSubetapa036Tests() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         action: 'set_test_audio_mocks',
-        transcription: 'Gasolina 73 reais e 45 centavos no débito',
+        transcription: 'Cinema 40 reais no débito',
         mimetype: 'audio/ogg'
       })
     });
@@ -468,7 +509,7 @@ export async function runSubetapa036Tests() {
           },
           message: {
             audioMessage: {
-              url: 'https://mmg.whatsapp.net/v/t62.7114-24/synthetic_voice.ogg',
+              url: 'https://mmg.whatsapp.net/v/t62.7114-24/synthetic_cinema_voice.ogg',
               mimetype: 'audio/ogg; codecs=opus',
               fileLength: '24560',
               seconds: 4,
@@ -483,9 +524,9 @@ export async function runSubetapa036Tests() {
     assert(respAudioNative.status === 200, 'Áudio no formato nativo do provedor processado com HTTP 200 OK');
     assert(jsonAudioNative.status === 'success', 'Status da operação de áudio nativo é success');
     assert(jsonAudioNative.receipt?.status === 'APPLIED', 'Recibo de áudio emitido com status APPLIED');
-    assert(jsonAudioNative.savedTx?.amountCents === 7345, 'Valor monetário extraído do áudio: exatamente 7.345 centavos');
+    assert(jsonAudioNative.savedTx?.amountCents === 4000, 'Valor monetário extraído do áudio: exatamente 4.000 centavos');
 
-    // 5.2 Validação do trace das fronteiras simuladas controladas
+    // 5.2 Validação do trace das fronteiras simuladas controladas (substituição de serviços externos)
     const respAudioTrace = await fetch(webhookUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -493,12 +534,12 @@ export async function runSubetapa036Tests() {
     });
     const jsonAudioTrace = await respAudioTrace.json();
     assert(Array.isArray(jsonAudioTrace.trace) && jsonAudioTrace.trace.length >= 2, 'Trace do pipeline de áudio contém registros das fronteiras controladas');
-    assert(jsonAudioTrace.trace.some((t: any) => t.step === 'FETCH_AUDIO_MEDIA'), 'Fronteira FETCH_AUDIO_MEDIA executada sob serviço de teste controlado');
-    assert(jsonAudioTrace.trace.some((t: any) => t.step === 'TRANSCRIBE_AUDIO_BUFFER'), 'Fronteira TRANSCRIBE_AUDIO_BUFFER executada sob serviço de teste controlado');
+    assert(jsonAudioTrace.trace.some((t: any) => t.step === 'FETCH_AUDIO_MEDIA'), 'Fronteira externa FETCH_AUDIO_MEDIA executada sob serviço de teste controlado');
+    assert(jsonAudioTrace.trace.some((t: any) => t.step === 'TRANSCRIBE_AUDIO_BUFFER'), 'Fronteira externa TRANSCRIBE_AUDIO_BUFFER executada sob serviço de teste controlado');
 
-    // 5.3 Saldo no Firestore atualizado: 84.500 - 7.345 = 77.155 centavos (R$ 771,55)
+    // 5.3 Saldo no Firestore atualizado: 80.500 - 4.000 = 76.500 centavos (R$ 765,00)
     const accAliceAfterAudio = await adapter.getAccount(ALICE_UID, `acc_${ALICE_UID}`);
-    assert(accAliceAfterAudio?.balanceCents === 77155, 'Saldo de Alice no Firestore atualizado exatamente para R$ 771,55 (77.155 cents)');
+    assert(accAliceAfterAudio?.balanceCents === 76500, 'Saldo de Alice no Firestore atualizado exatamente para R$ 765,00 (76.500 cents)');
 
     // 5.4 Mensagem enviada ao WhatsApp capturada e verificada
     const respCapturedAudio = await fetch(webhookUrl, {
@@ -509,52 +550,111 @@ export async function runSubetapa036Tests() {
     const jsonCapturedAudio = await respCapturedAudio.json();
     const lastAudioMsg = jsonCapturedAudio.replies[jsonCapturedAudio.replies.length - 1].message;
     assert(lastAudioMsg.includes('🎙️ [Áudio de Voz]'), 'Mensagem enviada ao WhatsApp inclui prefixo de áudio');
-    assert(lastAudioMsg.includes('73,45'), 'Mensagem reflete o valor de R$ 73,45 debitado');
+    assert(lastAudioMsg.includes('40,00'), 'Mensagem reflete o valor de R$ 40,00 debitado');
     assert(lastAudioMsg.includes('APPLIED'), 'Mensagem inclui confirmação derivada do recibo APPLIED');
 
     // ------------------------------------------------------------------------
-    // GRUPO 6: PARIDADE ESTRITA ENTRE CHAT WEB E WHATSAPP
+    // GRUPO 6: PROVA RIGOROSA DE PARIDADE PELA ENTRADA NATURAL DOS DOIS CHATS
     // ------------------------------------------------------------------------
-    console.log('\n--- GRUPO 6: PARIDADE ESTRITA ENTRE CHAT WEB E WHATSAPP ---');
+    console.log('\n--- GRUPO 6: PROVA RIGOROSA DE PARIDADE PELA ENTRADA NATURAL DOS DOIS CHATS ---');
 
-    // Frase natural idêntica testada em ambos os canais: "Gasolina 73 reais e 45 centavos no débito"
-    // No canal Chat Web (utilizando API Database protegida com token oficial do Auth Emulator para Bob)
+    // Mesma frase natural enviada em ambos os canais: "Gasolina 73 reais e 45 centavos no débito"
+    // Contas sintéticas equivalentes: Bob (Web) e Alice (WhatsApp)
+    // 6.1 Canal Chat Web: Invocação do mesmo ponto de entrada de mensagem natural chamado pelo handler real em App.tsx
     const bobAuthToken = await getAuthTokenForUser(BOB_UID);
-    const reqIdWebBob = `req_web_bob_${Date.now()}`;
-    const respWebBob = await fetch(`${baseUrl}/api/database`, {
+    clientAuthSession.setCurrentSession({
+      uid: BOB_UID,
+      email: `${BOB_UID}@kyro.test`,
+      getIdToken: async () => bobAuthToken
+    });
+
+    const naturalPhrase = 'Gasolina 73 reais e 45 centavos no débito';
+    const webLaunchRes = await launchTransactionFromChatVoice({
+      transcript: naturalPhrase,
+      baseUrl,
+      accountId: `acc_${BOB_UID}`,
+      accountOwnerId: BOB_UID,
+      userUid: BOB_UID,
+      authToken: bobAuthToken
+    });
+
+    assert(webLaunchRes.ok === true, 'Chat Web processou a entrada natural com sucesso (ok: true)');
+    assert(webLaunchRes.transaction !== null, 'Transação financeira construída e persistida pelo Chat Web');
+    assert(webLaunchRes.transaction?.amount === 73.45, 'Chat Web interpretou exatamente R$ 73,45 a partir da frase natural');
+    assert(webLaunchRes.data?.receipt?.status === 'APPLIED', 'Recibo formal emitido para o Chat Web com status APPLIED');
+
+    // 6.2 Canal WhatsApp Webhook: Envio da mesma frase natural pura via HTTP
+    await fetch(webhookUrl, {
       method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${bobAuthToken}`,
-        'X-Request-ID': reqIdWebBob
-      },
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'clear_captured_replies' })
+    });
+
+    const waNaturalMsgId = `msg_wa_natural_parity_${Date.now()}`;
+    const respWaNatural = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': 'kyro_webhook_secret_dev' },
       body: JSON.stringify({
-        action: 'save_transaction',
-        accountId: `acc_${BOB_UID}`,
-        transaction: {
-          id: `tx_web_bob_${Date.now()}`,
-          amount: 73.45,
-          amountCents: 7345,
-          description: 'Gasolina',
-          category: 'Combustível',
-          method: 'Débito'
-        }
+        sender: `${ALICE_PHONE}@s.whatsapp.net`,
+        messageId: waNaturalMsgId,
+        message: naturalPhrase, // Mesma frase natural pura!
+        isGroup: true
       })
     });
-    const jsonWebBob = await respWebBob.json();
+    const jsonWaNatural = await respWaNatural.json();
 
-    assert(respWebBob.status === 200, 'Chat Web confirma transação com HTTP 200 OK');
-    assert(jsonWebBob.receipt?.status === 'APPLIED', 'Recibo Chat Web emitido com status APPLIED');
-    assert(jsonWebBob.receipt?.code === 'TRANSACTION_COMMITTED', 'Código do recibo Web é TRANSACTION_COMMITTED');
+    assert(respWaNatural.status === 200, 'WhatsApp Webhook processou a entrada natural com HTTP 200 OK');
+    assert(jsonWaNatural.status === 'success', 'WhatsApp Webhook reporta status success');
+    assert(jsonWaNatural.savedTx?.amountCents === 7345, 'WhatsApp interpretou exatamente 7.345 centavos da frase natural');
+    assert(jsonWaNatural.receipt?.status === 'APPLIED', 'Recibo formal emitido para o WhatsApp com status APPLIED');
 
-    // Saldo de Bob debitado de R$ 500,00 (50.000) para R$ 426,55 (42.655 centavos)
-    const accBobAfterWeb = await adapter.getAccount(BOB_UID, `acc_${BOB_UID}`);
-    assert(accBobAfterWeb?.balanceCents === 42655, 'Saldo de Bob debitado exatamente em 7.345 centavos no motor contábil');
+    // 6.3 Comparação 1: Exatidão matemática de 7.345 centavos inteiros nos documentos persistidos no Firestore
+    const txWebDoc = await store.getDocument(`users/${BOB_UID}/transactions/${webLaunchRes.transaction!.id}`);
+    const txWaDoc = await store.getDocument(`users/${ALICE_UID}/transactions/${jsonWaNatural.savedTx.id}`);
 
-    // Comparação de Paridade: WhatsApp e Web debitaram exatamente 7.345 centavos inteiros com recibos APPLIED
+    assert(txWebDoc !== null && txWaDoc !== null, 'Ambos os documentos de transação foram persistidos no Firestore');
+    assert(txWebDoc.amountCents === 7345, 'Documento persistido pelo Chat Web possui exatamente 7.345 centavos inteiros');
+    assert(txWaDoc.amountCents === 7345, 'Documento persistido pelo WhatsApp possui exatamente 7.345 centavos inteiros');
+
+    // 6.4 Comparação 2: Efeito no saldo contábil no Firestore Emulator
+    // Bob (Web): 100.000 - 7.345 = 92.655 centavos (R$ 926,55)
+    // Alice (WhatsApp): 76.500 - 7.345 = 69.155 centavos (R$ 691,55) -> Ambas sofreram a redução de exatos 7.345 centavos!
+    const accBobAfterNatural = await adapter.getAccount(BOB_UID, `acc_${BOB_UID}`);
+    const accAliceAfterNatural = await adapter.getAccount(ALICE_UID, `acc_${ALICE_UID}`);
+
+    assert(accBobAfterNatural?.balanceCents === 92655, 'Saldo de Bob (Web) debitado em exatamente 7.345 centavos (R$ 926,55)');
+    assert(accAliceAfterNatural?.balanceCents === 69155, 'Saldo de Alice (WhatsApp) debitado em exatamente 7.345 centavos (R$ 691,55)');
+
+    // 6.5 Comparação 3: Campos persistidos no Firestore (Tipo, Categoria, Descrição, Método)
+    assert(txWebDoc.type === 'EXPENSE' && txWaDoc.type === 'EXPENSE', 'Ambos canais persistiram tipo EXPENSE (Saída)');
     assert(
-      jsonAudioNative.savedTx?.amountCents === 7345 && (accBobAfterWeb?.balanceCents === 50000 - 7345),
-      'Paridade contábil estrita: Chat Web e WhatsApp debitam exatamente 7.345 centavos sem discrepâncias'
+      txWebDoc.category === 'Transporte' && txWaDoc.category === 'Transporte',
+      'Ambos canais classificaram a categoria principal como Transporte'
+    );
+    assert(
+      (txWebDoc.subcategory === 'Combustível' || String(txWebDoc.description).toLowerCase().includes('combust')) &&
+      (txWaDoc.subcategory === 'Combustível' || String(txWaDoc.description).toLowerCase().includes('combust')),
+      'Ambos canais classificaram a subcategoria/descrição como Combustível'
+    );
+    assert(txWebDoc.method === 'Débito' && txWaDoc.method === 'Débito', 'Ambos canais persistiram a forma de pagamento como Débito');
+
+    // 6.6 Comparação 4: Confirmação apresentada em cada canal derivada do recibo contábil
+    assert(
+      webLaunchRes.confirmationText.includes('73,45') && webLaunchRes.confirmationText.includes('APPLIED'),
+      'Confirmação do Chat Web apresentada ao usuário deriva o valor de R$ 73,45 e o recibo APPLIED'
+    );
+
+    const respCapturedWaNatural = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'get_captured_replies' })
+    });
+    const jsonCapturedWaNatural = await respCapturedWaNatural.json();
+    const lastWaNaturalReply = jsonCapturedWaNatural.replies[jsonCapturedWaNatural.replies.length - 1].message;
+
+    assert(
+      lastWaNaturalReply.includes('73,45') && lastWaNaturalReply.includes('APPLIED') && lastWaNaturalReply.includes('Realizado / Debitado em conta'),
+      'Confirmação enviada ao WhatsApp apresentada deriva o valor de R$ 73,45, estado Realizado e recibo APPLIED'
     );
 
     // ------------------------------------------------------------------------
@@ -587,7 +687,7 @@ export async function runSubetapa036Tests() {
 
     // Saldo de conta corrente permanece inalterado (Modelo B: fatura a vencer não debita conta corrente)
     const accAliceAfterCard = await adapter.getAccount(ALICE_UID, `acc_${ALICE_UID}`);
-    assert(accAliceAfterCard?.balanceCents === 77155, 'Modelo B preservado: Saldo de conta corrente permanece R$ 771,55 intacto');
+    assert(accAliceAfterCard?.balanceCents === 69155, 'Modelo B preservado: Saldo de conta corrente permanece R$ 691,55 intacto');
 
     // 7.2 Consulta de Histórico / Diagnóstico
     const respQuery = await fetch(webhookUrl, {
@@ -604,7 +704,7 @@ export async function runSubetapa036Tests() {
     assert(jsonQuery.status === 'query_answered', 'Status da consulta é query_answered');
     assert(jsonQuery.mutations === 0, 'Zero mutações contábeis durante consulta');
 
-    // 7.3 Cancelamento / Estorno de Transação Específica
+    // 7.3 Cancelamento / Estorno de Transação Específica ("Cancela o abastecimento de 120 reais")
     const respCancel = await fetch(webhookUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'apikey': 'kyro_webhook_secret_dev' },
@@ -621,9 +721,9 @@ export async function runSubetapa036Tests() {
     assert(jsonCancel.action === 'reversal', 'Ação registrada é reversal');
     assert(jsonCancel.receipt?.code === 'TRANSACTION_REVERSED', 'Recibo de estorno possui código TRANSACTION_REVERSED');
 
-    // Saldo de Alice restaurado: 77.155 + 12.000 = 89.155 centavos (R$ 891,55)
+    // Saldo de Alice restaurado: 69.155 + 12.000 = 81.155 centavos (R$ 811,55)
     const accAliceAfterCancel = await adapter.getAccount(ALICE_UID, `acc_${ALICE_UID}`);
-    assert(accAliceAfterCancel?.balanceCents === 89155, 'Saldo no Firestore restaurado para R$ 891,55 (89.155 cents)');
+    assert(accAliceAfterCancel?.balanceCents === 81155, 'Saldo no Firestore restaurado para R$ 811,55 (81.155 cents)');
 
     // 7.4 Tentativa de estorno duplicado bloqueada pelo Tombstone ativo de 90 dias
     const respCancelDupl = await fetch(webhookUrl, {
@@ -642,12 +742,12 @@ export async function runSubetapa036Tests() {
     );
 
     const accAliceAfterDupl = await adapter.getAccount(ALICE_UID, `acc_${ALICE_UID}`);
-    assert(accAliceAfterDupl?.balanceCents === 89155, 'Saldo permanece inalterado em R$ 891,55 após tentativa de duplo estorno');
+    assert(accAliceAfterDupl?.balanceCents === 81155, 'Saldo permanece inalterado em R$ 811,55 após tentativa de duplo estorno');
 
     console.log('\n================================================================');
     console.log(`RESULTADO DA SUBETAPA 03.6: ${passedTests} / ${totalTests} APROVADOS (100%)`);
     console.log('STATUS: CONVERGÊNCIA COMPROVADA DO WHATSAPP COM MOTOR COMPARTILHADO');
-    console.log('CONTRATO ATÔMICO DE LOTE, MENSAGEM DO RECIBO, MÍDIA E PARIDADE WEB/WHATSAPP');
+    console.log('PARIDADE NATURAL DOS DOIS CHATS, LOTE ATÔMICO COM ROLLBACK E MÍDIA DO PROVEDOR');
     console.log('================================================================\n');
 
   } finally {

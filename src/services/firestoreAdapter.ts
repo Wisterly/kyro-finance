@@ -86,6 +86,10 @@ export interface StoredTransactionRecord {
   fencingToken: number;
   createdAt: string;
   updatedAt: string;
+  method?: string;
+  product?: string;
+  establishment?: string;
+  city?: string;
   // Campos legados para compatibilidade reversa
   amount?: number;
 }
@@ -143,6 +147,10 @@ export class FirestoreLedgerAdapter {
       category: string;
       description: string;
       date?: string;
+      method?: string;
+      product?: string;
+      establishment?: string;
+      city?: string;
       isEstimated?: boolean;
       fencingToken?: number;
       holderId?: string;
@@ -349,6 +357,10 @@ export class FirestoreLedgerAdapter {
         category: params.category,
         description: params.description,
         date: params.date || nowIso.split('T')[0],
+        method: params.method,
+        product: params.product,
+        establishment: params.establishment,
+        city: params.city,
         isEstimated,
         rev: 1,
         fencingToken: fencing,
@@ -585,6 +597,10 @@ export class FirestoreLedgerAdapter {
           category: item.category,
           description: item.description,
           date: item.date || nowIso.split('T')[0],
+          method: item.method,
+          product: item.product,
+          establishment: item.establishment,
+          city: item.city,
           isEstimated,
           rev: maxRev,
           fencingToken: fencing,

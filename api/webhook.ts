@@ -808,6 +808,14 @@ export function clearCapturedWhatsAppReplies(): void {
   globalAny.__KYRO_CAPTURED_WHATSAPP_REPLIES__ = [];
 }
 
+export function setTestBatchFailureIndex(index: number | undefined): void {
+  globalAny.__KYRO_TEST_SIMULATE_BATCH_FAILURE_INDEX__ = index;
+}
+
+export function clearTestBatchFailureIndex(): void {
+  globalAny.__KYRO_TEST_SIMULATE_BATCH_FAILURE_INDEX__ = undefined;
+}
+
 export function buildWhatsAppConfirmationMessage(params: {
   receipts: MutationReceipt[];
   savedTransactions: any[];
@@ -1306,6 +1314,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json({ success: true });
     }
 
+    // Ações de teste para injeção controlada de falha na transação do lote
+    if (payload?.action === 'set_test_batch_failure_index') {
+      globalAny.__KYRO_TEST_SIMULATE_BATCH_FAILURE_INDEX__ = payload.failureIndex !== undefined ? Number(payload.failureIndex) : undefined;
+      return res.status(200).json({ success: true, failureIndex: globalAny.__KYRO_TEST_SIMULATE_BATCH_FAILURE_INDEX__ });
+    }
+
+    if (payload?.action === 'clear_test_batch_failure_index') {
+      globalAny.__KYRO_TEST_SIMULATE_BATCH_FAILURE_INDEX__ = undefined;
+      return res.status(200).json({ success: true });
+    }
+
     // Suporte a ping de diagnóstico e teste de conectividade
     if (payload?.action === 'ping' || payload?.testPing === true) {
       return res.status(200).json({
@@ -1684,10 +1703,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     let batchResult: any;
     try {
+      // Injeção de falha permitida exclusivamente através da infraestrutura de teste controlada
+      // NUNCA aceita simulateItemFailureIndex a partir do payload de mensagens comuns do webhook
+      const testFailureIndex = globalAny.__KYRO_TEST_SIMULATE_BATCH_FAILURE_INDEX__;
+      globalAny.__KYRO_TEST_SIMULATE_BATCH_FAILURE_INDEX__ = undefined; // Consumo estrito one-shot para teste
+
       batchResult = await adapter.commitBatchTransactions(authUid, {
         batchRequestId,
         items: batchItems,
-        simulateItemFailureIndex: payload?.simulateItemFailureIndex
+        simulateItemFailureIndex: testFailureIndex
       });
     } catch (batchErr: any) {
       console.warn('[Webhook Batch Transaction Error]:', batchErr?.message || batchErr);
