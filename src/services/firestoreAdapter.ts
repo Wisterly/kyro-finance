@@ -31,7 +31,7 @@ export {
   LeaseNotFoundError,
   LeaseManager
 };
-export type { LeaseRecord };
+export type { LeaseRecord, MutationReceipt };
 
 export class IdempotencyConflictError extends Error {
   public readonly code = 'IDEMPOTENCY_PAYLOAD_MISMATCH';
@@ -394,6 +394,132 @@ export class FirestoreLedgerAdapter {
   }
 
   /**
+   * Estorna uma transação financeira no Firestore:
+   * 1. Verifica idempotência pelo requestId
+   * 2. Localiza a transação original
+   * 3. Desfaz o efeito contábil no saldo da conta
+   * 4. Registra tombstone de 90 dias
+   * 5. Grava recibo de idempotência
+   */
+  public async reverseTransaction(
+    userId: string,
+    params: {
+      requestId: string;
+      originalTxId: string;
+      reason: string;
+      fencingToken?: number;
+    }
+  ): Promise<MutationReceipt> {
+    if (!userId) throw new Error('[FirestoreLedgerAdapter] userId é obrigatório');
+    if (!params.requestId) throw new Error('[FirestoreLedgerAdapter] requestId é obrigatório');
+    if (!params.originalTxId) throw new Error('[FirestoreLedgerAdapter] originalTxId é obrigatório');
+
+    const idempotencyPath = `users/${userId}/idempotency/${params.requestId}`;
+    const originalTxPath = `users/${userId}/transactions/${params.originalTxId}`;
+    const tombstonePath = `users/${userId}/tombstones/${params.originalTxId}`;
+
+    return await this.store.runTransaction(async (t) => {
+      // 1. Idempotência por requestId
+      const existingIdempotency = await t.get(idempotencyPath) as StoredIdempotencyRecord | null;
+      if (existingIdempotency) {
+        return {
+          status: existingIdempotency.status,
+          code: existingIdempotency.code,
+          requestId: params.requestId,
+          replay: true,
+          resultingRev: existingIdempotency.resultingRev,
+          fencingToken: existingIdempotency.fencingToken
+        };
+      }
+
+      // 2. Busca transação original
+      const origDoc = await t.get(originalTxPath) as StoredTransactionRecord | null;
+      if (!origDoc) {
+        throw new LedgerTransactionError(`Transação original '${params.originalTxId}' não encontrada para estorno.`, 'ORIGINAL_TX_NOT_FOUND');
+      }
+
+      // 3. Verifica se já possui tombstone
+      const existingTomb = await t.get(tombstonePath);
+      if (existingTomb) {
+        throw new LedgerTransactionError(`Transação original '${params.originalTxId}' já foi estornada anteriormente (Tombstone ativo).`, 'ALREADY_REVERSED');
+      }
+
+      // 4. Desfaz o efeito no saldo da conta
+      let amountCents: bigint;
+      if (origDoc.amountCents !== undefined && origDoc.amountCents !== null) {
+        amountCents = SafeMoneySerializer.fromFirestoreCents(origDoc.amountCents);
+      } else if (origDoc.amount !== undefined && origDoc.amount !== null) {
+        amountCents = parseToCents(origDoc.amount);
+      } else {
+        amountCents = 0n;
+      }
+
+      const isExpense = origDoc.type === 'EXPENSE';
+      const isIncome = origDoc.type === 'INCOME';
+      const accountId = isExpense ? origDoc.sourceAccountId : origDoc.targetAccountId;
+
+      if (accountId && amountCents > 0n && !origDoc.isEstimated) {
+        const accountPath = `users/${userId}/accounts/${accountId}`;
+        const accDoc = await t.get(accountPath) as StoredAccountRecord | null;
+        if (accDoc) {
+          const currentBal = SafeMoneySerializer.fromFirestoreCents(accDoc.balanceCents);
+          const newBal = isExpense ? currentBal + amountCents : currentBal - amountCents;
+          const safeBal = SafeMoneySerializer.toFirestoreCents(newBal);
+          t.set(accountPath, {
+            ...accDoc,
+            balanceCents: safeBal,
+            rev: (accDoc.rev || 1) + 1,
+            updatedAt: new Date().toISOString()
+          });
+        }
+      }
+
+      // 5. Registra Tombstone com TTL de 90 dias
+      const tombstoneDoc = {
+        id: params.originalTxId,
+        userId,
+        reason: params.reason,
+        deletedAt: Date.now(),
+        expiresAt: Date.now() + (90 * 24 * 60 * 60 * 1000),
+        rev: (origDoc.rev || 1) + 1
+      };
+      t.set(tombstonePath, tombstoneDoc);
+
+      // 6. Atualiza status da transação para estornada
+      t.set(originalTxPath, {
+        ...origDoc,
+        status: 'REVERSED',
+        reversedAt: new Date().toISOString(),
+        reversalReason: params.reason
+      });
+
+      // 7. Grava Idempotência do estorno
+      const receipt: MutationReceipt = {
+        status: 'APPLIED',
+        code: 'TRANSACTION_REVERSED',
+        requestId: params.requestId,
+        resultingRev: (origDoc.rev || 1) + 1,
+        fencingToken: params.fencingToken || 1
+      };
+
+      const idempotencyDoc: StoredIdempotencyRecord = {
+        requestId: params.requestId,
+        payloadHash: computePayloadHash(params),
+        status: 'APPLIED',
+        code: 'TRANSACTION_REVERSED',
+        resultingRev: receipt.resultingRev || 1,
+        fencingToken: receipt.fencingToken || 1,
+        createdAt: new Date().toISOString(),
+        responseSnapshot: { success: true, receipt }
+      };
+
+      t.set(idempotencyPath, idempotencyDoc);
+
+      return receipt;
+    });
+  }
+
+  /**
    * Recupera a lista de transações normalizadas para o usuário,
    * preservando perfeitamente os dados legados com valores float.
    */
@@ -425,6 +551,7 @@ export class FirestoreLedgerAdapter {
         description: doc.description || '',
         date: doc.date || '2026-01-01',
         isEstimated: !!doc.isEstimated,
+        status: doc.status || 'Concluído',
         rev: doc.rev || 1,
         fencingToken: doc.fencingToken || 1,
         createdAt: doc.createdAt || new Date().toISOString(),

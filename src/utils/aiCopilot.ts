@@ -683,7 +683,11 @@ export function generateThinkingFinancialReply(query: string, ctx: FinancialCont
     norm.includes('minhas financas') ||
     norm.includes('como esta minha situacao') ||
     norm.includes('situacao financeira') ||
-    norm.includes('diagnostico')
+    norm.includes('diagnostico') ||
+    norm.includes('quanto gastei') ||
+    norm.includes('total de gastos') ||
+    norm.includes('gastei hoje') ||
+    norm.includes('gastei este mes')
   ) {
     const statusSaldo = ctx.totalBalance > 0 
       ? '🟢 Positivo e com reserva disponível' 
@@ -876,3 +880,14 @@ export function generateThinkingFinancialReply(query: string, ctx: FinancialCont
   return `Entendido, ${userName}! Analisei sua mensagem no contexto das suas finanças atuais (Saldo Disponível: **R$ ${ctx.totalBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}** e Total de Saídas: **R$ ${ctx.monthExpenses.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}**).\n\n` +
     `Você pode ditar novos gastos e ganhos, solicitar relatórios de despesas por cidade ou categoria, gerenciar cartões ou dar comandos de correção (como *"remova o último lançamento"*). Estou à sua disposição!`;
 }
+
+/**
+ * Detecta se uma mensagem é uma consulta ao histórico ou diagnóstico financeiro,
+ * sem requerer mutação de dados contábeis.
+ */
+export function isFinancialQueryCommand(rawText: string): boolean {
+  if (!rawText || typeof rawText !== 'string') return false;
+  const norm = normalizeText(rawText);
+  return /(quanto\s+gastei|qual\s+(?:o|meu)?\s*saldo|extrato|relat[oó]rio|saldo\s+atual|como\s+est[aã]o|minhas\s+finan[cç]as|tenho\s+em\s+conta|resumo\s+financeiro|posso\s+gastar|quanto\s+tenho)/i.test(norm);
+}
+

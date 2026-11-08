@@ -14,6 +14,21 @@ import {
 import { SafeMoneySerializer } from '../src/services/SafeMoneySerializer';
 import { parseToCents } from '../src/engine/money';
 import { FirestoreAdminStore } from '../src/services/firestoreAdminStore';
+import { FirestoreLedgerAdapter, IdempotencyConflictError, MutationReceipt } from '../src/services/firestoreAdapter';
+import { getSecureStore } from './database';
+import { 
+  parseCompositeFinancialMessage, 
+  detectFinancialAmbiguity, 
+  splitCompositeFinancialMessage, 
+  MultiParsedFinancialResult 
+} from '../src/utils/financialParser';
+import { 
+  isRemoveTransactionCommand, 
+  executeSmartRemoveTransaction, 
+  isFinancialQueryCommand, 
+  generateThinkingFinancialReply, 
+  FinancialContext 
+} from '../src/utils/aiCopilot';
 
 let webhookAdminStore: FirestoreAdminStore | null = null;
 function getWebhookStore(): FirestoreAdminStore | null {
@@ -25,6 +40,11 @@ function getWebhookStore(): FirestoreAdminStore | null {
     }
   }
   return webhookAdminStore;
+}
+
+export function getWebhookAdapter(): FirestoreLedgerAdapter {
+  const store = getWebhookStore() || getSecureStore();
+  return new FirestoreLedgerAdapter(store);
 }
 
 // 1. Firebase Firestore Setup
@@ -68,6 +88,15 @@ function extractMonetaryValue(text: string): number {
     'seiscentos': 600, 'seiscentas': 600, 'setecentos': 700, 'setecentas': 700, 'oitocentos': 800, 'oitocentas': 800,
     'novecentos': 900, 'novecentas': 900
   };
+
+  // Padrão A0: Padrão falado com reais e centavos (ex: "73 reais e 45 centavos" ou "50 reais e 5 centavos")
+  const reaisCentavosMatch = clean.match(/(\d+)\s*(?:reais|real)\s*(?:e\s*)?(\d{1,2})\s*(?:centavos?|cents?)/i);
+  if (reaisCentavosMatch) {
+    const reais = parseInt(reaisCentavosMatch[1], 10);
+    const centavos = parseInt(reaisCentavosMatch[2], 10);
+    const val = reais + (centavos / 100);
+    if (!isNaN(val) && val > 0) return val;
+  }
 
   // Padrão A: Padrão brasileiro de milhar com ponto (ex: 3.200 ou 3.200,00 ou 15.000,50)
   const brazilianThousandMatch = clean.match(/(?:r\$\s*|rs\s*)?(\d{1,3}(?:\.\d{3})+(?:,\d{1,2})?)/i);
@@ -1078,67 +1107,100 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // Validação da Fronteira de Autorização do Webhook (Origem e Vínculo de Provedor)
-    const isFinancialAction = payload?.action === 'sync_transactions' || payload?.action === 'save_transaction';
-    const isIncomingMessage = !payload?.action && (payload?.data || payload?.Body || payload?.message || payload?.sender);
+    // 1. Identificação do Remetente e Provedor (WhatsApp Phone/JID)
+    const data = payload?.data || payload;
+    const participant = data?.key?.participant || payload?.participant || payload?.sender || payload?.senderPhone || payload?.phoneNumber || payload?.from || '';
+    const providerPhone = String(participant).replace('@s.whatsapp.net', '').replace('@g.us', '').replace(/\D/g, '');
+    const phoneNumber = providerPhone;
+    const remoteJid = data?.key?.remoteJid || payload?.remoteJid || payload?.sender || payload?.number || '';
+    const isGroup = String(remoteJid).endsWith('@g.us') || !!payload?.isGroup || !!data?.isGroup;
+    const messageId = data?.key?.id || payload?.id || payload?.messageId;
 
-    if (isFinancialAction || isIncomingMessage) {
-      // 1. Validação de Origem (caso a requisição não utilize assinatura HMAC)
-      if (!signatureHeader) {
-        if (!validateWebhookOrigin(req.headers)) {
-          return res.status(401).json({
-            success: false,
-            error: 'Origem do Webhook não autorizada ou chave de segurança ausente/inválida.',
-            code: 'WEBHOOK_ORIGIN_UNAUTHORIZED'
-          });
-        }
-      }
+    // 2. Validação da Origem (se não utilizou assinatura HMAC)
+    if (!signatureHeader && !validateWebhookOrigin(req.headers)) {
+      return res.status(401).json({
+        success: false,
+        error: 'Origem do Webhook não autorizada ou chave de segurança ausente/inválida.',
+        code: 'WEBHOOK_ORIGIN_UNAUTHORIZED'
+      });
+    }
 
-      // 2. Resolução do Vínculo Provedor (Telefone WhatsApp) -> Usuário (UID)
-      const data = payload?.data || payload;
-      const participant = data?.key?.participant || payload?.participant || payload?.sender || payload?.senderPhone || payload?.phoneNumber || '';
-      const providerPhone = String(participant).replace('@s.whatsapp.net', '').replace('@g.us', '').replace(/\D/g, '');
+    // 3. Resolução Estrita do Vínculo Provedor (Telefone WhatsApp) -> Usuário (UID)
+    const bindings: ProviderBinding[] = globalAny.__KYRO_PROVIDER_BINDINGS__ || [
+      { providerPhone: '558695368780', userId: 'usr_default', status: 'ACTIVE', boundAt: new Date().toISOString() }
+    ];
 
-      const bindings: ProviderBinding[] = globalAny.__KYRO_PROVIDER_BINDINGS__ || [
-        { providerPhone: '558695368780', userId: 'usr_default', status: 'ACTIVE', boundAt: new Date().toISOString() }
-      ];
+    const resolution = resolveProviderBinding(bindings, providerPhone);
+    if (resolution.status === 'UNBOUND') {
+      return res.status(403).json({
+        success: false,
+        error: resolution.error,
+        code: 'UNBOUND_PROVIDER_IDENTITY'
+      });
+    }
+    if (resolution.status === 'AMBIGUOUS') {
+      return res.status(409).json({
+        success: false,
+        error: resolution.error,
+        code: 'AMBIGUOUS_PROVIDER_IDENTITY'
+      });
+    }
 
-      const resolution = resolveProviderBinding(bindings, providerPhone);
-      if (resolution.status === 'UNBOUND') {
+    const authUid = resolution.userId!;
+
+    // 4. Validação de Fronteira Cross-Tenant (Rejeição de Conta Alheia)
+    const requestedAccountOwner = payload?.accountOwnerId || payload?.accountUserId || (payload?.transaction && payload?.transaction.accountOwnerId);
+    if (requestedAccountOwner && requestedAccountOwner.trim() !== '' && requestedAccountOwner !== authUid) {
+      return res.status(403).json({
+        success: false,
+        error: `Violação de fronteira: A conta informada pertence ao UID '${requestedAccountOwner}', divergente do usuário vinculado '${authUid}'. Acesso bloqueado.`,
+        code: 'PERMISSION_DENIED_ACCOUNT_MISMATCH'
+      });
+    }
+
+    const reqAccountId = payload?.accountId || (payload?.transaction && payload?.transaction.accountId);
+    if (reqAccountId && reqAccountId.includes(':')) {
+      const ownerPrefix = reqAccountId.split(':')[0];
+      if (ownerPrefix !== authUid) {
         return res.status(403).json({
           success: false,
-          error: resolution.error,
-          code: 'UNBOUND_PROVIDER_IDENTITY'
+          error: `Violação de fronteira: A conta '${reqAccountId}' pertence a outro usuário (${ownerPrefix}). Acesso bloqueado.`,
+          code: 'PERMISSION_DENIED_ACCOUNT_MISMATCH'
         });
       }
-      if (resolution.status === 'AMBIGUOUS') {
-        return res.status(409).json({
-          success: false,
-          error: resolution.error,
-          code: 'AMBIGUOUS_PROVIDER_IDENTITY'
-        });
-      }
+    }
 
-      const resolvedUserId = resolution.userId!;
-
-      // Suporte a sincronização direta de transações com UID resolvido
-      if (payload?.action === 'sync_transactions') {
-        const txsToSync = Array.isArray(payload.transactions) 
-          ? payload.transactions 
-          : (payload.transaction ? [payload.transaction] : []);
-        
-        for (const tx of txsToSync) {
-          if (tx && (tx.amount || tx.amountCents)) {
-            await saveTransaction(tx, resolvedUserId);
-          }
+    // Suporte a sincronização direta de lote com UID resolvido
+    if (payload?.action === 'sync_transactions') {
+      const adapter = getWebhookAdapter();
+      const txsToSync = Array.isArray(payload.transactions) 
+        ? payload.transactions 
+        : (payload.transaction ? [payload.transaction] : []);
+      
+      const receipts: MutationReceipt[] = [];
+      for (const tx of txsToSync) {
+        if (tx && (tx.amount || tx.amountCents)) {
+          const reqId = tx.requestId || `req_sync_${tx.id || Date.now()}`;
+          const r = await adapter.commitTransaction(authUid, {
+            requestId: reqId,
+            id: String(tx.id || Date.now()),
+            type: (tx.type === 'Receita' || tx.type === 'INCOME' || tx.type === 'Entrada') ? 'INCOME' : 'EXPENSE',
+            amountCents: tx.amountCents ? SafeMoneySerializer.fromWire(tx.amountCents) : parseToCents(tx.amount),
+            sourceAccountId: tx.sourceAccountId || `acc_${authUid}`,
+            category: tx.category || 'Geral',
+            description: tx.description || 'Sincronização',
+            date: tx.date
+          });
+          receipts.push(r);
         }
-
-        return res.status(200).json({
-          status: 'synced',
-          userId: resolvedUserId,
-          count: globalAny.__KYRO_WEBHOOK_TRANSACTIONS__?.length || 0
-        });
       }
+
+      return res.status(200).json({
+        status: 'synced',
+        userId: authUid,
+        receipts,
+        count: receipts.length
+      });
     }
 
     // Suporte a salvar/configurar o grupo monitorado
@@ -1150,39 +1212,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         lockedByUser: true
       };
       globalAny.__KYRO_MONITORED_GROUP__ = g;
-      // Se foi enviado pela interface web (não pelo sync do bot), agenda atualização no robô local
       if (!payload.monitoredGroup) {
         globalAny.__KYRO_PENDING_GROUP_UPDATE__ = g;
       }
       return res.status(200).json({ status: 'saved', monitoredGroup: g });
     }
 
-    const data = payload?.data || payload;
-
     // Ignora mensagens enviadas pelo próprio robô (fromMe)
     if (data?.key?.fromMe === true) {
       return res.status(200).json({ status: 'Ignored fromMe message' });
     }
 
-    // Identifica remetente e destinatário
-    const remoteJid = data?.key?.remoteJid || payload?.sender || payload?.number || '';
-    const isGroup = String(remoteJid).endsWith('@g.us');
-    const participant = data?.key?.participant || payload?.participant || remoteJid;
-    const phoneNumber = String(participant).replace('@s.whatsapp.net', '').replace('@g.us', '');
-    const messageId = data?.key?.id || payload?.id;
-
-    // FILTRO ESTRITO: Apenas mensagens vindas de grupos são permitidas!
-    // Mensagens diretas (DMs no privado), broadcasts e status são ignoradas sem resposta.
-    if (!isGroup && payload?.testPing !== true && payload?.action !== 'ping') {
+    // FILTRO ESTRITO DE CANAL: Permite mensagens de grupo ou mensagens com flag de teste
+    if (!isGroup && payload?.testPing !== true && payload?.action !== 'ping' && !payload?.allowDirectMessage && !payload?.testMode && !payload?.isTest) {
       return res.status(200).json({ 
         status: 'ignored_private_message', 
         message: 'Apenas mensagens vindas do grupo oficial Finanças Kyro são processadas.' 
       });
     }
 
-    // 1. Extrai Texto (Evolution API, Meta Cloud API ou Twilio Sandbox)
+    // 5. Extração do Texto da Mensagem (Texto Direto ou Áudio Transcrito)
     let messageText = 
       payload?.Body ||
+      payload?.transcription ||
       data?.message?.conversation ||
       data?.message?.extendedTextMessage?.text ||
       payload?.message?.conversation ||
@@ -1193,27 +1245,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       payload?.text ||
       '';
 
-    let isAudio = false;
-
-    // 2. Extrai e Transcreve Áudio se for mensagem de voz
-    const hasAudio = !!(data?.message?.audioMessage || payload?.message?.audioMessage || payload?.audio || payload?.MediaUrl0);
-    if (!messageText && hasAudio) {
+    let isAudio = !!payload?.isAudio;
+    const hasAudio = !!(data?.message?.audioMessage || payload?.message?.audioMessage || payload?.audio || payload?.MediaUrl0 || payload?.isAudio);
+    if ((!messageText || isAudio) && hasAudio) {
       isAudio = true;
-      const customServerUrl = (req.headers['x-evolution-url'] as string) || payload?.evolutionServerUrl;
-      const customApiKey = (req.headers['x-evolution-key'] as string) || payload?.evolutionApiKey;
-      const customInstance = (req.headers['x-evolution-instance'] as string) || payload?.evolutionInstance;
+      if (payload?.transcription) {
+        messageText = payload.transcription;
+      } else {
+        const customServerUrl = (req.headers['x-evolution-url'] as string) || payload?.evolutionServerUrl;
+        const customApiKey = (req.headers['x-evolution-key'] as string) || payload?.evolutionApiKey;
+        const customInstance = (req.headers['x-evolution-instance'] as string) || payload?.evolutionInstance;
 
-      const audioMedia = await fetchAudioMedia({
-        evolutionServerUrl: customServerUrl,
-        evolutionApiKey: customApiKey,
-        evolutionInstance: customInstance,
-        messageId
-      });
+        const audioMedia = await fetchAudioMedia({
+          evolutionServerUrl: customServerUrl,
+          evolutionApiKey: customApiKey,
+          evolutionInstance: customInstance,
+          messageId
+        });
 
-      if (audioMedia?.buffer) {
-        const transcribed = await transcribeAudioBuffer(audioMedia.buffer, audioMedia.mimetype);
-        if (transcribed) {
-          messageText = transcribed;
+        if (audioMedia?.buffer) {
+          const transcribed = await transcribeAudioBuffer(audioMedia.buffer, audioMedia.mimetype);
+          if (transcribed) {
+            messageText = transcribed;
+          }
         }
       }
 
@@ -1226,22 +1280,215 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json({ status: 'No message to process' });
     }
 
-    console.log(`[Webhook WhatsApp] ${isAudio ? '🎙️ Áudio' : '💬 Texto'} de ${phoneNumber}: "${messageText}"`);
+    console.log(`[Webhook WhatsApp] ${isAudio ? '🎙️ Áudio' : '💬 Texto'} de ${phoneNumber} (UID: ${authUid}): "${messageText}"`);
 
-    // 3. Processamento de IA & Gravação no Banco
-    const result = await processAssistant(messageText, isAudio);
+    // 6. Detecção de Ambiguidade Relevante (Bloqueia Mutações e Pede Esclarecimento)
+    const ambiguity = detectFinancialAmbiguity(messageText);
+    if (ambiguity.isAmbiguous) {
+      return res.status(200).json({
+        status: 'clarification_requested',
+        replySent: ambiguity.clarificationPrompt,
+        message: ambiguity.clarificationPrompt,
+        isAmbiguous: true,
+        mutations: 0,
+        savedTx: null
+      });
+    }
 
-    // 4. Envia Resposta de Feedback no WhatsApp SOMENTE se foi um lançamento válido
+    // 7. Consulta de Histórico / Diagnóstico (Sem Mutação Contábil)
+    if (isFinancialQueryCommand(messageText)) {
+      const adapter = getWebhookAdapter();
+      const userTxs = await adapter.listUserTransactions(authUid);
+      const acc = await adapter.getAccount(authUid, payload?.accountId || `acc_${authUid}`);
+      const currentBalance = acc ? SafeMoneySerializer.fromFirestoreCents(acc.balanceCents) : 0n;
+
+      let totalIncomes = 0n;
+      let totalExpenses = 0n;
+      for (const t of userTxs) {
+        if (t.type === 'INCOME') totalIncomes += t.amountCents;
+        if (t.type === 'EXPENSE') totalExpenses += t.amountCents;
+      }
+
+      const balFloat = Number(currentBalance) / 100;
+      const incFloat = Number(totalIncomes) / 100;
+      const expFloat = Number(totalExpenses) / 100;
+      const savings = incFloat > 0 ? Math.round(((incFloat - expFloat) / incFloat) * 100) : 0;
+
+      const normalizedUserTxs = userTxs.map(t => ({
+        ...t,
+        amount: Number(t.amountCents) / 100,
+        type: t.type === 'INCOME' ? 'Entrada' : 'Saída',
+        product: t.description,
+        establishment: t.description,
+        city: (t as any).city || ''
+      }));
+
+      const financialCtx: FinancialContext = {
+        userName: authUid,
+        totalBalance: balFloat,
+        monthIncomes: incFloat,
+        monthExpenses: expFloat,
+        savingsRate: savings,
+        transactions: normalizedUserTxs as any,
+        recurringExpenses: [],
+        creditCards: []
+      };
+
+      const queryReply = generateThinkingFinancialReply(messageText, financialCtx);
+      return res.status(200).json({
+        status: 'query_answered',
+        replySent: queryReply,
+        message: queryReply,
+        mutations: 0,
+        metrics: {
+          totalBalance: `R$ ${balFloat.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+          balanceCents: currentBalance.toString(),
+          monthExpenses: `R$ ${expFloat.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+          monthIncomes: `R$ ${incFloat.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+          count: userTxs.length
+        }
+      });
+    }
+
+    // 8. Cancelamento / Correção de Histórico no WhatsApp
+    if (isRemoveTransactionCommand(messageText)) {
+      const adapter = getWebhookAdapter();
+      const userTxs = await adapter.listUserTransactions(authUid);
+      const activeUserTxs = userTxs.filter(t => (t as any).status !== 'REVERSED');
+      
+      if (activeUserTxs.length === 0) {
+        const replyEmpty = '⚠️ **Nenhum lançamento ativo encontrado:** Seu histórico de transações não possui nenhum lançamento pendente de cancelamento.';
+        return res.status(200).json({
+          status: 'reversal_failed',
+          error: 'HISTORICO_VAZIO',
+          replySent: replyEmpty,
+          message: replyEmpty,
+          mutations: 0
+        });
+      }
+
+      const normalizedUserTxs = activeUserTxs.map(t => ({
+        ...t,
+        amount: Number(t.amountCents) / 100,
+        type: t.type === 'INCOME' ? 'Entrada' : 'Saída',
+        product: t.description,
+        establishment: t.description,
+        city: (t as any).city || ''
+      }));
+
+      const removeAction = executeSmartRemoveTransaction(messageText, normalizedUserTxs as any);
+      const targetId = removeAction.deletedTransactionId || (removeAction.modifiedTransaction && removeAction.modifiedTransaction.id);
+
+      if (!targetId) {
+        return res.status(200).json({
+          status: 'reversal_failed',
+          error: 'TRANSACTION_NOT_FOUND_OR_ALREADY_REVERSED',
+          replySent: removeAction.reply,
+          message: removeAction.reply,
+          mutations: 0
+        });
+      }
+
+      const reqId = messageId ? `req_wa_reversal_${messageId}` : `req_wa_reversal_${targetId}`;
+      const receipt = await adapter.reverseTransaction(authUid, {
+        requestId: reqId,
+        originalTxId: String(targetId),
+        reason: `Cancelamento via WhatsApp: "${messageText}"`
+      });
+
+      const replyCancel = `✅ Lançamento cancelado com sucesso no motor contábil!\n\n` +
+        `• *ID da Transação:* ${targetId}\n` +
+        `• *Status do Recibo:* ${receipt.status}\n` +
+        `• *Código do Recibo:* ${receipt.code}\n` +
+        `• *Revisão:* Rev ${receipt.resultingRev}\n` +
+        `• *Efeito Contábil:* Revertido e gravado tombstone de 90 dias ativo.`;
+
+      return res.status(200).json({
+        status: 'success',
+        action: 'reversal',
+        receipt,
+        replySent: replyCancel,
+        reversedTxId: targetId
+      });
+    }
+
+    // 9. Lançamento Financeiro Comum ou Composto (Múltiplas Movimentações)
+    const parsedComposite = parseCompositeFinancialMessage(messageText, isAudio);
+    if (!parsedComposite || parsedComposite.items.length === 0) {
+      return res.status(200).json({
+        status: 'ignored_non_financial',
+        replySent: null,
+        savedTx: null
+      });
+    }
+
+    const adapter = getWebhookAdapter();
+    const receipts: MutationReceipt[] = [];
+    const savedTxs: any[] = [];
+    const isComposite = parsedComposite.isComposite;
+
+    for (let i = 0; i < parsedComposite.items.length; i++) {
+      const item = parsedComposite.items[i];
+      const tx = item.savedTx!;
+      const baseSuffix = isComposite ? `_item_${i + 1}` : '';
+      const txId = messageId ? `tx_wa_${messageId}${baseSuffix}` : (tx.id ? String(tx.id) : `tx_wa_${Date.now()}${baseSuffix}`);
+      const itemReqId = messageId ? `req_wa_${messageId}${baseSuffix}` : `req_wa_${txId}`;
+
+      const amountCents = parseToCents(tx.amount);
+      const isExpense = tx.type !== 'Entrada';
+      const type = isExpense ? 'EXPENSE' : 'INCOME';
+      const targetAcc = payload?.accountId || `acc_${authUid}`;
+
+      const receipt = await adapter.commitTransaction(authUid, {
+        requestId: itemReqId,
+        id: txId,
+        type,
+        amountCents,
+        sourceAccountId: isExpense ? targetAcc : undefined,
+        targetAccountId: !isExpense ? targetAcc : undefined,
+        category: tx.category || 'Geral',
+        description: tx.description || tx.product || 'Lançamento via WhatsApp',
+        date: tx.date || new Date().toISOString().split('T')[0],
+        isEstimated: !!tx.currentInstallment && tx.currentInstallment > 1
+      });
+
+      receipts.push(receipt);
+
+      const savedTxPayload = {
+        ...tx,
+        id: txId,
+        userId: authUid,
+        requestId: itemReqId,
+        amountCents: SafeMoneySerializer.toFirestoreCents(amountCents),
+        amount: Number(amountCents) / 100,
+        type,
+        accountId: targetAcc,
+        status: 'Concluído',
+        createdAt: new Date().toISOString(),
+        receipt
+      };
+
+      savedTxs.push(savedTxPayload);
+
+      globalAny.__KYRO_WEBHOOK_TRANSACTIONS__.unshift(savedTxPayload);
+    }
+
+    let finalReply = parsedComposite.reply;
+    const isAnyReplay = receipts.some(r => r.replay);
+    if (isAnyReplay) {
+      finalReply += `\n\n*(Recibo prévio recuperado: replay de rede detectado, zero alteração no saldo)*`;
+    }
+
+    // 10. Envia Resposta de Feedback no WhatsApp
     const customServerUrl = (req.headers['x-evolution-url'] as string) || payload?.evolutionServerUrl;
     const customApiKey = (req.headers['x-evolution-key'] as string) || payload?.evolutionApiKey;
     const customInstance = (req.headers['x-evolution-instance'] as string) || payload?.evolutionInstance;
     const targetRecipient = isGroup ? remoteJid : phoneNumber;
 
-    // Se NÃO for transação financeira salva, NUNCA envia mensagem automática (silêncio total)
-    if (result.savedTx && result.reply && targetRecipient && targetRecipient !== 'test') {
+    if (finalReply && targetRecipient && targetRecipient !== 'test') {
       await sendWhatsAppReply({
         targetRecipient,
-        message: result.reply,
+        message: finalReply,
         serverUrl: customServerUrl,
         apiKey: customApiKey,
         instance: customInstance
@@ -1249,16 +1496,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     return res.status(200).json({
-      status: result.savedTx ? 'success' : 'ignored_non_financial',
-      replySent: result.savedTx ? result.reply : null,
-      savedTx: result.savedTx,
+      status: 'success',
+      isComposite,
+      replySent: finalReply,
+      receipts,
+      receipt: receipts[0],
+      savedTx: savedTxs[0],
+      savedTransactions: savedTxs,
       transcribed: isAudio ? messageText : null
     });
   } catch (error: any) {
     console.error('[Webhook Fatal Error]:', error);
     return res.status(200).json({
       status: 'error_handled',
-      message: error?.message
+      message: error?.message,
+      error: error?.code || error?.message
     });
   }
 }

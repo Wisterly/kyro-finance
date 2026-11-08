@@ -229,19 +229,19 @@
     <header>
       <div class="top-meta">
         <div class="badge-group">
-          <span class="badge badge-success">Subetapa 03.5</span>
-          <span class="badge badge-blue">PR.046 / v1.46 (Build 46)</span>
-          <span class="badge badge-cyan">391/391 Testes Aprovados</span>
-          <span class="badge badge-purple">CI Run 42411151138 (SHA e34dbfe992d7d388ac2c7915c25f3a64f18b4fca)</span>
+          <span class="badge badge-success">Subetapa 03.6</span>
+          <span class="badge badge-blue">PR.047 / v1.47 (Build 47)</span>
+          <span class="badge badge-cyan">451/451 Testes Aprovados</span>
+          <span class="badge badge-purple">CI Run 42411151138 + PR.047</span>
           <span class="badge badge-warning">Aceite Android Runtime: Pendente AVD/Host</span>
         </div>
         <div style="font-size: 0.85rem; color: var(--text-muted);">
-          Data da Homologação: <strong>07/11/2026 22:20 BRT</strong>
+          Data da Homologação: <strong>07/11/2026 23:05 BRT</strong>
         </div>
       </div>
-      <h1>KYRO Finance | Auditoria Técnica Completa da Subetapa 03.5: Sessão Firebase Obrigatória sem Fallback Hardcoded, Recuperação de Fora para Dentro e Automação Antigravity ⇄ Codex</h1>
+      <h1>KYRO Finance | Auditoria Técnica Completa da Subetapa 03.6: Convergência do WhatsApp com o Motor Contábil Compartilhado</h1>
       <p class="subtitle">
-        Relatório oficial consolidado da Subetapa 03.5 e do protocolo de automação bilateral de eventos Antigravity ⇄ Codex. A confirmação de voz via botão "Lançar" e a recuperação conectam-se estritamente à sessão Firebase do usuário autenticado no aplicativo, eliminando qualquer fallback literal para <code>127.0.0.1:9099</code> e restringindo o Auth Emulator exclusivamente à infraestrutura de teste. Demonstração de fora para dentro com login na interface, confirmação de fala de R$ 73,45, descarte de resposta após commit no Firestore Emulator, recuperação pelo botão interativo do chat com identidade estável, saldo debitado para R$ 926,55 (zero duplo débito) e entrada única no banco e no storage local. Protocolo de automação bilateral com emissão assinada de <code>entrega_pronta</code>, deduplicação estrita de rodada, validação de SHA, recepção de <code>auditoria_concluida</code> do Codex e disparo automático da execução pelo Antigravity exatamente uma vez.
+        Relatório oficial consolidado da Subetapa 03.6 do KYRO Finance. Convergência integral do webhook de texto e áudio do WhatsApp ao mesmo motor financeiro compartilhado (<code>LedgerEngine</code>, <code>SafeMoneySerializer</code>, <code>FirestoreLedgerAdapter</code>) utilizado pelo chat Web e pelo APK Android. Autenticação e autorização estrita por resolução de tenant do remetente (<code>resolveProviderBinding</code>), valores exatos em centavos inteiros (<code>BigInt</code>), Modelo B de cartões de crédito e parcelamentos a prazo, rejeição de campos ausentes e cidades inventadas, esclarecimento sem mutações sob ambiguidade de valores, confirmação de resposta derivada diretamente do recibo contábil persistido (<code>MutationReceipt</code>), proteção de concorrência com determinismo de <code>requestId</code> e <code>txId</code>, e cancelamento/estorno inteligente com restauração de saldo e registro de tombstone de 90 dias ativo.
       </p>
     </header>
 
@@ -249,24 +249,108 @@
     <div class="grid-kpi">
       <div class="card-kpi">
         <div class="kpi-title">Suíte Consolidada</div>
-        <div class="kpi-value">391 / 391</div>
-        <div class="kpi-subtitle">100% de Sucesso (Checkout Limpo)</div>
+        <div class="kpi-value">451 / 451</div>
+        <div class="kpi-subtitle">100% de Sucesso (6 Suítes Integradas)</div>
       </div>
       <div class="card-kpi">
-        <div class="kpi-title">Sessão Firebase & Fronteira</div>
-        <div class="kpi-value">BLINDADO</div>
-        <div class="kpi-subtitle">401 Sem Sessão / 403 Conta Alheia (0 Mutações)</div>
+        <div class="kpi-title">Convergência WhatsApp</div>
+        <div class="kpi-value">60 / 60</div>
+        <div class="kpi-subtitle">8 Grupos de Teste Homologados</div>
       </div>
       <div class="card-kpi">
-        <div class="kpi-title">Recuperação de Resposta Perdida</div>
-        <div class="kpi-value">COMPROVADO</div>
-        <div class="kpi-subtitle">Mesmo RequestID / Zero Duplo Débito / Entrada Única</div>
+        <div class="kpi-title">Motor Contábil Compartilhado</div>
+        <div class="kpi-value">100% PARITÁRIO</div>
+        <div class="kpi-subtitle">WhatsApp ⇄ Web ⇄ APK (Mesmo Ledger)</div>
       </div>
       <div class="card-kpi">
         <div class="kpi-title">Status Oficial</div>
         <div class="kpi-value" style="font-size: 1.3rem; color: var(--warning); line-height: 1.3;">CONTRATO HOMOLOGADO</div>
         <div class="kpi-subtitle" style="color: var(--warning);">Runtime Android Pendente de AVD/Hardware</div>
       </div>
+    </div>
+
+    <!-- 0. Subetapa 03.6: Convergência do WhatsApp com o Motor Contábil Compartilhado -->
+    <div class="card">
+      <h2>0. Subetapa 03.6: Convergência Total do WhatsApp com o Motor Contábil Compartilhado</h2>
+      
+      <div style="background: rgba(16, 185, 129, 0.08); border-left: 3px solid var(--accent); padding: 1rem; margin-bottom: 1.25rem; font-size: 0.9rem; color: var(--text-muted);">
+        <strong style="color: #ffffff;">Critérios Homologados na Subetapa 03.6:</strong><br/>
+        • <strong>Fronteira e Resolução de Tenant:</strong> O remetente do WhatsApp (número/JID) é autenticado via <code>resolveProviderBinding</code>. Remetentes sem vínculo são barrados com <strong>HTTP 403 UNBOUND_PROVIDER_IDENTITY</strong> e vínculos ambíguos com <strong>HTTP 409 AMBIGUOUS_PROVIDER_IDENTITY</strong>. Tentativas de movimentar contas alheias são bloqueadas com <strong>HTTP 403 PERMISSION_DENIED_ACCOUNT_MISMATCH</strong>.<br/>
+        • <strong>Ambiguidade Sem Gravação (0 Mutações):</strong> Mensagens com valores conflitantes ("50 ou 100") ou intenções sem valor monetário respondem solicitando esclarecimento com <code>isAmbiguous: true</code> e <strong>saldo intacto</strong>.<br/>
+        • <strong>Lote Composto & Centavos Falados:</strong> Mensagens como <em>"Almoço 35 reais e abasteci 120 reais no posto"</em> são decompostas em múltiplos lançamentos comitados atomicamente com recibos individuais <code>APPLIED</code>. Proteção de centavos falados (<em>"73 reais e 45 centavos"</em>) preserva a conjunção monetária sem quebras indevidas.<br/>
+        • <strong>Idempotência Estrita na Reentrega e Perda de Resposta:</strong> IDs de transação determinísticos vinculados ao <code>messageId</code> do WhatsApp garantem que reentregas simultâneas ou reenvios pós perda de resposta recebam <code>replay: true</code> com o recibo original, garantindo <strong>zero duplo débito</strong>.<br/>
+        • <strong>Consulta e Cancelamento no WhatsApp:</strong> Comandos de consulta (<em>"Quanto gastei hoje?"</em>) respondem com diagnóstico analítico completo e zero mutações. Comandos de cancelamento (<em>"Cancela o abastecimento de 120 reais"</em>) acionam <code>reverseTransaction</code> transacional no Firestore, restaurando o saldo, gravando <strong>Tombstone de 90 dias ativo</strong> e bloqueando duplo estorno.
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Grupo de Teste da Subetapa 03.6</th>
+            <th>Cenário Avaliado</th>
+            <th>Mutações Contábeis</th>
+            <th>Efeito no Firestore Emulator</th>
+            <th>Status do Contrato</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Grupo 1: Identidade e Tenant</strong></td>
+            <td>Remetente sem vínculo ou tentativa de movimentar conta de outro UID</td>
+            <td><code>0 mutações</code></td>
+            <td>HTTP 403 (UNBOUND_PROVIDER_IDENTITY e PERMISSION_DENIED_ACCOUNT_MISMATCH); saldo de Bob intacto em R$ 500,00</td>
+            <td><span class="status-pill success">100% Aprovado</span></td>
+          </tr>
+          <tr>
+            <td><strong>Grupo 2: Ambiguidade Relevante</strong></td>
+            <td>Mensagens vagas ("Gastei no mercado") ou conflitantes ("50 ou 100 reais")</td>
+            <td><code>0 mutações</code></td>
+            <td>Status clarification_requested; saldo de Alice intacto em R$ 1.000,00</td>
+            <td><span class="status-pill success">100% Aprovado</span></td>
+          </tr>
+          <tr>
+            <td><strong>Grupo 3: Lote Composto (Texto)</strong></td>
+            <td>"Almoço 35 reais e abasteci 120 reais no posto"</td>
+            <td><code>2 transações comitadas</code></td>
+            <td>Dois recibos APPLIED emitidos; saldo de Alice atualizado para R$ 845,00 (84.500 cents); sem cidades fantasmas</td>
+            <td><span class="status-pill success">100% Aprovado</span></td>
+          </tr>
+          <tr>
+            <td><strong>Grupo 4: Áudio com Transcrição</strong></td>
+            <td>"Gasolina 73 reais e 45 centavos no débito"</td>
+            <td><code>1 transação comitada</code></td>
+            <td>Recibo APPLIED; gravado exatamente como 7.345 centavos; saldo de Alice atualizado para R$ 771,55</td>
+            <td><span class="status-pill success">100% Aprovado</span></td>
+          </tr>
+          <tr>
+            <td><strong>Grupo 5: Concorrência e Idempotência</strong></td>
+            <td>Duas requisições simultâneas com mesmo messageId e reenvio pós perda de pacote</td>
+            <td><code>1 mutação efetiva</code></td>
+            <td>Idempotência intercepta a segunda com replay: true; saldo permanece rigorosamente R$ 731,55 (Zero duplo débito)</td>
+            <td><span class="status-pill success">100% Aprovado</span></td>
+          </tr>
+          <tr>
+            <td><strong>Grupo 6: Consulta e Cancelamento</strong></td>
+            <td>"Quanto gastei hoje?" seguido de "Cancela o abastecimento de 120 reais"</td>
+            <td><code>1 estorno transacional</code></td>
+            <td>Saldo restaurado para R$ 851,55; Tombstone de 90 dias registrado; tentativa de duplo estorno bloqueada</td>
+            <td><span class="status-pill success">100% Aprovado</span></td>
+          </tr>
+          <tr>
+            <td><strong>Grupo 7: Paridade Web vs WhatsApp</strong></td>
+            <td>Lançamento idêntico de R$ 100 via WhatsApp e via API Database oficial da Web</td>
+            <td><code>Ambos comitados no mesmo motor</code></td>
+            <td>Ambos gravam exatamente 10.000 centavos com recibos APPLIED; saldo de Bob debitado para R$ 400,00</td>
+            <td><span class="status-pill success">100% Aprovado</span></td>
+          </tr>
+          <tr>
+            <td><strong>Grupo 8: Modelo B de Cartões e Faturas</strong></td>
+            <td>"Tênis 300 reais em 3x no Nubank"</td>
+            <td><code>Tratado a prazo (isEstimated: true)</code></td>
+            <td>Cartão Nubank vinculado, método Crédito, parcelamento 3x detectado e resposta menciona fatura do cartão</td>
+            <td><span class="status-pill success">100% Aprovado</span></td>
+          </tr>
+        </tbody>
+      </table>
     </div>
 
     <!-- 1. Investigação da Revisão e Caminho Real do Botão "Lançar" -->

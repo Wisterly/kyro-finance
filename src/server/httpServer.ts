@@ -10,6 +10,7 @@ import http from 'http';
 import { parse as parseUrl } from 'url';
 import databaseHandler from '../../api/database';
 import webhookHandler from '../../api/webhook';
+import chatHandler from '../../api/chat';
 
 // Extração de porta via CLI (--port 4001) ou env PORT
 function getPort(): number {
@@ -95,6 +96,8 @@ export function createHttpApp() {
           await databaseHandler(vercelReq, vercelRes);
         } else if (pathname === '/api/webhook') {
           await webhookHandler(vercelReq, vercelRes);
+        } else if (pathname === '/api/chat') {
+          await chatHandler(vercelReq, vercelRes);
         } else {
           res.writeHead(404, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: `Rota '${pathname}' não encontrada.` }));

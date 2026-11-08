@@ -683,7 +683,7 @@ async function runCompleteSubetapa033Suite() {
       action: 'sync_transactions',
       senderPhone: '558695368780',
       transaction: {
-        id: 'tx_wa_legit_01',
+        id: `tx_wa_legit_${Date.now()}`,
         amount: 85.50,
         description: 'Mercado via WhatsApp'
       }

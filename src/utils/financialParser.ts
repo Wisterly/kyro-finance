@@ -112,6 +112,15 @@ export function extractMonetaryValue(text: string): number {
     'novecentos': 900, 'novecentas': 900
   };
 
+  // Padrão A0: Padrão falado com reais e centavos (ex: "73 reais e 45 centavos" ou "50 reais e 5 centavos")
+  const reaisCentavosMatch = clean.match(/(\d+)\s*(?:reais|real)\s*(?:e\s*)?(\d{1,2})\s*(?:centavos?|cents?)/i);
+  if (reaisCentavosMatch) {
+    const reais = parseInt(reaisCentavosMatch[1], 10);
+    const centavos = parseInt(reaisCentavosMatch[2], 10);
+    const val = reais + (centavos / 100);
+    if (!isNaN(val) && val > 0) return val;
+  }
+
   // Padrão A: Padrão brasileiro de milhar com ponto (ex: 3.200 ou 3.200,00 ou 15.000,50 ou 1.250)
   const brazilianThousandMatch = clean.match(/(?:r\$\s*|rs\s*)?(\d{1,3}(?:\.\d{3})+(?:,\d{1,2})?)/i);
   if (brazilianThousandMatch) {
@@ -384,10 +393,30 @@ export function parseDynamicFinancialMessage(
     const cardLine = recurringData.cardName ? `\n• Cartão Vinculado: 💳 ${recurringData.cardName}` : '';
     const reply = `🔁 Dívida Recorrente / Parcelamento Adicionado ao KYRO Finance!\n\n${prefix}"${clean}"\n\n• Título: ${title}${cardLine}\n• Parcela: ${totalInstallments > 1 ? `${totalInstallments}x de ` : ''}R$ ${installmentAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}${totalInstallments > 0 ? ` (1/${totalInstallments})` : ''}\n• Total da Dívida: R$ ${totalAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n• Forma: ${method}\n• Vencimento: ${dueDateText}\n• Status: 🟡 Pendente / A Vencer (NÃO debitada)\n\n📌 REGRA DE CONTROLE: Esta dívida fica guardada separadamente na aba de Recorrentes e Cartões de Crédito e NÃO foi descontada do seu Saldo Total. O valor só será debitado do Dashboard quando você confirmar o pagamento ("Marcar como Paga")!`;
 
+    const savedTx: any = {
+      id: Date.now().toString(),
+      product: title,
+      establishment: '',
+      description: title,
+      amount: totalAmount,
+      type: 'EXPENSE',
+      method: method,
+      cardName: recurringData.cardName,
+      category: category,
+      subcategory: title,
+      city: city || '',
+      date: new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }),
+      status: 'Concluído',
+      currentInstallment: 1,
+      totalInstallments: totalInstallments,
+      createdAt: new Date().toISOString()
+    };
+
     return {
       reply,
       isRecurring: true,
       recurringData,
+      savedTx,
       cardName: recurringData.cardName,
       installments: totalInstallments,
       product: title,
@@ -683,5 +712,190 @@ export function parseDynamicFinancialMessage(
     object: finalProduct,
     location: establishment,
     city: finalCity
+  };
+}
+
+export interface AmbiguityResult {
+  isAmbiguous: boolean;
+  reason?: 'MISSING_AMOUNT' | 'CONFLICTING_VALUES' | 'VAGUE_INTENT';
+  clarificationPrompt?: string;
+}
+
+/**
+ * Detecta ambiguidade em comandos financeiros, bloqueando mutações silenciosas
+ * e orientando o usuário a fornecer os dados necessários.
+ */
+export function detectFinancialAmbiguity(text: string): AmbiguityResult {
+  if (!text || typeof text !== 'string') {
+    return { isAmbiguous: false };
+  }
+  const clean = text.trim();
+  const lower = clean.toLowerCase();
+
+  // Comandos de consulta ou estorno não são ambiguidade de criação de despesa
+  if (/(quanto\s+gastei|qual\s+(?:o|meu)?\s*saldo|extrato|relat[oó]rio|saldo\s+atual|como\s+est[aã]o|minhas\s+finan[cç]as)/i.test(lower)) {
+    return { isAmbiguous: false };
+  }
+  if (/(cancela|cancele|estorna|estorne|apaga|apague|remove|remova|exclui|exclua|desfaz|desfazer)/i.test(lower)) {
+    return { isAmbiguous: false };
+  }
+
+  const financialIntentKeywords = [
+    'gastei', 'gasto', 'gastar', 'paguei', 'pago', 'pagamento', 'pagar',
+    'comprei', 'compra', 'comprar', 'recebi', 'recebimento', 'ganhei',
+    'abasteci', 'abastecer', 'almocei', 'almoço', 'jantei', 'jantar',
+    'fatura', 'deposito', 'depósito', 'transferencia', 'transferência'
+  ];
+
+  const hasFinancialIntent = financialIntentKeywords.some(kw => {
+    const regex = new RegExp(`\\b${kw}\\b`, 'i');
+    return regex.test(lower);
+  });
+
+  const amount = extractMonetaryValue(clean);
+
+  // Caso 1: Tem intenção explícita mas sem valor monetário
+  if (hasFinancialIntent && amount === 0) {
+    return {
+      isAmbiguous: true,
+      reason: 'MISSING_AMOUNT',
+      clarificationPrompt: '🤔 Não consegui identificar o valor exato da operação. Por favor, envie o valor em reais (ex: "Almoço 35 reais" ou "Paguei R$ 50 no mercado").'
+    };
+  }
+
+  // Caso 2: Ambiguidade por valores conflitantes ("50 ou 100")
+  if (lower.includes(' ou ') && hasFinancialIntent && amount > 0) {
+    const orMatch = lower.match(/(?:foi|gastei|paguei)?\s*(\d+[\d.,]*)\s*ou\s*(\d+[\d.,]*)/i);
+    if (orMatch) {
+      return {
+        isAmbiguous: true,
+        reason: 'CONFLICTING_VALUES',
+        clarificationPrompt: `🤔 Fiquei em dúvida entre os valores informados (${orMatch[1]} ou ${orMatch[2]}). Qual o valor exato que você deseja lançar?`
+      };
+    }
+  }
+
+  return { isAmbiguous: false };
+}
+
+/**
+ * Segmenta mensagens compostas contendo múltiplas movimentações financeiras.
+ * Exemplo: "Almoço 35 reais e abasteci 120 reais no posto" -> ["Almoço 35 reais", "abasteci 120 reais no posto"]
+ */
+export function splitCompositeFinancialMessage(text: string): string[] {
+  if (!text || typeof text !== 'string') return [];
+  const clean = text.trim();
+
+  // Protege a expressão "reais e X centavos" substituindo temporariamente o conectivo
+  const protectedText = clean.replace(/(\d+\s*(?:reais|real))\s+e\s+(\d{1,2}\s*(?:centavos?|cents?))/gi, '$1___E___$2');
+
+  // Divide por quebras de linha e ponto-e-vírgula primeiro
+  const majorParts = protectedText.split(/[\n;]+/).map(p => p.trim()).filter(Boolean);
+  const result: string[] = [];
+
+  for (const part of majorParts) {
+    // Divide por conectivos e vírgulas que não sejam separadores decimais numéricos
+    const subParts = part
+      .split(/(?:\s+(?:e|além de|depois)\s+|(?<!\d)\s*,\s*|\s*,\s*(?!\d{1,2}(?:\b|\s)))/i)
+      .map(s => s.replace(/___E___/g, ' e ').trim())
+      .filter(Boolean);
+
+    if (subParts.length > 1) {
+      const partsWithAmount = subParts.filter(sp => extractMonetaryValue(sp) > 0);
+      if (partsWithAmount.length > 1) {
+        result.push(...partsWithAmount);
+        continue;
+      }
+    }
+    result.push(part.replace(/___E___/g, ' e '));
+  }
+
+  return result.length > 0 ? result : [clean];
+}
+
+export interface MultiParsedFinancialResult {
+  isComposite: boolean;
+  items: ParsedFinancialResult[];
+  totalAmount: number;
+  totalAmountCents: bigint;
+  reply: string;
+}
+
+/**
+ * Processa mensagens financeiras simples ou compostas (múltiplas movimentações).
+ */
+export function parseCompositeFinancialMessage(
+  text: string, 
+  isAudio: boolean = false, 
+  isImage: boolean = false
+): MultiParsedFinancialResult | null {
+  const segments = splitCompositeFinancialMessage(text);
+  
+  if (segments.length <= 1) {
+    const single = parseDynamicFinancialMessage(text, isAudio, isImage);
+    if (!single) return null;
+    const amount = single.savedTx?.amount || 0;
+    const cents = BigInt(Math.round(amount * 100));
+    return {
+      isComposite: false,
+      items: [single],
+      totalAmount: amount,
+      totalAmountCents: cents,
+      reply: single.reply
+    };
+  }
+
+  const parsedItems: ParsedFinancialResult[] = [];
+  let totalAmount = 0;
+
+  for (let i = 0; i < segments.length; i++) {
+    const seg = segments[i];
+    const parsed = parseDynamicFinancialMessage(seg, isAudio, isImage);
+    if (parsed && parsed.savedTx && parsed.savedTx.amount > 0) {
+      // Garante IDs únicos sequenciais
+      parsed.savedTx.id = `${Date.now()}_item_${i + 1}`;
+      parsedItems.push(parsed);
+      totalAmount += parsed.savedTx.amount;
+    }
+  }
+
+  if (parsedItems.length === 0) return null;
+
+  if (parsedItems.length === 1) {
+    const single = parsedItems[0];
+    const amount = single.savedTx?.amount || 0;
+    const cents = BigInt(Math.round(amount * 100));
+    return {
+      isComposite: false,
+      items: [single],
+      totalAmount: amount,
+      totalAmountCents: cents,
+      reply: single.reply
+    };
+  }
+
+  const totalCents = BigInt(Math.round(totalAmount * 100));
+  const prefix = isAudio ? '🎙️ [Áudio de Voz]: ' : '💬 ';
+  
+  let compositeReply = `⚡ Lote de Lançamentos adicionado ao KYRO Finance (${parsedItems.length} itens)!\n\n${prefix}"${text.trim()}"\n\n`;
+  parsedItems.forEach((item, idx) => {
+    const tx = item.savedTx!;
+    compositeReply += `${idx + 1}. *${tx.description}* (${tx.category})\n` +
+      `   • Valor: R$ ${tx.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n` +
+      `   • Forma: ${tx.method}\n`;
+    if (tx.establishment) {
+      compositeReply += `   • Estabelecimento: ${tx.establishment}\n`;
+    }
+  });
+
+  compositeReply += `\n💰 *Total do Lote:* R$ ${totalAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n` +
+    `✅ Todos os ${parsedItems.length} lançamentos foram comitados com sucesso no motor contábil!`;
+
+  return {
+    isComposite: true,
+    items: parsedItems,
+    totalAmount,
+    totalAmountCents: totalCents,
+    reply: compositeReply
   };
 }
