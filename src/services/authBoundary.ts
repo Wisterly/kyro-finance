@@ -120,6 +120,27 @@ export function validateWebhookOrigin(
 }
 
 /**
+ * Valida se a requisição possui credencial com autorização administrativa (Admin Role).
+ * Utilizado para proteger operações operacionais e sensíveis de vínculos e configuração de bot.
+ */
+export function validateAdminAuthorization(
+  headers: Record<string, string | string[] | undefined>,
+  configuredAdminKey?: string
+): boolean {
+  const adminSecret = configuredAdminKey || process.env.KYRO_ADMIN_SECRET || process.env.ADMIN_KEY || 'kyro_admin_master_secret';
+
+  const incomingAdminKey = 
+    headers['x-admin-key'] || 
+    headers['x-kyro-admin-token'] || 
+    (typeof headers['authorization'] === 'string' && (headers['authorization'].toLowerCase().includes('admin') || headers['authorization'] === `Bearer ${adminSecret}`)
+      ? headers['authorization'].replace(/Bearer\s+/i, '')
+      : '');
+
+  if (!incomingAdminKey) return false;
+  return incomingAdminKey === adminSecret;
+}
+
+/**
  * Resolve o vínculo entre a identidade do provedor (número de telefone) e o UID interno do usuário.
  * Mantém rejeição estrita quando o vínculo estiver ausente ou ambíguo.
  */

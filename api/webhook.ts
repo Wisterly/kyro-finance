@@ -5,6 +5,7 @@ import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore, collection, doc, setDoc, getDocs, query, orderBy, limit } from 'firebase/firestore';
 import { 
   validateWebhookOrigin, 
+  validateAdminAuthorization,
   validateWebhookHmac, 
   validateWebhookTimestamp, 
   validateWebhookNonce, 
@@ -1196,12 +1197,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const payload = req.body || {};
 
-    // 0. Validação Criptográfica Global do Webhook (HMAC, Timestamp e Nonce)
-    // Se o chamador forneceu cabeçalhos criptográficos, valida rigorosamente antes de qualquer despacho
-    if (!globalAny.__KYRO_SEEN_NONCES__) {
-      globalAny.__KYRO_SEEN_NONCES__ = new Set<string>();
-    }
-
+    // 0. Validação Criptográfica e de Origem Global do Webhook (HMAC, Timestamp, Nonce ou API Key)
+    // Nenhuma leitura sensível ou alteração de estado é permitida sem validação de origem
     const signatureHeader = (req.headers['x-webhook-signature'] || req.headers['x-hub-signature-256']) as string | undefined;
     const timestampHeader = req.headers['x-webhook-timestamp'] as string | undefined;
     const nonceHeader = req.headers['x-webhook-nonce'] as string | undefined;
@@ -1228,6 +1225,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       // C. Validação de Replay Attack via Nonce Único (com persistência distribuída no Firestore)
+      if (!globalAny.__KYRO_SEEN_NONCES__) {
+        globalAny.__KYRO_SEEN_NONCES__ = new Set<string>();
+      }
       const nonceResult = await validateWebhookNonce(nonceHeader, globalAny.__KYRO_SEEN_NONCES__, getWebhookStore());
       if (!nonceResult.valid) {
         return res.status(409).json({
@@ -1236,96 +1236,91 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           code: 'WEBHOOK_NONCE_REPLAY'
         });
       }
-    }
-
-    // Suporte a sincronização de QR Code, Grupos e Status Oficial do WhatsApp Web (Baileys -> Nuvem)
-    if (payload?.action === 'sync_bot_status' && payload?.botStatus) {
-      globalAny.__KYRO_BOT_STATUS__ = {
-        ...payload.botStatus,
-        updatedAt: Date.now()
-      };
-      if (payload.botStatus.monitoredGroup && !globalAny.__KYRO_PENDING_GROUP_UPDATE__) {
-        globalAny.__KYRO_MONITORED_GROUP__ = payload.botStatus.monitoredGroup;
-      }
-      const shouldResetQr = !!globalAny.__KYRO_PENDING_RESET_QR__;
-      if (shouldResetQr) {
-        globalAny.__KYRO_PENDING_RESET_QR__ = false;
-      }
-      const pendingGroupUpdate = globalAny.__KYRO_PENDING_GROUP_UPDATE__ || null;
-      if (pendingGroupUpdate) {
-        globalAny.__KYRO_PENDING_GROUP_UPDATE__ = null;
-      }
-      return res.status(200).json({
-        status: 'ok',
-        shouldResetQr,
-        pendingGroupUpdate
+    } else if (!validateWebhookOrigin(req.headers) && !validateAdminAuthorization(req.headers)) {
+      return res.status(401).json({
+        success: false,
+        error: 'Origem do Webhook não autorizada ou chave de segurança ausente/inválida.',
+        code: 'WEBHOOK_ORIGIN_UNAUTHORIZED'
       });
     }
 
-    // Suporte a solicitação de novo QR Code via interface Online
-    if (payload?.action === 'request_reset_qr') {
-      globalAny.__KYRO_PENDING_RESET_QR__ = true;
-      if (globalAny.__KYRO_BOT_STATUS__) {
-        globalAny.__KYRO_BOT_STATUS__.qr = '';
-        globalAny.__KYRO_BOT_STATUS__.connected = false;
-      }
-      return res.status(200).json({
-        status: 'reset_requested',
-        message: 'Solicitação de novo QR Code oficial enviada ao servidor WhatsApp.'
+    // 1. Rejeição Estrita de Controles de Teste no Ponto de Entrada Público
+    const forbiddenTestActions = [
+      'get_captured_replies',
+      'clear_captured_replies',
+      'get_audio_pipeline_trace',
+      'clear_audio_pipeline_trace',
+      'set_test_audio_mocks',
+      'set_test_batch_failure_index',
+      'clear_test_batch_failure_index'
+    ];
+    if (payload?.action && forbiddenTestActions.includes(payload.action)) {
+      return res.status(403).json({
+        success: false,
+        error: 'Controles de teste não são permitidos no ponto de entrada público do webhook.',
+        code: 'TEST_CONTROLS_FORBIDDEN_ON_PUBLIC_WEBHOOK'
       });
     }
 
-    // Suporte a cadastro/configuração de vínculos de provedor em runtime
-    if (payload?.action === 'register_provider_binding' && payload?.binding) {
-      if (!globalAny.__KYRO_PROVIDER_BINDINGS__) globalAny.__KYRO_PROVIDER_BINDINGS__ = [];
-      globalAny.__KYRO_PROVIDER_BINDINGS__.push(payload.binding);
-      return res.status(200).json({ success: true, bindings: globalAny.__KYRO_PROVIDER_BINDINGS__ });
+    // 2. Operações Administrativas Legítimas (Protegidas por Autorização Administrativa Estrita)
+    const adminActions = ['register_provider_binding', 'clear_provider_bindings', 'sync_bot_status', 'request_reset_qr'];
+    if (payload?.action && adminActions.includes(payload.action)) {
+      if (!validateAdminAuthorization(req.headers)) {
+        return res.status(403).json({
+          success: false,
+          error: 'Acesso negado: operação de gerenciamento de vínculos e configuração de bot requer autorização administrativa.',
+          code: 'ADMIN_PERMISSION_REQUIRED'
+        });
+      }
+
+      if (payload.action === 'register_provider_binding' && payload?.binding) {
+        if (!globalAny.__KYRO_PROVIDER_BINDINGS__) globalAny.__KYRO_PROVIDER_BINDINGS__ = [];
+        globalAny.__KYRO_PROVIDER_BINDINGS__.push(payload.binding);
+        return res.status(200).json({ success: true, bindings: globalAny.__KYRO_PROVIDER_BINDINGS__ });
+      }
+
+      if (payload.action === 'clear_provider_bindings') {
+        globalAny.__KYRO_PROVIDER_BINDINGS__ = [];
+        return res.status(200).json({ success: true });
+      }
+
+      if (payload.action === 'sync_bot_status' && payload?.botStatus) {
+        globalAny.__KYRO_BOT_STATUS__ = {
+          ...payload.botStatus,
+          updatedAt: Date.now()
+        };
+        if (payload.botStatus.monitoredGroup && !globalAny.__KYRO_PENDING_GROUP_UPDATE__) {
+          globalAny.__KYRO_MONITORED_GROUP__ = payload.botStatus.monitoredGroup;
+        }
+        const shouldResetQr = !!globalAny.__KYRO_PENDING_RESET_QR__;
+        if (shouldResetQr) {
+          globalAny.__KYRO_PENDING_RESET_QR__ = false;
+        }
+        const pendingGroupUpdate = globalAny.__KYRO_PENDING_GROUP_UPDATE__ || null;
+        if (pendingGroupUpdate) {
+          globalAny.__KYRO_PENDING_GROUP_UPDATE__ = null;
+        }
+        return res.status(200).json({
+          status: 'ok',
+          shouldResetQr,
+          pendingGroupUpdate
+        });
+      }
+
+      if (payload.action === 'request_reset_qr') {
+        globalAny.__KYRO_PENDING_RESET_QR__ = true;
+        if (globalAny.__KYRO_BOT_STATUS__) {
+          globalAny.__KYRO_BOT_STATUS__.qr = '';
+          globalAny.__KYRO_BOT_STATUS__.connected = false;
+        }
+        return res.status(200).json({
+          status: 'reset_requested',
+          message: 'Solicitação de novo QR Code oficial enviada ao servidor WhatsApp.'
+        });
+      }
     }
 
-    if (payload?.action === 'clear_provider_bindings') {
-      globalAny.__KYRO_PROVIDER_BINDINGS__ = [];
-      return res.status(200).json({ success: true });
-    }
-
-    // Ações de teste para captura de envio e rastreio de pipeline de mídia
-    if (payload?.action === 'get_captured_replies') {
-      return res.status(200).json({ success: true, replies: globalAny.__KYRO_CAPTURED_WHATSAPP_REPLIES__ || [] });
-    }
-
-    if (payload?.action === 'clear_captured_replies') {
-      globalAny.__KYRO_CAPTURED_WHATSAPP_REPLIES__ = [];
-      return res.status(200).json({ success: true });
-    }
-
-    if (payload?.action === 'get_audio_pipeline_trace') {
-      return res.status(200).json({ success: true, trace: globalAny.__KYRO_AUDIO_PIPELINE_TRACE__ || [] });
-    }
-
-    if (payload?.action === 'clear_audio_pipeline_trace') {
-      globalAny.__KYRO_AUDIO_PIPELINE_TRACE__ = [];
-      return res.status(200).json({ success: true });
-    }
-
-    if (payload?.action === 'set_test_audio_mocks') {
-      globalAny.__KYRO_TEST_AUDIO_MOCK_ACTIVE__ = true;
-      globalAny.__KYRO_TEST_AUDIO_TRANSCRIPTION__ = payload.transcription || 'Gasolina 73 reais e 45 centavos no débito';
-      globalAny.__KYRO_TEST_AUDIO_MIMETYPE__ = payload.mimetype || 'audio/ogg';
-      globalAny.__KYRO_TEST_AUDIO_BUFFER__ = Buffer.from(payload.audioBase64 || 'synthetic_ogg_voice_payload', 'utf-8');
-      return res.status(200).json({ success: true });
-    }
-
-    // Ações de teste para injeção controlada de falha na transação do lote
-    if (payload?.action === 'set_test_batch_failure_index') {
-      globalAny.__KYRO_TEST_SIMULATE_BATCH_FAILURE_INDEX__ = payload.failureIndex !== undefined ? Number(payload.failureIndex) : undefined;
-      return res.status(200).json({ success: true, failureIndex: globalAny.__KYRO_TEST_SIMULATE_BATCH_FAILURE_INDEX__ });
-    }
-
-    if (payload?.action === 'clear_test_batch_failure_index') {
-      globalAny.__KYRO_TEST_SIMULATE_BATCH_FAILURE_INDEX__ = undefined;
-      return res.status(200).json({ success: true });
-    }
-
-    // Suporte a ping de diagnóstico e teste de conectividade
+    // 3. Suporte a Ping de Diagnóstico Operacional
     if (payload?.action === 'ping' || payload?.testPing === true) {
       return res.status(200).json({
         status: 'pong',
@@ -1335,7 +1330,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // 1. Identificação do Remetente e Provedor (WhatsApp Phone/JID)
+    // 4. Identificação do Remetente e Provedor (WhatsApp Phone/JID)
     const data = payload?.data || payload;
     const participant = data?.key?.participant || payload?.participant || payload?.sender || payload?.senderPhone || payload?.phoneNumber || payload?.from || '';
     const providerPhone = String(participant).replace('@s.whatsapp.net', '').replace('@g.us', '').replace(/\D/g, '');
@@ -1344,16 +1339,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const isGroup = String(remoteJid).endsWith('@g.us') || !!payload?.isGroup || !!data?.isGroup;
     const messageId = data?.key?.id || payload?.id || payload?.messageId;
 
-    // 2. Validação da Origem (se não utilizou assinatura HMAC)
-    if (!signatureHeader && !validateWebhookOrigin(req.headers)) {
-      return res.status(401).json({
-        success: false,
-        error: 'Origem do Webhook não autorizada ou chave de segurança ausente/inválida.',
-        code: 'WEBHOOK_ORIGIN_UNAUTHORIZED'
-      });
-    }
-
-    // 3. Resolução Estrita do Vínculo Provedor (Telefone WhatsApp) -> Usuário (UID)
+    // 5. Resolução Estrita do Vínculo Provedor (Telefone WhatsApp) -> Usuário (UID)
     const bindings: ProviderBinding[] = globalAny.__KYRO_PROVIDER_BINDINGS__ || [
       { providerPhone: '558695368780', userId: 'usr_default', status: 'ACTIVE', boundAt: new Date().toISOString() }
     ];

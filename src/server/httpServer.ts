@@ -9,7 +9,14 @@
 import http from 'http';
 import { parse as parseUrl } from 'url';
 import databaseHandler from '../../api/database';
-import webhookHandler from '../../api/webhook';
+import webhookHandler, {
+  setTestBatchFailureIndex,
+  clearTestBatchFailureIndex,
+  getCapturedWhatsAppReplies,
+  clearCapturedWhatsAppReplies,
+  getAudioPipelineTrace,
+  clearAudioPipelineTrace
+} from '../../api/webhook';
 import chatHandler from '../../api/chat';
 
 // Extração de porta via CLI (--port 4001) ou env PORT
@@ -98,6 +105,50 @@ export function createHttpApp() {
           await webhookHandler(vercelReq, vercelRes);
         } else if (pathname === '/api/chat') {
           await chatHandler(vercelReq, vercelRes);
+        } else if (pathname === '/api/test-control') {
+          // Rota isolada exclusivamente para a infraestrutura da suíte de testes
+          const payload = vercelReq.body || {};
+          const action = payload.action || vercelReq.query?.action;
+
+          if (action === 'set_test_batch_failure_index') {
+            setTestBatchFailureIndex(payload.failureIndex !== undefined ? Number(payload.failureIndex) : undefined);
+            return vercelRes.status(200).json({ success: true, failureIndex: payload.failureIndex });
+          }
+          if (action === 'clear_test_batch_failure_index') {
+            clearTestBatchFailureIndex();
+            return vercelRes.status(200).json({ success: true });
+          }
+          if (action === 'set_test_audio_mocks') {
+            const globalAny = global as any;
+            globalAny.__KYRO_TEST_AUDIO_MOCK_ACTIVE__ = true;
+            globalAny.__KYRO_TEST_AUDIO_TRANSCRIPTION__ = payload.transcription || 'Gasolina 73 reais e 45 centavos no débito';
+            globalAny.__KYRO_TEST_AUDIO_MIMETYPE__ = payload.mimetype || 'audio/ogg';
+            globalAny.__KYRO_TEST_AUDIO_BUFFER__ = Buffer.from(payload.audioBase64 || 'synthetic_ogg_voice_payload', 'utf-8');
+            return vercelRes.status(200).json({ success: true });
+          }
+          if (action === 'clear_test_audio_mocks') {
+            const globalAny = global as any;
+            globalAny.__KYRO_TEST_AUDIO_MOCK_ACTIVE__ = false;
+            globalAny.__KYRO_TEST_AUDIO_TRANSCRIPTION__ = undefined;
+            globalAny.__KYRO_TEST_AUDIO_BUFFER__ = undefined;
+            return vercelRes.status(200).json({ success: true });
+          }
+          if (action === 'get_captured_replies') {
+            return vercelRes.status(200).json({ success: true, replies: getCapturedWhatsAppReplies() });
+          }
+          if (action === 'clear_captured_replies') {
+            clearCapturedWhatsAppReplies();
+            return vercelRes.status(200).json({ success: true });
+          }
+          if (action === 'get_audio_pipeline_trace') {
+            return vercelRes.status(200).json({ success: true, trace: getAudioPipelineTrace() });
+          }
+          if (action === 'clear_audio_pipeline_trace') {
+            clearAudioPipelineTrace();
+            return vercelRes.status(200).json({ success: true });
+          }
+
+          return vercelRes.status(400).json({ error: `Ação de controle de teste '${action}' desconhecida.` });
         } else {
           res.writeHead(404, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: `Rota '${pathname}' não encontrada.` }));

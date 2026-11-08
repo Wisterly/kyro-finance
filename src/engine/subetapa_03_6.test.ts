@@ -176,40 +176,144 @@ export async function runSubetapa036Tests() {
     { providerPhone: BOB_PHONE, userId: BOB_UID, status: 'ACTIVE', boundAt: new Date().toISOString() }
   ];
 
-  await fetch(webhookUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action: 'clear_provider_bindings' })
-  });
-
-  for (const b of bindings) {
-    await fetch(webhookUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'register_provider_binding', binding: b })
-    });
-  }
-
-  // Limpa mensagens capturadas, traces de áudio e injeção de falhas
-  await fetch(webhookUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action: 'clear_captured_replies' })
-  });
-
-  await fetch(webhookUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action: 'clear_audio_pipeline_trace' })
-  });
-
-  await fetch(webhookUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action: 'clear_test_batch_failure_index' })
-  });
+  const testControlUrl = `${baseUrl}/api/test-control`;
+  const ADMIN_HEADERS = { 'Content-Type': 'application/json', 'x-admin-key': 'kyro_admin_master_secret' };
+  const WEBHOOK_HEADERS = { 'Content-Type': 'application/json', 'apikey': 'kyro_webhook_secret_dev' };
 
   try {
+    // ------------------------------------------------------------------------
+    // GRUPO 0: PROTEÇÃO RIGOROSA DA FRONTEIRA DO WEBHOOK (AUTENTICAÇÃO E AUTORIZAÇÃO)
+    // ------------------------------------------------------------------------
+    console.log('\n--- GRUPO 0: PROTEÇÃO RIGOROSA DA FRONTEIRA DO WEBHOOK ---');
+
+    // 0.1 Envio de alteração de vínculos SEM credencial -> Rejeição 401 WEBHOOK_ORIGIN_UNAUTHORIZED
+    const respNoCredBinding = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'register_provider_binding', binding: { providerPhone: '558699999999', userId: 'usr_hacker' } })
+    });
+    const jsonNoCredBinding = await respNoCredBinding.json();
+    assert(respNoCredBinding.status === 401, 'Cadastro de vínculo sem credencial rejeitado com HTTP 401');
+    assert(jsonNoCredBinding.code === 'WEBHOOK_ORIGIN_UNAUTHORIZED', 'Código retornado é WEBHOOK_ORIGIN_UNAUTHORIZED');
+
+    // 0.2 Envio de limpeza de vínculos SEM credencial -> Rejeição 401 WEBHOOK_ORIGIN_UNAUTHORIZED
+    const respNoCredClear = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'clear_provider_bindings' })
+    });
+    const jsonNoCredClear = await respNoCredClear.json();
+    assert(respNoCredClear.status === 401, 'Limpeza de vínculos sem credencial rejeitada com HTTP 401');
+    assert(jsonNoCredClear.code === 'WEBHOOK_ORIGIN_UNAUTHORIZED', 'Código retornado é WEBHOOK_ORIGIN_UNAUTHORIZED');
+
+    // 0.3 Envio de injeção de falha de teste SEM credencial -> Rejeição 401 WEBHOOK_ORIGIN_UNAUTHORIZED
+    const respNoCredFail = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'set_test_batch_failure_index', failureIndex: 0 })
+    });
+    const jsonNoCredFail = await respNoCredFail.json();
+    assert(respNoCredFail.status === 401, 'Injeção de falha de teste sem credencial rejeitada com HTTP 401');
+    assert(jsonNoCredFail.code === 'WEBHOOK_ORIGIN_UNAUTHORIZED', 'Código retornado é WEBHOOK_ORIGIN_UNAUTHORIZED');
+
+    // 0.4 Envio de leitura de respostas capturadas SEM credencial -> Rejeição 401 WEBHOOK_ORIGIN_UNAUTHORIZED
+    const respNoCredReplies = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'get_captured_replies' })
+    });
+    const jsonNoCredReplies = await respNoCredReplies.json();
+    assert(respNoCredReplies.status === 401, 'Leitura de respostas capturadas sem credencial rejeitada com HTTP 401');
+    assert(jsonNoCredReplies.code === 'WEBHOOK_ORIGIN_UNAUTHORIZED', 'Código retornado é WEBHOOK_ORIGIN_UNAUTHORIZED');
+
+    // 0.5 Envio de alteração de vínculos COM credencial de webhook COMUM (sem permissão de admin) -> Rejeição 403 ADMIN_PERMISSION_REQUIRED
+    const respNoAdminBinding = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: WEBHOOK_HEADERS,
+      body: JSON.stringify({ action: 'register_provider_binding', binding: { providerPhone: '558699999999', userId: 'usr_hacker' } })
+    });
+    const jsonNoAdminBinding = await respNoAdminBinding.json();
+    assert(respNoAdminBinding.status === 403, 'Cadastro de vínculo com credencial de webhook sem permissão rejeitado com HTTP 403');
+    assert(jsonNoAdminBinding.code === 'ADMIN_PERMISSION_REQUIRED', 'Código retornado é ADMIN_PERMISSION_REQUIRED');
+
+    // 0.6 Envio de limpeza de vínculos COM credencial de webhook COMUM -> Rejeição 403 ADMIN_PERMISSION_REQUIRED
+    const respNoAdminClear = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: WEBHOOK_HEADERS,
+      body: JSON.stringify({ action: 'clear_provider_bindings' })
+    });
+    const jsonNoAdminClear = await respNoAdminClear.json();
+    assert(respNoAdminClear.status === 403, 'Limpeza de vínculos com credencial de webhook sem permissão rejeitada com HTTP 403');
+    assert(jsonNoAdminClear.code === 'ADMIN_PERMISSION_REQUIRED', 'Código retornado é ADMIN_PERMISSION_REQUIRED');
+
+    // 0.7 Envio de controle de teste COM credencial de webhook COMUM -> Rejeição 403 TEST_CONTROLS_FORBIDDEN_ON_PUBLIC_WEBHOOK
+    const respForbiddenTest1 = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: WEBHOOK_HEADERS,
+      body: JSON.stringify({ action: 'set_test_batch_failure_index', failureIndex: 0 })
+    });
+    const jsonForbiddenTest1 = await respForbiddenTest1.json();
+    assert(respForbiddenTest1.status === 403, 'Injeção de falha de teste no webhook público bloqueada com HTTP 403');
+    assert(jsonForbiddenTest1.code === 'TEST_CONTROLS_FORBIDDEN_ON_PUBLIC_WEBHOOK', 'Código retornado é TEST_CONTROLS_FORBIDDEN_ON_PUBLIC_WEBHOOK');
+
+    // 0.8 Envio de leitura de respostas COM credencial de webhook COMUM -> Rejeição 403 e zero dados vazados
+    const respForbiddenTest2 = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: WEBHOOK_HEADERS,
+      body: JSON.stringify({ action: 'get_captured_replies' })
+    });
+    const jsonForbiddenTest2 = await respForbiddenTest2.json();
+    assert(respForbiddenTest2.status === 403, 'Leitura de respostas no webhook público bloqueada com HTTP 403');
+    assert(jsonForbiddenTest2.code === 'TEST_CONTROLS_FORBIDDEN_ON_PUBLIC_WEBHOOK', 'Código retornado é TEST_CONTROLS_FORBIDDEN_ON_PUBLIC_WEBHOOK');
+    assert(jsonForbiddenTest2.replies === undefined, 'Zero respostas capturadas expostas na resposta rejeitada');
+
+    // 0.9 Envio de mock de áudio COM credencial de webhook COMUM -> Rejeição 403
+    const respForbiddenTest3 = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: WEBHOOK_HEADERS,
+      body: JSON.stringify({ action: 'set_test_audio_mocks', transcription: 'Injeção maliciosa de áudio' })
+    });
+    const jsonForbiddenTest3 = await respForbiddenTest3.json();
+    assert(respForbiddenTest3.status === 403, 'Configuração de mock de áudio no webhook público bloqueada com HTTP 403');
+    assert(jsonForbiddenTest3.code === 'TEST_CONTROLS_FORBIDDEN_ON_PUBLIC_WEBHOOK', 'Código retornado é TEST_CONTROLS_FORBIDDEN_ON_PUBLIC_WEBHOOK');
+
+    // 0.10 Cadastro legítimo de vínculos via webhook com credencial administrativa autorizada
+    await fetch(webhookUrl, {
+      method: 'POST',
+      headers: ADMIN_HEADERS,
+      body: JSON.stringify({ action: 'clear_provider_bindings' })
+    });
+
+    for (const b of bindings) {
+      const respAdminBind = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: ADMIN_HEADERS,
+        body: JSON.stringify({ action: 'register_provider_binding', binding: b })
+      });
+      assert(respAdminBind.status === 200, `Vínculo de ${b.providerPhone} cadastrado com sucesso sob fronteira administrativa`);
+    }
+
+    // 0.11 Limpeza inicial dos controles de teste isolados via servidor de teste (/api/test-control)
+    await fetch(testControlUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'clear_captured_replies' })
+    });
+    await fetch(testControlUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'clear_audio_pipeline_trace' })
+    });
+    await fetch(testControlUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'clear_test_batch_failure_index' })
+    });
+    await fetch(testControlUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'clear_test_audio_mocks' })
+    });
     // ------------------------------------------------------------------------
     // GRUPO 1: RESOLUÇÃO DE IDENTIDADE E FRONTEIRA DE TENANT NO WEBHOOK
     // ------------------------------------------------------------------------
@@ -254,7 +358,7 @@ export async function runSubetapa036Tests() {
     // ------------------------------------------------------------------------
     console.log('\n--- GRUPO 2: AMBIGUIDADE RELEVANTE SEM GRAVAÇÃO (ZERO MUTAÇÕES) E CAPTURA ---');
 
-    await fetch(webhookUrl, {
+    await fetch(testControlUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'clear_captured_replies' })
@@ -278,7 +382,7 @@ export async function runSubetapa036Tests() {
     assert(typeof jsonVague1.replySent === 'string' && jsonVague1.replySent.includes('valor exato'), 'Mensagem solicita esclarecimento sobre o valor exato');
 
     // 2.2 Captura do envio da mensagem de esclarecimento ao WhatsApp
-    const respCapturedAmb = await fetch(webhookUrl, {
+    const respCapturedAmb = await fetch(testControlUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'get_captured_replies' })
@@ -310,7 +414,7 @@ export async function runSubetapa036Tests() {
     // ------------------------------------------------------------------------
     console.log('\n--- GRUPO 3: CONTRATO ATÔMICO DO LOTE E IMUNIDADE A simulateItemFailureIndex ---');
 
-    await fetch(webhookUrl, {
+    await fetch(testControlUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'clear_captured_replies' })
@@ -341,7 +445,7 @@ export async function runSubetapa036Tests() {
     assert(accAliceAfterCommon?.balanceCents === 96000, 'Saldo de Alice atualizado para R$ 960,00 (96.000 cents): payload comum não abortou o lote');
 
     // 3.2 Prova de Rollback por Injeção de Falha Controlada na Infraestrutura de Teste
-    await fetch(webhookUrl, {
+    await fetch(testControlUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'set_test_batch_failure_index', failureIndex: 1 })
@@ -366,7 +470,7 @@ export async function runSubetapa036Tests() {
     assert(jsonLoteFalha.mutations === 0, 'Mutations no lote com falha é estritamente 0');
 
     // 3.3 Captura do envio da mensagem de erro e rollback para o WhatsApp
-    const respCapturedFail = await fetch(webhookUrl, {
+    const respCapturedFail = await fetch(testControlUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'get_captured_replies' })
@@ -391,7 +495,7 @@ export async function runSubetapa036Tests() {
     // ------------------------------------------------------------------------
     console.log('\n--- GRUPO 4: LOTE COMPOSTO BEM-SUCEDIDO, CONCORRÊNCIA E REPLAY ---');
 
-    await fetch(webhookUrl, {
+    await fetch(testControlUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'clear_captured_replies' })
@@ -449,7 +553,7 @@ export async function runSubetapa036Tests() {
     assert(accAliceAfterRetry?.balanceCents === 80500, 'Saldo no Firestore mantido estritamente em R$ 805,00 após retry');
 
     // 4.4 Captura e inspeção da mensagem efetivamente enviada ao WhatsApp a partir dos recibos
-    const respCapturedLote = await fetch(webhookUrl, {
+    const respCapturedLote = await fetch(testControlUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'get_captured_replies' })
@@ -470,7 +574,7 @@ export async function runSubetapa036Tests() {
     // ------------------------------------------------------------------------
     console.log('\n--- GRUPO 5: EVENTO SINTÉTICO DE MÍDIA NO FORMATO DO PROVEDOR ---');
 
-    await fetch(webhookUrl, {
+    await fetch(testControlUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -480,13 +584,13 @@ export async function runSubetapa036Tests() {
       })
     });
 
-    await fetch(webhookUrl, {
+    await fetch(testControlUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'clear_audio_pipeline_trace' })
     });
 
-    await fetch(webhookUrl, {
+    await fetch(testControlUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'clear_captured_replies' })
@@ -527,7 +631,7 @@ export async function runSubetapa036Tests() {
     assert(jsonAudioNative.savedTx?.amountCents === 4000, 'Valor monetário extraído do áudio: exatamente 4.000 centavos');
 
     // 5.2 Validação do trace das fronteiras simuladas controladas (substituição de serviços externos)
-    const respAudioTrace = await fetch(webhookUrl, {
+    const respAudioTrace = await fetch(testControlUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'get_audio_pipeline_trace' })
@@ -542,7 +646,7 @@ export async function runSubetapa036Tests() {
     assert(accAliceAfterAudio?.balanceCents === 76500, 'Saldo de Alice no Firestore atualizado exatamente para R$ 765,00 (76.500 cents)');
 
     // 5.4 Mensagem enviada ao WhatsApp capturada e verificada
-    const respCapturedAudio = await fetch(webhookUrl, {
+    const respCapturedAudio = await fetch(testControlUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'get_captured_replies' })
@@ -584,7 +688,7 @@ export async function runSubetapa036Tests() {
     assert(webLaunchRes.data?.receipt?.status === 'APPLIED', 'Recibo formal emitido para o Chat Web com status APPLIED');
 
     // 6.2 Canal WhatsApp Webhook: Envio da mesma frase natural pura via HTTP
-    await fetch(webhookUrl, {
+    await fetch(testControlUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'clear_captured_replies' })
@@ -644,7 +748,7 @@ export async function runSubetapa036Tests() {
       'Confirmação do Chat Web apresentada ao usuário deriva o valor de R$ 73,45 e o recibo APPLIED'
     );
 
-    const respCapturedWaNatural = await fetch(webhookUrl, {
+    const respCapturedWaNatural = await fetch(testControlUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'get_captured_replies' })
@@ -662,7 +766,7 @@ export async function runSubetapa036Tests() {
     // ------------------------------------------------------------------------
     console.log('\n--- GRUPO 7: MODELO B DE CARTÕES, CONSULTA E ESTORNO COM TOMBSTONE ---');
 
-    await fetch(webhookUrl, {
+    await fetch(testControlUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'clear_captured_replies' })
