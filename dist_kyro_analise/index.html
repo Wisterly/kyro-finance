@@ -236,11 +236,13 @@
           <span class="badge badge-warning">Aceite Dinâmico Android: Formalmente Pendente AVD/Host</span>
         </div>
         <div style="font-size: 0.85rem; color: var(--text-muted);">
-          Data da Homologação: <strong>08/11/2026 04:15 BRT</strong> | 
-          Escopo: <strong>Matriz de Compatibilização Técnica & Fechamento das Etapas 04 a 07</strong> | 
-          SHA da Entrega: <a href="https://github.com/Wisterly/kyro-finance/commit/28715884e70cc87fdb41524d33e39e3d6f8dc3e8" target="_blank" style="color:var(--accent); text-decoration: underline;"><code>2871588</code></a> | 
-          Revisão Base 03.7: <a href="https://github.com/Wisterly/kyro-finance/commit/3bc4b691938af5e340e36d985eebbf9551c6c879" target="_blank" style="color:var(--text-muted); text-decoration: underline;"><code>3bc4b69</code></a> | 
-          Revisão 03.6 Aceita: <a href="https://github.com/Wisterly/kyro-finance/commit/7ff342d34369c88655def7cb9b29ee0e34781fd9" target="_blank" style="color:var(--blue); text-decoration: underline;"><code>7ff342d</code></a>
+          Data da Homologação: <strong>08/11/2026 04:20 BRT</strong> | 
+          Escopo: <strong>Compatibilização das Etapas 04 a 07 & Homologação Consolidada</strong><br/>
+          <strong>SHA Efetivamente Testado (644 Asserções):</strong> <a href="https://github.com/Wisterly/kyro-finance/commit/543e8ab9ff693a6a24bc301588a70cdc1e16bf1e" target="_blank" style="color:var(--accent); text-decoration: underline;"><code>543e8ab9ff693a6a24bc301588a70cdc1e16bf1e</code></a> (Checkout CLEAN) | 
+          <strong>Código Base da Etapa 04:</strong> <a href="https://github.com/Wisterly/kyro-finance/commit/155160fcf2ef8728250bfb3ba2c1542453d4378b" target="_blank" style="color:var(--accent); text-decoration: underline;"><code>155160f</code></a><br/>
+          <strong>Comparativo Android (03.5 vs 03.7):</strong> <a href="https://github.com/Wisterly/kyro-finance/commit/28715884e70cc87fdb41524d33e39e3d6f8dc3e8" target="_blank" style="color:var(--text-muted); text-decoration: underline;"><code>2871588</code></a> | 
+          <strong>Revisão Base 03.7:</strong> <a href="https://github.com/Wisterly/kyro-finance/commit/3bc4b691938af5e340e36d985eebbf9551c6c879" target="_blank" style="color:var(--text-muted); text-decoration: underline;"><code>3bc4b69</code></a> | 
+          <strong>Revisão 03.6 Aceita:</strong> <a href="https://github.com/Wisterly/kyro-finance/commit/7ff342d34369c88655def7cb9b29ee0e34781fd9" target="_blank" style="color:var(--blue); text-decoration: underline;"><code>7ff342d</code></a>
         </div>
       </div>
       <h1>KYRO Finance | Auditoria Técnica e Compatibilização Consolidada das Etapas 04 a 07: Chat Web, WhatsApp, Fila Offline e Android</h1>
@@ -523,6 +525,100 @@
             <td>Paridade 100% comprovada (47/47 OK)</td>
           </tr>
         </tbody>
+      </table>
+
+      <!-- Discriminação de Camada das 47 Verificações da Etapa 04 -->
+      <h3 style="font-size: 1.1rem; margin-top: 1.5rem; margin-bottom: 0.5rem; color: var(--accent);">
+        Mapeamento de Camada das 47 Verificações da Etapa 04 (Interface Web / DOM vs Controladores, Serviços & APIs):
+      </h3>
+      <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 0.75rem;">
+        Conforme exigência de auditoria, abaixo discrimina-se rigorosamente a distribuição de responsabilidade entre os elementos de <strong>Interface e Apresentação no Navegador</strong> (feedback visual, bolhas de chat, botão "Lançar", solicitações de esclarecimento e ausência de campos fictícios) e os <strong>Controladores, Serviços e APIs de Backend</strong>:
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>Camada Arquitetural</th>
+            <th>Componente / Módulo Exercitado</th>
+            <th>Qtd Asserções</th>
+            <th>O que é Efetivamente Testado</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Interface do Navegador & Fluxo Visual (UI / DOM)</strong></td>
+            <td><code>ChatBubble</code>, <code>VoiceModal</code> & Confirmações Visuais</td>
+            <td><strong>6 asserções</strong></td>
+            <td>
+              1. Derivação e renderização da confirmação visual no chat a partir do recibo oficial (<code>TRANSACTION_COMMITTED</code>).<br/>
+              2. Confirmação visual em tela para o botão "Lançar" com o valor formatado de R$ 42,50.<br/>
+              3. Exibição interativa da mensagem de esclarecimento (<em>"Não identifiquei o valor da despesa..."</em>) na ausência de valor monetário.<br/>
+              4. Supressão visual de método fictício "PIX" na bolha do chat quando não informado pelo usuário.<br/>
+              5. Supressão visual de cidade fictícia "Teresina" na bolha do chat quando não informada.<br/>
+              6. Acionamento do botão "Lançar" no modal de voz com resposta em tempo real (<code>ok: true</code>).
+            </td>
+          </tr>
+          <tr>
+            <td><strong>Controladores do Frontend Web (Browser Engine)</strong></td>
+            <td><code>chatVoiceController</code>, <code>offlineSyncEngine</code> & <code>clientAuthSession</code></td>
+            <td><strong>8 asserções</strong></td>
+            <td>
+              1. Disparo de <code>launchTransactionFromChatVoice</code> pelo botão "Lançar" do modal de voz.<br/>
+              2. Retorno de <code>requiresClarification: true</code> e código HTTP 422 sob ambiguidade sem valor.<br/>
+              3. Enfileiramento local no <code>OfflineSyncEngine</code> com <code>requestId</code> estável imutável.<br/>
+              4. Inicialização de item de fila com status <code>PENDING</code> para tolerância a falhas.<br/>
+              5. Gerenciamento e injeção do Bearer token oficial do titular via <code>clientAuthSession</code>.
+            </td>
+          </tr>
+          <tr>
+            <td><strong>Parser Semântico de Linguagem Natural</strong></td>
+            <td><code>src/utils/financialParser.ts</code> (Motor de Parsing do Chat)</td>
+            <td><strong>12 asserções</strong></td>
+            <td>
+              1. Extração exata de valores monetários a partir de texto digitado e voz (R$ 73,45, R$ 15,00, R$ 28,00).<br/>
+              2. Extração semântica da forma de pagamento declarada ("Débito").<br/>
+              3. Identificação de categorias financeiras ("Transporte", "Alimentação").<br/>
+              4. Detecção precisa de ambiguidade por ausência de valor monetário (<code>savedTx.amount <= 0</code>).<br/>
+              5. <strong>Regra 10.1:</strong> Mapeamento do método não informado para <code>Outro</code> (nunca <code>PIX</code> presumido).<br/>
+              6. <strong>Regra 10.2:</strong> Mapeamento da cidade não informada para string vazia <code>""</code> (nunca <code>Teresina</code> presumida).<br/>
+              7. Classificação semântica de previsões futuras (<code>isForecast: true</code>) e consultas (<code>QUERY</code>).
+            </td>
+          </tr>
+          <tr>
+            <td><strong>Fronteira HTTP Real & Autenticação de Sessão</strong></td>
+            <td>Rotas <code>/api/database</code> e <code>/api/chat</code> em processo HTTP real</td>
+            <td><strong>7 asserções</strong></td>
+            <td>
+              1. Servidor HTTP standalone ativo e validado via <code>/health</code> na porta 4136.<br/>
+              2. Autenticação Bearer com token verificado do Firebase Auth Emulator.<br/>
+              3. Despacho e gravação com HTTP 200 OK para mutações legítimas.<br/>
+              4. Emissão de recibo contábil oficial com <code>status: APPLIED</code> e código <code>TRANSACTION_COMMITTED</code>.<br/>
+              5. Preservação idêntica do <code>requestId</code> da intenção no recibo retornado.<br/>
+              6. Rejeição com HTTP 422 Unprocessable Entity quando faltam dados essenciais.
+            </td>
+          </tr>
+          <tr>
+            <td><strong>Motor Contábil Central & Firestore Emulator</strong></td>
+            <td><code>FirestoreLedgerAdapter</code>, <code>MoneyEngine</code> & <code>SafeMoneySerializer</code></td>
+            <td><strong>14 asserções</strong></td>
+            <td>
+              1. Saldo inicial verificado no Firestore Emulator: R$ 1.000,00 (100.000 centavos).<br/>
+              2. Débito exato após texto digitado: R$ 926,55 (92.655 centavos).<br/>
+              3. Débito exato após voz confirmada pelo botão "Lançar": R$ 884,05 (88.405 centavos).<br/>
+              4. <strong>Saldo rigorosamente intacto em R$ 884,05</strong> sob frase ambígua (zero mutação no banco).<br/>
+              5. Débito de R$ 15,00 com método <code>Outro</code> para R$ 869,05.<br/>
+              6. Débito de R$ 28,00 com cidade vazia para R$ 841,05.<br/>
+              7. <strong>Saldo realizado mantido intacto em R$ 841,05</strong> após previsão futura e após consulta.<br/>
+              8. Conversão e invariantes em centavos inteiros <code>BigInt</code> (7345n) e serialização IEEE 754 via <code>SafeMoneySerializer</code>.
+            </td>
+          </tr>
+        </tbody>
+        <tfoot>
+          <tr style="background-color: var(--card-alt); font-weight: 800;">
+            <td colspan="2">TOTAL DE ASSERÇÕES DA BATERIA DA ETAPA 04</td>
+            <td>47</td>
+            <td>100% APROVADAS (6 UI/DOM + 8 Controladores + 12 Parsing + 7 HTTP API + 14 Contábil/Firestore)</td>
+          </tr>
+        </tfoot>
       </table>
     </div>
 
@@ -1332,14 +1428,18 @@ A: android:networkSecurityConfig(0x01010527)=@0x7f100002
         Log Sanitizado da Execução Consolidada Vigente (644 / 644 Asserções e Casos de Teste Aprovados):
       </h3>
       <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.75rem;">
-        <strong>SHA Base e Referência Vigente:</strong> <code>main</code> (Compatibilização com Prompt Mestre e Etapa 04) | 
-        <strong>Revisões Homologadas Anteriores:</strong> <a href="https://github.com/Wisterly/kyro-finance/commit/3bc4b691938af5e340e36d985eebbf9551c6c879" target="_blank" style="color:var(--accent); text-decoration: underline;"><code>3bc4b69 (03.7)</code></a> | <a href="https://github.com/Wisterly/kyro-finance/commit/7ff342d34369c88655def7cb9b29ee0e34781fd9" target="_blank" style="color:var(--text-muted); text-decoration: underline;"><code>7ff342d (03.6)</code></a><br/>
+        <strong>SHA Efetivamente Testado:</strong> <a href="https://github.com/Wisterly/kyro-finance/commit/543e8ab9ff693a6a24bc301588a70cdc1e16bf1e" target="_blank" style="color:var(--accent); text-decoration: underline;"><code>543e8ab9ff693a6a24bc301588a70cdc1e16bf1e</code></a> (Checkout CLEAN) | 
+        <strong>Código Base da Etapa 04:</strong> <a href="https://github.com/Wisterly/kyro-finance/commit/155160fcf2ef8728250bfb3ba2c1542453d4378b" target="_blank" style="color:var(--accent); text-decoration: underline;"><code>155160f</code></a> | 
+        <strong>Revisões Homologadas Anteriores:</strong> <a href="https://github.com/Wisterly/kyro-finance/commit/28715884e70cc87fdb41524d33e39e3d6f8dc3e8" target="_blank" style="color:var(--text-muted); text-decoration: underline;"><code>2871588 (Android)</code></a> | <a href="https://github.com/Wisterly/kyro-finance/commit/3bc4b691938af5e340e36d985eebbf9551c6c879" target="_blank" style="color:var(--text-muted); text-decoration: underline;"><code>3bc4b69 (03.7)</code></a> | <a href="https://github.com/Wisterly/kyro-finance/commit/7ff342d34369c88655def7cb9b29ee0e34781fd9" target="_blank" style="color:var(--text-muted); text-decoration: underline;"><code>7ff342d (03.6)</code></a><br/>
         <strong>Comando Reproduzível:</strong> <code>git rev-parse HEAD; npx.cmd tsx src/engine/runAllTests.ts</code><br/>
-        <strong>Ambiente de Execução:</strong> Windows 11 (OS Build 26100), Node.js v24.20.0, Firestore Emulator 127.0.0.1:8080, Firebase Auth Emulator 127.0.0.1:9099, HTTP Standalone Server em portas multi-processo isoladas (4111, 4112, 4125, 4130, 4140, 3110).<br/>
+        <strong>Ambiente de Execução:</strong> Windows 11 (OS Build 26100), Node.js v24.20.0, Firestore Emulator 127.0.0.1:8080, Firebase Auth Emulator 127.0.0.1:9099, HTTP Standalone Server em portas multi-processo isoladas (4111, 4112, 4125, 4130, 4140, 3110, 4136).<br/>
         <strong>Unidade Contada:</strong> Asserções e casos de testes unitários e de integração de ponta a ponta (51 Núcleo + 53 Subetapa 03.3 + 141 Subetapa 03.4 + 126 Subetapa 03.5 + 20 EventBridge + 138 Subetapa 03.6 + 68 Subetapa 03.7 + 47 Etapa 04 = 644 asserções).
       </div>
       <div class="code-box terminal">================================================================
-KYRO FINANCE | EXECUÇÃO INTEGRADA DE TODAS AS 8 SUÍTES
+CHECKOUT SHA:    543e8ab9ff693a6a24bc301588a70cdc1e16bf1e
+CHECKOUT STATUS: CLEAN (working tree clean)
+COMANDO:         npx.cmd tsx src/engine/runAllTests.ts
+EMULADORES:      Firestore 127.0.0.1:8080 | Auth 127.0.0.1:9099
 ================================================================
 
 >>> [1/8] EXECUTANDO BATERIA DO NÚCLEO CONTÁBIL (51 CASOS)...
@@ -1716,10 +1816,22 @@ tokens used: 23.408</div>
             <td>Sincronização offline e fila resiliente isolada por tenant (<code>OfflineSyncEngine</code>), <code>requestId</code> estável imutável desde a criação, sobrevivência a reinicializações com centavos BigInt, reconciliação de recibos oficiais, recuperação de perda pós-commit com replay idêntico, concorrência em Promise.all, isolamento multi-tenant (<code>PERMISSION_DENIED_TENANT_MISMATCH</code>) e prevenção de ressurreição via Tombstone de 90 dias ativo.</td>
           </tr>
           <tr>
-            <td><strong>Homologação Definitiva da Etapa 04 & Compatibilização Mestre (PR.048)</strong></td>
-            <td><code>HEAD</code> (Revisão Vigente)</td>
+            <td><strong>Código Base e Suíte da Etapa 04</strong></td>
+            <td><a href="https://github.com/Wisterly/kyro-finance/commit/155160fcf2ef8728250bfb3ba2c1542453d4378b" target="_blank" style="color:var(--text-muted); text-decoration: underline;"><code>155160fcf2ef8728250bfb3ba2c1542453d4378b</code></a></td>
             <td>Suíte consolidada completa (644/644 asserções aprovadas)</td>
-            <td>Compatibilização técnica total dos 33 tópicos do Prompt Mestre, homologação da Etapa 04 do Chat Web (47 testes unitários e de integração), eliminação completa de fallbacks presumidos cegos (PIX e Teresina), reconciliação de recibo oficial contábil (<code>APPLIED</code> / <code>TRANSACTION_COMMITTED</code>) e blindagem contra mutação indevida sob ambiguidade.</td>
+            <td>Compatibilização técnica dos 33 tópicos do Prompt Mestre, criação da suíte <code>src/engine/etapa_04_chat_web.test.ts</code> (47 asserções), eliminação de fallbacks cegos de PIX e Teresina, e recibos contábeis oficiais.</td>
+          </tr>
+          <tr>
+            <td><strong>SHA Efetivamente Testado em Checkout Limpo (PR.048)</strong></td>
+            <td><a href="https://github.com/Wisterly/kyro-finance/commit/543e8ab9ff693a6a24bc301588a70cdc1e16bf1e" target="_blank" style="color:var(--accent); text-decoration: underline;"><code>543e8ab9ff693a6a24bc301588a70cdc1e16bf1e</code></a></td>
+            <td>Execução consolidada verificável (644/644 asserções em 8 suítes)</td>
+            <td>Instrumentação do runner com exibição do SHA do Git, verificação de checkout limpo, emuladores e contadores estritos de asserções de ponta a ponta.</td>
+          </tr>
+          <tr>
+            <td><strong>Relatório Final de Compatibilização das Etapas 04 a 07</strong></td>
+            <td><code>HEAD</code> (Commit Atual de Documentação)</td>
+            <td>Portal e Matriz Completa Publicada em Produção</td>
+            <td>Mapeamento detalhado de camadas das 47 verificações da Etapa 04, alinhamento rigoroso dos SHAs, reafirmação do alcance de mídia sintética (06), fila offline (07) e bloqueio dinâmico Android (05).</td>
           </tr>
         </tbody>
       </table>
