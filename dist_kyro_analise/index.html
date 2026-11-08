@@ -944,60 +944,62 @@ CHECKOUT TESTADO: 8bbb987ecec60d5f2650e8e35da10f731e76757e
           <tr>
             <th>Propriedade / Metadado</th>
             <th>Candidato Web (SPA / PWA - Preview Isolado Vercel)</th>
-            <th>Candidato Android (APK Instalável Assinado)</th>
+            <th>Candidato Android Oficial (APK Compilado no CI da Revisão Escolhida)</th>
           </tr>
         </thead>
         <tbody>
           <tr>
             <td><strong>Versão & Ponto de Restauração</strong></td>
-            <td>v1.48 / Build 48 (Ponto de Restauração PR.048)</td>
-            <td>v1.48 / Build 48 (Ponto de Restauração PR.048)</td>
+            <td>v1.48 / Build 48 (Ponto de Restauração PR.048 / PR.049)</td>
+            <td>v1.48 / Build 48 (Ponto de Restauração PR.048 / PR.049)</td>
           </tr>
           <tr>
             <td><strong>SHA de Origem do Código</strong></td>
             <td><a href="https://github.com/Wisterly/kyro-finance/commit/8bbb987ecec60d5f2650e8e35da10f731e76757e" target="_blank" style="color:var(--accent); text-decoration: underline;"><code>8bbb987ecec60d5f2650e8e35da10f731e76757e</code></a></td>
-            <td><strong>Compilado no CI:</strong> <a href="https://github.com/Wisterly/kyro-finance/commit/3bc4b691938af5e340e36d985eebbf9551c6c879" target="_blank" style="color:var(--text-muted); text-decoration: underline;"><code>3bc4b69</code></a><br/>
-                <strong>Disparador do Workflow:</strong> <a href="https://github.com/Wisterly/kyro-finance/commit/8bcfe195dff9f0199596ae74f6868646f2f6826f" target="_blank" style="color:var(--blue); text-decoration: underline;"><code>8bcfe19</code></a><br/>
-                <strong>Estabilização Aceita:</strong> <a href="https://github.com/Wisterly/kyro-finance/commit/8bbb987ecec60d5f2650e8e35da10f731e76757e" target="_blank" style="color:var(--accent); text-decoration: underline;"><code>8bbb987</code></a> (100% paridade estática em <code>android/</code>)</td>
+            <td><strong>Compilado no CI Oficial:</strong> <a href="https://github.com/Wisterly/kyro-finance/commit/306def6310eb491ab6fcdafdbe57d91e40c57cfc" target="_blank" style="color:var(--accent); text-decoration: underline;"><code>306def6</code></a><br/>
+                <strong>Base de Estabilização Testada:</strong> <a href="https://github.com/Wisterly/kyro-finance/commit/8bbb987ecec60d5f2650e8e35da10f731e76757e" target="_blank" style="color:var(--blue); text-decoration: underline;"><code>8bbb987</code></a> (691 verificações preservadas)<br/>
+                <strong>Referência Histórica Subetapa 03.7:</strong> <a href="https://github.com/Wisterly/kyro-finance/commit/8bcfe195dff9f0199596ae74f6868646f2f6826f" target="_blank" style="color:var(--text-muted); text-decoration: underline;"><code>8bcfe19</code></a> (base <code>3bc4b69</code>)</td>
           </tr>
           <tr>
             <td><strong>Identificador de Deployment / Execução</strong></td>
             <td><strong>Deployment ID:</strong> <code>dpl_4SAa8mVTadPkLUqP6C3FCsWEvByf</code><br/>
                 <strong>Status:</strong> READY (Target: Preview Isolado, sem promoção)<br/>
                 <strong>Proteção:</strong> Vercel Authentication / Deployment Protection Ativa</td>
-            <td><strong>CI Run GitHub Actions:</strong> <a href="https://github.com/Wisterly/kyro-finance/actions/runs/42452451878" target="_blank" style="color:var(--accent); text-decoration: underline;">Run 42452451878</a><br/>
-                <strong>Job ID:</strong> <code>128644364384</code><br/>
-                <strong>Nome do Artefato no CI:</strong> <code>KYRO-Finance-APK</code></td>
+            <td><strong>CI Run GitHub Actions (Oficial Etapa 09):</strong> <a href="https://github.com/Wisterly/kyro-finance/actions/runs/42521353317" target="_blank" style="color:var(--accent); text-decoration: underline;">Run 42521353317</a><br/>
+                <strong>Job ID:</strong> <code>128855336435</code><br/>
+                <strong>Nome do Artefato no CI:</strong> <code>KYRO-Finance-APK</code> (ID: <code>13633651782</code>)<br/>
+                <span style="font-size:0.75rem; color:var(--text-muted);">Ref. Histórica 03.7: Run 42452451878 (Job 128644364384)</span></td>
           </tr>
           <tr>
             <td><strong>Paridade com o Checkout Atual</strong></td>
-            <td><code>git diff 8bbb987 HEAD</code>: Zero diferenças em arquivos de código (<code>src/</code>, <code>api/</code>, <code>android/</code>).</td>
-            <td><code>git diff 3bc4b69 8bbb987 -- android/</code>: Zero diferenças. Assets do Capacitor sincronizados via <code>apk:sync</code>.</td>
+            <td><code>git diff 8bbb987 HEAD</code>: Zero diferenças em arquivos de código de aplicação (<code>src/</code>, <code>api/</code>).</td>
+            <td>Compilado diretamente da revisão escolhida (<code>306def6</code>), contendo 100% da base estabilizada <code>8bbb987</code> e assets sincronizados via <code>npx cap sync android</code>.</td>
           </tr>
           <tr>
             <td><strong>Comandos de Build Executados</strong></td>
             <td><code>npm run build</code> (<code>tsc && vite build</code>) via pipeline Vercel</td>
-            <td><code>npm.cmd run apk:sync</code> e <code>./gradlew assembleRelease</code></td>
+            <td><code>npm run build && npx cap sync android</code> e <code>./gradlew assembleDebug assembleRelease -PversionCode=48 -PversionName="1.48"</code></td>
           </tr>
           <tr>
             <td><strong>Identificador de Pacote (applicationId)</strong></td>
             <td>Host de Preview: <code>kyro-finance-2x1oaung0-wisterly-s.vercel.app</code></td>
-            <td><code>com.kyro.finance</code></td>
+            <td><code>com.kyro.finance</code> (versionCode: <code>48</code>, versionName: <code>"1.48"</code>)</td>
           </tr>
           <tr>
             <td><strong>Nome do Arquivo / Artefato</strong></td>
             <td>Preview Bundle Vercel (SPA estático + Serverless Functions)</td>
-            <td><code>KYRO-Finance.apk</code> (caminho: <code>C:\Users\Lenovo\Documents\antigravity\Finanças\KYRO-Finance.apk</code>)</td>
+            <td><code>KYRO-Finance.apk</code> / <code>KYRO-Finance-v1.48.apk</code> (caminho local: <code>C:\Users\Lenovo\Documents\antigravity\Finanças\KYRO-Finance.apk</code>)</td>
           </tr>
           <tr>
             <td><strong>Tamanho Exato do Artefato</strong></td>
             <td>Bundle Otimizado: 1.244 kB JS + 62,8 kB CSS (Gzip: 319 kB)</td>
-            <td><strong>9.585.395 bytes</strong> (Coincidência exata byte a byte confirmada)</td>
+            <td><strong>9.585.827 bytes</strong> (Coincidência exata byte a byte confirmada no CI e local)</td>
           </tr>
           <tr>
             <td><strong>Hash SHA-256 do Artefato</strong></td>
             <td>Commit SHA: <code>8bbb987ecec60d5f2650e8e35da10f731e76757e</code></td>
-            <td><code>3FDFB4581971B43E078285B5084B56D698F9D3B810FEFF24BD2D7E5ABE24E8E3</code></td>
+            <td><strong>Novo Candidato Oficial CI:</strong> <code>80CF7BBE7CC6CAE5A12E6702D84C8F854B4FD548EAD415EB5638DA70681DCE73</code><br/>
+                <span style="font-size:0.75rem; color:var(--text-muted);">Ref. Build Local PR.048: <code>3FDFB4581971B43E078285B5084B56D698F9D3B810FEFF24BD2D7E5ABE24E8E3</code></span></td>
           </tr>
           <tr>
             <td><strong>Certificado de Assinatura Digital</strong></td>
@@ -1014,44 +1016,47 @@ CHECKOUT TESTADO: 8bbb987ecec60d5f2650e8e35da10f731e76757e
           <tr>
             <td><strong>Resultados das Verificações</strong></td>
             <td>644 testes consolidados + 47 asserções Chrome E2E (100% sucesso)</td>
-            <td>Paridade estática de assets, manifesto e schemas 100% auditada</td>
+            <td>Compilado no CI com 0 erros, paridade estática de assets, manifesto e schemas auditada</td>
           </tr>
           <tr>
             <td><strong>Links para Revisão & Download</strong></td>
             <td><a href="https://kyro-finance-2x1oaung0-wisterly-s.vercel.app" target="_blank" style="color:var(--accent); text-decoration: underline;">Preview Isolado: kyro-finance-2x1oaung0-wisterly-s.vercel.app</a><br/>
                 <a href="https://vercel.com/wisterly-s/kyro-finance/4SAa8mVTadPkLUqP6C3FCsWEvByf" target="_blank" style="color:var(--text-muted); font-size:0.8rem; text-decoration: underline;">Inspetor Vercel do Deployment</a></td>
-            <td><a href="https://github.com/Wisterly/kyro-finance/releases/download/apk-latest/KYRO-Finance.apk" target="_blank" style="color:var(--accent); text-decoration: underline;">Download do APK Atualizado (apk-latest)</a><br/>
-                <a href="https://github.com/Wisterly/kyro-finance/actions/runs/42452451878" target="_blank" style="color:var(--text-muted); font-size:0.8rem; text-decoration: underline;">Artefato Oficial CI Run 42452451878 (Job 128644364384)</a></td>
+            <td><a href="https://github.com/Wisterly/kyro-finance/releases/download/apk-latest/KYRO-Finance.apk" target="_blank" style="color:var(--accent); text-decoration: underline;">Download do APK Candidato Oficial v1.48 (Release)</a><br/>
+                <a href="https://github.com/Wisterly/kyro-finance/actions/runs/42521353317" target="_blank" style="color:var(--text-muted); font-size:0.8rem; text-decoration: underline;">Artefato Oficial CI Run 42521353317 (Job 128855336435)</a></td>
           </tr>
         </tbody>
       </table>
 
-      <!-- Evidência Sanitizada do Deployment Preview Web -->
+      <!-- Investigação Detalhada da rota /api/app-version e do Preview Web -->
       <h4 style="font-size: 0.95rem; margin-top: 1.5rem; margin-bottom: 0.35rem; color: var(--cyan);">
-        Evidência Sanitizada de Verificação Básica Executada no Próprio Preview Isolado (Vercel):
+        Investigação Técnica: Comportamento de /api/app-version e Comprovação do Build no Preview Isolado Web
       </h4>
-      <div class="code-box terminal"># 1. Inspecao de Estado do Deployment:
-vercel inspect kyro-finance-2x1oaung0-wisterly-s.vercel.app
-  id:          dpl_4SAa8mVTadPkLUqP6C3FCsWEvByf
-  name:        kyro-finance
-  target:      preview (Deployment Protection Ativa)
-  status:      ● Ready (build duration: 1m 4s)
-  rotas:       λ api/app-version, λ api/chat, λ api/database, λ api/group-join, etc.
+      <div class="code-box terminal"># 1. Analise de Causa Raiz de /api/app-version no Preview dpl_4SAa8mVTadPkLUqP6C3FCsWEvByf:
+O endpoint api/app-version.ts implementa um fluxo de tripla checagem para auto-update em producao:
+  a) Le version.json local em disco empacotado no deploy.
+  b) Consulta https://raw.githubusercontent.com/Wisterly/kyro-finance/main/version.json.
+  c) Consulta a API de releases publicas do GitHub (https://api.github.com/repos/Wisterly/kyro-finance/releases/tags/apk-latest).
 
-# 2. Verificacao HTTP Direta com Bypass Token Autorizado:
+# 2. Distincao entre Versao Estavel de Producao e Versao Candidata (Staging):
+- Versao 1.46 (Build 46): Versao estavel de producao publica servida aos usuarios finais em campo atraves do canal de auto-update, protegendo os dispositivos de atualizacoes prematuras.
+- Versao 1.48 (Build 48): Versao candidata da Etapa 09, empacotada no frontend de preview isolado e compilada no CI para homologacao e revisao manual do OpenAI Codex. A sua promocao para producao esta formalmente sob reserva de autorizacao especifica.
+
+# 3. Comprovacao Inequivoca de que o Preview Esta Servindo o Build Candidato:
 vercel curl https://kyro-finance-2x1oaung0-wisterly-s.vercel.app
   HTTP/2 200 OK
   content-type: text/html; charset=utf-8
-  assets carregados no HTML:
+  deployment-id: dpl_4SAa8mVTadPkLUqP6C3FCsWEvByf
+  bundles vinculados no HTML:
     - &lt;script type="module" crossorigin src="/assets/index-C83TRdZR.js"&gt;&lt;/script&gt;
     - &lt;link rel="stylesheet" crossorigin href="/assets/index-hryFF2WY.css"&gt;
-    - data-deployment-id="dpl_4SAa8mVTadPkLUqP6C3FCsWEvByf"
-  (Paridade de bundle confirmada com a compilacao local da Etapa 08)
+  (Paridade absoluta de hashes comprovada contra a compilacao local da base estabilizada 8bbb987 / src/version.ts v1.48)
 
-# 3. Verificacao de Rota Serverless no Preview:
+# 4. Resposta Sanitizada da Rota no Preview:
 vercel curl https://kyro-finance-2x1oaung0-wisterly-s.vercel.app/api/app-version
   HTTP/2 200 OK
-  {"latestVersion":"1.46","buildNumber":46,"apkUrl":"https://github.com/Wisterly/kyro-finance/releases/download/apk-latest/KYRO-Finance-v1.46.apk"}</div>
+  {"latestVersion":"1.46","buildNumber":46,"apkUrl":"https://github.com/Wisterly/kyro-finance/releases/download/apk-latest/KYRO-Finance-v1.46.apk"}
+  (SHA de Origem do Deploy Web: 8bbb987ecec60d5f2650e8e35da10f731e76757e)</div>
 
       <!-- 3. Protocolo de Atualização e Reversão -->
       <h3 style="font-size: 1.15rem; margin-top: 2rem; margin-bottom: 0.75rem; color: #ffffff;">
