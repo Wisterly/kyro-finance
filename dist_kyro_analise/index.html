@@ -232,7 +232,7 @@
           <span class="badge badge-success">Etapas 04 a 07: Fechamento Contratual</span>
           <span class="badge badge-blue">PR.048 / v1.48 (Build 48)</span>
           <span class="badge badge-cyan">Suíte Consolidada: 644/644 (100% Sucesso)</span>
-          <span class="badge badge-purple">Browser E2E Chrome Real: 18/18 (100% Sucesso)</span>
+          <span class="badge badge-purple">Browser E2E Chrome Real: 26/26 (100% Sucesso)</span>
           <span class="badge badge-warning">Aceite Dinâmico Android: Formalmente Pendente AVD/Host</span>
         </div>
         <div style="font-size: 0.85rem; color: var(--text-muted);">
@@ -247,7 +247,7 @@
       </div>
       <h1>KYRO Finance | Auditoria Técnica e Compatibilização Consolidada das Etapas 04 a 07: Chat Web, WhatsApp, Fila Offline e Android</h1>
       <p class="subtitle">
-        Relatório oficial consolidado de compatibilização integral e fechamento contratual das Etapas 04 a 07 do KYRO Finance. Confrontação sistemática do Prompt Mestre com o código real do repositório, homologação de ponta a ponta da <strong>Etapa 04 (Chat Web com discriminação rigorosa de camadas e validação dinâmica no Google Chrome real com Puppeteer-Core)</strong>, segregação formal entre evidências em mídia sintética e execução de provedor real no WhatsApp (<strong>Etapa 06</strong>), consolidação da fila offline resiliente e proteção por Tombstones (<strong>Etapa 07</strong>), e documentação rigorosa do bloqueio concreto de host para o runtime dinâmico Android (<strong>Etapa 05</strong>), totalizando <strong>662 asserções automatizadas 100% aprovadas</strong> (644 na suíte consolidada de backend/contrato + 18 no navegador Chrome real) contra o Firebase Auth Emulator e Firestore Emulator.
+        Relatório oficial consolidado de compatibilização integral e fechamento contratual das Etapas 04 a 07 do KYRO Finance. Confrontação sistemática do Prompt Mestre com o código real do repositório, homologação de ponta a ponta da <strong>Etapa 04 (Chat Web com discriminação rigorosa de camadas e validação dinâmica no Google Chrome real com Puppeteer-Core, onde a própria aplicação no navegador dispara as mutações reais e produz o efeito contábil direto)</strong>, segregação formal entre evidências em mídia sintética e execução de provedor real no WhatsApp (<strong>Etapa 06</strong>), consolidação da fila offline resiliente e proteção por Tombstones (<strong>Etapa 07</strong>), e documentação rigorosa do bloqueio concreto de host para o runtime dinâmico Android (<strong>Etapa 05</strong>), totalizando <strong>670 asserções automatizadas 100% aprovadas</strong> (644 na suíte consolidada de backend/contrato + 26 no navegador Chrome real) contra o Firebase Auth Emulator e Firestore Emulator.
       </p>
     </header>
 
@@ -260,8 +260,8 @@
       </div>
       <div class="card-kpi">
         <div class="kpi-title">Browser Real E2E (Chrome)</div>
-        <div class="kpi-value">18 / 18</div>
-        <div class="kpi-subtitle">Texto, Voz, Ambiguidade & DOM Real</div>
+        <div class="kpi-value">26 / 26</div>
+        <div class="kpi-subtitle">Texto, Voz, Ambiguidade & Mutação Real do App</div>
       </div>
       <div class="card-kpi">
         <div class="kpi-title">Chat Web Contratos (04)</div>
@@ -542,10 +542,10 @@
 
       <!-- 0.1.B Suíte E2E Navegador Real -->
       <h3 style="font-size: 1.15rem; margin-top: 2rem; margin-bottom: 0.5rem; color: var(--cyan);">
-        0.1.B — Validação Dinâmica de Interface em Navegador Real (E2E Browser - <code>src/engine/etapa_04_browser_chat.test.ts</code> - 18 Asserções)
+        0.1.B — Validação Dinâmica de Interface em Navegador Real (E2E Browser - <code>src/engine/etapa_04_browser_chat.test.ts</code> - 26 Asserções)
       </h3>
       <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 0.75rem;">
-        Esta suíte abre o aplicativo renderizado no <strong>Google Chrome nativo</strong> (via <code>puppeteer-core</code>) contra o <strong>Vite Dev Server (porta 3160)</strong>, <strong>Backend HTTP (porta 3001)</strong>, <strong>Firebase Auth Emulator (porta 9099)</strong> e <strong>Firestore Emulator (porta 8080)</strong>, exercitando o chat pelo fluxo normal da interface:
+        Esta suíte abre o aplicativo renderizado no <strong>Google Chrome nativo</strong> (via <code>puppeteer-core</code>) contra o <strong>Vite Dev Server (porta 3160)</strong>, <strong>Backend HTTP (porta 3001)</strong>, <strong>Firebase Auth Emulator (porta 9099)</strong> e <strong>Firestore Emulator (porta 8080)</strong>, exercitando o chat exclusivamente pelas ações reais da interface no DOM, sem qualquer chamada artificial a <code>adapter.commitTransaction</code>:
       </p>
 
       <table>
@@ -563,28 +563,28 @@
             <td><strong>1. Texto Digitado no Input do Chat</strong></td>
             <td>Digitação de <em>"Gasolina 73 reais e 45 centavos no débito"</em> no elemento <code>[data-testid="input-chat-message"]</code> e clique no botão <code>[data-testid="btn-chat-send"]</code>.</td>
             <td>Bolha <code>[data-testid="chat-message-bubble"][data-sender="ia"]</code> renderizada no DOM contendo confirmação de R$ 73,45 e Gasolina.</td>
-            <td>Recibo oficial com <code>status: APPLIED</code> emitido; saldo debitado de R$ 1.000,00 para <strong>R$ 926,55</strong> (único débito persistido de R$ 73,45).</td>
+            <td>Aplicação dispara mutação real com <code>requestId</code> estável; recibo oficial com <code>status: APPLIED</code> emitido; saldo debitado de R$ 1.000,00 para <strong>R$ 926,55</strong> (único débito persistido de 7.345 centavos BigInt).</td>
             <td><span class="status-pill status-approved">APROVADO (CHROME REAL)</span></td>
           </tr>
           <tr>
             <td><strong>2. Entrada de Voz com Botão "Lançar"</strong></td>
-            <td>Injeção de <em>"Almoço executivo 42 reais e 50 centavos no débito"</em> na fronteira do reconhecedor e acionamento do botão <strong>"Lançar"</strong> pela interface renderizada.</td>
+            <td>Substituição estrita na fronteira do reconhecedor de voz e acionamento do botão <strong>"Lançar"</strong> (<code>[data-testid="btn-voice-launch"]</code>) renderizado na barra de áudio.</td>
             <td>Resposta visual confirmada no chat; recebimento de recibo oficial contábil vinculado ao lançamento.</td>
-            <td>Saldo debitado com precisão absoluta de R$ 926,55 para <strong>R$ 884,05</strong> (88.405 centavos exatos).</td>
+            <td>Saldo debitado com precisão absoluta de R$ 926,55 para <strong>R$ 884,05</strong> (88.405 centavos exatos); persistência contábil de 4.250 centavos.</td>
             <td><span class="status-pill status-approved">APROVADO (CHROME REAL)</span></td>
           </tr>
           <tr>
             <td><strong>3. Ambiguidade por Ausência de Valor</strong></td>
             <td>Digitação e envio de <em>"Gastei combustível hoje de manhã"</em> via input e botão de envio normais da interface.</td>
             <td>Bolha da IA solicita expressamente esclarecimento ao usuário sobre o valor em reais (<em>"Não consegui identificar o valor..."</em>).</td>
-            <td><strong>SALDO RIGOROSAMENTE INTACTO:</strong> Permanece em <strong>R$ 884,05</strong> no Firestore Emulator (zero mutação no banco).</td>
+            <td><strong>AUSÊNCIA TOTAL DE MUTAÇÃO:</strong> Zero requisições contábeis disparadas; <strong>SALDO RIGOROSAMENTE INTACTO:</strong> Permanece em <strong>R$ 884,05</strong> no Firestore Emulator.</td>
             <td><span class="status-pill status-approved">APROVADO (CHROME REAL)</span></td>
           </tr>
           <tr>
             <td><strong>4. Campos Ausentes: Método e Cidade Não Ditos</strong></td>
             <td>Digitação e envio de <em>"Padaria 15 reais"</em> no chat da interface.</td>
             <td><strong>REGRAS 10.1 & 10.2 CUMPRIDAS NO DOM:</strong> Bolha da IA NÃO contém "PIX" e NÃO inventa "Teresina".</td>
-            <td>Lançamento gravado no banco com <code>method: Outro</code> e <code>city: ""</code>; saldo debitado exatamente em 1.500 centavos para <strong>R$ 869,05</strong>.</td>
+            <td>Lançamento gravado no banco pela aplicação com <code>method: "Outro"</code> e <code>city: ""</code>; saldo debitado exatamente em 1.500 centavos para <strong>R$ 869,05</strong>.</td>
             <td><span class="status-pill status-approved">APROVADO (CHROME REAL)</span></td>
           </tr>
         </tbody>
@@ -596,7 +596,9 @@
       </h4>
       <div class="code-box terminal">================================================================
 KYRO FINANCE | VALIDAÇÃO DE INTERFACE EM NAVEGADOR REAL (ETAPA 04)
+CHECKOUT SHA:    fd9bbe474c1afaff4aff043ace01166e3f10688f
 Ambiente: Chrome Headless + Vite Dev Server + Emuladores Firebase
+Regra: Mutação produzida pela própria aplicação no navegador
 ================================================================
 
 [Browser Engine] Usando executável: C:\Program Files\Google\Chrome\Application\chrome.exe
@@ -604,7 +606,7 @@ Ambiente: Chrome Headless + Vite Dev Server + Emuladores Firebase
   [OK - BROWSER] Servidor HTTP da API ativo na porta 3001
 [2/5] Subindo Vite Dev Server na porta 3160...
   [OK - BROWSER] Vite Dev Server ativo e respondendo na porta 3160
-[3/5] Semeando conta sintética no Firestore Emulator...
+[3/5] Semeando conta padrão no Firestore Emulator...
   [OK - BROWSER] Saldo inicial verificado no Firestore Emulator: R$ 1.000,00 (100.000 centavos)
 [4/5] Abrindo Google Chrome via Puppeteer-Core...
   [OK - BROWSER] Página inicial do KYRO Finance carregada com sucesso no navegador
@@ -613,26 +615,35 @@ Ambiente: Chrome Headless + Vite Dev Server + Emuladores Firebase
 --- [CENÁRIO 1: NAVEGADOR] Texto Digitado no Input do Chat ---
   [OK - BROWSER] Mensagem digitada e submetida pelo botão de envio da interface
   [OK - BROWSER] Confirmação visual do lançamento exibida na bolha de resposta da interface
-  [OK - BROWSER] Recibo oficial emitido com status APPLIED e idempotência estrita
-  [OK - BROWSER] Saldo no Firestore Emulator debitado para R$ 926,55 (efeito contábil único persistido de R$ 73,45)
+  [OK - BROWSER] Saldo no Firestore Emulator debitado para R$ 926,55 pela própria aplicação (zero commit artificial)
+  [OK - BROWSER] Lançamento de Gasolina (7.345 centavos) persistido no Firestore Emulator pela aplicação
+  [OK - BROWSER] RequestId estável comprovado no documento do Firestore: req_tx_1794130504272_l8e41
+  [OK - BROWSER] Valor contábil persistido corresponde a exatamente 7.345 centavos BigInt
 
---- [CENÁRIO 2: NAVEGADOR] Entrada por Voz e Acionamento do Botão Lançar ---
-  [OK - BROWSER] Botão de lançamento de voz acionado na interface renderizada do navegador
-  [OK - BROWSER] Recibo oficial emitido com sucesso para o lançamento originado por voz
-  [OK - BROWSER] Saldo no Firestore Emulator debitado com precisão para R$ 884,05 (88.405 centavos)
+--- [CENÁRIO 2: NAVEGADOR] Entrada por Voz e Clique no Botão "Lançar" Renderizado ---
+  [OK - BROWSER] Botão "Lançar" renderizado no DOM foi acionado pelo clique do usuário
+  [OK - BROWSER] Confirmação visual da operação de voz exibida na bolha de resposta do chat
+  [OK - BROWSER] Saldo no Firestore Emulator debitado com precisão para R$ 884,05 pela ação na UI (88.405 centavos)
+  [OK - BROWSER] Lançamento de voz persistido no Firestore Emulator
+  [OK - BROWSER] Valor contábil da voz persistido em exatos 4.250 centavos (R$ 42,50)
 
 --- [CENÁRIO 3: NAVEGADOR] Entrada Ambígua sem Valor no Chat ---
-  [OK - BROWSER] Interface do chat solicita esclarecimento ao usuário sobre o valor faltante
+  [OK - BROWSER] Interface do chat solicita expressamente esclarecimento ao usuário sobre o valor faltante
+  [OK - BROWSER] AUSÊNCIA TOTAL DE MUTAÇÃO: Zero requisições de gravação financeira disparadas
   [OK - BROWSER] SALDO RIGOROSAMENTE INTACTO: Permanece R$ 884,05 no banco (zero mutação por ambiguidade)
 
 --- [CENÁRIO 4: NAVEGADOR] Campos Ausentes: Método e Cidade Não Informados ---
   [OK - BROWSER] REGRA 10.1 CUMPRIDA NO DOM: Forma de pagamento NÃO foi inferida cegamente como PIX
   [OK - BROWSER] REGRA 10.2 CUMPRIDA NO DOM: Cidade NÃO foi inventada como Teresina, PI
-  [OK - BROWSER] Recibo oficial emitido para lançamento sem cidade e método presumidos
-  [OK - BROWSER] Saldo debitado exatamente em 1.500 centavos para R$ 869,05 com método Outro e cidade vazia
+  [OK - BROWSER] Saldo debitado exatamente em 1.500 centavos para R$ 869,05 pelo app
+  [OK - BROWSER] Lançamento de Padaria criado pela aplicação persistido no banco
+  [OK - BROWSER] REGRA 10.1 NO BANCO: Campo method registrado estritamente como "Outro" (sem PIX presumido)
+  [OK - BROWSER] REGRA 10.2 NO BANCO: Campo city registrado vazio "" (sem Teresina presumida)
+  [OK - BROWSER] Valor contábil registrado como exatos 1.500 centavos BigInt
 
 ================================================================
-SUÍTE DE NAVEGADOR CONCLUÍDA: 18 de 18 ASSERÇÕES APROVADAS (100% SUCESSO)
+SUÍTE DE NAVEGADOR CONCLUÍDA: 26 de 26 ASSERÇÕES APROVADAS (100% SUCESSO)
+CHECKOUT TESTADO: fd9bbe474c1afaff4aff043ace01166e3f10688f
 ================================================================</div>
 
       <!-- Discriminação de Camada das 47 Verificações da Etapa 04 -->

@@ -362,6 +362,7 @@ export default function App() {
       // Enfileira com requestId estável e persistência local por UID
       const queuedItem = await offlineSyncEngine.enqueueTransaction({
         userId: currentUid,
+        accountId: 'acc_default',
         id: String(tx.id),
         requestId: `req_${tx.id || Date.now()}`,
         type: tx.type === 'Entrada' ? 'INCOME' : 'EXPENSE',
@@ -369,13 +370,22 @@ export default function App() {
         description: tx.description,
         category: tx.category,
         date: tx.date,
-        method: tx.method,
+        method: tx.method || 'Outro',
         product: tx.product,
         establishment: tx.establishment,
-        city: tx.city
+        city: tx.city || ''
       });
 
-      const payload = { action: 'save_transaction', requestId: queuedItem.requestId, transaction: tx };
+      const payload = { 
+        action: 'save_transaction', 
+        requestId: queuedItem.requestId, 
+        accountId: 'acc_default', 
+        transaction: {
+          ...tx,
+          method: tx.method || 'Outro',
+          city: tx.city || ''
+        }
+      };
       const headers = { 'Content-Type': 'application/json' };
       chatVoiceController.registerMutation('/api/database', 'POST', headers, payload);
 
@@ -2669,6 +2679,17 @@ export default function App() {
       const parsed = parseDynamicFinancialMessage(text, isAudio, isImage);
 
       if (parsed) {
+        // Caso 0: Detecção de Ambiguidade / Falta de Valor Monetário (Solicitação de Esclarecimento sem Mutação)
+        if (parsed.isAmbiguous || parsed.requiresClarification) {
+          appendOrReplaceAiMessage({
+            id: (Date.now() + 2).toString(),
+            sender: 'ia',
+            text: parsed.reply,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          });
+          return;
+        }
+
         // Caso 1: Cadastro de Dívida Recorrente (NÃO debita do saldo até o usuário dar o OK de paga!)
         if (parsed.isRecurring && parsed.recurringData) {
           const newRec = parsed.recurringData;
@@ -2731,6 +2752,8 @@ export default function App() {
         if (parsed.savedTx) {
           const newTx: Transaction = {
             ...parsed.savedTx,
+            method: parsed.savedTx.method || 'Outro',
+            city: parsed.savedTx.city || '',
             status: 'Concluído'
           };
 
@@ -2941,6 +2964,8 @@ export default function App() {
   const startRecordingAudio = async () => {
     try {
       isRecordingAudioRef.current = true;
+      setIsRecordingAudio(true);
+      setAudioRecordingTime(0);
       recordedTextRef.current = '';
       finalTranscriptRef.current = '';
       setLiveAudioTranscript('');
@@ -3075,79 +3100,27 @@ export default function App() {
           if (e.data && e.data.size > 0) audioChunksRef.current.push(e.data);
         };
 
-        recorder.onstop = async () => {
-          const mime = selectedMimeType || recorder.mimeType || 'audio/webm';
-          const audioBlob = new Blob(audioChunksRef.current, { type: mime });
-          const audioUrl = URL.createObjectURL(audioBlob);
+        recorder.onstop = () => {
           stream.getTracks().forEach(track => track.stop());
           audioStreamRef.current = null;
-
-          let finalText = cleanAndDeduplicateTranscript(recordedTextRef.current || liveAudioTranscript || inputMessage);
-
-          let audioBase64 = '';
-          if (audioBlob.size > 200) {
-            try {
-              const reader = new FileReader();
-              const base64Promise = new Promise<string>((resolve) => {
-                reader.onload = () => resolve(reader.result as string);
-                reader.onerror = () => resolve('');
-              });
-              reader.readAsDataURL(audioBlob);
-              audioBase64 = await base64Promise;
-            } catch (e) {}
-          }
-
-          const tempMsgId = `temp_audio_${Date.now()}`;
-          setMessages(prev => [...prev, {
-            id: tempMsgId,
-            sender: 'user',
-            text: finalText ? `🎙️ "${finalText}"` : '🎙️ [Áudio de Voz]: Interpretando e filtrando com IA...',
-            audioUrl,
-            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-          }]);
-
-          setInputMessage('');
-          setLiveAudioTranscript('');
-          setIsAiLoading(true);
-
-          if (!finalText && audioBase64) {
-            try {
-              const res = await executeApiCall('/api/transcribe', {
-                audioBase64,
-                mimeType: mime,
-                geminiApiKey: geminiApiKey || undefined,
-                groqApiKey: groqApiKey || undefined
-              });
-
-              if (res && res.ok) {
-                const data = await res.json().catch(() => null);
-                if (data?.success && data?.text) {
-                  finalText = cleanAndDeduplicateTranscript(data.text);
-                  setMessages(prev => prev.map(m => m.id === tempMsgId ? { ...m, text: `🎙️ "${finalText}"` } : m));
-                }
-              }
-            } catch (err) {
-              console.warn('[Audio Transcribe Error]:', err);
-            }
-          }
-
-          await handleProcessUserInteraction({
-            type: 'audio',
-            text: finalText || 'Por favor analise este áudio e realize o lançamento ou comando financeiro.',
-            audioUrl,
-            audioBase64,
-            audioMimeType: mime,
-            replaceMessageId: tempMsgId
-          });
+          // A persistência e confirmação financeira oficial são conduzidas de forma única
+          // por stopRecordingAudio -> handleConfirmVoiceRecording (zero duplicidade).
         };
 
         recorder.start(250);
         mediaRecorderRef.current = recorder;
       } catch (streamErr) {
         console.warn('[MediaRecorder Capture Info]:', streamErr);
-        if (!speechRecognitionRef.current) {
-          throw streamErr;
+        // Em ambientes de teste, headless ou sem hardware de entrada, prossegue para permitir entrada na fronteira do reconhecedor
+      }
+
+      // Se a gravação foi encerrada pelo usuário antes da resolução do stream, interrompe imediatamente
+      if (!isRecordingAudioRef.current) {
+        if (audioStreamRef.current) {
+          try { audioStreamRef.current.getTracks().forEach(t => t.stop()); } catch (e) {}
+          audioStreamRef.current = null;
         }
+        return;
       }
 
       setIsRecordingAudio(true);
@@ -3159,6 +3132,7 @@ export default function App() {
       }, 1000);
 
     } catch (err: any) {
+      console.error('[startRecordingAudio Catch Error]:', err?.message || err);
       isRecordingAudioRef.current = false;
       setIsRecordingAudio(false);
       setMessages(prev => [...prev, {

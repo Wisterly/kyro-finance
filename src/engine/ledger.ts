@@ -37,6 +37,10 @@ export interface LedgerTransaction {
   fencingToken: number;
   createdAt: string;
   updatedAt: string;
+  method?: string;
+  product?: string;
+  establishment?: string;
+  city?: string;
 }
 
 export interface Tombstone {

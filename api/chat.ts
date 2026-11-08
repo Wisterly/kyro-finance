@@ -38,6 +38,8 @@ async function saveTransaction(tx: any, userId: string = 'usr_default', requestI
     requestId: requestId || `req_chat_${Date.now()}`,
     amountCents: safeCents,
     amount: safeCents / 100,
+    method: tx.method || 'Outro',
+    city: tx.city || '',
     date: tx.date || new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }),
     status: tx.status || 'Concluído',
     createdAt: new Date().toISOString()
@@ -628,6 +630,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } catch (e) {}
   }
 
+  // 0. DETECÇÃO ANTECIPADA DE AMBIGUIDADE (PRESERVAÇÃO E ESCLARECIMENTO IMEDIATO SEM MUTAÇÃO)
+  const preAmbiguity = detectFinancialAmbiguity(message);
+  if (preAmbiguity.isAmbiguous) {
+    return res.status(200).json({
+      reply: preAmbiguity.clarificationPrompt || '🤔 Não consegui identificar o valor exato da operação. Por favor, envie o valor em reais (ex: "Almoço 35 reais" ou "Paguei R$ 50 no mercado").',
+      action: { type: 'none' },
+      savedTx: null,
+      userId: authUid,
+      engine: 'kyro-cognitive-engine',
+      transcribedText: message
+    });
+  }
+
   // 1. TENTATIVA COM GOOGLE GEMINI 1.5 FLASH (MULTIMODAL: TEXTO, ÁUDIO, IMAGEM E ESTRUTURAÇÃO)
   if (effectiveGeminiKey && effectiveGeminiKey !== 'dummy_key') {
     try {
@@ -769,6 +784,8 @@ ${JSON.stringify(compactContext)}`;
           let savedTx = null;
           const reqId = (req.headers['x-request-id'] as string) || `req_chat_${Date.now()}`;
           if (parsedResult.action?.type === 'create_transaction' && parsedResult.action.transaction) {
+            parsedResult.action.transaction.method = parsedResult.action.transaction.method || 'Outro';
+            parsedResult.action.transaction.city = parsedResult.action.transaction.city || '';
             savedTx = await saveTransaction(parsedResult.action.transaction, authUid, reqId);
             parsedResult.action.transaction = savedTx;
           }
@@ -793,6 +810,8 @@ ${JSON.stringify(compactContext)}`;
   let localSavedTx = null;
   const fallbackReqId = (req.headers['x-request-id'] as string) || `req_chat_${Date.now()}`;
   if (fallback.action?.type === 'create_transaction' && fallback.action.transaction) {
+    fallback.action.transaction.method = fallback.action.transaction.method || 'Outro';
+    fallback.action.transaction.city = fallback.action.transaction.city || '';
     localSavedTx = await saveTransaction(fallback.action.transaction, authUid, fallbackReqId);
     fallback.action.transaction = localSavedTx;
   }
