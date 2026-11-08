@@ -104,6 +104,7 @@ class ClientAuthSessionManager {
   ): Promise<UserSession> {
     // 1. Prioridade para emulador explicitamente configurado pela infraestrutura de teste
     const emulatorHost = options?.emulatorHost || this.testEmulatorHost || 
+      (typeof window !== 'undefined' && (window.sessionStorage?.getItem('kyro_auth_emulator_host') || (window as any).__KYRO_AUTH_EMULATOR_HOST__)) ||
       (this.isTestEnvironment() && typeof process !== 'undefined' ? process.env?.FIREBASE_AUTH_EMULATOR_HOST : null);
 
     if (emulatorHost) {

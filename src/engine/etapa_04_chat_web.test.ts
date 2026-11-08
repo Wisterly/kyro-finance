@@ -1,9 +1,15 @@
 /**
- * KYRO FINANCE - ETAPA 04: INTEGRAÇÃO E VALIDAÇÃO COMPLETA DO CHAT WEB
+ * KYRO FINANCE - ETAPA 04: SUÍTE DE CONTRATO DE API, CONTROLADOR E SERVIÇOS DO CHAT WEB
  * 
- * Bateria automatizada de homologação dos fluxos de interface do Chat Web (Texto e Voz),
- * tratamento de ambiguidades sem mutação contábil, eliminação de fallbacks presumidos (PIX e Teresina),
- * preservação de campos ausentes e reconciliação por recibo oficial no Firestore Emulator.
+ * CLASSIFICAÇÃO RIGOROSA DO ALCANCE:
+ * - Esta suíte valida a integração contratual entre o Parser Semântico, os Serviços de Autenticação/Fila,
+ *   o Controlador de Voz (chatVoiceController) e o Contrato de API (/api/database) com o Firestore Emulator.
+ * - Distinção de Escopo:
+ *   1. A chamada direta à API /api/database seguida da construção de chatConfirmationBubble prova o
+ *      contrato da gravação e a reconciliação do recibo oficial no backend.
+ *   2. A chamada direta a launchTransactionFromChatVoice prova o fluxo do controlador de aplicação.
+ *   3. A interação com a interface gráfica renderizada no DOM do navegador é coberta pela suíte
+ *      dedicada E2E em navegador real: src/engine/etapa_04_browser_chat.test.ts (Chrome + Puppeteer).
  */
 
 process.env.FIRESTORE_EMULATOR_HOST = '127.0.0.1:8080';
@@ -93,7 +99,8 @@ async function killProcessSafely(proc: ChildProcess) {
 
 export async function runEtapa04ChatWebTests(): Promise<{ total: number; passed: number }> {
   console.log('\n================================================================');
-  console.log('KYRO FINANCE | BATERIA DE HOMOLOGAÇÃO: ETAPA 04 (CHAT WEB & AMBIGUIDADES)');
+  console.log('KYRO FINANCE | ETAPA 04: CONTRATO DE API, CONTROLADOR E SERVIÇOS');
+  console.log('Escopo: Parser Semântico, chatVoiceController, /api/database & Recibos');
   console.log('================================================================\n');
 
   const PORT = 4136;
@@ -129,9 +136,9 @@ export async function runEtapa04ChatWebTests(): Promise<{ total: number; passed:
     assert(initBal?.balanceCents === 100000, 'Saldo inicial da conta verificado no Firestore Emulator: R$ 1.000,00 (100.000 centavos)');
 
     // =========================================================================
-    // CENÁRIO 1: TEXTO DIGITADO NO CHAT WEB (FLUXO COMPLETO ATÉ RECIBO OFICIAL)
+    // CENÁRIO 1: SERVIÇO & CONTRATO DE API (PARSER, FILA OFFLINE E RECIBO OFICIAL)
     // =========================================================================
-    console.log('\n--- [CENÁRIO 1] Entrada Natural por Texto Digitado no Chat Web ---');
+    console.log('\n--- [CENÁRIO 1: SERVIÇO & CONTRATO DE API] Texto Digitado: Parser, Fila Offline e Recibo Oficial ---');
     const userTypedText = 'Gasolina 73 reais e 45 centavos no débito';
     const parsedText = parseDynamicFinancialMessage(userTypedText, true);
 
@@ -196,9 +203,9 @@ export async function runEtapa04ChatWebTests(): Promise<{ total: number; passed:
     assert(balAfterCen1?.balanceCents === 92655, 'Saldo no Firestore Emulator após texto digitado: R$ 926,55 (92.655 centavos exatos)');
 
     // =========================================================================
-    // CENÁRIO 2: ENTRADA POR VOZ COM BOTÃO "LANÇAR"
+    // CENÁRIO 2: CONTROLADOR DE VOZ (chatVoiceController E RECONCILIAÇÃO CONTÁBIL)
     // =========================================================================
-    console.log('\n--- [CENÁRIO 2] Entrada por Voz com Confirmação no Botão Lançar ---');
+    console.log('\n--- [CENÁRIO 2: CONTROLADOR] Entrada por Voz: chatVoiceController e Reconciliação Contábil ---');
     const voiceTranscript = 'Almoço executivo 42 reais e 50 centavos no débito';
     const voiceResult = await launchTransactionFromChatVoice({
       transcript: voiceTranscript,

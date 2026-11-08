@@ -33,6 +33,8 @@ export interface ParsedFinancialResult {
   object: string;
   location: string;
   city: string;
+  isAmbiguous?: boolean;
+  requiresClarification?: boolean;
 }
 
 // Extrator de nome de Cartão de Crédito
@@ -214,6 +216,19 @@ export function parseDynamicFinancialMessage(
   // 1. Ignora links, URLs e spam
   if (lower.includes('http://') || lower.includes('https://') || lower.includes('www.') || lower.includes('.com') || lower.includes('.br/')) {
     return null;
+  }
+
+  // 1.1 Detecção de ambiguidade sem mutação contábil (Preservação de Saldo)
+  const ambiguity = detectFinancialAmbiguity(clean);
+  if (ambiguity.isAmbiguous) {
+    return {
+      reply: ambiguity.clarificationPrompt || '🤔 Não consegui identificar o valor exato da operação. Por favor, envie o valor em reais (ex: "Almoço 35 reais" ou "Paguei R$ 50 no mercado").',
+      isAmbiguous: true,
+      requiresClarification: true,
+      object: '',
+      location: '',
+      city: ''
+    };
   }
 
   // 2. Extrai valor monetário com algoritmo de alta precisão

@@ -3381,6 +3381,7 @@ export default function App() {
     (window as any).__KYRO_APP_INTERFACE__ = {
       login: handleUserLogin,
       logout: handleUserLogout,
+      clientAuthSession: clientAuthSession,
       confirmVoice: handleConfirmVoiceRecording,
       recoverVoice: handleRecoverPendingVoiceRecording,
       startVoice: startRecordingAudio,
@@ -5287,7 +5288,10 @@ export default function App() {
               key={msg.id} 
               className={`flex flex-col ${msg.sender === 'user' ? 'items-end' : 'items-start'}`}
             >
-              <div className={`max-w-[88%] p-3.5 rounded-2xl text-xs leading-relaxed ${
+              <div 
+                data-testid="chat-message-bubble"
+                data-sender={msg.sender}
+                className={`max-w-[88%] p-3.5 rounded-2xl text-xs leading-relaxed ${
                 msg.sender === 'user'
                   ? 'bg-[#6D3811] text-amber-100 rounded-tr-none shadow-md border border-amber-600/40 whitespace-pre-line'
                   : 'bg-[#151C30] border border-[#202940] text-slate-200 rounded-tl-none shadow-sm'
@@ -5559,6 +5563,7 @@ export default function App() {
               {/* Botão Concluir & Lançar (Visível com texto e ícone em qualquer tela) */}
               <button
                 type="button"
+                data-testid="btn-voice-launch"
                 onClick={stopRecordingAudio}
                 title="Concluir e lançar transação com IA"
                 className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-red-500 via-orange-500 to-amber-500 text-white font-extrabold hover:brightness-110 shadow-lg shadow-amber-500/25 transition-all shrink-0 flex items-center gap-1.5 text-xs cursor-pointer active:scale-95"
@@ -5599,6 +5604,7 @@ export default function App() {
               {/* 3. Botão Microfone: Gravação de Voz / Áudio */}
               <button 
                 type="button"
+                data-testid="btn-chat-mic"
                 onClick={startRecordingAudio}
                 title="Gravar áudio com IA" 
                 className="p-1.5 rounded-lg transition-all text-slate-400 hover:text-amber-400 hover:bg-slate-800 cursor-pointer active:scale-95"
@@ -5608,6 +5614,7 @@ export default function App() {
 
               <input
                 type="text"
+                data-testid="input-chat-message"
                 value={inputMessage}
                 onChange={(e) => setInputMessage(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
@@ -5615,6 +5622,8 @@ export default function App() {
                 className="flex-1 bg-transparent text-xs text-slate-200 placeholder-slate-400 focus:outline-none min-w-0"
               />
               <button
+                type="button"
+                data-testid="btn-chat-send"
                 onClick={handleSendMessage}
                 disabled={isAiLoading || !inputMessage.trim()}
                 className="p-1.5 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 hover:brightness-110 disabled:opacity-40 transition-colors shadow-sm font-bold shrink-0 cursor-pointer active:scale-95"

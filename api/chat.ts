@@ -5,6 +5,7 @@ import { getFirestore, collection, doc, setDoc } from 'firebase/firestore';
 import { verifyAuthToken, enforceTenantBoundary, CrossTenantViolationError } from '../src/services/authBoundary';
 import { SafeMoneySerializer } from '../src/services/SafeMoneySerializer';
 import { parseToCents } from '../src/engine/money';
+import { detectFinancialAmbiguity } from '../src/utils/financialParser';
 
 const firebaseConfig = {
   apiKey: process.env.VITE_FIREBASE_API_KEY || process.env.FIREBASE_API_KEY,
@@ -69,6 +70,14 @@ function extractMonetaryValueStrict(text: string): number {
   if (!text) return 0;
   const clean = text.trim();
   const lower = clean.toLowerCase();
+
+  // 0. Suporte composto: "73 reais e 45 centavos"
+  const reaisCentavosMatch = clean.match(/(\d+)[\s,]*(?:reais|real)\s+(?:e\s+)?(\d{1,2})\s*(?:centavos?|cents?)/i);
+  if (reaisCentavosMatch) {
+    const r = parseInt(reaisCentavosMatch[1], 10);
+    const c = parseInt(reaisCentavosMatch[2].padEnd(2, '0').slice(0, 2), 10);
+    return r + (c / 100);
+  }
 
   // 1. Padrão explícito com R$: R$ 300, R$300,50, R$ 3.200,00
   const rsMatch = clean.match(/R\$\s*([\d.]+,\d{2})/i) || clean.match(/R\$\s*([\d.,]+)/i);
@@ -233,6 +242,17 @@ function extractItemAndCategory(text: string): { product: string; description: s
 function fallbackCognitiveProcess(text: string, context: any, userAiRules: string[] = []) {
   const normalized = normalizeStr(text);
   const transactions: any[] = context?.transactions || [];
+
+  // 0. Detecção de Ambiguidade por Ausência de Valor Monetário (Preservação de Saldo)
+  const ambiguity = detectFinancialAmbiguity(text);
+  if (ambiguity.isAmbiguous) {
+    return {
+      reply: ambiguity.clarificationPrompt || '🤔 Não consegui identificar o valor exato da operação. Por favor, envie o valor em reais (ex: "Almoço 35 reais" ou "Paguei R$ 50 no mercado").',
+      action: { type: 'none' },
+      isAmbiguous: true,
+      requiresClarification: true
+    };
+  }
 
   // 1. Detecção de Comando de Regra, Filtragem ou Ajuste de Diretriz
   const isRuleOrAdjustCommand = /(nao\s+coloqu|so\s+coloqu|coloqu\s+apenas|apenas\s+o|ajust.*descri|mud.*descri|a\s+partir\s+de\s+agora|filtr.*audio|aprend|diretriz|regr)/i.test(normalized);

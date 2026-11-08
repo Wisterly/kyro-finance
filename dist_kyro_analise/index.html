@@ -231,14 +231,14 @@
         <div class="badge-group">
           <span class="badge badge-success">Etapas 04 a 07: Fechamento Contratual</span>
           <span class="badge badge-blue">PR.048 / v1.48 (Build 48)</span>
-          <span class="badge badge-cyan">644/644 Asserções Aprovadas (100% Sucesso)</span>
-          <span class="badge badge-purple">CI Histórica 03.5: Run 42411151138 (Job 128519377910)</span>
+          <span class="badge badge-cyan">Suíte Consolidada: 644/644 (100% Sucesso)</span>
+          <span class="badge badge-purple">Browser E2E Chrome Real: 18/18 (100% Sucesso)</span>
           <span class="badge badge-warning">Aceite Dinâmico Android: Formalmente Pendente AVD/Host</span>
         </div>
         <div style="font-size: 0.85rem; color: var(--text-muted);">
-          Data da Homologação: <strong>08/11/2026 04:20 BRT</strong> | 
-          Escopo: <strong>Compatibilização das Etapas 04 a 07 & Homologação Consolidada</strong><br/>
-          <strong>SHA Efetivamente Testado (644 Asserções):</strong> <a href="https://github.com/Wisterly/kyro-finance/commit/543e8ab9ff693a6a24bc301588a70cdc1e16bf1e" target="_blank" style="color:var(--accent); text-decoration: underline;"><code>543e8ab9ff693a6a24bc301588a70cdc1e16bf1e</code></a> (Checkout CLEAN) | 
+          Data da Homologação: <strong>08/11/2026 05:00 BRT</strong> | 
+          Escopo: <strong>Compatibilização das Etapas 04 a 07 & Homologação Consolidada + E2E Browser</strong><br/>
+          <strong>SHA Consolidado (644 Asserções):</strong> <a href="https://github.com/Wisterly/kyro-finance/commit/543e8ab9ff693a6a24bc301588a70cdc1e16bf1e" target="_blank" style="color:var(--accent); text-decoration: underline;"><code>543e8ab9ff693a6a24bc301588a70cdc1e16bf1e</code></a> (Checkout CLEAN) | 
           <strong>Código Base da Etapa 04:</strong> <a href="https://github.com/Wisterly/kyro-finance/commit/155160fcf2ef8728250bfb3ba2c1542453d4378b" target="_blank" style="color:var(--accent); text-decoration: underline;"><code>155160f</code></a><br/>
           <strong>Comparativo Android (03.5 vs 03.7):</strong> <a href="https://github.com/Wisterly/kyro-finance/commit/28715884e70cc87fdb41524d33e39e3d6f8dc3e8" target="_blank" style="color:var(--text-muted); text-decoration: underline;"><code>2871588</code></a> | 
           <strong>Revisão Base 03.7:</strong> <a href="https://github.com/Wisterly/kyro-finance/commit/3bc4b691938af5e340e36d985eebbf9551c6c879" target="_blank" style="color:var(--text-muted); text-decoration: underline;"><code>3bc4b69</code></a> | 
@@ -247,7 +247,7 @@
       </div>
       <h1>KYRO Finance | Auditoria Técnica e Compatibilização Consolidada das Etapas 04 a 07: Chat Web, WhatsApp, Fila Offline e Android</h1>
       <p class="subtitle">
-        Relatório oficial consolidado de compatibilização integral e fechamento contratual das Etapas 04 a 07 do KYRO Finance. Confrontação sistemática do Prompt Mestre com o código real do repositório, homologação de ponta a ponta da <strong>Etapa 04 (Chat Web, texto digitado, voz nativa, ambiguidades sem mutação e eliminação de fallbacks presumidos)</strong>, segregação formal entre evidências em mídia sintética e execução de provedor real no WhatsApp (<strong>Etapa 06</strong>), consolidação da fila offline resiliente e proteção por Tombstones (<strong>Etapa 07</strong>), e documentação rigorosa do bloqueio concreto de host para o runtime dinâmico Android (<strong>Etapa 05</strong>), totalizando <strong>644 asserções e testes automatizados 100% aprovados</strong> contra o Firebase Auth Emulator e Firestore Emulator.
+        Relatório oficial consolidado de compatibilização integral e fechamento contratual das Etapas 04 a 07 do KYRO Finance. Confrontação sistemática do Prompt Mestre com o código real do repositório, homologação de ponta a ponta da <strong>Etapa 04 (Chat Web com discriminação rigorosa de camadas e validação dinâmica no Google Chrome real com Puppeteer-Core)</strong>, segregação formal entre evidências em mídia sintética e execução de provedor real no WhatsApp (<strong>Etapa 06</strong>), consolidação da fila offline resiliente e proteção por Tombstones (<strong>Etapa 07</strong>), e documentação rigorosa do bloqueio concreto de host para o runtime dinâmico Android (<strong>Etapa 05</strong>), totalizando <strong>662 asserções automatizadas 100% aprovadas</strong> (644 na suíte consolidada de backend/contrato + 18 no navegador Chrome real) contra o Firebase Auth Emulator e Firestore Emulator.
       </p>
     </header>
 
@@ -259,9 +259,14 @@
         <div class="kpi-subtitle">100% de Sucesso (8 Suítes Integradas)</div>
       </div>
       <div class="card-kpi">
-        <div class="kpi-title">Chat Web (Etapa 04)</div>
+        <div class="kpi-title">Browser Real E2E (Chrome)</div>
+        <div class="kpi-value">18 / 18</div>
+        <div class="kpi-subtitle">Texto, Voz, Ambiguidade & DOM Real</div>
+      </div>
+      <div class="card-kpi">
+        <div class="kpi-title">Chat Web Contratos (04)</div>
         <div class="kpi-value">47 / 47</div>
-        <div class="kpi-subtitle">Texto, Voz, Ambiguidades & Campos Ausentes</div>
+        <div class="kpi-subtitle">Controlador, Parser & API Database</div>
       </div>
       <div class="card-kpi">
         <div class="kpi-title">Sincronização Offline (03.7)</div>
@@ -450,43 +455,51 @@
       </table>
     </div>
 
-    <!-- 0.1 Etapa 04: Homologação Completa do Chat Web -->
+    <!-- 0.1 Etapa 04: Homologação Completa do Chat Web e Validação em Navegador Real -->
     <div class="card">
-      <h2>0.1 Etapa 04: Homologação Completa do Chat Web (Texto, Voz, Ambiguidades e Preservação de Campos Ausentes)</h2>
+      <h2>0.1 Etapa 04: Homologação Completa do Chat Web (Contratos de Backend + Navegador Real Chrome E2E)</h2>
       <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1rem;">
-        Validação de ponta a ponta da interface real do Chat Web através da bateria automatizada <code>src/engine/etapa_04_chat_web.test.ts</code> (47 asserções aprovadas), cobrindo texto digitado, voz com botão "Lançar", tratamento de ambiguidades sem efeitos colaterais e eliminação definitiva de presunções indevidas:
+        Conforme diretriz técnica e separação rigorosa de camadas solicitada pela auditoria, a Etapa 04 está estruturada em duas frentes complementares: (A) a suíte de <strong>Contratos de API, Controlador e Serviços</strong> (<code>src/engine/etapa_04_chat_web.test.ts</code> - 47 asserções) e (B) a suíte de <strong>Validação Dinâmica de Interface em Navegador Real</strong> (<code>src/engine/etapa_04_browser_chat.test.ts</code> - 18 asserções no Google Chrome real com Puppeteer-Core).
+      </p>
+
+      <!-- 0.1.A Suíte de Contratos -->
+      <h3 style="font-size: 1.15rem; margin-top: 1.25rem; margin-bottom: 0.5rem; color: var(--accent);">
+        0.1.A — Suíte de Contrato de API, Controlador e Serviços (<code>src/engine/etapa_04_chat_web.test.ts</code> - 47 Asserções)
+      </h3>
+      <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 0.75rem;">
+        <strong>Discriminação Real do Alcance:</strong> A chamada direta à API <code>/api/database</code> seguida da construção de <code>chatConfirmationBubble</code> prova o <em>contrato da gravação e a reconciliação do recibo oficial</em> no backend. A chamada direta a <code>launchTransactionFromChatVoice</code> prova o <em>fluxo do controlador de voz</em>. As demais asserções cobrem o parser semântico, o serviço de fila offline e o motor contábil central:
       </p>
 
       <table>
         <thead>
           <tr>
-            <th>Cenário de Teste (Etapa 04)</th>
-            <th>Entrada do Usuário</th>
-            <th>Interpretação e Enfileiramento</th>
+            <th>Cenário Avaliado</th>
+            <th>Entrada / Disparo</th>
+            <th>Interpretação e Serviço</th>
             <th>Recibo e Efeito no Firestore Emulator</th>
             <th>Saldo Resultante</th>
           </tr>
         </thead>
         <tbody>
           <tr>
-            <td><strong>1. Texto Digitado no Chat Web</strong></td>
+            <td><strong>1. Contrato de Gravação & Recibo</strong></td>
             <td><em>"Gasolina 73 reais e 45 centavos no débito"</em></td>
-            <td>Parser semântico extrai 7.345 centavos inteiros, Transporte, Débito. Fila offline alimentada com <code>req_chat_text_...</code>.</td>
-            <td>Recibo oficial emitido com <code>status: APPLIED</code> e código <code>TRANSACTION_COMMITTED</code>. Confirmação visual no chat derivada do recibo.</td>
+            <td>Parser extrai 7.345 centavos, Transporte, Débito. Fila offline com <code>requestId</code> estável. Despacho direto a <code>/api/database</code>.</td>
+            <td>Recibo oficial emitido com <code>status: APPLIED</code> e código <code>TRANSACTION_COMMITTED</code>. Confirmação <code>chatConfirmationBubble</code> derivada do recibo.</td>
             <td>Saldo debitado com precisão: <strong>R$ 926,55</strong> (92.655 centavos)</td>
           </tr>
           <tr>
-            <td><strong>2. Entrada Natural por Voz</strong></td>
+            <td><strong>2. Fluxo do Controlador de Voz</strong></td>
             <td><em>"Almoço executivo 42 reais e 50 centavos no débito"</em></td>
-            <td>Botão "Lançar" acionado no controlador de voz. Fila offline e credencial oficial Firebase validadas.</td>
+            <td>Chamada direta a <code>launchTransactionFromChatVoice</code> simulando o controlador. Fila offline e credencial Firebase verificadas.</td>
             <td>Recibo contábil oficial emitido com <code>status: APPLIED</code>. Texto visual reflete exatos R$ 42,50.</td>
             <td>Saldo debitado: <strong>R$ 884,05</strong> (88.405 centavos)</td>
           </tr>
           <tr>
-            <td><strong>3. Ambiguidade por Ausência de Valor</strong></td>
+            <td><strong>3. Ambiguidade no Controlador</strong></td>
             <td><em>"Gastei combustível hoje de manhã"</em></td>
-            <td>Chat identifica intenção de gasto mas detecta ausência de valor monetário (<code>requiresClarification: true</code>).</td>
-            <td><strong>Zero mutações HTTP enviadas ao servidor.</strong> Zero transações gravadas no Firestore. Pedido de esclarecimento claro exibido.</td>
+            <td>Controlador e parser identificam ausência de valor monetário (<code>requiresClarification: true</code>, HTTP 422).</td>
+            <td><strong>Zero mutações enviadas ao servidor.</strong> Zero transações gravadas no Firestore. Mensagem de esclarecimento retornada.</td>
             <td>Saldo mantido intacto: <strong>R$ 884,05</strong> (zero mutação preventiva)</td>
           </tr>
           <tr>
@@ -527,42 +540,137 @@
         </tbody>
       </table>
 
-      <!-- Discriminação de Camada das 47 Verificações da Etapa 04 -->
-      <h3 style="font-size: 1.1rem; margin-top: 1.5rem; margin-bottom: 0.5rem; color: var(--accent);">
-        Mapeamento de Camada das 47 Verificações da Etapa 04 (Interface Web / DOM vs Controladores, Serviços & APIs):
+      <!-- 0.1.B Suíte E2E Navegador Real -->
+      <h3 style="font-size: 1.15rem; margin-top: 2rem; margin-bottom: 0.5rem; color: var(--cyan);">
+        0.1.B — Validação Dinâmica de Interface em Navegador Real (E2E Browser - <code>src/engine/etapa_04_browser_chat.test.ts</code> - 18 Asserções)
       </h3>
       <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 0.75rem;">
-        Conforme exigência de auditoria, abaixo discrimina-se rigorosamente a distribuição de responsabilidade entre os elementos de <strong>Interface e Apresentação no Navegador</strong> (feedback visual, bolhas de chat, botão "Lançar", solicitações de esclarecimento e ausência de campos fictícios) e os <strong>Controladores, Serviços e APIs de Backend</strong>:
+        Esta suíte abre o aplicativo renderizado no <strong>Google Chrome nativo</strong> (via <code>puppeteer-core</code>) contra o <strong>Vite Dev Server (porta 3160)</strong>, <strong>Backend HTTP (porta 3001)</strong>, <strong>Firebase Auth Emulator (porta 9099)</strong> e <strong>Firestore Emulator (porta 8080)</strong>, exercitando o chat pelo fluxo normal da interface:
       </p>
+
       <table>
         <thead>
           <tr>
-            <th>Camada Arquitetural</th>
-            <th>Componente / Módulo Exercitado</th>
-            <th>Qtd Asserções</th>
-            <th>O que é Efetivamente Testado</th>
+            <th>Cenário em Navegador Real</th>
+            <th>Ação Executada no DOM da Interface</th>
+            <th>Resposta Visual Renderizada no Chat</th>
+            <th>Efeito Persistido no Firestore Emulator</th>
+            <th>Status E2E</th>
           </tr>
         </thead>
         <tbody>
           <tr>
-            <td><strong>Interface do Navegador & Fluxo Visual (UI / DOM)</strong></td>
-            <td><code>ChatBubble</code>, <code>VoiceModal</code> & Confirmações Visuais</td>
+            <td><strong>1. Texto Digitado no Input do Chat</strong></td>
+            <td>Digitação de <em>"Gasolina 73 reais e 45 centavos no débito"</em> no elemento <code>[data-testid="input-chat-message"]</code> e clique no botão <code>[data-testid="btn-chat-send"]</code>.</td>
+            <td>Bolha <code>[data-testid="chat-message-bubble"][data-sender="ia"]</code> renderizada no DOM contendo confirmação de R$ 73,45 e Gasolina.</td>
+            <td>Recibo oficial com <code>status: APPLIED</code> emitido; saldo debitado de R$ 1.000,00 para <strong>R$ 926,55</strong> (único débito persistido de R$ 73,45).</td>
+            <td><span class="status-pill status-approved">APROVADO (CHROME REAL)</span></td>
+          </tr>
+          <tr>
+            <td><strong>2. Entrada de Voz com Botão "Lançar"</strong></td>
+            <td>Injeção de <em>"Almoço executivo 42 reais e 50 centavos no débito"</em> na fronteira do reconhecedor e acionamento do botão <strong>"Lançar"</strong> pela interface renderizada.</td>
+            <td>Resposta visual confirmada no chat; recebimento de recibo oficial contábil vinculado ao lançamento.</td>
+            <td>Saldo debitado com precisão absoluta de R$ 926,55 para <strong>R$ 884,05</strong> (88.405 centavos exatos).</td>
+            <td><span class="status-pill status-approved">APROVADO (CHROME REAL)</span></td>
+          </tr>
+          <tr>
+            <td><strong>3. Ambiguidade por Ausência de Valor</strong></td>
+            <td>Digitação e envio de <em>"Gastei combustível hoje de manhã"</em> via input e botão de envio normais da interface.</td>
+            <td>Bolha da IA solicita expressamente esclarecimento ao usuário sobre o valor em reais (<em>"Não consegui identificar o valor..."</em>).</td>
+            <td><strong>SALDO RIGOROSAMENTE INTACTO:</strong> Permanece em <strong>R$ 884,05</strong> no Firestore Emulator (zero mutação no banco).</td>
+            <td><span class="status-pill status-approved">APROVADO (CHROME REAL)</span></td>
+          </tr>
+          <tr>
+            <td><strong>4. Campos Ausentes: Método e Cidade Não Ditos</strong></td>
+            <td>Digitação e envio de <em>"Padaria 15 reais"</em> no chat da interface.</td>
+            <td><strong>REGRAS 10.1 & 10.2 CUMPRIDAS NO DOM:</strong> Bolha da IA NÃO contém "PIX" e NÃO inventa "Teresina".</td>
+            <td>Lançamento gravado no banco com <code>method: Outro</code> e <code>city: ""</code>; saldo debitado exatamente em 1.500 centavos para <strong>R$ 869,05</strong>.</td>
+            <td><span class="status-pill status-approved">APROVADO (CHROME REAL)</span></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- Log da Suíte E2E Browser -->
+      <h4 style="font-size: 0.95rem; margin-top: 1rem; margin-bottom: 0.35rem; color: var(--cyan);">
+        Log de Execução em Navegador Real (Google Chrome + Puppeteer-Core + Emuladores):
+      </h4>
+      <div class="code-box terminal">================================================================
+KYRO FINANCE | VALIDAÇÃO DE INTERFACE EM NAVEGADOR REAL (ETAPA 04)
+Ambiente: Chrome Headless + Vite Dev Server + Emuladores Firebase
+================================================================
+
+[Browser Engine] Usando executável: C:\Program Files\Google\Chrome\Application\chrome.exe
+[1/5] Subindo servidor HTTP de API na porta 3001...
+  [OK - BROWSER] Servidor HTTP da API ativo na porta 3001
+[2/5] Subindo Vite Dev Server na porta 3160...
+  [OK - BROWSER] Vite Dev Server ativo e respondendo na porta 3160
+[3/5] Semeando conta sintética no Firestore Emulator...
+  [OK - BROWSER] Saldo inicial verificado no Firestore Emulator: R$ 1.000,00 (100.000 centavos)
+[4/5] Abrindo Google Chrome via Puppeteer-Core...
+  [OK - BROWSER] Página inicial do KYRO Finance carregada com sucesso no navegador
+  [OK - BROWSER] Interface do Chat Web renderizada e interativa no DOM do navegador
+
+--- [CENÁRIO 1: NAVEGADOR] Texto Digitado no Input do Chat ---
+  [OK - BROWSER] Mensagem digitada e submetida pelo botão de envio da interface
+  [OK - BROWSER] Confirmação visual do lançamento exibida na bolha de resposta da interface
+  [OK - BROWSER] Recibo oficial emitido com status APPLIED e idempotência estrita
+  [OK - BROWSER] Saldo no Firestore Emulator debitado para R$ 926,55 (efeito contábil único persistido de R$ 73,45)
+
+--- [CENÁRIO 2: NAVEGADOR] Entrada por Voz e Acionamento do Botão Lançar ---
+  [OK - BROWSER] Botão de lançamento de voz acionado na interface renderizada do navegador
+  [OK - BROWSER] Recibo oficial emitido com sucesso para o lançamento originado por voz
+  [OK - BROWSER] Saldo no Firestore Emulator debitado com precisão para R$ 884,05 (88.405 centavos)
+
+--- [CENÁRIO 3: NAVEGADOR] Entrada Ambígua sem Valor no Chat ---
+  [OK - BROWSER] Interface do chat solicita esclarecimento ao usuário sobre o valor faltante
+  [OK - BROWSER] SALDO RIGOROSAMENTE INTACTO: Permanece R$ 884,05 no banco (zero mutação por ambiguidade)
+
+--- [CENÁRIO 4: NAVEGADOR] Campos Ausentes: Método e Cidade Não Informados ---
+  [OK - BROWSER] REGRA 10.1 CUMPRIDA NO DOM: Forma de pagamento NÃO foi inferida cegamente como PIX
+  [OK - BROWSER] REGRA 10.2 CUMPRIDA NO DOM: Cidade NÃO foi inventada como Teresina, PI
+  [OK - BROWSER] Recibo oficial emitido para lançamento sem cidade e método presumidos
+  [OK - BROWSER] Saldo debitado exatamente em 1.500 centavos para R$ 869,05 com método Outro e cidade vazia
+
+================================================================
+SUÍTE DE NAVEGADOR CONCLUÍDA: 18 de 18 ASSERÇÕES APROVADAS (100% SUCESSO)
+================================================================</div>
+
+      <!-- Discriminação de Camada das 47 Verificações da Etapa 04 -->
+      <h3 style="font-size: 1.1rem; margin-top: 1.5rem; margin-bottom: 0.5rem; color: var(--accent);">
+        Mapeamento Detalhado de Camadas da Suíte de Contratos (<code>etapa_04_chat_web.test.ts</code> - 47 Asserções):
+      </h3>
+      <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 0.75rem;">
+        Conforme exigência de auditoria e correção formal de taxonomia, a tabela abaixo classifica rigorosamente o alcance real de cada verificação da suíte contratual:
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>Camada Arquitetural / Alcance Real</th>
+            <th>Componente / Módulo Exercitado</th>
+            <th>Qtd Asserções</th>
+            <th>O que é Efetivamente Testado (Alcance Real)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Contrato de Gravação & Recibo da API</strong></td>
+            <td>Rota <code>/api/database</code> + Construção de <code>chatConfirmationBubble</code></td>
             <td><strong>6 asserções</strong></td>
             <td>
-              1. Derivação e renderização da confirmação visual no chat a partir do recibo oficial (<code>TRANSACTION_COMMITTED</code>).<br/>
-              2. Confirmação visual em tela para o botão "Lançar" com o valor formatado de R$ 42,50.<br/>
-              3. Exibição interativa da mensagem de esclarecimento (<em>"Não identifiquei o valor da despesa..."</em>) na ausência de valor monetário.<br/>
-              4. Supressão visual de método fictício "PIX" na bolha do chat quando não informado pelo usuário.<br/>
-              5. Supressão visual de cidade fictícia "Teresina" na bolha do chat quando não informada.<br/>
-              6. Acionamento do botão "Lançar" no modal de voz com resposta em tempo real (<code>ok: true</code>).
+              1. A chamada direta à API <code>/api/database</code> seguida da construção de <code>chatConfirmationBubble</code> prova o <strong>contrato da gravação e a reconciliação do recibo contábil oficial</strong> (<code>TRANSACTION_COMMITTED</code>).<br/>
+              2. Validação contratual do texto do recibo contendo o valor formatado de R$ 42,50.<br/>
+              3. Verificação do payload da mensagem de esclarecimento (<em>"Não identifiquei o valor..."</em>) sob ambiguidade sem valor.<br/>
+              4. Garantia de que o payload e a confirmação contratual não injetam a forma de pagamento fictícia "PIX".<br/>
+              5. Garantia de que o payload e a confirmação contratual não injetam a localização fictícia "Teresina".<br/>
+              6. Resposta síncrona com confirmação contratual e status <code>ok: true</code> no backend.
             </td>
           </tr>
           <tr>
-            <td><strong>Controladores do Frontend Web (Browser Engine)</strong></td>
-            <td><code>chatVoiceController</code>, <code>offlineSyncEngine</code> & <code>clientAuthSession</code></td>
+            <td><strong>Fluxo do Controlador de Aplicação</strong></td>
+            <td>Invocação direta de <code>launchTransactionFromChatVoice</code></td>
             <td><strong>8 asserções</strong></td>
             <td>
-              1. Disparo de <code>launchTransactionFromChatVoice</code> pelo botão "Lançar" do modal de voz.<br/>
+              1. A chamada direta a <code>launchTransactionFromChatVoice</code> prova o <strong>fluxo do controlador</strong> acionando a preparação de payload e autenticação.<br/>
               2. Retorno de <code>requiresClarification: true</code> e código HTTP 422 sob ambiguidade sem valor.<br/>
               3. Enfileiramento local no <code>OfflineSyncEngine</code> com <code>requestId</code> estável imutável.<br/>
               4. Inicialização de item de fila com status <code>PENDING</code> para tolerância a falhas.<br/>
@@ -584,7 +692,7 @@
             </td>
           </tr>
           <tr>
-            <td><strong>Fronteira HTTP Real & Autenticação de Sessão</strong></td>
+            <td><strong>Fronteira HTTP Standalone & Autenticação</strong></td>
             <td>Rotas <code>/api/database</code> e <code>/api/chat</code> em processo HTTP real</td>
             <td><strong>7 asserções</strong></td>
             <td>
@@ -603,7 +711,7 @@
             <td>
               1. Saldo inicial verificado no Firestore Emulator: R$ 1.000,00 (100.000 centavos).<br/>
               2. Débito exato após texto digitado: R$ 926,55 (92.655 centavos).<br/>
-              3. Débito exato após voz confirmada pelo botão "Lançar": R$ 884,05 (88.405 centavos).<br/>
+              3. Débito exato após voz confirmada pelo controlador: R$ 884,05 (88.405 centavos).<br/>
               4. <strong>Saldo rigorosamente intacto em R$ 884,05</strong> sob frase ambígua (zero mutação no banco).<br/>
               5. Débito de R$ 15,00 com método <code>Outro</code> para R$ 869,05.<br/>
               6. Débito de R$ 28,00 com cidade vazia para R$ 841,05.<br/>
@@ -614,9 +722,9 @@
         </tbody>
         <tfoot>
           <tr style="background-color: var(--card-alt); font-weight: 800;">
-            <td colspan="2">TOTAL DE ASSERÇÕES DA BATERIA DA ETAPA 04</td>
+            <td colspan="2">TOTAL DE ASSERÇÕES DA SUÍTE CONTRATUAL DA ETAPA 04</td>
             <td>47</td>
-            <td>100% APROVADAS (6 UI/DOM + 8 Controladores + 12 Parsing + 7 HTTP API + 14 Contábil/Firestore)</td>
+            <td>100% APROVADAS (6 Contrato Recibo + 8 Controlador + 12 Parsing + 7 HTTP API + 14 Contábil/Firestore)</td>
           </tr>
         </tfoot>
       </table>
@@ -637,24 +745,24 @@
         </thead>
         <tbody>
           <tr>
-            <td><strong>Etapa 04: Chat Web</strong></td>
-            <td>Interface real do chat Web (texto e voz), tratamento de ambiguidades sem mutação e eliminação de presunções.</td>
-            <td>Texto digitado e voz confirmada via recibo contábil; ambiguidade sem valor mantém saldo intacto; método e cidade ausentes preservados (zero PIX e Teresina cegos).</td>
+            <td><strong>Etapa 04: Chat Web & Browser E2E</strong></td>
+            <td>Interface real do chat Web (texto e voz), tratamento de ambiguidades sem mutação, eliminação de presunções e execução no Google Chrome real.</td>
+            <td>Contratos de API, controlador de voz e serviços (47 testes) + Validação dinâmica E2E no DOM do Google Chrome real via Puppeteer (18 testes) 100% aprovados. Texto digitado e voz confirmada via recibo contábil; ambiguidade sem valor mantém saldo rigorosamente intacto; método e cidade ausentes preservados (zero PIX e Teresina cegos).</td>
             <td>Nenhum critério aberto no escopo da Etapa 04.</td>
-            <td><span class="status-pill status-approved">CUMPRIDA (47/47 TESTES)</span></td>
+            <td><span class="status-pill status-approved">CUMPRIDA (47 CONTRATO + 18 E2E BROWSER)</span></td>
           </tr>
           <tr>
             <td><strong>Etapa 05: APK Android</strong></td>
             <td>Aplicativo Android compilado com Capacitor, saneamento de rede cleartext, assinatura e validação dinâmica.</td>
             <td>Inspeção estática completa de artefatos (hashes SHA-256 <code>8CDFB55B...</code> e <code>3FDFB458...</code>, certificado oficial de Teresina, cleartext desativado, regras do Capacitor).</td>
-            <td>Validação dinâmica em hardware/AVD com microfone físico bloqueada por ausência de Android SDK/adb no host local descartável.</td>
-            <td><span class="status-pill warning">CONTRATO CUMPRIDO | RUNTIME PENDENTE</span></td>
+            <td>Validação dinâmica em hardware/AVD com microfone físico e captura de áudio formalmente pendente no host local por ausência de Android SDK/adb no ambiente.</td>
+            <td><span class="status-pill warning">CONTRATO CUMPRIDO | RUNTIME FORMALMENTE PENDENTE</span></td>
           </tr>
           <tr>
             <td><strong>Etapa 06: WhatsApp e Áudio</strong></td>
             <td>Webhook WhatsApp (Baileys/Evolution), lotes transacionais atômicos, autenticação de canal e paridade.</td>
             <td>Lotes atômicos com rollback integral e replay sem efeito; autorização de canal estrita do servidor; paridade comprovada com entrada natural e mídia sintética (138 testes).</td>
-            <td>Execução em produção com instância real conectada ao número comercial do WhatsApp (ambiente externo).</td>
+            <td>Evidência identificada formalmente como mídia sintética em ambiente de teste local; execução com número comercial real aguardando liberação de provedor externo.</td>
             <td><span class="status-pill status-approved">CUMPRIDA EM MÍDIA SINTÉTICA (138 TESTES)</span></td>
           </tr>
           <tr>
@@ -1828,10 +1936,10 @@ tokens used: 23.408</div>
             <td>Instrumentação do runner com exibição do SHA do Git, verificação de checkout limpo, emuladores e contadores estritos de asserções de ponta a ponta.</td>
           </tr>
           <tr>
-            <td><strong>Relatório Final de Compatibilização das Etapas 04 a 07</strong></td>
-            <td><code>HEAD</code> (Commit Atual de Documentação)</td>
-            <td>Portal e Matriz Completa Publicada em Produção</td>
-            <td>Mapeamento detalhado de camadas das 47 verificações da Etapa 04, alinhamento rigoroso dos SHAs, reafirmação do alcance de mídia sintética (06), fila offline (07) e bloqueio dinâmico Android (05).</td>
+            <td><strong>Validação de Interface em Navegador Real (E2E Browser)</strong></td>
+            <td><code>HEAD</code> (Commit Atual de Implementação e Portal)</td>
+            <td>Suíte E2E Chrome Real (18/18 asserções) + 644 Consolidadas = 662 Asserções</td>
+            <td>Execução automatizada no Google Chrome real com Puppeteer-Core, Vite na porta 3160 e emuladores Firebase. Fluxo normal da interface por texto digitado, voz com botão Lançar, ambiguidade sem mutação e campos ausentes sem PIX nem Teresina.</td>
           </tr>
         </tbody>
       </table>
