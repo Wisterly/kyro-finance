@@ -936,15 +936,15 @@ CHECKOUT TESTADO: 8bbb987ecec60d5f2650e8e35da10f731e76757e
         2. Ficha Técnica e Criptográfica dos Candidatos de Publicação para Revisão
       </h3>
       <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 0.75rem;">
-        Identificação completa dos artefatos candidatos a publicação para revisão manual do OpenAI Codex, com seus respectivos comandos de geração, hashes criptográficos e integridade de assinatura:
+        Identificação completa dos artefatos candidatos a publicação para revisão manual do OpenAI Codex, com seus respectivos comandos de geração, hashes criptográficos, identificadores de deployment e integridade de assinatura:
       </p>
 
       <table>
         <thead>
           <tr>
             <th>Propriedade / Metadado</th>
-            <th>Candidato Web (SPA / PWA - Vercel)</th>
-            <th>Candidato Android (APK Instalável)</th>
+            <th>Candidato Web (SPA / PWA - Preview Isolado Vercel)</th>
+            <th>Candidato Android (APK Instalável Assinado)</th>
           </tr>
         </thead>
         <tbody>
@@ -959,29 +959,36 @@ CHECKOUT TESTADO: 8bbb987ecec60d5f2650e8e35da10f731e76757e
             <td><a href="https://github.com/Wisterly/kyro-finance/commit/8bbb987ecec60d5f2650e8e35da10f731e76757e" target="_blank" style="color:var(--accent); text-decoration: underline;"><code>8bbb987ecec60d5f2650e8e35da10f731e76757e</code></a></td>
           </tr>
           <tr>
+            <td><strong>Identificador de Deployment / Execução</strong></td>
+            <td><strong>Deployment ID:</strong> <code>dpl_4SAa8mVTadPkLUqP6C3FCsWEvByf</code><br/>
+                <strong>Status:</strong> READY (Target: Preview Isolado, sem promoção)</td>
+            <td><strong>CI Run GitHub Actions:</strong> <a href="https://github.com/Wisterly/kyro-finance/actions/runs/42452451878" target="_blank" style="color:var(--accent); text-decoration: underline;">Run 42452451878</a><br/>
+                <strong>Job ID:</strong> <code>128644364384</code> (Commit base <code>3bc4b69</code>, sincronizado no checkout <code>8bbb987</code>)</td>
+          </tr>
+          <tr>
             <td><strong>Paridade com o Checkout Atual</strong></td>
             <td><code>git diff 8bbb987 HEAD</code>: Zero diferenças em arquivos de código (<code>src/</code>, <code>api/</code>, <code>android/</code>).</td>
             <td>Assets do Capacitor perfeitamente sincronizados via <code>npx cap sync android</code> no mesmo checkout.</td>
           </tr>
           <tr>
             <td><strong>Comandos de Build Executados</strong></td>
-            <td><code>npm run build</code> (<code>tsc && vite build</code>)</td>
+            <td><code>npm run build</code> (<code>tsc && vite build</code>) via pipeline Vercel</td>
             <td><code>npm.cmd run apk:sync</code> e <code>./gradlew assembleRelease</code></td>
           </tr>
           <tr>
             <td><strong>Identificador de Pacote (applicationId)</strong></td>
-            <td>Domínio de Produção: <code>kyro-finance.vercel.app</code></td>
+            <td>Host de Preview: <code>kyro-finance-2x1oaung0-wisterly-s.vercel.app</code></td>
             <td><code>com.kyro.finance</code></td>
           </tr>
           <tr>
             <td><strong>Nome do Arquivo / Artefato</strong></td>
-            <td>Deploy Produção Vercel: <code>dist/</code></td>
+            <td>Preview Bundle Vercel (SPA estático + Serverless Functions)</td>
             <td><code>KYRO-Finance.apk</code> (caminho: <code>C:\Users\Lenovo\Documents\antigravity\Finanças\KYRO-Finance.apk</code>)</td>
           </tr>
           <tr>
             <td><strong>Tamanho Exato do Artefato</strong></td>
             <td>Bundle Otimizado: 1.244 kB JS + 62,8 kB CSS (Gzip: 319 kB)</td>
-            <td><strong>9.585.395 bytes</strong> (Tamanho estável e auditado)</td>
+            <td><strong>9.585.395 bytes</strong> (Coincidência exata byte a byte confirmada)</td>
           </tr>
           <tr>
             <td><strong>Hash SHA-256 do Artefato</strong></td>
@@ -1007,8 +1014,10 @@ CHECKOUT TESTADO: 8bbb987ecec60d5f2650e8e35da10f731e76757e
           </tr>
           <tr>
             <td><strong>Links para Revisão & Download</strong></td>
-            <td><a href="https://kyro-finance.vercel.app/" target="_blank" style="color:var(--accent); text-decoration: underline;">https://kyro-finance.vercel.app/</a></td>
-            <td><a href="https://github.com/Wisterly/kyro-finance/releases/download/apk-latest/KYRO-Finance.apk" target="_blank" style="color:var(--accent); text-decoration: underline;">Download do APK Atualizado (apk-latest)</a></td>
+            <td><a href="https://kyro-finance-2x1oaung0-wisterly-s.vercel.app" target="_blank" style="color:var(--accent); text-decoration: underline;">Preview Isolado: kyro-finance-2x1oaung0-wisterly-s.vercel.app</a><br/>
+                <a href="https://vercel.com/wisterly-s/kyro-finance/4SAa8mVTadPkLUqP6C3FCsWEvByf" target="_blank" style="color:var(--text-muted); font-size:0.8rem; text-decoration: underline;">Inspetor Vercel do Deployment</a></td>
+            <td><a href="https://github.com/Wisterly/kyro-finance/releases/download/apk-latest/KYRO-Finance.apk" target="_blank" style="color:var(--accent); text-decoration: underline;">Download do APK Atualizado (apk-latest)</a><br/>
+                <a href="https://github.com/Wisterly/kyro-finance/actions/runs/42452451878" target="_blank" style="color:var(--text-muted); font-size:0.8rem; text-decoration: underline;">Artefato Oficial CI Run 42452451878</a></td>
           </tr>
         </tbody>
       </table>
@@ -1023,11 +1032,12 @@ CHECKOUT TESTADO: 8bbb987ecec60d5f2650e8e35da10f731e76757e
         2. <strong>Comando de Atualização:</strong> O aplicativo pode ser instalado diretamente sobre qualquer versão anterior utilizando <code>adb install -r KYRO-Finance.apk</code>.<br/>
         3. <strong>Preservação Integral de Dados Locais:</strong> A instalação in-place preserva 100% do banco de dados SQLite nativo do Capacitor, as credenciais salvas em <code>localStorage</code> / <code>sessionStorage</code> e as filas pendentes de sincronização do <code>offlineSyncEngine</code> (particionadas por <code>kyro_offline_queue_${userId}</code>).<br/>
         <br/>
-        <strong style="color: #ffffff; font-size: 0.95rem;">B. Procedimento de Reversão Estável sem Perda de Dados (Rollback):</strong><br/>
-        1. <strong>Garantia de Chave Idêntica:</strong> Caso seja necessária a reversão para o APK de referência da 03.5 (SHA-256 <code>8CDFB55B21A23566BC03FF24DC5722F551C608167A53785ED311AC3AEA77F638</code>), como ambos foram gerados a partir do mesmo keystore oficial, o sistema operacional Android não bloqueia a substituição por divergência de assinatura.<br/>
-        2. <strong>Comando de Reversão (Downgrade Seguro):</strong> Utilizar o comando <code>adb install -r -d KYRO-Finance-03.5.apk</code> (a flag <code>-d</code> autoriza o downgrade de versionCode sem desinstalação).<br/>
-        3. <strong>Preservação Contábil e Tombstones:</strong> Como o motor contábil opera sob o Modelo B com partidas dobradas e identificadores <code>requestId</code> estáveis no Firestore, qualquer lançamento já consolidado no servidor permanece intacto. A reversão do cliente não gera lançamentos duplicados e o motor de idempotência reconhece transações pré-existentes como replay legítimo.<br/>
-        4. <strong>Reversão no Canal Web:</strong> A reversão na Vercel pode ser executada instantaneamente promovendo o deployment anterior via <code>vercel rollback</code> ou reapontando o alias de produção sem qualquer downtime ou perda de estado de sessão dos usuários.
+        <strong style="color: #ffffff; font-size: 0.95rem;">B. Procedimento de Reversão Estável (Rollback Seguro sem Downgrade Forçado):</strong><br/>
+        1. <strong>Retirada de Garantia via Flag -d:</strong> Em estrito alinhamento com a auditoria do OpenAI Codex, <strong>retira-se expressamente qualquer garantia de reversão via flag arriscada <code>adb install -r -d</code> para o APK em ambiente de produção</strong> enquanto carecer de comprovação prática em hardware/AVD autorizado.<br/>
+        2. <strong>Procedimento Oficial por Rollback Forward (versionCode Superior):</strong> O procedimento oficial e seguro de reversão consiste em empacotar o código de referência estável (ex: commit da 03.5 <code>e34dbfe992d7d388ac2c7915c25f3a64f18b4fca</code>), mantendo o <strong>mesmo <code>applicationId</code></strong> (<code>com.kyro.finance</code>) e a <strong>mesma assinatura oficial</strong> (keystore com digest <code>9b2b95a9...</code>), porém incrementando o <code>versionCode</code> para um valor estritamente superior ao instalado (ex: <code>versionCode = 49</code> ou <code>50</code>). Isso assegura aceitação transparente e nativa pelo Android Package Manager via <code>adb install -r</code>, sem rejeições de versão ou necessidade de flags de downgrade de baixo nível.<br/>
+        3. <strong>Compatibilidade de Dados Locais e da Fila Offline:</strong> O formato de persistência local da fila offline no <code>offlineSyncEngine</code> (armazenado sob as chaves <code>kyro_offline_queue_${userId}</code>) utiliza esquemas universais serializados em JSON com campos imutáveis (<code>requestId</code>, <code>amountCents</code> BigInt serializado em string, <code>status</code> e <code>receipt</code>). A versão de reversão lê perfeitamente essa estrutura; caso haja transações pendentes enfileiradas pelo usuário, o motor continua descarregando-as com idempotência atômica pelo <code>requestId</code> contra <code>/api/database</code>, sem duplicidade nem descarte de operações.<br/>
+        4. <strong>Status do Procedimento:</strong> Na ausência de AVD ou dispositivo móvel com áudio funcional no host, o procedimento dinâmico de reversão permanece <strong>formalmente registrado como PENDENTE DE VALIDAÇÃO DINÂMICA EM HARDWARE</strong>, mantendo-se estritamente separados os resultados de auditoria estática dos APKs da 03.5 (<code>8CDFB55B...</code>) e da 03.7 (<code>3FDFB458...</code>).<br/>
+        5. <strong>Reversão no Canal Web:</strong> A reversão na Vercel pode ser executada instantaneamente promovendo o deployment anterior via <code>vercel rollback</code> ou reapontando o alias de produção sem qualquer downtime ou perda de estado de sessão dos usuários.
       </div>
 
       <!-- 4. Parecer de Prontidão Operacional por Canal -->
@@ -1053,8 +1063,8 @@ CHECKOUT TESTADO: 8bbb987ecec60d5f2650e8e35da10f731e76757e
           <tr>
             <td><strong>Canal Android (APK Nativo)</strong></td>
             <td><span class="status-pill status-approved">PRONTO EM AUDITORIA ESTÁTICA</span><br/><span class="status-pill warning">CONDICIONADO A DISPOSITIVO ARM64</span></td>
-            <td>Compilação com manifesto limpo (<code>usesCleartextTraffic="false"</code>), <code>networkSecurityConfig</code> restritivo, assets de Capacitor higienizados e assinatura criptográfica oficial compatível com upgrade in-place e downgrade sem perda de dados.</td>
-            <td><strong>Bloqueio concreto de host:</strong> O host de desenvolvimento Windows não possui Android SDK / <code>adb</code> nem emulador AVD configurado com microfone funcional. O aceite dinâmico de runtime móvel permanece <strong>formalmente condicionado</strong> à execução do comparativo dinâmico em hardware ARM64 autorizado com microfone real ou runner nativo do Codex.</td>
+            <td>Compilação com manifesto limpo (<code>usesCleartextTraffic="false"</code>), <code>networkSecurityConfig</code> restritivo, assets de Capacitor higienizados e assinatura criptográfica oficial compatível com upgrade in-place e procedimento de reversão segura via Rollback Forward (<code>versionCode</code> superior com base de código estável).</td>
+            <td><strong>Bloqueio concreto de host:</strong> O host de desenvolvimento Windows não possui Android SDK / <code>adb</code> nem emulador AVD configurado com microfone funcional. O aceite dinâmico de runtime móvel do comparativo dinâmico (03.5 vs 03.7) permanece <strong>formalmente condicionado e pendente</strong> de execução em hardware ARM64 autorizado com microfone real ou runner nativo do Codex, mantendo rigorosamente separados os dados estáticos dos APKs.</td>
           </tr>
           <tr>
             <td><strong>Canal WhatsApp (Mensageria)</strong></td>
