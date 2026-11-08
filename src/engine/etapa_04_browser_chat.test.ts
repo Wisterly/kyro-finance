@@ -237,6 +237,16 @@ export async function runEtapa04BrowserChatTests(): Promise<{ total: number; pas
       }
     });
 
+    async function waitForMutation(fromIndex: number, maxWaitMs = 15000): Promise<CapturedMutation | null> {
+      const start = Date.now();
+      while (Date.now() - start < maxWaitMs) {
+        const found = capturedMutations.slice(fromIndex).find(m => Boolean(m.sentRequestId) && Boolean(m.receivedRequestId));
+        if (found) return found;
+        await new Promise(r => setTimeout(r, 150));
+      }
+      return capturedMutations.slice(fromIndex).find(m => Boolean(m.sentRequestId) && Boolean(m.receivedRequestId)) || null;
+    }
+
     page.on('console', (msg: any) => {
       console.log(`[Browser Console ${msg.type()}]: ${msg.text()}`);
     });
@@ -284,16 +294,23 @@ export async function runEtapa04BrowserChatTests(): Promise<{ total: number; pas
     await page.click(btnSendSelector);
     assertBrowser(true, 'Mensagem digitada e submetida pelo botão de envio da interface');
 
-    // Sincroniza a mutação disparada pela aplicação
+    // Aguarda a resposta da IA no chat (garante que a IA processou e acionou a persistência)
+    await page.waitForFunction(
+      (beforeCount) => document.querySelectorAll('[data-testid="chat-message-bubble"][data-sender="ia"]').length > beforeCount,
+      { timeout: 15000 },
+      bubblesBeforeScenario1
+    );
+
+    // Sincroniza a mutação disparada pela aplicação caso ainda na fila
     await page.evaluate(async (uid: string) => {
       const offline = (window as any).offlineSyncEngine;
       if (offline) {
-        await offline.sync({ baseUrl: 'http://127.0.0.1:3001', userId: uid });
+        await offline.sync({ baseUrl: 'http://127.0.0.1:3001', userId: uid }).catch(() => {});
       }
     }, testUid);
 
-    // 1. Captura separadamente sentRequestId e receivedRequestId da mutação emitida
-    const mut1 = capturedMutations.slice(mutationsBeforeScenario1).find(m => Boolean(m.sentRequestId) || Boolean(m.receivedRequestId));
+    // 1. Aguarda e captura separadamente sentRequestId e receivedRequestId da mutação emitida
+    const mut1 = await waitForMutation(mutationsBeforeScenario1);
     assertBrowser(Boolean(mut1), 'Requisição financeira emitida pela interface web capturada');
     assertBrowser(Boolean(mut1?.sentRequestId), `sentRequestId presente na requisição emitida pela interface: ${mut1?.sentRequestId}`);
     assertBrowser(Boolean(mut1?.receivedRequestId), `receivedRequestId presente no recibo oficial devolvido: ${mut1?.receivedRequestId}`);
@@ -310,13 +327,7 @@ export async function runEtapa04BrowserChatTests(): Promise<{ total: number; pas
     assertBrowser(savedTx1?.amountCents === 7345n, 'Valor contábil do lançamento localizado por requestId é de exatos 7.345 centavos BigInt');
     assertBrowser(txList1.filter(t => t.requestId === expectedRequestId1).length === 1, 'UNICIDADE CONTÁBIL: Exatamente um único lançamento com este requestId gravado no Firestore (sem duplicação)');
 
-    // 3. Aguarda e confere a nova confirmação renderizada no DOM após o recibo APPLIED
-    await page.waitForFunction(
-      (beforeCount) => document.querySelectorAll('[data-testid="chat-message-bubble"][data-sender="ia"]').length > beforeCount,
-      { timeout: 15000 },
-      bubblesBeforeScenario1
-    );
-
+    // 3. Confere a nova confirmação renderizada no DOM após o recibo APPLIED
     const bubbleText1 = await page.evaluate(() => {
       const bubbles = Array.from(document.querySelectorAll('[data-testid="chat-message-bubble"][data-sender="ia"]'));
       return bubbles[bubbles.length - 1]?.textContent || '';
@@ -386,8 +397,8 @@ export async function runEtapa04BrowserChatTests(): Promise<{ total: number; pas
     }
     assertBrowser(true, 'Botão "Lançar" renderizado no DOM foi acionado pelo clique do usuário');
 
-    // 4. Captura separadamente sentRequestId e receivedRequestId da mutação de voz
-    const mut2 = capturedMutations.slice(mutationsBeforeScenario2).find(m => Boolean(m.sentRequestId) || Boolean(m.receivedRequestId));
+    // 4. Aguarda e captura separadamente sentRequestId e receivedRequestId da mutação de voz
+    const mut2 = await waitForMutation(mutationsBeforeScenario2);
     assertBrowser(Boolean(mut2), 'Requisição originada pelo botão "Lançar" capturada');
     assertBrowser(Boolean(mut2?.sentRequestId), `sentRequestId de voz presente na requisição emitida pela interface: ${mut2?.sentRequestId}`);
     assertBrowser(Boolean(mut2?.receivedRequestId), `receivedRequestId de voz presente no recibo oficial devolvido: ${mut2?.receivedRequestId}`);
@@ -507,16 +518,23 @@ export async function runEtapa04BrowserChatTests(): Promise<{ total: number; pas
 
     await submitTextViaReact(noMethodNoCity);
 
-    // Sincroniza a mutação disparada pela aplicação
+    // Aguarda a resposta da IA no chat (garante que a IA processou e acionou a persistência)
+    await page.waitForFunction(
+      (beforeCount) => document.querySelectorAll('[data-testid="chat-message-bubble"][data-sender="ia"]').length > beforeCount,
+      { timeout: 15000 },
+      bubblesBeforeScenario4
+    );
+
+    // Sincroniza a mutação disparada pela aplicação caso ainda na fila
     await page.evaluate(async (uid: string) => {
       const offline = (window as any).offlineSyncEngine;
       if (offline) {
-        await offline.sync({ baseUrl: 'http://127.0.0.1:3001', userId: uid });
+        await offline.sync({ baseUrl: 'http://127.0.0.1:3001', userId: uid }).catch(() => {});
       }
     }, testUid);
 
-    // 1. Captura separadamente sentRequestId e receivedRequestId da mutação de campos ausentes
-    const mut4 = capturedMutations.slice(mutationsBeforeScenario4).find(m => Boolean(m.sentRequestId) || Boolean(m.receivedRequestId));
+    // 1. Aguarda e captura separadamente sentRequestId e receivedRequestId da mutação de campos ausentes
+    const mut4 = await waitForMutation(mutationsBeforeScenario4);
     assertBrowser(Boolean(mut4), 'Requisição de campos ausentes emitida pela interface web capturada');
     assertBrowser(Boolean(mut4?.sentRequestId), `sentRequestId de campos ausentes presente na requisição: ${mut4?.sentRequestId}`);
     assertBrowser(Boolean(mut4?.receivedRequestId), `receivedRequestId de campos ausentes presente no recibo devolvido: ${mut4?.receivedRequestId}`);
@@ -535,13 +553,7 @@ export async function runEtapa04BrowserChatTests(): Promise<{ total: number; pas
     assertBrowser(savedTx4?.amountCents === 1500n, 'Valor contábil registrado como exatos 1.500 centavos BigInt');
     assertBrowser(txList4.filter(t => t.requestId === expectedRequestId4).length === 1, 'CAMPOS AUSENTES - UNICIDADE CONTÁBIL: Exatamente um único lançamento de Padaria com este requestId no Firestore');
 
-    // 3. Aguarda e confere a nova confirmação renderizada no DOM após o recibo APPLIED
-    await page.waitForFunction(
-      (beforeCount) => document.querySelectorAll('[data-testid="chat-message-bubble"][data-sender="ia"]').length > beforeCount,
-      { timeout: 15000 },
-      bubblesBeforeScenario4
-    );
-
+    // 3. Confere a nova confirmação renderizada no DOM após o recibo APPLIED
     const bubbleText4 = await page.evaluate(() => {
       const bubbles = Array.from(document.querySelectorAll('[data-testid="chat-message-bubble"][data-sender="ia"]'));
       return bubbles[bubbles.length - 1]?.textContent || '';
