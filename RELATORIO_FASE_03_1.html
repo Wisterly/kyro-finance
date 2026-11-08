@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KYRO Finance | Relatório Oficial — Fase 3.1 (Etapa 03.1)</title>
+  <style>
+    :root {
+      --bg: #0b0f17;
+      --card-bg: #111827;
+      --card-alt: #162032;
+      --border: #1f2937;
+      --text: #f3f4f6;
+      --text-muted: #9ca3af;
+      --accent: #10b981;
+      --accent-glow: rgba(16, 185, 129, 0.15);
+      --danger: #ef4444;
+      --warning: #f59e0b;
+      --blue: #3b82f6;
+      --purple: #8b5cf6;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      padding: 2rem 1rem;
+    }
+    .container { max-width: 1400px; margin: 0 auto; }
+    header {
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 2rem;
+      margin-bottom: 2.5rem;
+    }
+    .top-meta {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+    .badge-group { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+    .badge {
+      display: inline-block;
+      padding: 0.35rem 0.85rem;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .badge-success { background-color: rgba(16, 185, 129, 0.1); color: var(--accent); border: 1px solid var(--accent); }
+    .badge-blue { background-color: rgba(59, 130, 246, 0.1); color: var(--blue); border: 1px solid var(--blue); }
+    .badge-purple { background-color: rgba(139, 92, 246, 0.1); color: var(--purple); border: 1px solid var(--purple); }
+    .badge-warning { background-color: rgba(245, 158, 11, 0.1); color: var(--warning); border: 1px solid var(--warning); }
+    
+    h1 { font-size: 2.5rem; font-weight: 900; letter-spacing: -0.03em; margin-bottom: 0.5rem; }
+    .subtitle { font-size: 1.15rem; color: var(--text-muted); max-width: 900px; }
+    
+    .grid-kpi {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 3rem;
+    }
+    .card-kpi {
+      background-color: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 0.75rem;
+      padding: 1.5rem;
+      position: relative;
+      overflow: hidden;
+    }
+    .card-kpi::before {
+      content: "";
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--accent), var(--blue));
+    }
+    .kpi-title { font-size: 0.85rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700; margin-bottom: 0.5rem; }
+    .kpi-value { font-size: 2.2rem; font-weight: 800; color: #ffffff; }
+    .kpi-subtitle { font-size: 0.8rem; color: var(--accent); margin-top: 0.35rem; display: flex; align-items: center; gap: 0.35rem; }
+    
+    .card {
+      background-color: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 0.75rem;
+      padding: 2rem;
+      margin-bottom: 2.5rem;
+    }
+    .card h2 {
+      font-size: 1.5rem;
+      font-weight: 800;
+      margin-bottom: 1.25rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.75rem;
+    }
+    .card h3 {
+      font-size: 1.2rem;
+      font-weight: 700;
+      margin: 1.5rem 0 0.75rem 0;
+      color: #e5e7eb;
+    }
+    p { margin-bottom: 1rem; color: #d1d5db; }
+    
+    table { width: 100%; border-collapse: collapse; margin: 1.5rem 0; font-size: 0.9rem; }
+    th, td { padding: 0.85rem 1rem; text-align: left; border-bottom: 1px solid var(--border); }
+    th { background-color: var(--card-alt); color: var(--text-muted); font-weight: 700; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.05em; }
+    tr:hover { background-color: rgba(255, 255, 255, 0.02); }
+    
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.85rem;
+      background-color: #1f2937;
+      padding: 0.2rem 0.4rem;
+      border-radius: 0.25rem;
+      color: #93c5fd;
+    }
+    pre {
+      background-color: #0d1117;
+      border: 1px solid var(--border);
+      padding: 1.25rem;
+      border-radius: 0.5rem;
+      overflow-x: auto;
+      font-size: 0.85rem;
+      margin: 1rem 0;
+      color: #e6edf3;
+    }
+    
+    .status-pass {
+      color: var(--accent);
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+    }
+    .status-locked {
+      color: var(--blue);
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+    }
+    
+    .quick-links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      margin: 1.5rem 0;
+    }
+    .btn-link {
+      background: var(--card-alt);
+      border: 1px solid var(--border);
+      color: #ffffff;
+      padding: 0.75rem 1.25rem;
+      border-radius: 0.5rem;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 0.875rem;
+      transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .btn-link:hover {
+      background: #1f2937;
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    .btn-primary {
+      background: rgba(16, 185, 129, 0.15);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    .btn-primary:hover {
+      background: var(--accent);
+      color: #000000;
+    }
+    
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 2.5rem 0;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 0.875rem;
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+  
+  <header>
+    <div class="top-meta">
+      <div class="badge-group">
+        <span class="badge badge-success">Fase 3 Ativa</span>
+        <span class="badge badge-blue">Subetapa 03.1 Homologada</span>
+        <span class="badge badge-purple">Ponto de Restauração PR.042</span>
+        <span class="badge badge-warning">Próximo: Subetapa 03.2</span>
+      </div>
+      <div style="font-size:0.85rem; color:var(--text-muted);">
+        Atualizado em: <strong>05/11/2026 23:55 BRT</strong> | Commit: <code>dd0031d</code>
+      </div>
+    </div>
+    <h1>KYRO Finance | Relatório Oficial de Acompanhamento</h1>
+    <p class="subtitle">
+      Plataforma Unificada de Gestão Financeira Privada (Web, APK Android e WhatsApp). Documento contínuo de evolução arquitetural, validação determinística e certificação de código.
+    </p>
+
+    <div class="quick-links">
+      <a href="https://github.com/Wisterly/kyro-finance/releases/download/apk-latest/KYRO-Finance.apk" class="btn-link btn-primary" target="_blank">
+        📥 Baixar APK Atualizado (.apk)
+      </a>
+      <a href="https://github.com/Wisterly/kyro-finance" class="btn-link" target="_blank">
+        📦 Repositório GitHub
+      </a>
+      <a href="./kyro_fase02_reproduction_suite.zip" class="btn-link">
+        📦 Pacote ZIP de Reprodução
+      </a>
+      <a href="./results_fechamento.json" class="btn-link" target="_blank">
+        📊 Resultados 45 Testes (JSON)
+      </a>
+      <a href="./mutation_results_fechamento.json" class="btn-link" target="_blank">
+        🧬 Mutantes Detectados (JSON)
+      </a>
+      <a href="./offline_reversal_evidence.json" class="btn-link" target="_blank">
+        🔄 Reversão Offline 03.7 (JSON)
+      </a>
+      <a href="./encerramento-fase-02.html" class="btn-link">
+        📜 Arquivo: Encerramento Fase 02
+      </a>
+    </div>
+  </header>
+
+  <!-- PAINEL DE KPIS PRINCIPAIS -->
+  <div class="grid-kpi">
+    <div class="card-kpi">
+      <div class="kpi-title">Fase / Subetapa Vigente</div>
+      <div class="kpi-value" style="color:var(--accent);">Fase 3.1</div>
+      <div class="kpi-subtitle">
+        ✓ Portão 03.1 Homologado (PR.042)
+      </div>
+    </div>
+
+    <div class="card-kpi">
+      <div class="kpi-title">Assinatura Android & CI/CD</div>
+      <div class="kpi-value" style="color:var(--blue);">100% Sanitizada</div>
+      <div class="kpi-subtitle">
+        ✓ Segredos protegidos & Keystore intacto
+      </div>
+    </div>
+
+    <div class="card-kpi">
+      <div class="kpi-title">Canais de Entrada Mapeados</div>
+      <div class="kpi-value" style="color:var(--purple);">6 Rotas</div>
+      <div class="kpi-subtitle">
+        ✓ Web, APK Voz/Texto, Baileys, Evolution, Edge
+      </div>
+    </div>
+
+    <div class="card-kpi">
+      <div class="kpi-title">Bateria de Regressão Integral</div>
+      <div class="kpi-value" style="color:var(--accent);">45/45 Testes</div>
+      <div class="kpi-subtitle">
+        ✓ 100% Determinísticos + 10 Mutantes Mortos
+      </div>
+    </div>
+  </div>
+
+  <!-- SEÇÃO 1: SUBETAPA 03.1 - STATUS E HOMOLOGAÇÃO -->
+  <div class="card">
+    <h2>1. Portão 03.1 — Sanitização Android, CI/CD e Mapeamento de Canais</h2>
+    <p>
+      A Subetapa 03.1 abriu oficialmente a <strong>Etapa 03</strong>, cujo objetivo supremo é fazer <strong>Web, APK Android e WhatsApp usarem o mesmo motor financeiro unificado</strong>, assegurando que o usuário possa falar ou escrever naturalmente, efetuar lançamentos em lote, retificar histórico e receber respostas fiéis ao estado real da contabilidade privada.
+    </p>
+
+    <h3>1.1. Saneamento Crítico de Credenciais Android (build.gradle e GitHub Actions)</h3>
+    <p>
+      Anteriormente, o arquivo <code>android/app/build.gradle</code> mantinha senhas de keystore em texto claro no código versionado. O portão 03.1 removeu qualquer credencial estática, parametrizando a assinatura por variáveis de ambiente injetadas de forma isolada nos segredos do GitHub Actions (<code>{secrets.ANDROID_KEYSTORE_PASSWORD}</code>) e no ambiente local.
+    </p>
+    <table>
+      <thead>
+        <tr>
+          <th>Atributo de Assinatura</th>
+          <th>Estado Canônico</th>
+          <th>Integridade Criptográfica (SHA-256)</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Keystore Canônico</strong></td>
+          <td><code>android/app/kyro.keystore</code></td>
+          <td><code>EDFA8DA70A34B7CBCCDE2D2086EF80DC8C903A65DA5F8C465AE79CEAF1C8B9B9</code></td>
+          <td><span class="status-pass">✓ PRESERVADO INTACTO</span></td>
+        </tr>
+        <tr>
+          <td><strong>Application ID</strong></td>
+          <td><code>com.kyro.finance</code></td>
+          <td>Idêntico para atualizações in-place sem conflito</td>
+          <td><span class="status-pass">✓ INALTERADO</span></td>
+        </tr>
+        <tr>
+          <td><strong>Release APK Local</strong></td>
+          <td><code>KYRO-Finance.apk</code> (9.535.171 bytes)</td>
+          <td><code>AC68662B788EA5291A789BC89004B2DA469AFF43B90C076E55FA7BAF4026E44F</code></td>
+          <td><span class="status-pass">✓ AUDITADO</span></td>
+        </tr>
+        <tr>
+          <td><strong>CI/CD Workflow</strong></td>
+          <td><code>.github/workflows/android-build.yml</code></td>
+          <td>Segredos injetados via Secrets em runner Ubuntu JDK 21</td>
+          <td><span class="status-pass">✓ SANITIZADO</span></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>1.2. Mapeamento Nominal dos Canais de Entrada e Escritas Legadas</h3>
+    <p>
+      Para preparar a migração sem quebra de compatibilidade na Subetapa 03.2 e 03.3, todos os pontos de ingestão foram mapeados nominalmente em modo de leitura estrita:
+    </p>
+    <table>
+      <thead>
+        <tr>
+          <th>Canal de Entrada</th>
+          <th>Ponto de Captura</th>
+          <th>Mecanismo de Parser / IA</th>
+          <th>Persistência Legada Atual</th>
+          <th>Destino Unificado (Etapa 03)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Web (Browser)</strong></td>
+          <td><code>src/App.tsx:873+</code></td>
+          <td><code>financialParser.ts</code> / <code>aiCopilot.ts</code></td>
+          <td><code>src/firebase.ts:77-169</code> (float plano)</td>
+          <td><code>src/engine/ledger.ts</code> + Centavos BigInt</td>
+        </tr>
+        <tr>
+          <td><strong>APK (Voz Contínua)</strong></td>
+          <td><code>src/nativeBridge.ts:95-189</code></td>
+          <td>Google SpeechRecognizer nativo + Copilot</td>
+          <td><code>src/firebase.ts:77-169</code></td>
+          <td><code>src/engine/ledger.ts</code> + Fila Offline</td>
+        </tr>
+        <tr>
+          <td><strong>APK (Chat Interno)</strong></td>
+          <td><code>src/App.tsx:6790+</code></td>
+          <td><code>aiCopilot.ts</code></td>
+          <td><code>src/firebase.ts:77-169</code></td>
+          <td><code>src/engine/ledger.ts</code></td>
+        </tr>
+        <tr>
+          <td><strong>WhatsApp (Baileys)</strong></td>
+          <td><code>bot.cjs:porta 3001</code></td>
+          <td>Whisper <code>@xenova/transformers</code> + OCR</td>
+          <td><code>transactions.json</code> + webhook HTTP</td>
+          <td>Ingestão Idempotente + <code>src/engine/ledger.ts</code></td>
+        </tr>
+        <tr>
+          <td><strong>WhatsApp (Evolution)</strong></td>
+          <td><code>api/services/evolution.ts</code></td>
+          <td>Webhook Edge (<code>api/webhook.ts</code>)</td>
+          <td><code>api/webhook.ts:677,719</code></td>
+          <td>Fila Idempotente + Fencing Token</td>
+        </tr>
+        <tr>
+          <td><strong>Edge Functions</strong></td>
+          <td><code>/api/chat</code> / <code>/api/webhook</code></td>
+          <td>OpenAI GPT-4o-mini</td>
+          <td><code>api/database.ts</code> (RAM global)</td>
+          <td>Modelo B isolado por UID + Firestore puro</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- SEÇÃO 2: REGRESSÃO E ACEITE SINTÉTICO -->
+  <div class="card">
+    <h2>2. Bateria de Regressão e Prova de Reversão Offline</h2>
+    <p>
+      A suíte integral da Fase 02 foi replicada em pasta descartável (<code>scratch/regression_etapa03_1</code>) para comprovar a ausência total de regressão após a sanitização e início da Etapa 03:
+    </p>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Bateria de Teste</th>
+          <th>Casos Executados</th>
+          <th>Aprovados</th>
+          <th>Taxonomia / Cobertura</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Suíte Determinística Fechamento</strong></td>
+          <td>45</td>
+          <td>45</td>
+          <td>38 Isolados Executados + 7 Contratos Executados</td>
+          <td><span class="status-pass">✓ 100% APROVADO</span></td>
+        </tr>
+        <tr>
+          <td><strong>Fluxo de Linguagem Natural (6 Casos)</strong></td>
+          <td>6</td>
+          <td>6</td>
+          <td>Gasto, Receita, Temporal Ontem, Transferência, Correção e Cancelamento</td>
+          <td><span class="status-pass">✓ 100% APROVADO</span></td>
+        </tr>
+        <tr>
+          <td><strong>Suíte de Mutação Causal</strong></td>
+          <td>10</td>
+          <td>10</td>
+          <td>10 Mutantes Adversariais Mortos + Controle INFRA-CTRL-01</td>
+          <td><span class="status-pass">✓ 100% DETECTADO</span></td>
+        </tr>
+        <tr>
+          <td><strong>Aceite Sintético de Reversão Offline (03.7)</strong></td>
+          <td>4 Invariantes</td>
+          <td>4</td>
+          <td>Operação pendente recuperada, confirmada sem replay, tombstone respeitado e integridade de ledger</td>
+          <td><span class="status-pass">✓ 100% COMPROVADO</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- SEÇÃO 3: ROTEIRO TÉCNICO DA SUBETAPA 03.2 -->
+  <div class="card">
+    <h2>3. Próximo Passo — Subetapa 03.2: Núcleo Contábil Unificado Modelo B</h2>
+    <p>
+      Com a liberação formal do portão 03.1, os trabalhos avançam imediatamente para a <strong>Subetapa 03.2</strong>, focada na construção do núcleo aritmético e contábil puro em <code>src/engine/</code>:
+    </p>
+    <table>
+      <thead>
+        <tr>
+          <th>Módulo do Engine</th>
+          <th>Arquivo Alvo</th>
+          <th>Responsabilidade Técnica e Invariantes</th>
+          <th>Previsão</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Money Engine</strong></td>
+          <td><code>src/engine/money.ts</code></td>
+          <td>Aritmética estrita em centavos inteiros (<code>BigInt</code>), eliminação total de ponto flutuante, parsing de moedas e formatação determinística BRL.</td>
+          <td><span class="status-locked">➔ EM ANDAMENTO</span></td>
+        </tr>
+        <tr>
+          <td><strong>Calendar Engine</strong></td>
+          <td><code>src/engine/calendar.ts</code></td>
+          <td>Fuso horário canônico <code>America/Sao_Paulo</code>, granularidade temporal contábil (dia, mês, ano) e ordenação causal sem desvio UTC.</td>
+          <td><span class="status-locked">➔ EM ANDAMENTO</span></td>
+        </tr>
+        <tr>
+          <td><strong>Ledger Engine</strong></td>
+          <td><code>src/engine/ledger.ts</code></td>
+          <td>Escrituração contábil em partidas dobradas, versionamento de concorrência com fencing tokens, idempotência estrita por <code>requestId</code>.</td>
+          <td><span class="status-locked">➔ EM ANDAMENTO</span></td>
+        </tr>
+        <tr>
+          <td><strong>Reports Engine</strong></td>
+          <td><code>src/engine/reports.ts</code></td>
+          <td>Agregação de saldos, projeções de fluxo de caixa separadas do realizado e demonstrativos DFC/DRE sintéticos.</td>
+          <td><span class="status-locked">➔ EM ANDAMENTO</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <footer>
+    <p><strong>KYRO Finance | Private Finance</strong> — Relatório Oficial de Evolução e Engenharia</p>
+    <p style="margin-top:0.35rem;">
+      Ambiente de Produção Web: <a href="https://kyro-finance.vercel.app" target="_blank" style="color:var(--accent);">https://kyro-finance.vercel.app</a> | 
+      Relatório Contínuo Vercel: <a href="https://kyro-fase-02-encerramento.vercel.app/" target="_blank" style="color:var(--accent);">https://kyro-fase-02-encerramento.vercel.app/</a>
+    </p>
+  </footer>
+
+</div>
+</body>
+</html>

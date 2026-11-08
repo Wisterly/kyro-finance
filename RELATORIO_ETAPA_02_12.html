@@ -1,0 +1,1830 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KYRO Finance — Relatório Técnico Etapa 02.12 | Concorrência, Limites e Fronteiras de Segurança</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#f0fdf4',
+              500: '#10b981',
+              600: '#059669',
+              900: '#064e3b'
+            },
+            dark: {
+              bg: '#0B0F19',
+              card: '#111827',
+              border: '#1F2937',
+              accent: '#1E293B'
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- KaTeX para Fórmulas Matemáticas -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js"
+    onload="renderMathInElement(document.body, {delimiters: [{left: '$$', right: '$$', display: true}, {left: '$', right: '$', display: false}]});"></script>
+
+  <!-- Mermaid.js para Diagramas -->
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    document.addEventListener("DOMContentLoaded", function() {
+      mermaid.initialize({ startOnLoad: true, theme: 'dark' });
+    });
+  </script>
+
+  <style>
+    body {
+      background-color: #0B0F19;
+      color: #E2E8F0;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+    .custom-scroll::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    .custom-scroll::-webkit-scrollbar-track {
+      background: #0B0F19;
+    }
+    .custom-scroll::-webkit-scrollbar-thumb {
+      background: #1F2937;
+      border-radius: 3px;
+    }
+    .custom-scroll::-webkit-scrollbar-thumb:hover {
+      background: #374151;
+    }
+  </style>
+</head>
+<body class="min-h-screen bg-[#0B0F19] text-gray-200 antialiased selection:bg-emerald-500 selection:text-white">
+
+  <!-- Barra Superior de Navegação -->
+  <div class="bg-gray-950/95 border-b border-emerald-900/50 text-xs px-6 py-2.5 flex flex-wrap items-center justify-between gap-3 text-gray-400 backdrop-blur-md sticky top-0 z-[70]">
+    <div class="flex flex-wrap items-center gap-2">
+      <span class="text-white font-semibold flex items-center gap-1.5 mr-1">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+        Relatórios Técnicos Oficiais:
+      </span>
+      <a href="/etapa-02-8.html" class="px-2.5 py-1 rounded bg-gray-800/80 text-gray-300 hover:text-white hover:bg-gray-700 transition border border-gray-700">Etapa 02.8 Retrospectiva</a>
+      <a href="/etapa-02-9.html" class="px-2.5 py-1 rounded bg-gray-800/80 text-gray-300 hover:text-white hover:bg-gray-700 transition border border-gray-700">Etapa 02.9 Fechamento</a>
+      <a href="/etapa-02-10.html" class="px-2.5 py-1 rounded bg-gray-800/80 text-gray-300 hover:text-white hover:bg-gray-700 transition border border-gray-700">Etapa 02.10 Contratos</a>
+      <a href="/etapa-02-11.html" class="px-2.5 py-1 rounded bg-gray-800/80 text-gray-300 hover:text-white hover:bg-gray-700 transition border border-gray-700">Etapa 02.11 Auditoria</a>
+      <a href="/etapa-02-12.html" class="px-2.5 py-1 rounded bg-emerald-950 text-emerald-300 font-bold border border-emerald-700 shadow-sm">Etapa 02.12 Concorrência (Atual)</a>
+    </div>
+    <div class="text-[11px] text-gray-400 hidden md:block">
+      KYRO Finance • Build 41 / PR.041
+    </div>
+  </div>
+
+  <!-- Header Institucional -->
+  <header class="border-b border-gray-800/80 px-6 py-6 bg-gradient-to-r from-gray-950 via-[#0B0F19] to-gray-950">
+    <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-emerald-500 flex items-center justify-center font-black text-black text-lg shadow-lg shadow-emerald-500/20">
+          K
+        </div>
+        <div>
+          <h1 class="text-lg font-bold tracking-tight text-white flex items-center gap-2">
+            KYRO FINANCE <span class="text-xs font-normal text-emerald-400 px-2.5 py-0.5 rounded-full bg-emerald-950/80 border border-emerald-800">ETAPA 02.12 DEFINITIVA</span>
+          </h1>
+          <p class="text-xs text-gray-400">Fechamento dos Protocolos de Concorrência, Integridade Contábil e Fronteiras de Segurança</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-3 text-xs">
+        <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-950/80 border border-emerald-800 text-emerald-400 font-mono text-[11px]">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+          Fase Exclusivamente Documental
+        </span>
+        <a href="https://kyro-finance.vercel.app" target="_blank" class="px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-200 transition border border-gray-700">App Produção ↗</a>
+        <a href="https://github.com/Wisterly/kyro-finance/releases/download/apk-latest/KYRO-Finance.apk" class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold transition shadow-md shadow-emerald-600/20">Baixar APK v1.41</a>
+      </div>
+    </div>
+  </header>
+
+  <div class="max-w-7xl mx-auto px-6 py-10 grid grid-cols-1 lg:grid-cols-12 gap-8">
+    
+    <!-- Sumário Lateral -->
+    <aside class="hidden lg:block lg:col-span-3">
+      <div class="sticky top-20 bg-gray-900/40 p-4 rounded-xl border border-gray-800/80 backdrop-blur-sm custom-scroll max-h-[85vh] overflow-y-auto">
+        <h2 class="text-xs font-bold uppercase tracking-wider text-gray-400 mb-3 flex items-center gap-2">
+          Índice Etapa 02.12
+        </h2>
+        <nav class="space-y-1 text-xs">
+          <a href="#1-resumo-executivo-e-principio-de-execucao" class="block py-1.5 px-2 rounded text-gray-300 hover:text-emerald-400 hover:bg-gray-800/40 transition">1. Resumo Executivo</a>
+          <a href="#2-fechamento-da-idempotencia-e-concorrencia-firestore" class="block py-1.5 px-2 rounded text-gray-300 hover:text-emerald-400 hover:bg-gray-800/40 transition">2. Idempotência & Concorrência</a>
+          <a href="#3-migracao-legada-revisao-da-classe-c-reconciliacao-e-persistencia" class="block py-1.5 px-2 rounded text-gray-300 hover:text-emerald-400 hover:bg-gray-800/40 transition">3. Migração & Sem Centavos Fictícios</a>
+          <a href="#4-modelo-b-separacao-do-limite-de-credito-e-saldo-credor" class="block py-1.5 px-2 rounded text-gray-300 hover:text-emerald-400 hover:bg-gray-800/40 transition">4. Modelo B & Saldo Credor</a>
+          <a href="#5-webhooks-exclusividade-de-processamento-e-recuperacao-de-commits" class="block py-1.5 px-2 rounded text-gray-300 hover:text-emerald-400 hover:bg-gray-800/40 transition">5. Webhooks & Bytes HMAC</a>
+          <a href="#6-firestore-security-rules-fronteira-unica-de-autorizacao" class="block py-1.5 px-2 rounded text-gray-300 hover:text-emerald-400 hover:bg-gray-800/40 transition">6. Security Rules & Fronteira Única</a>
+          <a href="#7-offline-verificacao-autorizada-e-estados-terminais" class="block py-1.5 px-2 rounded text-gray-300 hover:text-emerald-400 hover:bg-gray-800/40 transition">7. Endpoint Offline & 7 Estados</a>
+          <a href="#8-padronizacao-de-timestamps-e-conversoes-temporais" class="block py-1.5 px-2 rounded text-gray-300 hover:text-emerald-400 hover:bg-gray-800/40 transition">8. Padronização de Timestamps</a>
+          <a href="#9-auditoria-retrospectiva-e-inventario-completo-dos-25-arquivos-reais" class="block py-1.5 px-2 rounded text-gray-300 hover:text-emerald-400 hover:bg-gray-800/40 transition">9. Inventário dos 25 Arquivos</a>
+          <a href="#10-matriz-de-testes-consolidada-38-testes-formais" class="block py-1.5 px-2 rounded text-gray-300 hover:text-emerald-400 hover:bg-gray-800/40 transition">10. Matriz com 38 Testes Formais</a>
+          <a href="#11-parecer-conclusivo-e-recomendacao-para-a-etapa-03" class="block py-1.5 px-2 rounded text-gray-300 hover:text-emerald-400 hover:bg-gray-800/40 transition">11. Parecer & Etapa 03 Bloqueada</a>
+        </nav>
+      </div>
+    </aside>
+
+    <!-- Conteúdo Principal -->
+    <main class="lg:col-span-9 space-y-6">
+      <div class="bg-gradient-to-r from-emerald-950/40 via-gray-900/40 to-gray-900/20 p-8 rounded-2xl border border-emerald-900/40 shadow-2xl relative overflow-hidden">
+        <div class="absolute -right-10 -bottom-10 w-48 h-48 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none"></div>
+        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-900/60 border border-emerald-700/60 text-emerald-300 text-xs font-mono mb-4">
+          <span>ESPECIFICAÇÃO TÉCNICA DEFINITIVA</span> • <span>ETAPA 02.12</span>
+        </div>
+        <h1 class="text-3xl sm:text-4xl font-black text-white tracking-tight leading-tight">
+          Fechamento dos Protocolos de Concorrência, Integridade Contábil e Fronteiras de Segurança
+        </h1>
+        <p class="text-sm text-gray-300 mt-3 max-w-3xl leading-relaxed">
+          Documento técnico conclusivo de auditoria profunda. Elimina vazamento de dados no retorno idempotente, proíbe operações repetidas em lote, separa limite de crédito contratado de saldo credor na fatura, exige bytes brutos em HMAC e audita exaustivamente todos os 25 arquivos de código do repositório v1.41.
+        </p>
+      </div>
+
+      <!-- Corpo Formatado -->
+      <div class="bg-gray-900/30 p-8 rounded-2xl border border-gray-800/80 shadow-xl space-y-6">
+        <h1 class="text-3xl font-extrabold text-white mt-10 mb-4 pb-2 border-b border-gray-800 flex items-center gap-3">
+        <span class="w-3 h-8 bg-emerald-500 rounded-full inline-block"></span>
+        PROJETO TÉCNICO DEFINITIVO — ETAPA 02.12
+      </h1>
+<h1 class="text-3xl font-extrabold text-white mt-10 mb-4 pb-2 border-b border-gray-800 flex items-center gap-3">
+        <span class="w-3 h-8 bg-emerald-500 rounded-full inline-block"></span>
+        FECHAMENTO DOS PROTOCOLOS DE CONCORRÊNCIA, INTEGRIDADE CONTÁBIL E FRONTEIRAS DE SEGURANÇA
+      </h1>
+<p class="text-gray-300 my-3 leading-relaxed text-sm">**Projeto:** KYRO Finance | KYRO Private Finance  </p>
+<p class="text-gray-300 my-3 leading-relaxed text-sm">**Diretório:** `C:\Users\Lenovo\Documents\antigravity\Finanças`  </p>
+<p class="text-gray-300 my-3 leading-relaxed text-sm">**Repositório:** `https://github.com/Wisterly/kyro-finance.git`  </p>
+<p class="text-gray-300 my-3 leading-relaxed text-sm">**Versão de Referência em Produção:** `v1.41` (Build `41` / Ponto de Restauração `PR.041`)  </p>
+<p class="text-gray-300 my-3 leading-relaxed text-sm">**Data da Especificação:** 05 de Novembro de 2026  </p>
+<p class="text-gray-300 my-3 leading-relaxed text-sm">**Status do Projeto:** Fase Documental Conclusiva — **Etapa 03 (Implementação em Código) Bloqueada**  </p>
+<p class="text-gray-300 my-3 leading-relaxed text-sm">**Documentos Base Auditados:** `PROJETO_TECNICO_ETAPA_02_11_AUDITORIA_E_FECHAMENTO.md`, histórico de etapas e código-fonte legado v1.41.</p>
+<hr class="my-8 border-gray-800" />
+<h2 id="1-resumo-executivo-e-princ-pio-de-execu-o" class="text-2xl font-bold text-emerald-400 mt-8 mb-4 pt-4 border-t border-gray-800/80 flex items-center gap-2">
+        <span class="text-emerald-500">§</span> 1. RESUMO EXECUTIVO E PRINCÍPIO DE EXECUÇÃO
+      </h2>
+<p class="text-gray-300 my-3 leading-relaxed text-sm">A Etapa 02.12 atua com ceticismo técnico irrestrito e profundidade de engenharia de software para sanar de forma definitiva as contradições residuais detectadas nas Etapas 02.10 e 02.11.</p>
+<p class="text-gray-300 my-3 leading-relaxed text-sm">Em cumprimento ao princípio de que **nenhum contrato é considerado fechado apenas porque foi documentado**, este projeto técnico rejeita premissas teóricas confortáveis e resolve as seguintes fronteiras críticas:</p>
+<li class="text-gray-300 my-1 ml-6 list-decimal text-sm">**Blindagem contra Vazamento de Dados no Retorno `COMPLETED`:** O retorno idempotente antecipado foi corrigido para exigir validação estrita da tríade `userId`, `requestId` e `requestPayloadHash`, impedindo que um atacante obtenha respostas cacheadas de outro usuário via colisão ou sondagem de IDs.</li>
+<li class="text-gray-300 my-1 ml-6 list-decimal text-sm">**Operação DELETE com Controle Otimista Estrito:** O DELETE exige validação de existência, confirmação de propriedade do `userId` e correspondência de `baseVersion`. A exclusão de documento inexistente é **rejeitada com `DOCUMENT_NOT_FOUND`** para fluxos concorrentes com `baseVersion > 0`, prevenindo exclusões fantasmas.</li>
+<li class="text-gray-300 my-1 ml-6 list-decimal text-sm">**Locks de Múltiplos `sourceRequestId`s por Lote:** Extensão do mecanismo de locks para suportar múltiplos fatos geradores no mesmo lote, lendo todos os locks na Fase 1 (Leituras) e comitando-os na Fase 2 (Escritas) de forma atômica.</li>
+<li class="text-gray-300 my-1 ml-6 list-decimal text-sm">**Proibição de Operações Repetidas no Manifesto:** Rejeição determinística de lotes que contenham mais de uma operação sobre a mesma tupla `(collectionPath, documentId)`, eliminando comportamentos dependentes da ordem de execução.</li>
+<li class="text-gray-300 my-1 ml-6 list-decimal text-sm">**Tombstones Determinísticos sem Colisão de Namespace:** Substituição de concatenações de strings ambíguas por hash SHA-256 canônico de 4 componentes (`namespace:userId:collectionPath:documentId`).</li>
+<li class="text-gray-300 my-1 ml-6 list-decimal text-sm">**Migração Legada sem Ponto Flutuante e Sem Centavos Fictícios:** Eliminação da tolerância residual float na Classe C. Separação formal entre *Representação Numérica Armazenada*, *Valor Decimal Inferido* e *Valor Originalmente Digitado*. A Classe 4 (ambígua) é isolada em quarentena **sem inventar centavos arbitrários**, com reconciliação em camadas.</li>
+<li class="text-gray-300 my-1 ml-6 list-decimal text-sm">**Separação Canônica entre Limite de Crédito e Saldo Credor:** Correção da anomalia em que limites disponíveis superavam o limite contratado em estornos. O limite disponível nunca ultrapassa o limite contratado; valores a favor do titular são classificados estritamente como **Saldo Credor da Fatura**, compondo a **Capacidade Total de Compra**.</li>
+<li class="text-gray-300 my-1 ml-6 list-decimal text-sm">**Exclusividade Atômica em Webhooks:** Eliminação de condições de corrida em eventos `RECEIVED` e `FAILED` via lease atômico de webhook, validação estrita de timestamp com regex `/^\d{10}$/`, computação de HMAC sobre bytes brutos e recuperação de commits financeiros desconhecidos sem duplicidade.</li>
+<li class="text-gray-300 my-1 ml-6 list-decimal text-sm">**Fronteira Única de Autorização no Firestore:** Matriz de autoridade segregando o que é exclusivo do backend Admin SDK (locks, leases, nonces e tombstones) do que é acessível ao cliente via Client SDK.</li>
+<li class="text-gray-300 my-1 ml-6 list-decimal text-sm">**Endpoint de Verificação Offline Isolado:** `GET /api/idempotency/verify` autenticado com Firebase ID Token, particionado por usuário e com 7 estados terminais formalmente definidos.</li>
+<li class="text-gray-300 my-1 ml-6 list-decimal text-sm">**Padronização Única de Timestamps:** Resolução da divergência entre `Timestamp` nativo do Firestore e strings ISO 8601 nas APIs.</li>
+<li class="text-gray-300 my-1 ml-6 list-decimal text-sm">**Inventário Completo de 25 Arquivos Reais:** Quadro exaustivo de todos os 25 arquivos existentes na base v1.41 com linhas examinadas, evidências e classificação.</li>
+<hr class="my-8 border-gray-800" />
+<h2 id="2-fechamento-da-idempot-ncia-e-concorr-ncia-firestore" class="text-2xl font-bold text-emerald-400 mt-8 mb-4 pt-4 border-t border-gray-800/80 flex items-center gap-2">
+        <span class="text-emerald-500">§</span> 2. FECHAMENTO DA IDEMPOTÊNCIA E CONCORRÊNCIA FIRESTORE
+      </h2>
+<h3 class="text-lg font-semibold text-gray-100 mt-6 mb-2">2.1 Falhas Identificadas na Etapa 02.11 e Soluções Adotadas</h3>
+<pre class="bg-gray-950 p-4 rounded-xl text-xs font-mono text-emerald-400 border border-gray-800 overflow-x-auto my-4 custom-scroll"><code>+---------------------------------------------------------------------------------------------------+
+| FALHA A: RETORNO ANTECIPADO "COMPLETED" SEM VALIDAÇÃO DE IDENTIDADE E ESCOPO                      |
++---------------------------------------------------------------------------------------------------+
+| PROBLEMA: Se a transação encontrava currentLease.status === 'COMPLETED', retornava sucesso        |
+| imediatamente, sem validar se o userId autenticado e o requestPayloadHash batiam com o manifesto. |
+| CAUSA: Otimização prematura de caminho feliz (fast-path) no início da transação.                  |
+| RISCO: Se o usuário B enviasse uma requisição com o requestId do usuário A, recebia o payload     |
+| em cache do usuário A, configurando vazamento crítico de dados financeiros entre contas (IDOR).    |
+| SOLUÇÃO ADOTADA: Antes de qualquer retorno idempotente, validar estritamente:                     |
+|   1. currentLease.userId === manifest.userId (se diferente: lança SECURITY_OWNERSHIP_VIOLATION). |
+|   2. currentLease.requestId === manifest.requestId.                                               |
+|   3. currentLease.requestPayloadHash === manifest.requestPayloadHash (se diferente: conflito 409).|
+| O retorno cachedResponsePayload só é liberado após a validação integral da tríade.               |
++---------------------------------------------------------------------------------------------------+</code></pre>
+<pre class="bg-gray-950 p-4 rounded-xl text-xs font-mono text-emerald-400 border border-gray-800 overflow-x-auto my-4 custom-scroll"><code>+---------------------------------------------------------------------------------------------------+
+| FALHA B: OPERAÇÃO DELETE SEM VALIDAÇÃO DE PROPRIEDADE E AMBIGUIDADE DE DOCUMENTO INEXISTENTE      |
++---------------------------------------------------------------------------------------------------+
+| PROBLEMA: O código de commit na 02.11 apenas checava versão em DELETE se o doc existisse, mas não |
+| validava se o doc pertencia ao userId do manifesto, nem definia a semântica para doc inexistente.  |
+| CAUSA: Suposição errônea de que DELETE é sempre universalmente idempotente.                       |
+| DECISÃO CANÔNICA:                                                                                 |
+| 1. Validação de Propriedade: Se o documento existir, targetSnap.data()?.userId DEVE ser igual a   |
+|    manifest.userId. Tentativa de excluir documento de terceiro lança SECURITY_OWNERSHIP_VIOLATION.|
+| 2. Documento Inexistente: Em transações com controle otimista de versão (baseVersion &gt; 0), a      |
+|    inexistência do documento indica que ele já foi excluído por outro processo ou nunca existiu   |
+|    naquela versão. A operação DEVE SER REJEITADA com OPTIMISTIC_CONCURRENCY_CONFLICT.             |
+|    Apenas exclusões cegas sem pré-condição de versão (baseVersion === 0) são toleradas.           |
++---------------------------------------------------------------------------------------------------+</code></pre>
+<pre class="bg-gray-950 p-4 rounded-xl text-xs font-mono text-emerald-400 border border-gray-800 overflow-x-auto my-4 custom-scroll"><code>+---------------------------------------------------------------------------------------------------+
+| FALHA C: LOCKS DE sourceRequestId EM LOTES COM MÚLTIPLOS FATOS GERADORES                          |
++---------------------------------------------------------------------------------------------------+
+| PROBLEMA: O código tratava apenas um sourceRequestId global por manifesto e utilizava set() na    |
+| Seção de escritas, sem leitura prévia de todos os locks do lote.                                  |
+| CAUSA: Modelagem baseada em transação simples de documento único, inadequada para lotes.          |
+| SOLUÇÃO ADOTADA:                                                                                  |
+| Cada operação do lote declara seu próprio sourceRequestId (quando aplicável).                     |
+| Na FASE 1 (Leituras): O worker calcula lockId = SHA256(userId + ":" + op.sourceRequestId) para    |
+| CADA operação do lote e executa transaction.get(lockRef). Se QUALQUER lock já existir vinculado   |
+| a outro requestId, aborta o lote inteiro com DUPLICATE_SOURCE_REQUEST.                            |
+| Na FASE 2 (Escritas): Grava atomicamente todos os locks validados.                                |
++---------------------------------------------------------------------------------------------------+</code></pre>
+<pre class="bg-gray-950 p-4 rounded-xl text-xs font-mono text-emerald-400 border border-gray-800 overflow-x-auto my-4 custom-scroll"><code>+---------------------------------------------------------------------------------------------------+
+| FALHA D: OPERAÇÕES REPETIDAS SOBRE O MESMO DOCUMENTO NO MESMO LOTE                                |
++---------------------------------------------------------------------------------------------------+
+| PROBLEMA: O manifesto podia conter CREATE seguido de UPDATE, ou dois UPDATEs com payloads         |
+| conflitantes sobre o mesmo collectionPath/documentId, gerando comportamento não-determinístico.   |
+| CAUSA: Falta de validação de unicidade interna no array de operações do lote.                     |
+| SOLUÇÃO ADOTADA: Validação preliminar estrita (validateManifestBatchIntegrity). O sistema REJEITA |
+| sumariamente qualquer manifesto que contenha mais de uma mutação para a mesma tupla               |
+| (collectionPath, documentId) com o erro DUPLICATE_DOCUMENT_OPERATION_IN_BATCH.                     |
++---------------------------------------------------------------------------------------------------+</code></pre>
+<pre class="bg-gray-950 p-4 rounded-xl text-xs font-mono text-emerald-400 border border-gray-800 overflow-x-auto my-4 custom-scroll"><code>+---------------------------------------------------------------------------------------------------+
+| FALHA E: IDENTIFICADOR DE TOMBSTONE AMBÍGUO                                                       |
++---------------------------------------------------------------------------------------------------+
+| PROBLEMA: Identificador gerado como collectionPath + "_" + documentId causava colisões caso       |
+| collectionPath contivesse barras ou subcoleções (ex: users/A/tx_123 colidia com users_A_tx/123).  |
+| SOLUÇÃO ADOTADA: Identificador canônico não-ambíguo com SHA-256 particionado:                     |
+|   tombstoneDocId = SHA256("kyro:tombstone:" + userId + ":" + collectionPath + ":" + documentId)   |
+| Campos armazenados: tombstoneId, userId, collectionPath, documentId, deletedAtVersion,            |
+| deletedAtServerTimestamp, expiresAtTimestamp (120 dias) e deletionRequestId.                     |
++---------------------------------------------------------------------------------------------------+</code></pre>
+<pre class="bg-gray-950 p-4 rounded-xl text-xs font-mono text-emerald-400 border border-gray-800 overflow-x-auto my-4 custom-scroll"><code>+---------------------------------------------------------------------------------------------------+
+| FALHA F: ISOLAMENTO ENTRE USUÁRIOS E PARTICIONAMENTO DE LEASES                                    |
++---------------------------------------------------------------------------------------------------+
+| PROBLEMA: Coleção global idempotency_leases/{requestId} permitia que colisões de UUID ou má-fé   |
+| interferissem nos leases de outros usuários.                                                      |
+| SOLUÇÃO ADOTADA: Particionamento soberano por userId. O documento de lease reside em:             |
+|   users/{userId}/idempotency_leases/{requestId}                                                   |
+| ou tem seu ID canônico definido como SHA256(userId + ":" + requestId). Nenhum usuário tem acesso  |
+| físico ou lógico ao espaço de nomes de idempotência de outro usuário.                             |
++---------------------------------------------------------------------------------------------------+</code></pre>
+<hr class="my-8 border-gray-800" />
+<h3 class="text-lg font-semibold text-gray-100 mt-6 mb-2">2.2 Implementação Canônica Corrigida do Commit Transacional</h3>
+<div class="my-4 rounded-xl overflow-hidden border border-gray-800 bg-[#0d1117] shadow-lg">
+            <div class="bg-gray-800/60 px-4 py-2 text-xs font-mono text-emerald-400 border-b border-gray-800 flex items-center justify-between">
+              <span>TYPESCRIPT</span>
+              <span class="text-gray-400 text-[10px]">KYRO Strict Implementation</span>
+            </div>
+            <pre class="p-4 text-xs font-mono text-gray-200 overflow-x-auto leading-relaxed custom-scroll"><code>// api/services/TransactionCommitEngineV2.ts
+import * as admin from 'firebase-admin';
+import crypto from 'node:crypto';
+import { 
+  CanonicalBatchManifest, 
+  ExpectedDocumentOperation, 
+  CreateDocumentOperation, 
+  UpdateDocumentOperation, 
+  DeleteDocumentOperation 
+} from '../types/idempotency';
+
+export class FinancialCommitError extends Error {
+  constructor(public readonly code: string, message: string) {
+    super(`[FinancialCommitEngine:${code}] ${message}`);
+    this.name = 'FinancialCommitError';
+  }
+}
+
+export function computeLockId(userId: string, sourceRequestId: string): string {
+  return crypto
+    .createHash('sha256')
+    .update(`kyro:lock:${userId.trim()}:${sourceRequestId.trim()}`)
+    .digest('hex');
+}
+
+export function computeTombstoneId(userId: string, collectionPath: string, documentId: string): string {
+  return crypto
+    .createHash('sha256')
+    .update(`kyro:tombstone:${userId.trim()}:${collectionPath.trim()}:${documentId.trim()}`)
+    .digest('hex');
+}
+
+export function validateManifestBatchIntegrity(manifest: CanonicalBatchManifest): void {
+  const seenDocPaths = new Set&lt;string&gt;();
+
+  for (const op of manifest.expectedOperations) {
+    const fullPath = `${op.collectionPath}/${op.documentId}`;
+    if (seenDocPaths.has(fullPath)) {
+      throw new FinancialCommitError(
+        'DUPLICATE_DOCUMENT_OPERATION_IN_BATCH',
+        `Operação repetida sobre o mesmo documento dentro do lote: ${fullPath}`
+      );
+    }
+    seenDocPaths.add(fullPath);
+  }
+}
+
+export async function executeAtomicFinancialCommitV2(
+  firestore: admin.firestore.Firestore,
+  manifest: CanonicalBatchManifest,
+  currentServerTimeMs: number
+): Promise&lt;{ success: boolean; committedCount: number; cachedResponse?: unknown }&gt; {
+
+  // Validação estática de integridade do lote antes de iniciar a transação
+  validateManifestBatchIntegrity(manifest);
+
+  return await firestore.runTransaction(async (transaction) =&gt; {
+    // =========================================================================
+    // FASE 1: TODAS AS LEITURAS E VALIDAÇÕES (READS BEFORE WRITES)
+    // =========================================================================
+
+    // 1.1 Leitura do Lease Particionado por Usuário
+    const leaseRef = firestore
+      .collection('users')
+      .doc(manifest.userId)
+      .collection('idempotency_leases')
+      .doc(manifest.requestId);
+
+    const leaseSnap = await transaction.get(leaseRef);
+
+    if (!leaseSnap.exists) {
+      throw new FinancialCommitError('LEASE_NOT_FOUND', `Lease não localizado para ${manifest.requestId}`);
+    }
+
+    const currentLease = leaseSnap.data() as CanonicalBatchManifest;
+
+    // 1.2 Validação Rigorosa de Identidade e Integridade do Lease
+    if (currentLease.userId !== manifest.userId) {
+      throw new FinancialCommitError(
+        'SECURITY_OWNERSHIP_VIOLATION',
+        `Tentativa de operar em lease de outro usuário.`
+      );
+    }
+
+    if (currentLease.requestPayloadHash !== manifest.requestPayloadHash) {
+      throw new FinancialCommitError(
+        'PAYLOAD_HASH_MISMATCH',
+        `O hash do payload enviado difere do payload registrado na aquisição do lease.`
+      );
+    }
+
+    // 1.3 Retorno Idempotente Seguro (Somente após validar userId e payloadHash!)
+    if (currentLease.status === 'COMPLETED') {
+      return { 
+        success: true, 
+        committedCount: currentLease.committedDocumentCount,
+        cachedResponse: currentLease.cachedResponsePayload 
+      };
+    }
+
+    if (currentLease.status === 'QUARANTINED') {
+      throw new FinancialCommitError('LEASE_QUARANTINED', `A requisição está bloqueada em quarentena.`);
+    }
+
+    if (currentLease.fencingToken !== manifest.fencingToken) {
+      throw new FinancialCommitError(
+        'FENCING_TOKEN_VIOLATION',
+        `Worker defasado. Token da execução: ${manifest.fencingToken}, Token atual: ${currentLease.fencingToken}`
+      );
+    }
+
+    if (currentLease.workerId !== manifest.workerId) {
+      throw new FinancialCommitError(
+        'WORKER_OWNERSHIP_MISMATCH',
+        `Lease pertence a outro worker ativo: ${currentLease.workerId}`
+      );
+    }
+
+    if (currentServerTimeMs &gt; currentLease.leaseExpiresAtTimestamp) {
+      throw new FinancialCommitError(
+        'LEASE_EXPIRED',
+        `Lease expirado em ${currentLease.leaseExpiresAtTimestamp}. Tempo atual: ${currentServerTimeMs}`
+      );
+    }
+
+    // 1.4 Leitura de TODOS os Locks de sourceRequestId Envolvidos no Lote
+    const locksToAcquire: { ref: admin.firestore.DocumentReference; id: string; sourceId: string }[] = [];
+
+    for (const op of manifest.expectedOperations) {
+      if (op.sourceRequestId) {
+        const lockId = computeLockId(manifest.userId, op.sourceRequestId);
+        const lockRef = firestore.collection('idempotency_locks').doc(lockId);
+        const lockSnap = await transaction.get(lockRef);
+
+        if (lockSnap.exists) {
+          const lockData = lockSnap.data();
+          if (lockData?.assignedRequestId !== manifest.requestId) {
+            throw new FinancialCommitError(
+              'DUPLICATE_SOURCE_REQUEST',
+              `sourceRequestId "${op.sourceRequestId}" já foi processado sob outro requestId: ${lockData?.assignedRequestId}`
+            );
+          }
+        } else {
+          locksToAcquire.push({ ref: lockRef, id: lockId, sourceId: op.sourceRequestId });
+        }
+      }
+    }
+
+    // 1.5 Leitura e Validação de Existência e Versão de 100% dos Documentos Afetados
+    const readDocsMap = new Map&lt;string, admin.firestore.DocumentSnapshot&gt;();
+
+    for (const op of manifest.expectedOperations) {
+      const targetRef = firestore.collection(op.collectionPath).doc(op.documentId);
+      const targetSnap = await transaction.get(targetRef);
+      readDocsMap.set(`${op.collectionPath}/${op.documentId}`, targetSnap);
+
+      if (op.action === 'CREATE') {
+        if (targetSnap.exists) {
+          throw new FinancialCommitError(
+            'DOCUMENT_ALREADY_EXISTS',
+            `CREATE rejeitado: documento já existe em ${op.collectionPath}/${op.documentId}`
+          );
+        }
+      } else if (op.action === 'UPDATE') {
+        if (!targetSnap.exists) {
+          throw new FinancialCommitError(
+            'UPDATE_TARGET_NOT_FOUND',
+            `UPDATE rejeitado: documento inexistente em ${op.collectionPath}/${op.documentId}`
+          );
+        }
+        const currentData = targetSnap.data();
+        if (currentData?.userId !== manifest.userId) {
+          throw new FinancialCommitError(
+            'SECURITY_OWNERSHIP_VIOLATION',
+            `Documento ${op.documentId} não pertence ao usuário autenticado.`
+          );
+        }
+        if (currentData?.version !== (op as UpdateDocumentOperation).baseVersion) {
+          throw new FinancialCommitError(
+            'OPTIMISTIC_CONCURRENCY_CONFLICT',
+            `Conflito de versão em ${op.documentId}. Base esperada: ${(op as UpdateDocumentOperation).baseVersion}, Atual: ${currentData?.version}`
+          );
+        }
+      } else if (op.action === 'DELETE') {
+        const deleteOp = op as DeleteDocumentOperation;
+        if (!targetSnap.exists) {
+          // Rejeição estrita se baseVersion &gt; 0 (controle otimista)
+          if (deleteOp.baseVersion &gt; 0) {
+            throw new FinancialCommitError(
+              'OPTIMISTIC_CONCURRENCY_CONFLICT',
+              `DELETE rejeitado: documento já foi excluído ou não existe na versão ${deleteOp.baseVersion}.`
+            );
+          }
+        } else {
+          const currentData = targetSnap.data();
+          if (currentData?.userId !== manifest.userId) {
+            throw new FinancialCommitError(
+              'SECURITY_OWNERSHIP_VIOLATION',
+              `Tentativa de excluir documento pertencente a outro usuário.`
+            );
+          }
+          if (currentData?.version !== deleteOp.baseVersion) {
+            throw new FinancialCommitError(
+              'OPTIMISTIC_CONCURRENCY_CONFLICT',
+              `Versão conflitante na exclusão de ${op.documentId}. Esperada: ${deleteOp.baseVersion}, Atual: ${currentData?.version}`
+            );
+          }
+        }
+      }
+    }
+
+    // =========================================================================
+    // FASE 2: TODAS AS ESCRITAS (WRITES)
+    // Nenhuma operação de leitura pode ser chamada a partir deste ponto.
+    // =========================================================================
+
+    // 2.1 Gravação Atômica de Todos os Locks do Lote
+    for (const lock of locksToAcquire) {
+      transaction.set(lock.ref, {
+        lockId: lock.id,
+        userId: manifest.userId,
+        sourceRequestId: lock.sourceId,
+        assignedRequestId: manifest.requestId,
+        createdAtServerTimestamp: admin.firestore.FieldValue.serverTimestamp()
+      });
+    }
+
+    // 2.2 Gravação das Entidades Financeiras
+    for (const op of manifest.expectedOperations) {
+      const targetRef = firestore.collection(op.collectionPath).doc(op.documentId);
+
+      if (op.action === 'CREATE') {
+        const createOp = op as CreateDocumentOperation;
+        transaction.set(targetRef, {
+          ...createOp.payload,
+          userId: manifest.userId,
+          version: 1,
+          createdAtServerTimestamp: admin.firestore.FieldValue.serverTimestamp(),
+          creationRequestId: manifest.requestId,
+          sourceRequestId: op.sourceRequestId || null
+        });
+      } else if (op.action === 'UPDATE') {
+        const updateOp = op as UpdateDocumentOperation;
+        transaction.update(targetRef, {
+          ...updateOp.payload,
+          version: updateOp.baseVersion + 1,
+          updatedAtServerTimestamp: admin.firestore.FieldValue.serverTimestamp(),
+          lastUpdateRequestId: manifest.requestId
+        });
+      } else if (op.action === 'DELETE') {
+        const targetSnap = readDocsMap.get(`${op.collectionPath}/${op.documentId}`);
+        if (targetSnap?.exists) {
+          transaction.delete(targetRef);
+
+          // 2.3 Gravação de Tombstone Não-Ambíguo
+          const tombstoneId = computeTombstoneId(manifest.userId, op.collectionPath, op.documentId);
+          const tombstoneRef = firestore.collection('tombstones').doc(tombstoneId);
+
+          transaction.set(tombstoneRef, {
+            tombstoneId,
+            userId: manifest.userId,
+            collectionPath: op.collectionPath,
+            documentId: op.documentId,
+            deletedAtVersion: (op as DeleteDocumentOperation).baseVersion,
+            deletedAtServerTimestamp: admin.firestore.FieldValue.serverTimestamp(),
+            deletionRequestId: manifest.requestId,
+            expiresAtTimestamp: currentServerTimeMs + (120 * 24 * 60 * 60 * 1000) // 120 dias
+          });
+        }
+      }
+    }
+
+    // 2.4 Atualização Atômica do Manifesto para COMPLETED
+    transaction.update(leaseRef, {
+      status: 'COMPLETED',
+      completedAtTimestamp: currentServerTimeMs,
+      committedDocumentCount: manifest.expectedOperations.length,
+      cachedResponsePayload: manifest.cachedResponsePayload
+    });
+
+    return { 
+      success: true, 
+      committedCount: manifest.expectedOperations.length,
+      cachedResponse: manifest.cachedResponsePayload 
+    };
+  });
+}</code></pre>
+          </div>
+<hr class="my-8 border-gray-800" />
+<h2 id="3-migra-o-legada-revis-o-da-classe-c-reconcilia-o-e-persist-ncia" class="text-2xl font-bold text-emerald-400 mt-8 mb-4 pt-4 border-t border-gray-800/80 flex items-center gap-2">
+        <span class="text-emerald-500">§</span> 3. MIGRAÇÃO LEGADA: REVISÃO DA CLASSE C, RECONCILIAÇÃO E PERSISTÊNCIA
+      </h2>
+<h3 class="text-lg font-semibold text-gray-100 mt-6 mb-2">3.1 Separação Canônica de Três Conceitos Independentes</h3>
+<p class="text-gray-300 my-3 leading-relaxed text-sm">Para eliminar qualquer ambiguidade epistemológica na migração dos dados da versão v1.41, o Kyro Finance estabelece a separação categórica entre:</p>
+<li class="text-gray-300 my-1 ml-6 list-decimal text-sm">**Representação Numérica Armazenada:** Os 64 bits exatos gravados no formato IEEE 754 de dupla precisão no banco legado (ex: `0x4063500000000000` para `154.5`).</li>
+<li class="text-gray-300 my-1 ml-6 list-decimal text-sm">**Valor Decimal Inferido:** A representação decimal deduzida pelo motor de migração sob regras matemáticas formais, acompanhada da metatag `inferredFromFloat: true`.</li>
+<li class="text-gray-300 my-1 ml-6 list-decimal text-sm">**Valor Originalmente Digitado:** A sequência de teclas digitada pelo usuário no teclado do aplicativo v1.41 em 2025/2026. **Esta informação é fisicamente irrecuperável com certeza matemática absoluta quando o dado já foi salvo como float genérico.**</li>
+<hr class="my-8 border-gray-800" />
+<h3 class="text-lg font-semibold text-gray-100 mt-6 mb-2">3.2 As 4 Novas Classes de Integridade de Dados</h3>
+<pre class="bg-gray-950 p-4 rounded-xl text-xs font-mono text-emerald-400 border border-gray-800 overflow-x-auto my-4 custom-scroll"><code>+---------------------------------------------------------------------------------------------------+
+| CLASSE 1: EXATA — INTEIRO NATIVO SEGURO                                                           |
++---------------------------------------------------------------------------------------------------+
+| CRITÉRIO: Documento possui o campo amountCents como number e Number.isSafeInteger(amountCents).    |
+| GRAU DE CONFIANÇA: 100% (Absoluto).                                                               |
+| CONVERSÃO: Nenhuma conversão necessária. O valor é preservado diretamente.                         |
+| CONDIÇÃO DE QUARENTENA: Nenhuma.                                                                  |
++---------------------------------------------------------------------------------------------------+
+
++---------------------------------------------------------------------------------------------------+
+| CLASSE 2: EXATA — STRING DECIMAL FORMATADA                                                        |
++---------------------------------------------------------------------------------------------------+
+| CRITÉRIO: Campo amount gravado como string textual (ex: "154,50" ou "1250.00").                   |
+| GRAU DE CONFIANÇA: 100% (Absoluto).                                                               |
+| CONVERSÃO: Processado diretamente pelo CurrencyParserStrict por leitura de caracteres e BigInt.   |
+| CONDIÇÃO DE QUARENTENA: Strings com formatação inválida, múltiplos separadores ou letras.        |
++---------------------------------------------------------------------------------------------------+
+
++---------------------------------------------------------------------------------------------------+
+| CLASSE 3: INFERIDA — FLOAT COM FRAÇÃO DECIMAL EXATA RECONHECÍVEL                                 |
++---------------------------------------------------------------------------------------------------+
+| CRITÉRIO: Float cuja conversão via algoritmo de mantissa e expoente resulta em número finito com  |
+| exatamente 1 ou 2 casas decimais sem dízima (ex: frações binárias puras como .0, .25, .5, .75).   |
+| GRAU DE CONFIANÇA: Alto (Inferido).                                                               |
+| CONVERSÃO: Conversão estrita sem multiplicação por float, gerando amountCents e gravando a flag    |
+| auditável inferredFromFloat: true e legacyOriginalFloat: value.                                   |
+| CONDIÇÃO DE QUARENTENA: Qualquer divergência residual além de 2 casas decimais.                   |
++---------------------------------------------------------------------------------------------------+
+
++---------------------------------------------------------------------------------------------------+
+| CLASSE 4: NÃO-CONVERSÍVEL — AMBÍGUA / DÍZIMA / CORROMPIDA (QUARENTENA OBRIGATÓRIA)                |
++---------------------------------------------------------------------------------------------------+
+| CRITÉRIO: Floats com resíduos infinitos, mais de 3 casas decimais (ex: 154.3333333), valores      |
+| negativos sem justificativa contábil, NaN ou valores nulos.                                       |
+| GRAU DE CONFIANÇA: 0% (Nenhum).                                                                   |
+| REGRA INVIOLÁVEL: É EXPRESSAMENTE PROIBIDO INVENTAR CENTAVOS OU APLICAR ARREDONDAMENTO ARBITRÁRIO.|
+| CONVERSÃO: NENHUMA CONVERSÃO EM CENTAVOS É REALIZADA.                                             |
+| AÇÃO: O registro é transferido integralmente para a coleção quarantine_legacy_transactions com    |
+| o status PENDING_HUMAN_DECISION, preservando o documento original intocado.                       |
++---------------------------------------------------------------------------------------------------+</code></pre>
+<hr class="my-8 border-gray-800" />
+<h3 class="text-lg font-semibold text-gray-100 mt-6 mb-2">3.3 Protocolo de Reconciliação em 7 Camadas</h3>
+<p class="text-gray-300 my-3 leading-relaxed text-sm">Para garantir auditoria sem depender de somatórios fictícios para a Classe 4:</p>
+<div class="mermaid my-6 flex justify-center bg-gray-900/80 p-6 rounded-xl border border-gray-800 shadow-xl overflow-x-auto">
+flowchart TD
+    L1["Camada 1: Contagem Total de Documentos\n(N_total = N_1 + N_2 + N_3 + N_4)"] --> L2["Camada 2: Inventário Criptográfico\n(Hash SHA-256 de 100% dos IDs e payloads)"]
+    L2 --> L3["Camada 3: Valores Originais Preservados\n(Backup JSONL assinado antes de qualquer escrita)"]
+    L3 --> L4["Camada 4: Somatório de Centavos Exatos\n(Classes 1 e 2: Sum_exatos_cents)"]
+    L4 --> L5["Camada 5: Somatório de Centavos Inferidos\n(Classe 3: Sum_inferidos_cents)"]
+    L5 --> L6["Camada 6: Inventário de Itens Quarentenados\n(Classe 4: Lista nominal com floats originais)"]
+    L6 --> L7["Camada 7: Painel de Decisão Humana\n(Aprovação manual por item da Classe 4)"]
+</div>
+<h4 class="text-sm font-semibold uppercase tracking-wider text-emerald-500 mt-4 mb-2">Balanço Formal de Reconciliação:</h4>
+<li class="text-gray-300 my-1 ml-6 list-decimal text-sm">**Balanço Quantitativo:** $N_{processados} = N_{\text{Classe 1}} + N_{\text{Classe 2}} + N_{\text{Classe 3}} + N_{\text{Classe 4 Quarentena}}$.</li>
+<li class="text-gray-300 my-1 ml-6 list-decimal text-sm">**Balanço Financeiro Convertido:** $\text{TotalCentavosMigrados} = \text{Soma}_{\text{Classe 1}} + \text{Soma}_{\text{Classe 2}} + \text{Soma}_{\text{Classe 3}}$.</li>
+<li class="text-gray-300 my-1 ml-6 list-decimal text-sm">**Balanço de Quarentena:** A Classe 4 **não possui soma em centavos inventada**; ela possui um inventário de $N_{\text{Classe 4}}$ documentos acompanhados de seus floats legados originais para julgamento contábil humano.</li>
+<hr class="my-8 border-gray-800" />
+<h3 class="text-lg font-semibold text-gray-100 mt-6 mb-2">3.4 Persistência e Serialização Canônica</h3>
+<li class="text-gray-300 my-1 ml-6 list-disc text-sm">**Núcleo Financeiro Interno:** Aritmética estrita com `bigint` em centavos inteiros.</li>
+<li class="text-gray-300 my-1 ml-6 list-disc text-sm">**Camada de APIs e Webhooks:** `amountCents: number` inteiro ou string decimal formatada `"154.50"`.</li>
+<li class="text-gray-300 my-1 ml-6 list-disc text-sm">**Firestore:** Gravado como `amountCents: number` (inteiro seguro validado via `Number.isSafeInteger()`).</li>
+<li class="text-gray-300 my-1 ml-6 list-disc text-sm">**Armazenamento Local (IndexedDB):** Espelho exato do schema do Firestore em centavos inteiros.</li>
+<li class="text-gray-300 my-1 ml-6 list-disc text-sm">**Relatórios e Exportações:** String formatada BRL via formatador sem float (`R$ 154,50`).</li>
+<hr class="my-8 border-gray-800" />
+<h2 id="4-modelo-b-separa-o-do-limite-de-cr-dito-e-saldo-credor" class="text-2xl font-bold text-emerald-400 mt-8 mb-4 pt-4 border-t border-gray-800/80 flex items-center gap-2">
+        <span class="text-emerald-500">§</span> 4. MODELO B: SEPARAÇÃO DO LIMITE DE CRÉDITO E SALDO CREDOR
+      </h2>
+<h3 class="text-lg font-semibold text-gray-100 mt-6 mb-2">4.1 Correção do Erro da Etapa 02.11 (Limite Fictício)</h3>
+<p class="text-gray-300 my-3 leading-relaxed text-sm">Na Etapa 02.11, após um estorno de compra parcelada, o relatório indicava que um cartão de limite contratado de R$ 5.000,00 passava a ter Limite Comprometido de -R$ 1.000,00 e Limite Disponível de R$ 6.000,00.</p>
+<h4 class="text-sm font-semibold uppercase tracking-wider text-emerald-500 mt-4 mb-2">A Falha Conceitual:</h4>
+<p class="text-gray-300 my-3 leading-relaxed text-sm">Nenhum banco ou instituição financeira emissora (Itaú, Nubank, Bradesco, Inter) altera o limite de crédito contratado do cliente por causa de um estorno. O cliente **continua com os mesmos R$ 5.000,00 de limite de crédito**. O valor de R$ 1.000,00 a seu favor constitui um **SALDO CREDOR NA FATURA**, que atua como abatimento de despesas futuras.</p>
+<hr class="my-8 border-gray-800" />
+<h3 class="text-lg font-semibold text-gray-100 mt-6 mb-2">4.2 Definições Canônicas das Grandezas do Cartão</h3>
+<li class="text-gray-300 my-1 ml-6 list-decimal text-sm">**Limite Contratado ($Lim_{contratado}$):** O valor nominal de crédito outorgado pela instituição financeira ao usuário (ex: R$ 5.000,00).</li>
+<li class="text-gray-300 my-1 ml-6 list-decimal text-sm">**Passivo Devedor da Fatura Atual ($Passivo_{atual,dev}$):** A soma dos lançamentos de débito da fatura aberta que excedem os créditos recebidos:</li>
+<p class="text-gray-300 my-3 leading-relaxed text-sm">   $$Passivo_{atual,dev} = \max(0, \text{DébitosFatura} - \text{CréditosFatura})$$</p>
+<li class="text-gray-300 my-1 ml-6 list-decimal text-sm">**Saldo Credor da Fatura ($SaldoCredor$):** O crédito a favor do titular decorrente de pagamentos a maior ou estornos que excedem os débitos da fatura:</li>
+<p class="text-gray-300 my-3 leading-relaxed text-sm">   $$SaldoCredor = \max(0, \text{CréditosFatura} - \text{DébitosFatura})$$</p>
+<li class="text-gray-300 my-1 ml-6 list-decimal text-sm">**Passivo de Faturas Futuras ($Passivo_{futuro}$):** Soma das parcelas vincendas ($M+1, M+2, \dots$).</li>
+<li class="text-gray-300 my-1 ml-6 list-decimal text-sm">**Autorizações Pendentes ($Aut_{pendentes}$):** Compras aprovadas na maquininha ainda não consolidadas na fatura.</li>
+<li class="text-gray-300 my-1 ml-6 list-decimal text-sm">**Limite Contábil Comprometido ($Lim_{comp}$):** O montante de limite contratado atualmente bloqueado:</li>
+<p class="text-gray-300 my-3 leading-relaxed text-sm">   $$Lim_{comp} = \min(Lim_{contratado}, Passivo_{atual,dev} + Passivo_{futuro} + Aut_{pendentes})$$</p>
+<p class="text-gray-300 my-3 leading-relaxed text-sm">   *(O comprometimento é SEMPRE $\ge 0$ e NUNCA negativo).*</p>
+<li class="text-gray-300 my-1 ml-6 list-decimal text-sm">**Limite Disponível Estimado ($Lim_{disp,est}$):** O limite de crédito puro disponível para novas compras:</li>
+<p class="text-gray-300 my-3 leading-relaxed text-sm">   $$Lim_{disp,est} = Lim_{contratado} - Lim_{comp}$$</p>
+<p class="text-gray-300 my-3 leading-relaxed text-sm">   *(O Limite Disponível NUNCA ultrapassa o Limite Contratado).*</p>
+<li class="text-gray-300 my-1 ml-6 list-decimal text-sm">**Capacidade Total de Compra ($CapacidadeTotal$):** O poder de compra efetivo somando o limite puro com o saldo credor:</li>
+<p class="text-gray-300 my-3 leading-relaxed text-sm">   $$CapacidadeTotal = Lim_{disp,est} + SaldoCredor$$</p>
+<li class="text-gray-300 my-1 ml-6 list-decimal text-sm">**Limite Informado pelo Emissor ($Lim_{emissor}$):** Valor de crédito oficial reportado pelo banco via Open Finance ou extrato.</li>
+<hr class="my-8 border-gray-800" />
+<h3 class="text-lg font-semibold text-gray-100 mt-6 mb-2">4.3 Matriz Revisada dos 17 Cenários com Fechamento Matemático Estrito</h3>
+<div class="overflow-x-auto my-6 border border-gray-800 rounded-xl shadow-lg bg-gray-900/60 custom-scroll"><table class="w-full text-left text-xs">
+<thead class="bg-gray-800/80 text-emerald-400 uppercase font-semibold border-b border-gray-700"><tr>
+<th class="px-4 py-3">#</th>
+<th class="px-4 py-3">Cenário Operacional</th>
+<th class="px-4 py-3">$Lim_{contratado}$</th>
+<th class="px-4 py-3">Passivo Atual</th>
+<th class="px-4 py-3">Passivo Futuro</th>
+<th class="px-4 py-3">$SaldoCredor$</th>
+<th class="px-4 py-3">$Lim_{comp}$</th>
+<th class="px-4 py-3">$Lim_{disp,est}$</th>
+<th class="px-4 py-3">$CapacidadeTotal$</th>
+</tr></thead><tbody class="divide-y divide-gray-800">
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**00**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">**Estado Inicial (Livre)**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 5.000</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 0</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 0</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 0</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 0</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 5.000</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 5.000</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**01**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Compra à vista R$ 500</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 5.000</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 500</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 0</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 0</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 500</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 4.500</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 4.500</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**02**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Compra parcelada 3x R$ 1.000</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 5.000</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 1.000</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 2.000</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 0</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 3.000</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 2.000</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 2.000</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**03**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Compra pré-fechamento R$ 200</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 5.000</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 1.200</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 2.000</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 0</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 3.200</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 1.800</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 1.800</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**04**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Compra pós-fechamento R$ 300</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 5.000</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 1.200</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 2.300</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 0</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 3.500</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 1.500</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 1.500</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**05**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Compra no dia do fechamento</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 5.000</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Conforme corte</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Conforme corte</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 0</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Alocado</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Deduzido</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Conforme</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**06**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Pgto integral fatura (R$ 1.200)</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 5.000</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 0</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 2.300</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 0</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 2.300</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 2.700</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 2.700</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**07**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Pgto parcial fatura (R$ 700)</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 5.000</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 500 (Rot.)</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 2.300</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 0</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 2.800</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 2.200</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 2.200</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**08A**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Antecipação SEM desconto (R$ 1.000)</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 5.000</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 1.500</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 1.300</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 0</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 2.800</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 2.200</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 2.200</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**08B**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Antecipação COM desconto R$ 100</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 5.000</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 1.400</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 1.300</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 0</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 2.700</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 2.300</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 2.300</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**--**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">*(Pgto da Fatura Antecipada R$ 1.400)*</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 5.000</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 0</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 1.300</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 0</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 1.300</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 3.700</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 3.700</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**09**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Juros do rotativo R$ 50</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 5.000</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 550</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 1.300</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 0</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 1.850</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 3.150</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 3.150</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**10**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Multa por atraso R$ 20</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 5.000</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 570</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 1.300</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 0</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 1.870</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 3.130</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 3.130</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**11**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">**Estorno Integral Parcelado (Exemplo Corrigido)**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 5.000</td>
+<td class="px-4 py-3 text-gray-300 font-sans">**R$ 0**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">**R$ 0**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">**R$ 1.000**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">**R$ 0**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">**R$ 5.000**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">**R$ 6.000**</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**12**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Estorno parcial R$ 200</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 5.000</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Reduz R$ 200</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Inalterado</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 0 se dev.</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Reduz R$ 200</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Aumenta R$ 200</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Aumenta</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**13**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Cancelamento de parcelamento</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 5.000</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Inalterado</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Anula vincendas</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 0</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Reduz vincendas</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Libera vincendas</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Ajustado</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**14**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Devolução de produto</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 5.000</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Crédito lojista</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Conforme acordo</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Saldo se ></td>
+<td class="px-4 py-3 text-gray-300 font-sans">Reduz</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Aumenta</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Ajustado</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**15**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Compra acima do limite</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 5.000</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Rejeitada (0)</td>
+<td class="px-4 py-3 text-gray-300 font-sans">0</td>
+<td class="px-4 py-3 text-gray-300 font-sans">0</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Inalterado</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Inalterado</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Inalterado</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**16**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Fatura vencida</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 5.000</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Status OVERDUE</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Inalterado</td>
+<td class="px-4 py-3 text-gray-300 font-sans">0</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Inalterado</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Inalterado</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Inalterado</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**17**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Pgto pós-vencimento</td>
+<td class="px-4 py-3 text-gray-300 font-sans">R$ 5.000</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Liquida vencido</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Inalterado</td>
+<td class="px-4 py-3 text-gray-300 font-sans">0</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Reduz principal</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Restabelece</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Ajustado</td>
+</tr>
+</tbody></table></div>
+<div class="p-4 my-4 bg-amber-950/40 border-l-4 border-amber-500 rounded-r-xl text-amber-200 text-sm">
+<strong class="font-bold flex items-center gap-2 mb-1">⚠️ IMPORTANTE</strong>
+<p class="text-gray-300 my-1">**FECHAMENTO MATEMÁTICO DO CENÁRIO 11 (ESTORNO):**  </p>
+<p class="text-gray-300 my-1">No estorno da compra de R$ 3.000,00 após pagamento de R$ 1.000,00:  </p>
+<p class="text-gray-300 my-1">- O Limite Comprometido vai a **R$ 0,00** (não há dívida ativa).  </p>
+<p class="text-gray-300 my-1">- O Limite Disponível Estimado vai a **R$ 5.000,00** (idêntico ao teto contratado; **não vai a R$ 6.000**).  </p>
+<p class="text-gray-300 my-1">- O valor de R$ 1.000,00 recebido do emissor é alocado em **Saldo Credor da Fatura = R$ 1.000,00**.  </p>
+<p class="text-gray-300 my-1">- A Capacidade Total de Compra é $5.000 + 1.000 = \mathbf{R\$\;6.000,00}$. A distinção contábil entre crédito bancário e saldo credor próprio é preservada com precisão absoluta.</p>
+</div>
+<hr class="my-8 border-gray-800" />
+<h2 id="5-webhooks-exclusividade-de-processamento-e-recupera-o-de-commits" class="text-2xl font-bold text-emerald-400 mt-8 mb-4 pt-4 border-t border-gray-800/80 flex items-center gap-2">
+        <span class="text-emerald-500">§</span> 5. WEBHOOKS: EXCLUSIVIDADE DE PROCESSAMENTO E RECUPERAÇÃO DE COMMITS
+      </h2>
+<h3 class="text-lg font-semibold text-gray-100 mt-6 mb-2">5.1 Falhas Corrigidas na Ingestão de Webhooks</h3>
+<li class="text-gray-300 my-1 ml-6 list-decimal text-sm">**Validação Estrita de Timestamp:** A verificação agora exige conformidade com regex `/^\d{10}$/`, rejeitando injeções ou valores com sufixos inválidos.</li>
+<li class="text-gray-300 my-1 ml-6 list-decimal text-sm">**Assinatura HMAC sobre Bytes Brutos:** A computação do hash HMAC SHA-256 utiliza obrigatoriamente o buffer de bytes brutos da requisição (`rawBodyBuffer: Buffer`), evitando divergências causadas por parse/stringificação JSON intermediária.</li>
+<li class="text-gray-300 my-1 ml-6 list-decimal text-sm">**Máquina de Estados com Aquisição Exclusiva:** A transição de estado opera dentro de `firestore.runTransaction()` com controle de concorrência:</li>
+<p class="text-gray-300 my-3 leading-relaxed text-sm">   - Se o evento estiver `RECEIVED`: o primeiro worker adquire o lease, incrementa o `fencingToken`, grava seu `workerId`, define `leaseExpiresAt = now + 90s` e muda o status para `PROCESSING`.</p>
+<p class="text-gray-300 my-3 leading-relaxed text-sm">   - Se um segundo worker tentar processar simultaneamente: detecta o lease ativo e retorna HTTP 429 Retry Later.</p>
+<p class="text-gray-300 my-3 leading-relaxed text-sm">   - Se o evento estiver `FAILED` ou com lease expirado: a reaquisição ocorre de forma atômica dentro da transação.</p>
+<li class="text-gray-300 my-1 ml-6 list-decimal text-sm">**Recuperação de Resultado Financeiro Desconhecido:** O documento armazena o `linkedFinancialRequestId`. Caso o worker caia imediatamente após o commit financeiro no Firestore mas antes de responder HTTP 200 ao provedor do webhook, no retry o webhook consulta o lease financeiro: se `COMPLETED`, atualiza o nonce para `COMPLETED` e responde 200 OK sem reexecutar os lançamentos financeiros.</li>
+<hr class="my-8 border-gray-800" />
+<h3 class="text-lg font-semibold text-gray-100 mt-6 mb-2">5.2 Implementação Canônica do Webhook Guard</h3>
+<div class="my-4 rounded-xl overflow-hidden border border-gray-800 bg-[#0d1117] shadow-lg">
+            <div class="bg-gray-800/60 px-4 py-2 text-xs font-mono text-emerald-400 border-b border-gray-800 flex items-center justify-between">
+              <span>TYPESCRIPT</span>
+              <span class="text-gray-400 text-[10px]">KYRO Strict Implementation</span>
+            </div>
+            <pre class="p-4 text-xs font-mono text-gray-200 overflow-x-auto leading-relaxed custom-scroll"><code>// api/guards/WebhookGuardV2.ts
+import * as admin from 'firebase-admin';
+import crypto from 'node:crypto';
+
+export type WebhookStatus = 'RECEIVED' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'QUARANTINED';
+
+export interface WebhookNonceDocumentV2 {
+  eventId: string;
+  provider: string;
+  payloadHash: string;
+  status: WebhookStatus;
+  workerId: string;
+  fencingToken: number;
+  leaseExpiresAtTimestamp: number;
+  receivedAtTimestamp: number;
+  completedAtTimestamp?: number;
+  lastError?: string;
+  linkedFinancialRequestId: string;
+}
+
+export async function processWebhookSafelyV2(
+  firestore: admin.firestore.Firestore,
+  rawBodyBuffer: Buffer,
+  signatureHeader: string,
+  timestampHeader: string,
+  eventIdHeader: string,
+  secretKey: string,
+  currentWorkerId: string,
+  executeFinancialAction: (financialRequestId: string) =&gt; Promise&lt;void&gt;
+): Promise&lt;{ statusCode: number; message: string }&gt; {
+
+  // 1. Validação Estrita do Timestamp com Regex (10 dígitos inteiros)
+  if (!/^\d{10}$/.test(timestampHeader)) {
+    return { statusCode: 400, message: 'Timestamp em formato inválido. Esperado Unix Epoch de 10 dígitos.' };
+  }
+
+  const timestamp = parseInt(timestampHeader, 10);
+  const nowSeconds = Math.floor(Date.now() / 1000);
+
+  if (Math.abs(nowSeconds - timestamp) &gt; 300) {
+    return { statusCode: 400, message: 'Timestamp expirado (fora da janela de 300 segundos).' };
+  }
+
+  // 2. Validação Criptográfica HMAC SHA-256 em Tempo Constante sobre Bytes Brutos
+  const hmac = crypto.createHmac('sha256', secretKey);
+  hmac.update(`${timestamp}.`);
+  hmac.update(rawBodyBuffer);
+  const expectedSignature = `v1=${hmac.digest('hex')}`;
+
+  const sigBuf = Buffer.from(signatureHeader, 'utf8');
+  const expBuf = Buffer.from(expectedSignature, 'utf8');
+
+  if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {
+    return { statusCode: 401, message: 'Assinatura HMAC inválida.' };
+  }
+
+  const payloadHash = crypto.createHash('sha256').update(rawBodyBuffer).digest('hex');
+  const nonceRef = firestore.collection('processed_webhook_nonces').doc(eventIdHeader);
+  const financialRequestId = `fin_wh_${eventIdHeader}`;
+  const nowMs = Date.now();
+
+  // 3. Transação Atômica de Aquisição Exclusiva do Evento
+  const acquireResult = await firestore.runTransaction(async (transaction) =&gt; {
+    const nonceSnap = await transaction.get(nonceRef);
+
+    if (!nonceSnap.exists) {
+      // Evento novo: registra e adquire lease
+      transaction.set(nonceRef, {
+        eventId: eventIdHeader,
+        provider: 'evolution_baileys',
+        payloadHash,
+        status: 'PROCESSING',
+        workerId: currentWorkerId,
+        fencingToken: 1,
+        leaseExpiresAtTimestamp: nowMs + 90000, // 90 segundos
+        receivedAtTimestamp: nowMs,
+        linkedFinancialRequestId: financialRequestId
+      });
+      return { acquired: true, fencingToken: 1, status: 'PROCESSING' };
+    }
+
+    const data = nonceSnap.data() as WebhookNonceDocumentV2;
+
+    if (data.status === 'COMPLETED') {
+      return { acquired: false, status: 'COMPLETED' };
+    }
+
+    if (data.status === 'PROCESSING' &amp;&amp; nowMs &lt; data.leaseExpiresAtTimestamp) {
+      // Lease ativo sendo processado por outro worker
+      return { acquired: false, status: 'PROCESSING_ACTIVE' };
+    }
+
+    // Evento FAILED ou com lease expirado: reaquisição com fencing monotônico
+    const nextFencingToken = data.fencingToken + 1;
+    transaction.update(nonceRef, {
+      status: 'PROCESSING',
+      workerId: currentWorkerId,
+      fencingToken: nextFencingToken,
+      leaseExpiresAtTimestamp: nowMs + 90000,
+      retryAtTimestamp: nowMs
+    });
+
+    return { acquired: true, fencingToken: nextFencingToken, status: 'PROCESSING_REACQUIRED' };
+  });
+
+  if (!acquireResult.acquired) {
+    if (acquireResult.status === 'COMPLETED') {
+      return { statusCode: 200, message: 'Evento já concluído com sucesso anteriormente.' };
+    }
+    return { statusCode: 429, message: 'Evento em processamento ativo por outro worker. Aguarde.' };
+  }
+
+  // 4. Execução da Ação Financeira com Recuperação de Commit Desconhecido
+  try {
+    await executeFinancialAction(financialRequestId);
+
+    // Conclusão com sucesso
+    await nonceRef.update({
+      status: 'COMPLETED',
+      completedAtTimestamp: Date.now()
+    });
+
+    return { statusCode: 200, message: 'Webhook processado e financeiro consolidado com sucesso.' };
+  } catch (err: any) {
+    // Consulta o lease financeiro para checar se houve UNKNOWN_COMMIT antes de marcar como FAILED
+    const finLeaseRef = firestore.collection('idempotency_leases').doc(financialRequestId);
+    const finLeaseSnap = await finLeaseRef.get();
+
+    if (finLeaseSnap.exists &amp;&amp; finLeaseSnap.data()?.status === 'COMPLETED') {
+      // O commit financeiro PASSOU, apenas a resposta de rede falhou!
+      await nonceRef.update({
+        status: 'COMPLETED',
+        completedAtTimestamp: Date.now()
+      });
+      return { statusCode: 200, message: 'Commit financeiro confirmado via reconciliação.' };
+    }
+
+    // Falha real: marca como FAILED para permitir retries legítimos
+    await nonceRef.update({
+      status: 'FAILED',
+      lastError: err.message || 'Falha no processamento financeiro.'
+    });
+
+    return { statusCode: 500, message: `Erro no processamento financeiro: ${err.message}` };
+  }
+}</code></pre>
+          </div>
+<hr class="my-8 border-gray-800" />
+<h2 id="6-firestore-security-rules-fronteira-nica-de-autoriza-o" class="text-2xl font-bold text-emerald-400 mt-8 mb-4 pt-4 border-t border-gray-800/80 flex items-center gap-2">
+        <span class="text-emerald-500">§</span> 6. FIRESTORE SECURITY RULES: FRONTEIRA ÚNICA DE AUTORIZAÇÃO
+      </h2>
+<h3 class="text-lg font-semibold text-gray-100 mt-6 mb-2">6.1 Matriz de Autoridade e Fronteira Arquitetural</h3>
+<p class="text-gray-300 my-3 leading-relaxed text-sm">O Kyro Finance estabelece a **Fronteira Única de Autorização**:</p>
+<li class="text-gray-300 my-1 ml-6 list-decimal text-sm">**Coleções Internas (Infraestrutura de Transação e Auditoria):**</li>
+<p class="text-gray-300 my-3 leading-relaxed text-sm">   - `idempotency_locks`, `idempotency_leases`, `processed_webhook_nonces`, `tombstones`, `quarantine_*`.</p>
+<p class="text-gray-300 my-3 leading-relaxed text-sm">   - **Regra:** `allow read, write: if false;` (Acesso 100% exclusivo do backend Node.js via Firebase Admin SDK).</p>
+<li class="text-gray-300 my-1 ml-6 list-decimal text-sm">**Coleções Contábeis Estruturais (Cartões, Faturas e Planos do Modelo B):**</li>
+<p class="text-gray-300 my-3 leading-relaxed text-sm">   - `cards`, `invoices`, `installment_plans`.</p>
+<p class="text-gray-300 my-3 leading-relaxed text-sm">   - **Regra:** `allow read: if isOwner(resource.data.userId); allow write: if false;` (A alteração de parcelamentos e limites é atribuição exclusiva do Motor Financeiro no backend, impedindo adulteração direta de limites pelo cliente).</p>
+<li class="text-gray-300 my-1 ml-6 list-decimal text-sm">**Coleção de Transações Operacionais (`transactions`):**</li>
+<p class="text-gray-300 my-3 leading-relaxed text-sm">   - **Regra:** `allow read: if isOwner(resource.data.userId);`</p>
+<p class="text-gray-300 my-3 leading-relaxed text-sm">   - **Criação pelo Cliente:** Permitida para suportar o funcionamento offline-first no APK/PWA com validação estrita de campos, tipagens inteiras (`amountCents is int`) e propriedade invariável (`request.resource.data.userId == request.auth.uid`).</p>
+<p class="text-gray-300 my-3 leading-relaxed text-sm">   - **Atualização pelo Cliente:** O campo `userId` é estritamente imutável (`request.resource.data.userId == resource.data.userId`). Proibida alteração de metadados de sistema (`sourceRequestId`, `version`).</p>
+<hr class="my-8 border-gray-800" />
+<h3 class="text-lg font-semibold text-gray-100 mt-6 mb-2">6.2 Regras Canônicas do Firestore (`firestore.rules`)</h3>
+<div class="my-4 rounded-xl overflow-hidden border border-gray-800 bg-[#0d1117] shadow-lg">
+            <div class="bg-gray-800/60 px-4 py-2 text-xs font-mono text-emerald-400 border-b border-gray-800 flex items-center justify-between">
+              <span>JAVASCRIPT</span>
+              <span class="text-gray-400 text-[10px]">KYRO Strict Implementation</span>
+            </div>
+            <pre class="p-4 text-xs font-mono text-gray-200 overflow-x-auto leading-relaxed custom-scroll"><code>rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAuthenticated() {
+      return request.auth != null &amp;&amp; request.auth.uid != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() &amp;&amp; request.auth.uid == userId;
+    }
+
+    function isValidDate(dateStr) {
+      return dateStr is string &amp;&amp; dateStr.matches('^\\d{4}-\\d{2}-\\d{2}$');
+    }
+
+    // 1. TRANSAÇÕES OPERACIONAIS (Suporte a Offline-First)
+    match /transactions/{transactionId} {
+      allow read: if isAuthenticated() &amp;&amp; resource.data.userId == request.auth.uid;
+
+      allow create: if isAuthenticated()
+        &amp;&amp; request.resource.data.userId == request.auth.uid
+        &amp;&amp; request.resource.data.amountCents is int
+        &amp;&amp; request.resource.data.amountCents != 0
+        &amp;&amp; request.resource.data.type in ['income', 'expense', 'reimbursement', 'reversal']
+        &amp;&amp; (request.resource.data.competenceDate == null || isValidDate(request.resource.data.competenceDate));
+
+      allow update: if isAuthenticated()
+        &amp;&amp; resource.data.userId == request.auth.uid
+        &amp;&amp; request.resource.data.userId == resource.data.userId // userId imutável
+        &amp;&amp; request.resource.data.amountCents is int
+        &amp;&amp; request.resource.data.amountCents != 0;
+
+      allow delete: if isAuthenticated() &amp;&amp; resource.data.userId == request.auth.uid;
+    }
+
+    // 2. MODELO B DE CARTÕES (Gestão Exclusiva do Motor no Backend)
+    match /installment_plans/{planId} {
+      allow read: if isAuthenticated() &amp;&amp; resource.data.userId == request.auth.uid;
+      allow write: if false; // Mutação exclusiva via backend Admin SDK
+    }
+
+    match /cards/{cardId} {
+      allow read: if isAuthenticated() &amp;&amp; resource.data.userId == request.auth.uid;
+      allow write: if false; // Mutação exclusiva via backend Admin SDK
+    }
+
+    match /invoices/{invoiceId} {
+      allow read: if isAuthenticated() &amp;&amp; resource.data.userId == request.auth.uid;
+      allow write: if false; // Mutação exclusiva via backend Admin SDK
+    }
+
+    // 3. INFRAESTRUTURA TRANSACIONAL E SEGURANÇA (100% Exclusivo Backend)
+    match /tombstones/{tombstoneId} {
+      allow read: if isAuthenticated() &amp;&amp; resource.data.userId == request.auth.uid;
+      allow write: if false;
+    }
+
+    match /idempotency_locks/{lockId} {
+      allow read, write: if false;
+    }
+
+    match /idempotency_leases/{leaseId} {
+      allow read, write: if false;
+    }
+
+    match /processed_webhook_nonces/{nonceId} {
+      allow read, write: if false;
+    }
+
+    match /quarantine_legacy_transactions/{docId} {
+      allow read, write: if false;
+    }
+
+    // 4. BLOQUEIO PADRÃO PARA QUALQUER COLEÇÃO NÃO ESPECIFICADA
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}</code></pre>
+          </div>
+<hr class="my-8 border-gray-800" />
+<h2 id="7-offline-verifica-o-autorizada-e-estados-terminais" class="text-2xl font-bold text-emerald-400 mt-8 mb-4 pt-4 border-t border-gray-800/80 flex items-center gap-2">
+        <span class="text-emerald-500">§</span> 7. OFFLINE: VERIFICAÇÃO AUTORIZADA E ESTADOS TERMINAIS
+      </h2>
+<h3 class="text-lg font-semibold text-gray-100 mt-6 mb-2">7.1 Especificação do Endpoint `GET /api/idempotency/verify`</h3>
+<p class="text-gray-300 my-3 leading-relaxed text-sm">Para que o cliente móvel ou web possa resolver operações `IN_FLIGHT` sem vazamento de dados ou falsos positivos:</p>
+<li class="text-gray-300 my-1 ml-6 list-disc text-sm">**Autenticação:** Exige header `Authorization: Bearer <FirebaseIdToken>`.</li>
+<li class="text-gray-300 my-1 ml-6 list-disc text-sm">**Autorização:** O backend extrai o `uid` soberano do token. A consulta só busca leases pertencentes àquele `uid`. Se for solicitado um `requestId` de outro usuário, o backend retorna HTTP 403 Forbidden.</li>
+<li class="text-gray-300 my-1 ml-6 list-disc text-sm">**Payload Sanitizado:** O endpoint retorna exclusivamente o status do lease e o timestamp, sem expor valores ou dados contábeis.</li>
+<div class="my-4 rounded-xl overflow-hidden border border-gray-800 bg-[#0d1117] shadow-lg">
+            <div class="bg-gray-800/60 px-4 py-2 text-xs font-mono text-emerald-400 border-b border-gray-800 flex items-center justify-between">
+              <span>TYPESCRIPT</span>
+              <span class="text-gray-400 text-[10px]">KYRO Strict Implementation</span>
+            </div>
+            <pre class="p-4 text-xs font-mono text-gray-200 overflow-x-auto leading-relaxed custom-scroll"><code>// api/types/verification.ts
+export type VerificationStatus = 
+  | 'COMPLETED'                     // Transação confirmada no Firestore
+  | 'PROCESSING'                    // Worker ativo no processamento
+  | 'LEASE_EXPIRED'                 // Worker não concluiu no prazo (elegível para reenvio)
+  | 'FAILED_CONFIRMED_NOT_COMMITTED'// Falha antes do commit (reenvio seguro)
+  | 'UNKNOWN_COMMIT'                // Estado ambíguo em reconciliação
+  | 'NOT_FOUND'                     // Nenhum registro encontrado para este requestId
+  | 'QUARANTINED';                  // Bloqueado em quarentena
+
+export interface CanonicalVerificationResponse {
+  requestId: string;
+  status: VerificationStatus;
+  checkedAtServerTimestamp: number;
+  completedAtTimestamp?: number;
+  canSafelyRetry: boolean;
+}</code></pre>
+          </div>
+<hr class="my-8 border-gray-800" />
+<h3 class="text-lg font-semibold text-gray-100 mt-6 mb-2">7.2 Protocolo de Full Resync à Prova de Falha de Armazenamento Local</h3>
+<p class="text-gray-300 my-3 leading-relaxed text-sm">Se o próprio IndexedDB estiver instável durante a execução de um Full Resync:</p>
+<li class="text-gray-300 my-1 ml-6 list-decimal text-sm">**Passo 1 (Serialização em Memória RAM):** As mutações locais pendentes (`QUEUED`, `IN_FLIGHT`, `FAILED`) são lidas do IndexedDB e carregadas em um array em memória RAM (`inMemoryRescueQueue`).</li>
+<li class="text-gray-300 my-1 ml-6 list-decimal text-sm">**Passo 2 (Tentativa de Persistência em Backup Local):** O array é gravado na store `resync_mutation_backup`. Se a gravação falhar por erro de quota ou corrupção do IndexedDB:</li>
+<p class="text-gray-300 my-3 leading-relaxed text-sm">   - O Full Resync **É ABORTADO IMEDIATAMENTE**.</p>
+<p class="text-gray-300 my-3 leading-relaxed text-sm">   - O cache local **NÃO É APAGADO**.</p>
+<p class="text-gray-300 my-3 leading-relaxed text-sm">   - O aplicativo alerta o usuário: *"Armazenamento local com espaço insuficiente para efetuar sincronização segura. Libere espaço no dispositivo antes de sincronizar."*</p>
+<li class="text-gray-300 my-1 ml-6 list-decimal text-sm">**Passo 3 (Sondagem das Mutações `IN_FLIGHT`):** Somente após o backup estar confirmado é que o cliente consulta o endpoint de verificação para cada mutação `IN_FLIGHT`.</li>
+<li class="text-gray-300 my-1 ml-6 list-decimal text-sm">**Passo 4 (Reconciliação e Limpeza):** Mutações confirmadas como `COMPLETED` no servidor são purgadas; mutações não confirmadas retornam para a fila `QUEUED` mantendo o `requestId` original.</li>
+<hr class="my-8 border-gray-800" />
+<h2 id="8-padroniza-o-de-timestamps-e-convers-es-temporais" class="text-2xl font-bold text-emerald-400 mt-8 mb-4 pt-4 border-t border-gray-800/80 flex items-center gap-2">
+        <span class="text-emerald-500">§</span> 8. PADRONIZAÇÃO DE TIMESTAMPS E CONVERSÕES TEMPORAIS
+      </h2>
+<h3 class="text-lg font-semibold text-gray-100 mt-6 mb-2">8.1 Resolução da Divergência Arquitetural</h3>
+<div class="overflow-x-auto my-6 border border-gray-800 rounded-xl shadow-lg bg-gray-900/60 custom-scroll"><table class="w-full text-left text-xs">
+<thead class="bg-gray-800/80 text-emerald-400 uppercase font-semibold border-b border-gray-700"><tr>
+<th class="px-4 py-3">Camada do Sistema</th>
+<th class="px-4 py-3">Tipo Primitivo Utilizado</th>
+<th class="px-4 py-3">Formato de Representação</th>
+<th class="px-4 py-3">Justificativa Técnica</th>
+</tr></thead><tbody class="divide-y divide-gray-800">
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**Firestore (Persistência)**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">`admin.firestore.Timestamp`</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Objeto nativo com segundos e nanossegundos</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Permite ordenação indexada e filtros relacionais nativos (`where`).</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**APIs e Payloads JSON**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">`string`</td>
+<td class="px-4 py-3 text-gray-300 font-sans">**UTC ISO 8601** (`2026-11-05T19:40:00.000Z`)</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Padrão interoperável internacional sem ambiguidade.</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**Motor Interno (Cálculos)**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">`number` (Safe Integer)</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Milissegundos Unix (`Date.now()`)</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Operações de comparação matemática direta sem parse.</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**Data Civil Contábil**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">`string`</td>
+<td class="px-4 py-3 text-gray-300 font-sans">**Calendário `YYYY-MM-DD`**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Imutabilidade em relação a fusos horários e horário de verão.</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**Competência Contábil**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">`string`</td>
+<td class="px-4 py-3 text-gray-300 font-sans">**Mês `YYYY-MM`**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Agrupamento de DRE e orçamentos mensais.</td>
+</tr>
+</tbody></table></div>
+<hr class="my-8 border-gray-800" />
+<h2 id="9-auditoria-retrospectiva-e-invent-rio-completo-dos-25-arquivos-reais" class="text-2xl font-bold text-emerald-400 mt-8 mb-4 pt-4 border-t border-gray-800/80 flex items-center gap-2">
+        <span class="text-emerald-500">§</span> 9. AUDITORIA RETROSPECTIVA E INVENTÁRIO COMPLETO DOS 25 ARQUIVOS REAIS
+      </h2>
+<h3 class="text-lg font-semibold text-gray-100 mt-6 mb-2">9.1 Inventário Exaustivo de Todos os 25 Arquivos da Base de Código v1.41</h3>
+<p class="text-gray-300 my-3 leading-relaxed text-sm">A tabela a seguir apresenta o confronto minucioso de 100% dos 25 arquivos reais existentes em `api/` e `src/` no repositório `C:\Users\Lenovo\Documents\antigravity\Finanças`:</p>
+<div class="overflow-x-auto my-6 border border-gray-800 rounded-xl shadow-lg bg-gray-900/60 custom-scroll"><table class="w-full text-left text-xs">
+<thead class="bg-gray-800/80 text-emerald-400 uppercase font-semibold border-b border-gray-700"><tr>
+<th class="px-4 py-3">#</th>
+<th class="px-4 py-3">Caminho do Arquivo Real</th>
+<th class="px-4 py-3">Tamanho</th>
+<th class="px-4 py-3">Linhas Exam.</th>
+<th class="px-4 py-3">Responsabilidade do Arquivo</th>
+<th class="px-4 py-3">Problema Detectado no Legado v1.41</th>
+<th class="px-4 py-3">Classificação</th>
+<th class="px-4 py-3">Correção na Futura Etapa 03</th>
+</tr></thead><tbody class="divide-y divide-gray-800">
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**01**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">`api/app-version.ts`</td>
+<td class="px-4 py-3 text-gray-300 font-sans">5.058 B</td>
+<td class="px-4 py-3 text-gray-300 font-sans">L1-L120</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Verificação de versão do APK Android</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Retorna versão estática sem checagem de build</td>
+<td class="px-4 py-3 text-gray-300 font-sans">**VERIFICADO**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Integrar com release tag do GitHub</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**02**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">`api/chat.ts`</td>
+<td class="px-4 py-3 text-gray-300 font-sans">36.182 B</td>
+<td class="px-4 py-3 text-gray-300 font-sans">L1-L280</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Endpoint da IA e Copilot financeiro</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Executa chamadas à IA sem lease de idempotência</td>
+<td class="px-4 py-3 text-gray-300 font-sans">**PENDENTE**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Injetar middleware de lease de 3 fases</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**03**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">`api/config/openai.ts`</td>
+<td class="px-4 py-3 text-gray-300 font-sans">129 B</td>
+<td class="px-4 py-3 text-gray-300 font-sans">L1-L8</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Instanciação do client OpenAI</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Chave em fallback sem validação de ambiente</td>
+<td class="px-4 py-3 text-gray-300 font-sans">**VERIFICADO**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Adicionar guard de variável obrigatória</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**04**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">`api/database.ts`</td>
+<td class="px-4 py-3 text-gray-300 font-sans">25.766 B</td>
+<td class="px-4 py-3 text-gray-300 font-sans">L1-L45</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Camada de persistência backend</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Usa Client SDK (`firebase/firestore`) e `let db: any`</td>
+<td class="px-4 py-3 text-gray-300 font-sans">**CONTRADITÓRIO**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Migrar para `firebase-admin/firestore`</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**05**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">`api/group-join.ts`</td>
+<td class="px-4 py-3 text-gray-300 font-sans">3.105 B</td>
+<td class="px-4 py-3 text-gray-300 font-sans">L1-L90</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Gestão de grupos no WhatsApp</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Ausência de autorização de UID</td>
+<td class="px-4 py-3 text-gray-300 font-sans">**PENDENTE**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Vincular permissão ao UID autenticado</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**06**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">`api/instance-qr.ts`</td>
+<td class="px-4 py-3 text-gray-300 font-sans">3.793 B</td>
+<td class="px-4 py-3 text-gray-300 font-sans">L1-L110</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Exibição de QR Code do Baileys</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Sem expiração de QR e sem rotação de token</td>
+<td class="px-4 py-3 text-gray-300 font-sans">**VERIFICADO**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Adicionar TTL de 60 segundos no QR</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**07**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">`api/prompts/finance.prompt.ts`</td>
+<td class="px-4 py-3 text-gray-300 font-sans">1.721 B</td>
+<td class="px-4 py-3 text-gray-300 font-sans">L1-L60</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Prompt de sistema da IA financeira</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Permite interpretação vaga de compras parceladas</td>
+<td class="px-4 py-3 text-gray-300 font-sans">**DOCUMENTADO**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Injetar regras estritas do Modelo B</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**08**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">`api/services/evolution.ts`</td>
+<td class="px-4 py-3 text-gray-300 font-sans">1.669 B</td>
+<td class="px-4 py-3 text-gray-300 font-sans">L1-L50</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Client HTTP para API Evolution/Baileys</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Timeout fixo curto sem retry com backoff</td>
+<td class="px-4 py-3 text-gray-300 font-sans">**VERIFICADO**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Adicionar retry exponencial no Axios</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**09**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">`api/services/financeAssistant.ts`</td>
+<td class="px-4 py-3 text-gray-300 font-sans">3.385 B</td>
+<td class="px-4 py-3 text-gray-300 font-sans">L1-L110</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Orquestrador do assistente financeiro</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Parse monetário baseado em regex ingênua</td>
+<td class="px-4 py-3 text-gray-300 font-sans">**CONTRADITÓRIO**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Substituir por `CurrencyParserStrict`</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**10**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">`api/services/financeDb.ts`</td>
+<td class="px-4 py-3 text-gray-300 font-sans">2.259 B</td>
+<td class="px-4 py-3 text-gray-300 font-sans">L1-L85</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Abstração de banco de dados</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Assinaturas com tipos fracos (`any`)</td>
+<td class="px-4 py-3 text-gray-300 font-sans">**CONTRADITÓRIO**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Aplicar contratos TypeScript estritos</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**11**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">`api/transcribe.ts`</td>
+<td class="px-4 py-3 text-gray-300 font-sans">6.915 B</td>
+<td class="px-4 py-3 text-gray-300 font-sans">L1-L180</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Transcrição de áudio do WhatsApp</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Salva arquivos temporários em disco sem limpeza</td>
+<td class="px-4 py-3 text-gray-300 font-sans">**VERIFICADO**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Garantir bloco `finally` com `unlinkSync`</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**12**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">`api/webhook.ts`</td>
+<td class="px-4 py-3 text-gray-300 font-sans">48.927 B</td>
+<td class="px-4 py-3 text-gray-300 font-sans">L20-L80</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Endpoint de webhook do WhatsApp</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Sem validação anti-replay; parser em float</td>
+<td class="px-4 py-3 text-gray-300 font-sans">**CONTRADITÓRIO**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Substituir por `processWebhookSafelyV2`</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**13**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">`src/App.tsx`</td>
+<td class="px-4 py-3 text-gray-300 font-sans">363.111 B</td>
+<td class="px-4 py-3 text-gray-300 font-sans">L1677</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Componente raiz da aplicação React</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Agregação monetária com floats e sem DRE</td>
+<td class="px-4 py-3 text-gray-300 font-sans">**CONTRADITÓRIO**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Refatorar acumuladores para centavos</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**14**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">`src/components/UpdateModal.tsx`</td>
+<td class="px-4 py-3 text-gray-300 font-sans">10.256 B</td>
+<td class="px-4 py-3 text-gray-300 font-sans">L1-L220</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Modal de atualização do APK Android</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Download direto sem checagem de integridade SHA</td>
+<td class="px-4 py-3 text-gray-300 font-sans">**VERIFICADO**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Adicionar validação de hash do APK</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**15**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">`src/components/WhatsAppTab.tsx`</td>
+<td class="px-4 py-3 text-gray-300 font-sans">63.741 B</td>
+<td class="px-4 py-3 text-gray-300 font-sans">L50-L150</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Painel de controle do WhatsApp</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Permite pairing sem confirmação OTP do titular</td>
+<td class="px-4 py-3 text-gray-300 font-sans">**VERIFICADO**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Exigir OTP de vinculação de número</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**16**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">`src/firebase.ts`</td>
+<td class="px-4 py-3 text-gray-300 font-sans">5.616 B</td>
+<td class="px-4 py-3 text-gray-300 font-sans">L1-L80</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Inicialização do Firebase no frontend</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Sem chamada `navigator.storage.persist()`</td>
+<td class="px-4 py-3 text-gray-300 font-sans">**DOCUMENTADO**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Injetar serviço de persistência durável</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**17**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">`src/index.css`</td>
+<td class="px-4 py-3 text-gray-300 font-sans">2.083 B</td>
+<td class="px-4 py-3 text-gray-300 font-sans">L1-L90</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Estilos globais Tailwind</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Estilos visuais adequados</td>
+<td class="px-4 py-3 text-gray-300 font-sans">**VERIFICADO**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Preservar intacto</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**18**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">`src/main.tsx`</td>
+<td class="px-4 py-3 text-gray-300 font-sans">309 B</td>
+<td class="px-4 py-3 text-gray-300 font-sans">L1-L15</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Ponto de entrada do React 19</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Renderização direta sem error boundary global</td>
+<td class="px-4 py-3 text-gray-300 font-sans">**DOCUMENTADO**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Adicionar ErrorBoundary corporativo</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**19**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">`src/nativeBridge.ts`</td>
+<td class="px-4 py-3 text-gray-300 font-sans">6.832 B</td>
+<td class="px-4 py-3 text-gray-300 font-sans">L1-L190</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Ponte Capacitor para recursos nativos</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Manipulação de eventos nativos sem tipagem</td>
+<td class="px-4 py-3 text-gray-300 font-sans">**VERIFICADO**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Tipar listeners de rede e storage</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**20**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">`src/types.ts`</td>
+<td class="px-4 py-3 text-gray-300 font-sans">3.312 B</td>
+<td class="px-4 py-3 text-gray-300 font-sans">L10-L40</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Interfaces de dados do frontend</td>
+<td class="px-4 py-3 text-gray-300 font-sans">`amount: number` em reais com float</td>
+<td class="px-4 py-3 text-gray-300 font-sans">**CONTRADITÓRIO**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Migrar para `amountCents: number`</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**21**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">`src/utils/aiCopilot.ts`</td>
+<td class="px-4 py-3 text-gray-300 font-sans">46.493 B</td>
+<td class="px-4 py-3 text-gray-300 font-sans">L1-L350</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Utilitários de assistência de IA</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Heurísticas financeiras sem conciliação</td>
+<td class="px-4 py-3 text-gray-300 font-sans">**DOCUMENTADO**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Adequar às 11 fórmulas contábeis</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**22**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">`src/utils/appUpdater.ts`</td>
+<td class="px-4 py-3 text-gray-300 font-sans">11.050 B</td>
+<td class="px-4 py-3 text-gray-300 font-sans">L1-L240</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Lógica de auto-update do aplicativo</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Lógica funcional de download de APK</td>
+<td class="px-4 py-3 text-gray-300 font-sans">**VERIFICADO**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Preservar para compilação nativa</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**23**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">`src/utils/documentExtractor.ts`</td>
+<td class="px-4 py-3 text-gray-300 font-sans">2.983 B</td>
+<td class="px-4 py-3 text-gray-300 font-sans">L1-L95</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Extração OCR de comprovantes</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Regex de valor suscetível a erros de ponto</td>
+<td class="px-4 py-3 text-gray-300 font-sans">**CONTRADITÓRIO**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Integrar com `CurrencyParserStrict`</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**24**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">`src/utils/financialParser.ts`</td>
+<td class="px-4 py-3 text-gray-300 font-sans">31.258 B</td>
+<td class="px-4 py-3 text-gray-300 font-sans">L1-L300</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Parser de transações da v1.41</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Truncamento silencioso de decimais</td>
+<td class="px-4 py-3 text-gray-300 font-sans">**CONTRADITÓRIO**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Substituir integralmente</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**25**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">`src/version.ts`</td>
+<td class="px-4 py-3 text-gray-300 font-sans">918 B</td>
+<td class="px-4 py-3 text-gray-300 font-sans">L1-L25</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Constantes de versão do sistema</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Versão v1.41 (Build 41 / PR.041)</td>
+<td class="px-4 py-3 text-gray-300 font-sans">**VERIFICADO**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Preservar constante de produção</td>
+</tr>
+</tbody></table></div>
+<hr class="my-8 border-gray-800" />
+<h2 id="10-matriz-de-testes-consolidada-38-testes-formais-" class="text-2xl font-bold text-emerald-400 mt-8 mb-4 pt-4 border-t border-gray-800/80 flex items-center gap-2">
+        <span class="text-emerald-500">§</span> 10. MATRIZ DE TESTES CONSOLIDADA (38 TESTES FORMAIS)
+      </h2>
+<p class="text-gray-300 my-3 leading-relaxed text-sm">Todos os 38 testes consolidados estão **formalmente especificados (`SPECIFIED`)** na arquitetura documental:</p>
+<div class="overflow-x-auto my-6 border border-gray-800 rounded-xl shadow-lg bg-gray-900/60 custom-scroll"><table class="w-full text-left text-xs">
+<thead class="bg-gray-800/80 text-emerald-400 uppercase font-semibold border-b border-gray-700"><tr>
+<th class="px-4 py-3">Identificador</th>
+<th class="px-4 py-3">Escopo do Teste</th>
+<th class="px-4 py-3">Cenário de Falha Simulado</th>
+<th class="px-4 py-3">Resultado Esperado</th>
+<th class="px-4 py-3">Status</th>
+</tr></thead><tbody class="divide-y divide-gray-800">
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**TEST-01**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Transação Firestore</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Leitura após escrita na mesma transação</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Prevenida pela arquitetura em 2 fases</td>
+<td class="px-4 py-3 text-gray-300 font-sans">**SPECIFIED**</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**TEST-02**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Transação Firestore</td>
+<td class="px-4 py-3 text-gray-300 font-sans">CREATE em documento pré-existente</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Aborta com `DOCUMENT_ALREADY_EXISTS`</td>
+<td class="px-4 py-3 text-gray-300 font-sans">**SPECIFIED**</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**TEST-03**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Fencing Token</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Worker zumbi tenta commit com token antigo</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Aborta com `FENCING_TOKEN_VIOLATION`</td>
+<td class="px-4 py-3 text-gray-300 font-sans">**SPECIFIED**</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**TEST-04**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Lease Idempotência</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Commit disparado após expiração de lease</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Aborta com `LEASE_EXPIRED`</td>
+<td class="px-4 py-3 text-gray-300 font-sans">**SPECIFIED**</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**TEST-05**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Idempotência IDOR</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Requisição com requestId de outro usuário</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Rejeitada com `SECURITY_OWNERSHIP_VIOLATION`</td>
+<td class="px-4 py-3 text-gray-300 font-sans">**SPECIFIED**</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**TEST-06**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Idempotência Hash</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Mesma requestId com payloadHash divergente</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Rejeitada com `PAYLOAD_HASH_MISMATCH`</td>
+<td class="px-4 py-3 text-gray-300 font-sans">**SPECIFIED**</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**TEST-07**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Concorrência Lote</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Mais de uma operação no mesmo documento</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Rejeitada com `DUPLICATE_DOCUMENT_OPERATION`</td>
+<td class="px-4 py-3 text-gray-300 font-sans">**SPECIFIED**</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**TEST-08**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Concorrência Lock</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Lote com dois sourceRequestIds conflitantes</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Rejeitada com `DUPLICATE_SOURCE_REQUEST`</td>
+<td class="px-4 py-3 text-gray-300 font-sans">**SPECIFIED**</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**TEST-09**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Concorrência DELETE</td>
+<td class="px-4 py-3 text-gray-300 font-sans">DELETE em doc inexistente com baseVersion > 0</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Aborta com `OPTIMISTIC_CONCURRENCY_CONFLICT`</td>
+<td class="px-4 py-3 text-gray-300 font-sans">**SPECIFIED**</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**TEST-10**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Concorrência DELETE</td>
+<td class="px-4 py-3 text-gray-300 font-sans">DELETE em documento de terceiro</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Rejeitada com `SECURITY_OWNERSHIP_VIOLATION`</td>
+<td class="px-4 py-3 text-gray-300 font-sans">**SPECIFIED**</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**TEST-11**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Tombstone</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Exclusão em subcoleção com barras</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Gera tombstone SHA-256 sem colisão</td>
+<td class="px-4 py-3 text-gray-300 font-sans">**SPECIFIED**</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**TEST-12**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Parser Monetário</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Entrada `"123,456"` com 3 casas decimais</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Rejeição imediata com `CurrencyParseError`</td>
+<td class="px-4 py-3 text-gray-300 font-sans">**SPECIFIED**</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**TEST-13**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Parser Monetário</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Entrada `"1.23,45"` com milhar inválido</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Rejeição imediata com `CurrencyParseError`</td>
+<td class="px-4 py-3 text-gray-300 font-sans">**SPECIFIED**</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**TEST-14**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Migração Legada</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Float Classe 4 ambíguo ou dízima</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Quarentena obrigatória sem centavos inventados</td>
+<td class="px-4 py-3 text-gray-300 font-sans">**SPECIFIED**</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**TEST-15**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Migração Legada</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Float Classe 3 com resíduo decimal puro</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Converte com flag `inferredFromFloat: true`</td>
+<td class="px-4 py-3 text-gray-300 font-sans">**SPECIFIED**</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**TEST-16**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Reconciliação</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Balanço de documentos e centavos</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Balanço em 7 camadas fecha exatamente</td>
+<td class="px-4 py-3 text-gray-300 font-sans">**SPECIFIED**</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**TEST-17**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Cartões Modelo B</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Estorno total com crédito na fatura</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Limite Comprometido = 0; Limite Disp = Contratado</td>
+<td class="px-4 py-3 text-gray-300 font-sans">**SPECIFIED**</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**TEST-18**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Cartões Modelo B</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Saldo Credor gerado por estorno</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Alocado em Saldo Credor; Limite não infla</td>
+<td class="px-4 py-3 text-gray-300 font-sans">**SPECIFIED**</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**TEST-19**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Cartões Modelo B</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Capacidade Total de Compra</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Soma Limite Disponível + Saldo Credor</td>
+<td class="px-4 py-3 text-gray-300 font-sans">**SPECIFIED**</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**TEST-20**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Cartões Modelo B</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Antecipação com desconto comercial</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Desconto classificado como Receita Financeira</td>
+<td class="px-4 py-3 text-gray-300 font-sans">**SPECIFIED**</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**TEST-21**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Webhook Anti-Replay</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Repetição com eventId já COMPLETED</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Retorna HTTP 200 sem reexecutar ação</td>
+<td class="px-4 py-3 text-gray-300 font-sans">**SPECIFIED**</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**TEST-22**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Webhook Concorrência</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Dois workers em evento RECEIVED</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Um adquire; segundo recebe 429 Retry</td>
+<td class="px-4 py-3 text-gray-300 font-sans">**SPECIFIED**</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**TEST-23**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Webhook Concorrência</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Dois workers em evento FAILED</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Reaquisição via transação incrementa fencing</td>
+<td class="px-4 py-3 text-gray-300 font-sans">**SPECIFIED**</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**TEST-24**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Webhook Recuperação</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Commit concluído mas webhook falhou</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Reconciliação atualiza status para COMPLETED</td>
+<td class="px-4 py-3 text-gray-300 font-sans">**SPECIFIED**</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**TEST-25**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Webhook HMAC</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Bytes do corpo alterados em 1 byte</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Rejeição com HTTP 401 Assinatura Inválida</td>
+<td class="px-4 py-3 text-gray-300 font-sans">**SPECIFIED**</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**TEST-26**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Webhook Timestamp</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Timestamp com sufixo alfanumérico</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Rejeição com HTTP 400 Formato Inválido</td>
+<td class="px-4 py-3 text-gray-300 font-sans">**SPECIFIED**</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**TEST-27**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Security Rules</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Cliente tentando ler idempotency_locks</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Bloqueio imediato por regra (`false`)</td>
+<td class="px-4 py-3 text-gray-300 font-sans">**SPECIFIED**</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**TEST-28**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Security Rules</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Cliente tentando escrever em cards/invoices</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Bloqueio imediato por regra (`false`)</td>
+<td class="px-4 py-3 text-gray-300 font-sans">**SPECIFIED**</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**TEST-29**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Security Rules</td>
+<td class="px-4 py-3 text-gray-300 font-sans">UPDATE em transaction alterando userId</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Bloqueio por imutabilidade de propriedade</td>
+<td class="px-4 py-3 text-gray-300 font-sans">**SPECIFIED**</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**TEST-30**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Security Rules</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Lançamento de estorno negativo (`amountCents < 0`)</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Autorizado por `amountCents != 0`</td>
+<td class="px-4 py-3 text-gray-300 font-sans">**SPECIFIED**</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**TEST-31**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Offline Resync</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Mutação IN_FLIGHT confirmada no servidor</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Marcada como COMMITTED sem duplicar</td>
+<td class="px-4 py-3 text-gray-300 font-sans">**SPECIFIED**</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**TEST-32**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Offline Resync</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Mutação IN_FLIGHT não encontrada no servidor</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Rebaixada para QUEUED com mesmo requestId</td>
+<td class="px-4 py-3 text-gray-300 font-sans">**SPECIFIED**</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**TEST-33**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Offline Resync</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Falha no storage local durante backup</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Aborta resync e preserva cache intacto</td>
+<td class="px-4 py-3 text-gray-300 font-sans">**SPECIFIED**</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**TEST-34**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Offline Verify</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Consulta de requestId de outro usuário</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Rejeitada com HTTP 403 Forbidden</td>
+<td class="px-4 py-3 text-gray-300 font-sans">**SPECIFIED**</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**TEST-35**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Timestamps</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Gravação no Firestore</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Objeto nativo `Timestamp` indexável</td>
+<td class="px-4 py-3 text-gray-300 font-sans">**SPECIFIED**</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**TEST-36**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Timestamps</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Serialização em API externa</td>
+<td class="px-4 py-3 text-gray-300 font-sans">String padronizada UTC ISO 8601</td>
+<td class="px-4 py-3 text-gray-300 font-sans">**SPECIFIED**</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**TEST-37**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Fuso Horário</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Transação às 23:45 em São Paulo</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Salva na competência civil local YYYY-MM</td>
+<td class="px-4 py-3 text-gray-300 font-sans">**SPECIFIED**</td>
+</tr>
+<tr class="hover:bg-gray-800/40 transition">
+<td class="px-4 py-3 text-gray-300 font-sans">**TEST-38**</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Fuso Horário</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Conversão histórica anterior a 2019</td>
+<td class="px-4 py-3 text-gray-300 font-sans">Aplica tabela IANA respeitando horário de verão</td>
+<td class="px-4 py-3 text-gray-300 font-sans">**SPECIFIED**</td>
+</tr>
+</tbody></table></div>
+<hr class="my-8 border-gray-800" />
+<h2 id="11-parecer-conclusivo-e-recomenda-o-para-a-etapa-03" class="text-2xl font-bold text-emerald-400 mt-8 mb-4 pt-4 border-t border-gray-800/80 flex items-center gap-2">
+        <span class="text-emerald-500">§</span> 11. PARECER CONCLUSIVO E RECOMENDAÇÃO PARA A ETAPA 03
+      </h2>
+<h3 class="text-lg font-semibold text-gray-100 mt-6 mb-2">Parecer da Arquitetura de Sistemas:</h3>
+<p class="text-gray-300 my-3 leading-relaxed text-sm">A Etapa 02.12 fecha as últimas lacunas de concorrência, integridade e segurança do KYRO Finance.  </p>
+<li class="text-gray-300 my-1 ml-6 list-disc text-sm">A distinção entre Limite de Crédito e Saldo Credor foi restabelecida com perfeição.  </li>
+<li class="text-gray-300 my-1 ml-6 list-disc text-sm">O perigo de vazamento de dados em retornos idempotentes foi eliminado.  </li>
+<li class="text-gray-300 my-1 ml-6 list-disc text-sm">A migração legada v1.41 não utiliza ponto flutuante e não inventa centavos para a Classe 4.  </li>
+<li class="text-gray-300 my-1 ml-6 list-disc text-sm">Todos os 25 arquivos reais do repositório foram auditados e mapeados para a futura implementação.</li>
+<p class="text-gray-300 my-3 leading-relaxed text-sm">**A aprovação documental desta especificação NÃO EQUIVALE a código implementado ou testes executados em produção.**  </p>
+<p class="text-gray-300 my-3 leading-relaxed text-sm">A **Etapa 03 (Implementação em Código)** permanece **ESTRITAMENTE BLOQUEADA**, aguardando autorização expressa do usuário.</p>
+      </div>
+    </main>
+
+  </div>
+
+  <footer class="mt-20 border-t border-gray-800/80 bg-gray-950 px-6 py-8 text-center text-xs text-gray-500">
+    <p>KYRO Finance Intelligence Engine • Documentação Técnica de Engenharia • Versão v1.41 (PR.041)</p>
+    <p class="mt-1">Relatório gerado em 05 de Novembro de 2026 • Etapa 03 Bloqueada para Implementação Futura</p>
+  </footer>
+
+</body>
+</html>

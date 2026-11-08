@@ -1,0 +1,1277 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KYRO Finance — Relatório Oficial Etapa 02.14 | Auditoria Final e Preparação</title>
+  
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#eef2ff',
+              100: '#e0e7ff',
+              500: '#6366f1',
+              600: '#4f46e5',
+              700: '#4338ca',
+              800: '#3730a3',
+              900: '#312e81',
+              950: '#0b0f19'
+            }
+          },
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            mono: ['JetBrains Mono', 'Fira Code', 'Consolas', 'monospace']
+          }
+        }
+      }
+    }
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { background-color: #07090e; color: #cbd5e1; font-family: 'Inter', sans-serif; }
+    pre, code { font-family: 'JetBrains Mono', monospace; }
+    .glass-card { background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.08); }
+    .badge-verificado { background-color: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+    .badge-pendente { background-color: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+    .badge-bloqueado { background-color: rgba(244, 63, 94, 0.15); color: #fb7185; border: 1px solid rgba(244, 63, 94, 0.3); }
+    .badge-sucesso { background-color: rgba(6, 182, 212, 0.15); color: #22d3ee; border: 1px solid rgba(6, 182, 212, 0.3); }
+  </style>
+</head>
+<body class="min-h-screen text-slate-200 antialiased selection:bg-indigo-500 selection:text-white">
+
+  <!-- Banner Oficial Canônico -->
+  <div class="bg-gradient-to-r from-indigo-900 via-indigo-950 to-slate-950 border-b border-indigo-500/40 py-2.5 px-4 text-center text-xs">
+    <span class="inline-flex items-center gap-2 font-medium text-indigo-200">
+      <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+      <strong class="text-white font-bold">RELATÓRIO OFICIAL DEFINITIVO — ETAPA 02.14</strong> | Versão Canônica: <code class="text-cyan-300 font-mono">v1.42-BUILD42-ETAPA-02.14-FINAL</code> (05/11/2026)
+    </span>
+  </div>
+
+  <!-- Top Global Navigation Bar -->
+  <header class="sticky top-0 z-50 bg-[#07090e]/95 backdrop-blur-md border-b border-slate-800">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-cyan-400 flex items-center justify-center font-bold text-white shadow-lg shadow-indigo-500/20">
+          K
+        </div>
+        <div>
+          <span class="font-bold text-lg text-white tracking-tight">KYRO</span>
+          <span class="text-xs uppercase tracking-widest text-indigo-400 font-semibold ml-1.5 px-2 py-0.5 rounded-full bg-indigo-950/60 border border-indigo-800/50">Finance</span>
+        </div>
+      </div>
+
+      <nav class="hidden md:flex items-center gap-1.5 text-xs font-medium">
+        <a href="https://kyro-relatorio-etapa-02-8.vercel.app/etapa-02-8.html" class="px-3 py-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/60 transition">Etapa 02.8</a>
+        <a href="https://kyro-relatorio-etapa-02-8.vercel.app/etapa-02-12.html" class="px-3 py-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/60 transition">Etapa 02.12</a>
+        <a href="https://kyro-relatorio-etapa-02-13.vercel.app" class="px-3 py-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/60 transition">Etapa 02.13</a>
+        <a href="https://kyro-relatorio-etapa-02-14.vercel.app" class="px-3 py-1.5 rounded-lg bg-indigo-600 text-white font-semibold shadow-md shadow-indigo-600/30">Etapa 02.14 (Oficial)</a>
+      </nav>
+
+      <div class="flex items-center gap-3">
+        <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-950/70 text-emerald-400 border border-emerald-800/60">
+          <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+          Auditoria Concluída
+        </span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Hero Section -->
+  <section class="relative py-14 px-4 sm:px-6 lg:px-8 border-b border-slate-800/80 bg-gradient-to-b from-[#0e1322] via-[#07090e] to-[#07090e]">
+    <div class="max-w-5xl mx-auto text-center space-y-4">
+      <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-medium bg-indigo-950/80 text-indigo-300 border border-indigo-700/50">
+        <svg class="w-4 h-4 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+        </svg>
+        Auditoria Final de Consistência e Preparação para Implementação
+      </div>
+
+      <h1 class="text-3xl sm:text-5xl font-extrabold text-white tracking-tight leading-tight">
+        Relatório Técnico Integrado — <span class="bg-gradient-to-r from-indigo-400 via-cyan-400 to-emerald-400 bg-clip-text text-transparent">Etapa 02.14</span>
+      </h1>
+      
+      <p class="text-base text-slate-400 max-w-3xl mx-auto">
+        Fechamento definitivo das pendências da Etapa 02.13: modelo de cartões estrito bancário (16 cenários comprovados), separação metodológica de testes, confrontação real de webhook, inventário dos 66 componentes e parecer objetivo em quatro conclusões.
+      </p>
+
+      <div class="pt-4 flex flex-wrap justify-center gap-3 text-xs font-medium">
+        <div class="px-4 py-2 rounded-xl bg-slate-900/90 border border-slate-800">
+          <span class="text-slate-500 block text-[10px] uppercase">Versão Canônica</span>
+          <span class="font-bold text-white">v1.42-BUILD42-ETAPA-02.14-FINAL</span>
+        </div>
+        <div class="px-4 py-2 rounded-xl bg-slate-900/90 border border-slate-800">
+          <span class="text-slate-500 block text-[10px] uppercase">Cenários de Cartão</span>
+          <span class="font-bold text-emerald-400">16 de 16 Aprovados (100%)</span>
+        </div>
+        <div class="px-4 py-2 rounded-xl bg-slate-900/90 border border-slate-800">
+          <span class="text-slate-500 block text-[10px] uppercase">Testes Determinísticos</span>
+          <span class="font-bold text-cyan-400">7 de 7 Aprovados</span>
+        </div>
+        <div class="px-4 py-2 rounded-xl bg-slate-900/90 border border-slate-800">
+          <span class="text-slate-500 block text-[10px] uppercase">Componentes Inspecionados</span>
+          <span class="font-bold text-white">66 Itens (58 Ativos / 8 Ausentes)</span>
+        </div>
+        <div class="px-4 py-2 rounded-xl bg-slate-900/90 border border-rose-900/40">
+          <span class="text-rose-400 block text-[10px] uppercase">Implementação em Código</span>
+          <span class="font-bold text-rose-400">Etapa 03 RIGOROSAMENTE BLOQUEADA</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Main Content Layout -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-12">
+
+    <!-- 1. Modelo de Cartões Bancário Estrito -->
+    <section class="glass-card rounded-2xl p-6 sm:p-8 space-y-6">
+      <div class="flex items-center gap-3 border-b border-slate-800 pb-3">
+        <span class="w-7 h-7 rounded-lg bg-indigo-600/20 text-indigo-400 flex items-center justify-center font-bold text-xs">01</span>
+        <h2 class="text-xl font-bold text-white">Modelo de Cartões Bancário Estrito: Não Dedução Automática de Saldo Credor</h2>
+      </div>
+
+      <div class="p-4 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-300 space-y-2">
+        <div class="text-indigo-400 font-bold">Diretriz Contábil e Bancária Obrigatória:</div>
+        <p class="text-slate-400 leading-relaxed">
+          O saldo credor do titular <strong>NÃO é abatido automaticamente do limite comprometido junto ao emissor</strong>. O limite informado pelo banco representa a linha de crédito autorizada formalmente no contrato. As compras efetuadas consomem diretamente essa linha. O saldo credor próprio é mantido segregado em conta gráfica como ativo do titular, compondo o <em>Poder de Compra Estimado pelo App</em>, sem inflar o limite do emissor bancário.
+        </p>
+      </div>
+
+      <div class="overflow-x-auto border border-slate-800 rounded-xl">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-slate-900 text-slate-400 uppercase tracking-wider font-semibold border-b border-slate-800">
+            <tr>
+              <th class="py-2.5 px-2.5 text-center">ID</th>
+              <th class="py-2.5 px-2.5">Cenário Obrigatório</th>
+              <th class="py-2.5 px-2.5 text-right">Limite Banco</th>
+              <th class="py-2.5 px-2.5 text-right">Dívida Real</th>
+              <th class="py-2.5 px-2.5 text-right">Saldo Credor</th>
+              <th class="py-2.5 px-2.5 text-right">Limite Livre Puro</th>
+              <th class="py-2.5 px-2.5 text-right">Overlimit</th>
+              <th class="py-2.5 px-2.5 text-right">Poder Compra</th>
+              <th class="py-2.5 px-2.5 text-center">Status</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-800/60 font-mono text-slate-300">
+            
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-indigo-400 font-bold text-center text-xs">SCN-01</td>
+      <td class="py-2 px-2.5 font-sans text-white text-xs font-medium">Compra inferior ao limite<span class="block text-[10px] text-slate-500 font-normal">Limite R$ 5.000, compra de R$ 1.500 na fatura aberta</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-300 text-xs text-right">R$ 5000.00</td>
+      <td class="py-2 px-2.5 font-mono text-slate-300 text-xs text-right">R$ 1500.00</td>
+      <td class="py-2 px-2.5 font-mono text-cyan-300 text-xs text-right">R$ 0.00</td>
+      <td class="py-2 px-2.5 font-mono text-emerald-400 text-xs text-right font-bold">R$ 3500.00</td>
+      <td class="py-2 px-2.5 font-mono text-rose-400 text-xs text-right font-bold">R$ 0.00</td>
+      <td class="py-2 px-2.5 font-mono text-cyan-400 text-xs text-right font-bold">R$ 3500.00</td>
+      <td class="py-2 px-2.5 text-center"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-bold">PASSOU</span></td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-indigo-400 font-bold text-center text-xs">SCN-02</td>
+      <td class="py-2 px-2.5 font-sans text-white text-xs font-medium">Compra que consome integralmente o limite<span class="block text-[10px] text-slate-500 font-normal">Limite R$ 5.000, dívida total de R$ 5.000</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-300 text-xs text-right">R$ 5000.00</td>
+      <td class="py-2 px-2.5 font-mono text-slate-300 text-xs text-right">R$ 5000.00</td>
+      <td class="py-2 px-2.5 font-mono text-cyan-300 text-xs text-right">R$ 0.00</td>
+      <td class="py-2 px-2.5 font-mono text-emerald-400 text-xs text-right font-bold">R$ 0.00</td>
+      <td class="py-2 px-2.5 font-mono text-rose-400 text-xs text-right font-bold">R$ 0.00</td>
+      <td class="py-2 px-2.5 font-mono text-cyan-400 text-xs text-right font-bold">R$ 0.00</td>
+      <td class="py-2 px-2.5 text-center"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-bold">PASSOU</span></td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-indigo-400 font-bold text-center text-xs">SCN-03</td>
+      <td class="py-2 px-2.5 font-sans text-white text-xs font-medium">Comprometimento superior ao limite (Overlimit)<span class="block text-[10px] text-slate-500 font-normal">Limite R$ 5.000, compras e encargos totalizam R$ 6.500</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-300 text-xs text-right">R$ 5000.00</td>
+      <td class="py-2 px-2.5 font-mono text-slate-300 text-xs text-right">R$ 6500.00</td>
+      <td class="py-2 px-2.5 font-mono text-cyan-300 text-xs text-right">R$ 0.00</td>
+      <td class="py-2 px-2.5 font-mono text-emerald-400 text-xs text-right font-bold">R$ 0.00</td>
+      <td class="py-2 px-2.5 font-mono text-rose-400 text-xs text-right font-bold">R$ 1500.00</td>
+      <td class="py-2 px-2.5 font-mono text-cyan-400 text-xs text-right font-bold">R$ 0.00</td>
+      <td class="py-2 px-2.5 text-center"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-bold">PASSOU</span></td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-indigo-400 font-bold text-center text-xs">SCN-04</td>
+      <td class="py-2 px-2.5 font-sans text-white text-xs font-medium">Saldo credor sem dívida<span class="block text-[10px] text-slate-500 font-normal">Limite R$ 5.000, nenhuma compra, saldo credor de R$ 800 por estorno</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-300 text-xs text-right">R$ 5000.00</td>
+      <td class="py-2 px-2.5 font-mono text-slate-300 text-xs text-right">R$ 0.00</td>
+      <td class="py-2 px-2.5 font-mono text-cyan-300 text-xs text-right">R$ 800.00</td>
+      <td class="py-2 px-2.5 font-mono text-emerald-400 text-xs text-right font-bold">R$ 5000.00</td>
+      <td class="py-2 px-2.5 font-mono text-rose-400 text-xs text-right font-bold">R$ 0.00</td>
+      <td class="py-2 px-2.5 font-mono text-cyan-400 text-xs text-right font-bold">R$ 5800.00</td>
+      <td class="py-2 px-2.5 text-center"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-bold">PASSOU</span></td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-indigo-400 font-bold text-center text-xs">SCN-05</td>
+      <td class="py-2 px-2.5 font-sans text-white text-xs font-medium">Saldo credor com dívida (Regra Estrita: Não deduz automaticamente)<span class="block text-[10px] text-slate-500 font-normal">Limite R$ 5.000, dívida R$ 1.000, saldo credor R$ 1.500</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-300 text-xs text-right">R$ 5000.00</td>
+      <td class="py-2 px-2.5 font-mono text-slate-300 text-xs text-right">R$ 1000.00</td>
+      <td class="py-2 px-2.5 font-mono text-cyan-300 text-xs text-right">R$ 1500.00</td>
+      <td class="py-2 px-2.5 font-mono text-emerald-400 text-xs text-right font-bold">R$ 4000.00</td>
+      <td class="py-2 px-2.5 font-mono text-rose-400 text-xs text-right font-bold">R$ 0.00</td>
+      <td class="py-2 px-2.5 font-mono text-cyan-400 text-xs text-right font-bold">R$ 5500.00</td>
+      <td class="py-2 px-2.5 text-center"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-bold">PASSOU</span></td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-indigo-400 font-bold text-center text-xs">SCN-06</td>
+      <td class="py-2 px-2.5 font-sans text-white text-xs font-medium">Pagamento parcial de fatura<span class="block text-[10px] text-slate-500 font-normal">Limite R$ 5.000, fatura fechada de R$ 2.000 paga em R$ 1.200 (restando R$ 800)</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-300 text-xs text-right">R$ 5000.00</td>
+      <td class="py-2 px-2.5 font-mono text-slate-300 text-xs text-right">R$ 800.00</td>
+      <td class="py-2 px-2.5 font-mono text-cyan-300 text-xs text-right">R$ 0.00</td>
+      <td class="py-2 px-2.5 font-mono text-emerald-400 text-xs text-right font-bold">R$ 4200.00</td>
+      <td class="py-2 px-2.5 font-mono text-rose-400 text-xs text-right font-bold">R$ 0.00</td>
+      <td class="py-2 px-2.5 font-mono text-cyan-400 text-xs text-right font-bold">R$ 4200.00</td>
+      <td class="py-2 px-2.5 text-center"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-bold">PASSOU</span></td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-indigo-400 font-bold text-center text-xs">SCN-07</td>
+      <td class="py-2 px-2.5 font-sans text-white text-xs font-medium">Pagamento integral de fatura<span class="block text-[10px] text-slate-500 font-normal">Limite R$ 5.000, fatura de R$ 2.500 liquidada 100%</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-300 text-xs text-right">R$ 5000.00</td>
+      <td class="py-2 px-2.5 font-mono text-slate-300 text-xs text-right">R$ 0.00</td>
+      <td class="py-2 px-2.5 font-mono text-cyan-300 text-xs text-right">R$ 0.00</td>
+      <td class="py-2 px-2.5 font-mono text-emerald-400 text-xs text-right font-bold">R$ 5000.00</td>
+      <td class="py-2 px-2.5 font-mono text-rose-400 text-xs text-right font-bold">R$ 0.00</td>
+      <td class="py-2 px-2.5 font-mono text-cyan-400 text-xs text-right font-bold">R$ 5000.00</td>
+      <td class="py-2 px-2.5 text-center"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-bold">PASSOU</span></td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-indigo-400 font-bold text-center text-xs">SCN-08</td>
+      <td class="py-2 px-2.5 font-sans text-white text-xs font-medium">Pagamento antecipado de fatura<span class="block text-[10px] text-slate-500 font-normal">Limite R$ 5.000, fatura em curso de R$ 1.000 pré-paga em R$ 1.000 antes do fechamento</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-300 text-xs text-right">R$ 5000.00</td>
+      <td class="py-2 px-2.5 font-mono text-slate-300 text-xs text-right">R$ 0.00</td>
+      <td class="py-2 px-2.5 font-mono text-cyan-300 text-xs text-right">R$ 0.00</td>
+      <td class="py-2 px-2.5 font-mono text-emerald-400 text-xs text-right font-bold">R$ 5000.00</td>
+      <td class="py-2 px-2.5 font-mono text-rose-400 text-xs text-right font-bold">R$ 0.00</td>
+      <td class="py-2 px-2.5 font-mono text-cyan-400 text-xs text-right font-bold">R$ 5000.00</td>
+      <td class="py-2 px-2.5 text-center"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-bold">PASSOU</span></td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-indigo-400 font-bold text-center text-xs">SCN-09</td>
+      <td class="py-2 px-2.5 font-sans text-white text-xs font-medium">Compra parcelada (10x de R$ 100)<span class="block text-[10px] text-slate-500 font-normal">Limite R$ 5.000, compra de R$ 1.000 parcelada: 1ª parcela R$ 100 aberta, R$ 900 futuras</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-300 text-xs text-right">R$ 5000.00</td>
+      <td class="py-2 px-2.5 font-mono text-slate-300 text-xs text-right">R$ 1000.00</td>
+      <td class="py-2 px-2.5 font-mono text-cyan-300 text-xs text-right">R$ 0.00</td>
+      <td class="py-2 px-2.5 font-mono text-emerald-400 text-xs text-right font-bold">R$ 4000.00</td>
+      <td class="py-2 px-2.5 font-mono text-rose-400 text-xs text-right font-bold">R$ 0.00</td>
+      <td class="py-2 px-2.5 font-mono text-cyan-400 text-xs text-right font-bold">R$ 4000.00</td>
+      <td class="py-2 px-2.5 text-center"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-bold">PASSOU</span></td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-indigo-400 font-bold text-center text-xs">SCN-10</td>
+      <td class="py-2 px-2.5 font-sans text-white text-xs font-medium">Cancelamento de compra antes da captura<span class="block text-[10px] text-slate-500 font-normal">Compra de R$ 300 que estava pendente é revertida pelo lojista antes do fechamento</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-300 text-xs text-right">R$ 5000.00</td>
+      <td class="py-2 px-2.5 font-mono text-slate-300 text-xs text-right">R$ 0.00</td>
+      <td class="py-2 px-2.5 font-mono text-cyan-300 text-xs text-right">R$ 0.00</td>
+      <td class="py-2 px-2.5 font-mono text-emerald-400 text-xs text-right font-bold">R$ 5000.00</td>
+      <td class="py-2 px-2.5 font-mono text-rose-400 text-xs text-right font-bold">R$ 0.00</td>
+      <td class="py-2 px-2.5 font-mono text-cyan-400 text-xs text-right font-bold">R$ 5000.00</td>
+      <td class="py-2 px-2.5 text-center"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-bold">PASSOU</span></td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-indigo-400 font-bold text-center text-xs">SCN-11</td>
+      <td class="py-2 px-2.5 font-sans text-white text-xs font-medium">Estorno após pagamento de fatura<span class="block text-[10px] text-slate-500 font-normal">Fatura anterior foi paga; lojista estorna R$ 400 gerando saldo credor</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-300 text-xs text-right">R$ 5000.00</td>
+      <td class="py-2 px-2.5 font-mono text-slate-300 text-xs text-right">R$ 0.00</td>
+      <td class="py-2 px-2.5 font-mono text-cyan-300 text-xs text-right">R$ 400.00</td>
+      <td class="py-2 px-2.5 font-mono text-emerald-400 text-xs text-right font-bold">R$ 5000.00</td>
+      <td class="py-2 px-2.5 font-mono text-rose-400 text-xs text-right font-bold">R$ 0.00</td>
+      <td class="py-2 px-2.5 font-mono text-cyan-400 text-xs text-right font-bold">R$ 5400.00</td>
+      <td class="py-2 px-2.5 text-center"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-bold">PASSOU</span></td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-indigo-400 font-bold text-center text-xs">SCN-12</td>
+      <td class="py-2 px-2.5 font-sans text-white text-xs font-medium">Juros e encargos contratuais<span class="block text-[10px] text-slate-500 font-normal">Lançamento de juros de mora de R$ 150 na fatura aberta</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-300 text-xs text-right">R$ 5000.00</td>
+      <td class="py-2 px-2.5 font-mono text-slate-300 text-xs text-right">R$ 1150.00</td>
+      <td class="py-2 px-2.5 font-mono text-cyan-300 text-xs text-right">R$ 0.00</td>
+      <td class="py-2 px-2.5 font-mono text-emerald-400 text-xs text-right font-bold">R$ 3850.00</td>
+      <td class="py-2 px-2.5 font-mono text-rose-400 text-xs text-right font-bold">R$ 0.00</td>
+      <td class="py-2 px-2.5 font-mono text-cyan-400 text-xs text-right font-bold">R$ 3850.00</td>
+      <td class="py-2 px-2.5 text-center"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-bold">PASSOU</span></td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-indigo-400 font-bold text-center text-xs">SCN-13</td>
+      <td class="py-2 px-2.5 font-sans text-white text-xs font-medium">Fatura vencida com rotativo<span class="block text-[10px] text-slate-500 font-normal">Dívida vencida de R$ 3.000 rolando para a fatura aberta com encargos</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-300 text-xs text-right">R$ 5000.00</td>
+      <td class="py-2 px-2.5 font-mono text-slate-300 text-xs text-right">R$ 3300.00</td>
+      <td class="py-2 px-2.5 font-mono text-cyan-300 text-xs text-right">R$ 0.00</td>
+      <td class="py-2 px-2.5 font-mono text-emerald-400 text-xs text-right font-bold">R$ 1700.00</td>
+      <td class="py-2 px-2.5 font-mono text-rose-400 text-xs text-right font-bold">R$ 0.00</td>
+      <td class="py-2 px-2.5 font-mono text-cyan-400 text-xs text-right font-bold">R$ 1700.00</td>
+      <td class="py-2 px-2.5 text-center"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-bold">PASSOU</span></td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-indigo-400 font-bold text-center text-xs">SCN-14</td>
+      <td class="py-2 px-2.5 font-sans text-white text-xs font-medium">Compra pendente de confirmação (Pré-autorização de hotel/posto)<span class="block text-[10px] text-slate-500 font-normal">Pré-autorização de R$ 500 que já cativa limite bancário antes de faturar</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-300 text-xs text-right">R$ 5000.00</td>
+      <td class="py-2 px-2.5 font-mono text-slate-300 text-xs text-right">R$ 500.00</td>
+      <td class="py-2 px-2.5 font-mono text-cyan-300 text-xs text-right">R$ 0.00</td>
+      <td class="py-2 px-2.5 font-mono text-emerald-400 text-xs text-right font-bold">R$ 4500.00</td>
+      <td class="py-2 px-2.5 font-mono text-rose-400 text-xs text-right font-bold">R$ 0.00</td>
+      <td class="py-2 px-2.5 font-mono text-cyan-400 text-xs text-right font-bold">R$ 4500.00</td>
+      <td class="py-2 px-2.5 text-center"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-bold">PASSOU</span></td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-indigo-400 font-bold text-center text-xs">SCN-15</td>
+      <td class="py-2 px-2.5 font-sans text-white text-xs font-medium">Divergência entre limite informado pelo banco e calculado<span class="block text-[10px] text-slate-500 font-normal">Banco informa R$ 3.000 disponível, mas compras somadas no Kyro apontam R$ 3.200 (descompasso de R$ 200 de IOF/câmbio)</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-300 text-xs text-right">R$ 5000.00</td>
+      <td class="py-2 px-2.5 font-mono text-slate-300 text-xs text-right">R$ 1800.00</td>
+      <td class="py-2 px-2.5 font-mono text-cyan-300 text-xs text-right">R$ 0.00</td>
+      <td class="py-2 px-2.5 font-mono text-emerald-400 text-xs text-right font-bold">R$ 3200.00</td>
+      <td class="py-2 px-2.5 font-mono text-rose-400 text-xs text-right font-bold">R$ 0.00</td>
+      <td class="py-2 px-2.5 font-mono text-cyan-400 text-xs text-right font-bold">R$ 3200.00</td>
+      <td class="py-2 px-2.5 text-center"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-bold">PASSOU</span></td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-indigo-400 font-bold text-center text-xs">SCN-16</td>
+      <td class="py-2 px-2.5 font-sans text-white text-xs font-medium">Conservação de competência e fluxo de caixa (Modelo B)<span class="block text-[10px] text-slate-500 font-normal">Pagamento de fatura de R$ 2.000 debita conta corrente e liquida passivo do cartão sem gerar despesa de DRE</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-300 text-xs text-right">R$ 5000.00</td>
+      <td class="py-2 px-2.5 font-mono text-slate-300 text-xs text-right">R$ 0.00</td>
+      <td class="py-2 px-2.5 font-mono text-cyan-300 text-xs text-right">R$ 0.00</td>
+      <td class="py-2 px-2.5 font-mono text-emerald-400 text-xs text-right font-bold">R$ 5000.00</td>
+      <td class="py-2 px-2.5 font-mono text-rose-400 text-xs text-right font-bold">R$ 0.00</td>
+      <td class="py-2 px-2.5 font-mono text-cyan-400 text-xs text-right font-bold">R$ 5000.00</td>
+      <td class="py-2 px-2.5 text-center"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-bold">PASSOU</span></td>
+    </tr>
+  
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 2. Comprovação dos Testes e Separação por Categoria -->
+    <section class="glass-card rounded-2xl p-6 sm:p-8 space-y-6">
+      <div class="flex items-center gap-3 border-b border-slate-800 pb-3">
+        <span class="w-7 h-7 rounded-lg bg-indigo-600/20 text-indigo-400 flex items-center justify-center font-bold text-xs">02</span>
+        <h2 class="text-xl font-bold text-white">Comprovação dos Testes e Separação Rígida por Categorias</h2>
+      </div>
+
+      <div class="p-4 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-300 space-y-2">
+        <div class="text-cyan-400 font-bold">Separação Epistemológica de Testes:</div>
+        <p class="text-slate-400 leading-relaxed">
+          <strong class="text-white">Regra de Rigor Técnico:</strong> Um teste isolado determinístico aprovado valida exclusivamente a exatidão matemática do algoritmo e <strong>não pode ser apresentado como prova de integração real ou de sistema em produção</strong>.
+        </p>
+      </div>
+
+      <div class="overflow-x-auto border border-slate-800 rounded-xl">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-slate-900 text-slate-400 uppercase tracking-wider font-semibold border-b border-slate-800">
+            <tr>
+              <th class="py-3 px-3">ID</th>
+              <th class="py-3 px-3">Objetivo do Teste</th>
+              <th class="py-3 px-3">Entrada Utilizada</th>
+              <th class="py-3 px-3">Resultado Obtido</th>
+              <th class="py-3 px-3">Comando Executado</th>
+              <th class="py-3 px-3 text-center">Situação Final</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-800/60 font-mono text-slate-300">
+            
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2.5 px-3 font-mono text-indigo-400 font-bold">TST-01-ROUNDTRIP</td>
+      <td class="py-2.5 px-3 font-sans text-white text-xs">Verificar conversão de ida e volta entre String, Centavos Inteiros, BigInt e Display sem perda de precisão float</td>
+      <td class="py-2.5 px-3 font-mono text-slate-300 text-[11px]">{"testValues":["0.00","0.01","1.00","150.75","1250.50","999999.99","1000000.00","90071992547.40"],"count":8}</td>
+      <td class="py-2.5 px-3 font-mono text-cyan-300 text-[11px]">{"passedCount":8,"allIdentical":true}</td>
+      <td class="py-2.5 px-3 font-mono text-slate-400 text-[11px]">node scratch/run_full_adversarial_suite.js --test=TST-01</td>
+      <td class="py-2.5 px-3 text-center"><span class="badge-verificado px-2.5 py-1 rounded-full text-[10px] font-bold">EXECUTADO COM SUCESSO</span></td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2.5 px-3 font-mono text-indigo-400 font-bold">TST-02-DECIMAL-REJECT</td>
+      <td class="py-2.5 px-3 font-sans text-white text-xs">Garantir rejeição de strings com mais de 2 casas decimais para evitar dízimas periódicas ocultas</td>
+      <td class="py-2.5 px-3 font-mono text-slate-300 text-[11px]">{"rawString":"100.333"}</td>
+      <td class="py-2.5 px-3 font-mono text-cyan-300 text-[11px]">{"thrown":true,"message":"Excesso de casas decimais (máximo permitido: 2): 100.333"}</td>
+      <td class="py-2.5 px-3 font-mono text-slate-400 text-[11px]">node scratch/run_full_adversarial_suite.js --test=TST-02</td>
+      <td class="py-2.5 px-3 text-center"><span class="badge-verificado px-2.5 py-1 rounded-full text-[10px] font-bold">EXECUTADO COM SUCESSO</span></td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2.5 px-3 font-mono text-indigo-400 font-bold">TST-03-CARD-OVERLIMIT</td>
+      <td class="py-2.5 px-3 font-sans text-white text-xs">Expor dívida real excedente (R$ 6.000) e zerar limite puro sem mascarar o passivo ao limite do banco (R$ 5.000)</td>
+      <td class="py-2.5 px-3 font-mono text-slate-300 text-[11px]">{"issuerReportedLimitCents":500000,"openInvoiceDebtCents":400000,"futureInstallmentsCents":200000,"pendingAuthorizationsCents":0,"creditBalanceCents":0}</td>
+      <td class="py-2.5 px-3 font-mono text-cyan-300 text-[11px]">{"issuerReportedLimitCents":500000,"totalRealDebtCents":600000,"creditBalanceCents":0,"bankCommittedLimitCents":600000,"calculatedAvailableIssuerLimitCents":0,"overlimitDebtCents":100000,"availableCreditBalanceCents":0,"totalEstimatedPurchasingPowerCents":0}</td>
+      <td class="py-2.5 px-3 font-mono text-slate-400 text-[11px]">node scratch/run_full_adversarial_suite.js --test=TST-03</td>
+      <td class="py-2.5 px-3 text-center"><span class="badge-verificado px-2.5 py-1 rounded-full text-[10px] font-bold">EXECUTADO COM SUCESSO</span></td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2.5 px-3 font-mono text-indigo-400 font-bold">TST-04-CARD-CREDIT-BALANCE-STRICT</td>
+      <td class="py-2.5 px-3 font-sans text-white text-xs">Preservar limite informado pelo banco (R$ 5k), descontar dívida (R$ 1k) gerando limite disponível puro bancário de R$ 4k, mantendo saldo credor próprio de R$ 1,5k segregado e totalizando poder de compra de R$ 5,5k sem inflar o limite do emissor</td>
+      <td class="py-2.5 px-3 font-mono text-slate-300 text-[11px]">{"issuerReportedLimitCents":500000,"openInvoiceDebtCents":100000,"futureInstallmentsCents":0,"pendingAuthorizationsCents":0,"creditBalanceCents":150000}</td>
+      <td class="py-2.5 px-3 font-mono text-cyan-300 text-[11px]">{"issuerReportedLimitCents":500000,"totalRealDebtCents":100000,"creditBalanceCents":150000,"bankCommittedLimitCents":100000,"calculatedAvailableIssuerLimitCents":400000,"overlimitDebtCents":0,"availableCreditBalanceCents":150000,"totalEstimatedPurchasingPowerCents":550000}</td>
+      <td class="py-2.5 px-3 font-mono text-slate-400 text-[11px]">node scratch/run_full_adversarial_suite.js --test=TST-04</td>
+      <td class="py-2.5 px-3 text-center"><span class="badge-verificado px-2.5 py-1 rounded-full text-[10px] font-bold">EXECUTADO COM SUCESSO</span></td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2.5 px-3 font-mono text-indigo-400 font-bold">TST-05-HMAC-VERIFICATION</td>
+      <td class="py-2.5 px-3 font-sans text-white text-xs">Validar HMAC-SHA256 sobre Buffer de bytes brutos com timingSafeEqual rejeitando chaves adulteradas</td>
+      <td class="py-2.5 px-3 font-mono text-slate-300 text-[11px]">{"payloadBytes":48,"secretKey":"***REDACTED***"}</td>
+      <td class="py-2.5 px-3 font-mono text-cyan-300 text-[11px]">{"validSignatureAccepted":true,"tamperedSignatureRejected":true}</td>
+      <td class="py-2.5 px-3 font-mono text-slate-400 text-[11px]">node scratch/run_full_adversarial_suite.js --test=TST-05</td>
+      <td class="py-2.5 px-3 text-center"><span class="badge-verificado px-2.5 py-1 rounded-full text-[10px] font-bold">EXECUTADO COM SUCESSO</span></td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2.5 px-3 font-mono text-indigo-400 font-bold">TST-06-TIMESTAMP-WINDOW</td>
+      <td class="py-2.5 px-3 font-sans text-white text-xs">Aceitar timestamps dentro de +-300s e rejeitar requisições defasadas no passado ou no futuro com regex /^\d{10}$/</td>
+      <td class="py-2.5 px-3 font-mono text-slate-300 text-[11px]">{"currentEpoch":1793910000,"validTs":"1793910000","oldTs":"1793909500","futTs":"1793910500","windowSeconds":300}</td>
+      <td class="py-2.5 px-3 font-mono text-cyan-300 text-[11px]">{"validAccepted":true,"oldRejected":true,"futureRejected":true,"oldReason":"EXPIRED_TIMESTAMP","futReason":"FUTURE_TIMESTAMP"}</td>
+      <td class="py-2.5 px-3 font-mono text-slate-400 text-[11px]">node scratch/run_full_adversarial_suite.js --test=TST-06</td>
+      <td class="py-2.5 px-3 text-center"><span class="badge-verificado px-2.5 py-1 rounded-full text-[10px] font-bold">EXECUTADO COM SUCESSO</span></td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2.5 px-3 font-mono text-indigo-400 font-bold">TST-07-CENT-RESIDUAL-SPLIT</td>
+      <td class="py-2.5 px-3 font-sans text-white text-xs">Garantir conservação de massa monetária na divisão inteira de centavos (10000 / 3) alocando resto na parcela 1</td>
+      <td class="py-2.5 px-3 font-mono text-slate-300 text-[11px]">{"totalCents":10000,"installmentsCount":3}</td>
+      <td class="py-2.5 px-3 font-mono text-cyan-300 text-[11px]">{"installments":[3334,3333,3333],"totalSumCents":10000}</td>
+      <td class="py-2.5 px-3 font-mono text-slate-400 text-[11px]">node scratch/run_full_adversarial_suite.js --test=TST-07</td>
+      <td class="py-2.5 px-3 text-center"><span class="badge-verificado px-2.5 py-1 rounded-full text-[10px] font-bold">EXECUTADO COM SUCESSO</span></td>
+    </tr>
+  
+          </tbody>
+        </table>
+      </div>
+
+      <div class="pt-4 border-t border-slate-800/80 space-y-3">
+        <h3 class="text-sm font-bold text-white">Justificativa e Pré-requisitos dos Três Testes Bloqueados por Dependência Externa:</h3>
+        <div class="overflow-x-auto border border-slate-800 rounded-xl">
+          <table class="w-full text-left text-xs">
+            <thead class="bg-slate-900 text-slate-400 uppercase tracking-wider font-semibold border-b border-slate-800">
+              <tr>
+                <th class="py-3 px-3">ID</th>
+                <th class="py-3 px-3">Objetivo do Teste</th>
+                <th class="py-3 px-3">Dependência Externa Impeditiva</th>
+                <th class="py-3 px-3">Pré-requisito para Execução Futura (Etapa 03)</th>
+                <th class="py-3 px-3 text-center">Situação</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-800/60 font-mono text-slate-300">
+              
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2.5 px-3 font-mono text-rose-400 font-bold">TST-08-CONCURRENCY-FIRESTORE</td>
+      <td class="py-2.5 px-3 font-sans text-white text-xs">Testar concorrência de 50 transações simultâneas de escrita com lease distribuído e fencing monotônico no Firestore</td>
+      <td class="py-2.5 px-3 font-sans text-slate-300 text-xs">Requer credenciais ativas do Firebase Admin SDK de produção/staging e ambiente serverless na Vercel</td>
+      <td class="py-2.5 px-3 font-sans text-amber-300 text-xs">Na Etapa 03, configurar emulador do Firebase local (firebase emulators:start --only firestore) para execução determinística offline</td>
+      <td class="py-2.5 px-3 text-center"><span class="badge-bloqueado px-2.5 py-1 rounded-full text-[10px] font-bold">BLOQUEADO POR DEPENDÊNCIA EXTERNA</span></td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2.5 px-3 font-mono text-rose-400 font-bold">TST-09-ANDROID-WIPE-STORAGE</td>
+      <td class="py-2.5 px-3 font-sans text-white text-xs">Validar comportamento do app Capacitor após o evento de Limpar Armazenamento nas configurações do Android com dados offline na fila</td>
+      <td class="py-2.5 px-3 font-sans text-slate-300 text-xs">Requer dispositivo físico ou emulador Android com AndroidDebugBridge (ADB) conectado em modo root</td>
+      <td class="py-2.5 px-3 font-sans text-amber-300 text-xs">Na Etapa 03, provisionar um emulador Android com script ADB automatizado (adb shell pm clear com.kyro.finance)</td>
+      <td class="py-2.5 px-3 text-center"><span class="badge-bloqueado px-2.5 py-1 rounded-full text-[10px] font-bold">BLOQUEADO POR DEPENDÊNCIA EXTERNA</span></td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2.5 px-3 font-mono text-rose-400 font-bold">TST-10-ANDROID-AUTO-UPDATE-INTENT</td>
+      <td class="py-2.5 px-3 font-sans text-white text-xs">Testar o plugin nativo AppUpdateManagerPlugin baixando o APK e disparando a Intent com FileProvider para instalação</td>
+      <td class="py-2.5 px-3 font-sans text-slate-300 text-xs">Requer dispositivo Android com o APK KYRO Finance instalado e permissão REQUEST_INSTALL_PACKAGES concedida</td>
+      <td class="py-2.5 px-3 font-sans text-amber-300 text-xs">Na Etapa 03, executar testes de instrumentação UI via Appium ou Espresso em dispositivo real</td>
+      <td class="py-2.5 px-3 text-center"><span class="badge-bloqueado px-2.5 py-1 rounded-full text-[10px] font-bold">BLOQUEADO POR DEPENDÊNCIA EXTERNA</span></td>
+    </tr>
+  
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. Timestamp, HMAC e Segurança de Webhooks -->
+    <section class="glass-card rounded-2xl p-6 sm:p-8 space-y-4">
+      <div class="flex items-center gap-3 border-b border-slate-800 pb-3">
+        <span class="w-7 h-7 rounded-lg bg-indigo-600/20 text-indigo-400 flex items-center justify-center font-bold text-xs">03</span>
+        <h2 class="text-xl font-bold text-white">Investigação em 5 Frentes: Timestamp, HMAC e Código Real de Webhook</h2>
+      </div>
+      
+      <div class="p-4 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-300 space-y-2">
+        <div class="text-indigo-400 font-bold">Diagnóstico Técnico Exato:</div>
+        <ul class="list-disc pl-5 space-y-1 text-slate-400">
+          <li><strong>1. Expressão Efetivamente Utilizada no Teste:</strong> <code class="text-emerald-400 font-mono">/^d{10}$/</code> (com barra invertida para dígitos decimais).</li>
+          <li><strong>2. Origem da Grafia Errónea:</strong> Erro de escape no script gerador do relatório HTML anterior (<code class="text-slate-300">\d</code> consumido pelo motor de escape do Node.js).</li>
+          <li><strong>3. Situação no Código Real (<code class="text-slate-300">api/webhook.ts</code>):</strong> <span class="badge-pendente px-2 py-0.5 rounded text-[10px] font-bold">PENDENTE DE IMPLEMENTAÇÃO</span>. O código de produção v1.41 atual <strong>não possui</strong> validação de timestamp de cabeçalho nem HMAC raw (utiliza apenas <code class="text-slate-300">timestamp: Date.now()</code> na L1023). A implementação em código ocorrerá na Etapa 03.</li>
+          <li><strong>4. Testes Realizados:</strong> 7 cenários cobrindo timestamp no momento exato, recente, alfanumérico, incompleto, milissegundos, futuro e expirado.</li>
+          <li><strong>5. Resultado Obtido:</strong> 7 de 7 aprovados no ambiente isolado.</li>
+        </ul>
+      </div>
+
+      <div class="overflow-x-auto border border-slate-800 rounded-xl">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-slate-900 text-slate-400 uppercase tracking-wider font-semibold border-b border-slate-800">
+            <tr>
+              <th class="py-2.5 px-3">Cenário de Teste de Timestamp</th>
+              <th class="py-2.5 px-3 text-center">Entrada Testada</th>
+              <th class="py-2.5 px-3 text-center">Código Esperado</th>
+              <th class="py-2.5 px-3 text-center">Código Obtido</th>
+              <th class="py-2.5 px-3">Razão / Comportamento</th>
+              <th class="py-2.5 px-3 text-center">Situação</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-800/60 font-mono text-slate-300">
+            
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-sans text-white text-xs">1. Timestamp Válido (emissão no momento exato)</td>
+      <td class="py-2 px-2.5 font-mono text-slate-300 text-center text-xs">"1793910000"</td>
+      <td class="py-2 px-2.5 font-mono text-indigo-400 text-center text-xs">VALID</td>
+      <td class="py-2 px-2.5 font-mono text-cyan-400 text-center text-xs">VALID</td>
+      <td class="py-2 px-2.5 font-sans text-slate-400 text-xs">OK</td>
+      <td class="py-2 px-2.5 text-center"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-bold">PASSOU</span></td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-sans text-white text-xs">2. Timestamp Válido (emissão há 120 segundos)</td>
+      <td class="py-2 px-2.5 font-mono text-slate-300 text-center text-xs">"1793909880"</td>
+      <td class="py-2 px-2.5 font-mono text-indigo-400 text-center text-xs">VALID</td>
+      <td class="py-2 px-2.5 font-mono text-cyan-400 text-center text-xs">VALID</td>
+      <td class="py-2 px-2.5 font-sans text-slate-400 text-xs">OK</td>
+      <td class="py-2 px-2.5 text-center"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-bold">PASSOU</span></td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-sans text-white text-xs">3. Timestamp Inválido (caracteres alfabéticos)</td>
+      <td class="py-2 px-2.5 font-mono text-slate-300 text-center text-xs">"179391000a"</td>
+      <td class="py-2 px-2.5 font-mono text-indigo-400 text-center text-xs">INVALID_FORMAT</td>
+      <td class="py-2 px-2.5 font-mono text-cyan-400 text-center text-xs">INVALID_FORMAT</td>
+      <td class="py-2 px-2.5 font-sans text-slate-400 text-xs">Formato inválido: exige exatamente 10 algarismos numéricos decimais (/^\d{10}$/)</td>
+      <td class="py-2 px-2.5 text-center"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-bold">PASSOU</span></td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-sans text-white text-xs">4. Timestamp Incompleto (7 dígitos)</td>
+      <td class="py-2 px-2.5 font-mono text-slate-300 text-center text-xs">"1793910"</td>
+      <td class="py-2 px-2.5 font-mono text-indigo-400 text-center text-xs">INVALID_FORMAT</td>
+      <td class="py-2 px-2.5 font-mono text-cyan-400 text-center text-xs">INVALID_FORMAT</td>
+      <td class="py-2 px-2.5 font-sans text-slate-400 text-xs">Formato inválido: exige exatamente 10 algarismos numéricos decimais (/^\d{10}$/)</td>
+      <td class="py-2 px-2.5 text-center"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-bold">PASSOU</span></td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-sans text-white text-xs">5. Timestamp Incompleto/Excesso (13 dígitos - ms)</td>
+      <td class="py-2 px-2.5 font-mono text-slate-300 text-center text-xs">"1793910000000"</td>
+      <td class="py-2 px-2.5 font-mono text-indigo-400 text-center text-xs">INVALID_FORMAT</td>
+      <td class="py-2 px-2.5 font-mono text-cyan-400 text-center text-xs">INVALID_FORMAT</td>
+      <td class="py-2 px-2.5 font-sans text-slate-400 text-xs">Formato inválido: exige exatamente 10 algarismos numéricos decimais (/^\d{10}$/)</td>
+      <td class="py-2 px-2.5 text-center"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-bold">PASSOU</span></td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-sans text-white text-xs">6. Timestamp Futuro fora da janela (+500s)</td>
+      <td class="py-2 px-2.5 font-mono text-slate-300 text-center text-xs">"1793910500"</td>
+      <td class="py-2 px-2.5 font-mono text-indigo-400 text-center text-xs">FUTURE_TIMESTAMP</td>
+      <td class="py-2 px-2.5 font-mono text-cyan-400 text-center text-xs">FUTURE_TIMESTAMP</td>
+      <td class="py-2 px-2.5 font-sans text-slate-400 text-xs">Timestamp futuro além da tolerância máxima (+ 500s > 300s)</td>
+      <td class="py-2 px-2.5 text-center"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-bold">PASSOU</span></td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-sans text-white text-xs">7. Timestamp Expirado fora da janela (-500s)</td>
+      <td class="py-2 px-2.5 font-mono text-slate-300 text-center text-xs">"1793909500"</td>
+      <td class="py-2 px-2.5 font-mono text-indigo-400 text-center text-xs">EXPIRED_TIMESTAMP</td>
+      <td class="py-2 px-2.5 font-mono text-cyan-400 text-center text-xs">EXPIRED_TIMESTAMP</td>
+      <td class="py-2 px-2.5 font-sans text-slate-400 text-xs">Timestamp expirado/passado além da tolerância máxima (500s > 300s)</td>
+      <td class="py-2 px-2.5 text-center"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-bold">PASSOU</span></td>
+    </tr>
+  
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 4. Inventário dos 66 Componentes -->
+    <section class="glass-card rounded-2xl p-6 sm:p-8 space-y-4">
+      <div class="flex items-center gap-3 border-b border-slate-800 pb-3">
+        <span class="w-7 h-7 rounded-lg bg-indigo-600/20 text-indigo-400 flex items-center justify-center font-bold text-xs">04</span>
+        <h2 class="text-xl font-bold text-white">Inventário Completo dos 66 Componentes do Repositório Real</h2>
+      </div>
+
+      <p class="text-xs text-slate-300 leading-relaxed">
+        A auditoria física inspecionou exatamente 66 componentes no repositório: <strong>58 arquivos existentes</strong> com bytes e linhas conferidos no disco, e <strong>8 arquivos ausentes</strong> que haviam sido presumidos em etapas preliminares, com suas responsabilidades reais mapeadas nos componentes consolidados:
+      </p>
+
+      <div class="overflow-x-auto max-h-[500px] overflow-y-auto border border-slate-800 rounded-xl">
+        <table class="w-full text-left text-xs">
+          <thead class="sticky top-0 bg-slate-900 text-slate-400 uppercase tracking-wider font-semibold border-b border-slate-800 z-10">
+            <tr>
+              <th class="py-3 px-3 text-center">#</th>
+              <th class="py-3 px-3">Caminho / Componente</th>
+              <th class="py-3 px-3">Responsabilidade</th>
+              <th class="py-3 px-3">Relevância</th>
+              <th class="py-3 px-3">Situação</th>
+              <th class="py-3 px-3">Evidência da Inspeção</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-800/60 text-slate-300">
+            
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-center text-xs">01</td>
+      <td class="py-2 px-2.5 font-mono text-white text-xs">bot.cjs</td>
+      <td class="py-2 px-2.5 font-sans text-slate-300 text-xs">Servidor autônomo WhatsApp Baileys com pareamento por código e IA Whisper/Tesseract</td>
+      <td class="py-2 px-2.5 font-sans text-indigo-300 text-xs font-semibold">Crítica (Canal WhatsApp)</td>
+      <td class="py-2 px-2.5"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-semibold">EXISTENTE / ATIVO</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-[11px]">Tamanho: 181796 B | Linhas: 4057</td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-center text-xs">02</td>
+      <td class="py-2 px-2.5 font-mono text-white text-xs">package.json</td>
+      <td class="py-2 px-2.5 font-sans text-slate-300 text-xs">Manifesto de dependências do Node.js, Capacitor e React 19</td>
+      <td class="py-2 px-2.5 font-sans text-indigo-300 text-xs font-semibold">Fundamental (Build & Deps)</td>
+      <td class="py-2 px-2.5"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-semibold">EXISTENTE / ATIVO</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-[11px]">Tamanho: 1186 B | Linhas: 46</td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-center text-xs">03</td>
+      <td class="py-2 px-2.5 font-mono text-white text-xs">package-lock.json</td>
+      <td class="py-2 px-2.5 font-sans text-slate-300 text-xs">Lockfile determinístico de árvores de dependência npm</td>
+      <td class="py-2 px-2.5 font-sans text-indigo-300 text-xs font-semibold">Controle de Build</td>
+      <td class="py-2 px-2.5"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-semibold">EXISTENTE / ATIVO</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-[11px]">Tamanho: 331451 B | Linhas: 9560</td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-center text-xs">04</td>
+      <td class="py-2 px-2.5 font-mono text-white text-xs">capacitor.config.json</td>
+      <td class="py-2 px-2.5 font-sans text-slate-300 text-xs">Configuração de empacotamento nativo Android (appId, server, webDir)</td>
+      <td class="py-2 px-2.5 font-sans text-indigo-300 text-xs font-semibold">Crítica (Android)</td>
+      <td class="py-2 px-2.5"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-semibold">EXISTENTE / ATIVO</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-[11px]">Tamanho: 406 B | Linhas: 21</td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-center text-xs">05</td>
+      <td class="py-2 px-2.5 font-mono text-white text-xs">vite.config.ts</td>
+      <td class="py-2 px-2.5 font-sans text-slate-300 text-xs">Configuração do bundler Vite e plugins React</td>
+      <td class="py-2 px-2.5 font-sans text-indigo-300 text-xs font-semibold">Build Web</td>
+      <td class="py-2 px-2.5"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-semibold">EXISTENTE / ATIVO</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-[11px]">Tamanho: 295 B | Linhas: 17</td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-center text-xs">06</td>
+      <td class="py-2 px-2.5 font-mono text-white text-xs">tsconfig.json</td>
+      <td class="py-2 px-2.5 font-sans text-slate-300 text-xs">Configuração do compilador TypeScript e paths</td>
+      <td class="py-2 px-2.5 font-sans text-indigo-300 text-xs font-semibold">Tipagem Estática</td>
+      <td class="py-2 px-2.5"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-semibold">EXISTENTE / ATIVO</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-[11px]">Tamanho: 511 B | Linhas: 21</td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-center text-xs">07</td>
+      <td class="py-2 px-2.5 font-mono text-white text-xs">vercel.json</td>
+      <td class="py-2 px-2.5 font-sans text-slate-300 text-xs">Configuração de rotas serverless, headers e rewrite da Vercel</td>
+      <td class="py-2 px-2.5 font-sans text-indigo-300 text-xs font-semibold">Hospedagem Web/API</td>
+      <td class="py-2 px-2.5"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-semibold">EXISTENTE / ATIVO</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-[11px]">Tamanho: 522 B | Linhas: 32</td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-center text-xs">08</td>
+      <td class="py-2 px-2.5 font-mono text-white text-xs">tailwind.config.js</td>
+      <td class="py-2 px-2.5 font-sans text-slate-300 text-xs">Configuração de design system e temas CSS</td>
+      <td class="py-2 px-2.5 font-sans text-indigo-300 text-xs font-semibold">Interface Visual</td>
+      <td class="py-2 px-2.5"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-semibold">EXISTENTE / ATIVO</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-[11px]">Tamanho: 455 B | Linhas: 24</td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-center text-xs">09</td>
+      <td class="py-2 px-2.5 font-mono text-white text-xs">postcss.config.js</td>
+      <td class="py-2 px-2.5 font-sans text-slate-300 text-xs">Configuração de processamento de estilos Tailwind</td>
+      <td class="py-2 px-2.5 font-sans text-indigo-300 text-xs font-semibold">Interface Visual</td>
+      <td class="py-2 px-2.5"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-semibold">EXISTENTE / ATIVO</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-[11px]">Tamanho: 80 B | Linhas: 7</td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-center text-xs">10</td>
+      <td class="py-2 px-2.5 font-mono text-white text-xs">Dockerfile</td>
+      <td class="py-2 px-2.5 font-sans text-slate-300 text-xs">Containerização para deploy do bot em VPS (Render/Railway)</td>
+      <td class="py-2 px-2.5 font-sans text-indigo-300 text-xs font-semibold">Deploy Backend</td>
+      <td class="py-2 px-2.5"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-semibold">EXISTENTE / ATIVO</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-[11px]">Tamanho: 257 B | Linhas: 18</td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-center text-xs">11</td>
+      <td class="py-2 px-2.5 font-mono text-white text-xs">render.yaml</td>
+      <td class="py-2 px-2.5 font-sans text-slate-300 text-xs">Configuração de infraestrutura de nuvem no Render</td>
+      <td class="py-2 px-2.5 font-sans text-indigo-300 text-xs font-semibold">Deploy Backend</td>
+      <td class="py-2 px-2.5"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-semibold">EXISTENTE / ATIVO</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-[11px]">Tamanho: 382 B | Linhas: 16</td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-center text-xs">12</td>
+      <td class="py-2 px-2.5 font-mono text-white text-xs">iniciar_robo.bat</td>
+      <td class="py-2 px-2.5 font-sans text-slate-300 text-xs">Script Windows para inicialização em segundo plano do bot.cjs</td>
+      <td class="py-2 px-2.5 font-sans text-indigo-300 text-xs font-semibold">Operacional Local</td>
+      <td class="py-2 px-2.5"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-semibold">EXISTENTE / ATIVO</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-[11px]">Tamanho: 587 B | Linhas: 19</td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-center text-xs">13</td>
+      <td class="py-2 px-2.5 font-mono text-white text-xs">version.json</td>
+      <td class="py-2 px-2.5 font-sans text-slate-300 text-xs">Fonte única de versionamento de build do app Android (v1.41 / PR.041)</td>
+      <td class="py-2 px-2.5 font-sans text-indigo-300 text-xs font-semibold">Governança Versão</td>
+      <td class="py-2 px-2.5"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-semibold">EXISTENTE / ATIVO</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-[11px]">Tamanho: 861 B | Linhas: 11</td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-center text-xs">14</td>
+      <td class="py-2 px-2.5 font-mono text-white text-xs">README.md</td>
+      <td class="py-2 px-2.5 font-sans text-slate-300 text-xs">Documentação geral de instalação e execução do projeto</td>
+      <td class="py-2 px-2.5 font-sans text-indigo-300 text-xs font-semibold">Documentação</td>
+      <td class="py-2 px-2.5"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-semibold">EXISTENTE / ATIVO</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-[11px]">Tamanho: 6350 B | Linhas: 109</td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-center text-xs">15</td>
+      <td class="py-2 px-2.5 font-mono text-white text-xs">PONTOS_DE_RESTAURACAO.md</td>
+      <td class="py-2 px-2.5 font-sans text-slate-300 text-xs">Registro histórico de builds estáveis e snapshots de restauração</td>
+      <td class="py-2 px-2.5 font-sans text-indigo-300 text-xs font-semibold">Governança Release</td>
+      <td class="py-2 px-2.5"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-semibold">EXISTENTE / ATIVO</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-[11px]">Tamanho: 87056 B | Linhas: 871</td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-center text-xs">16</td>
+      <td class="py-2 px-2.5 font-mono text-white text-xs">HISTORICO_CONSOLIDADO_KYRO_FINANCE.md</td>
+      <td class="py-2 px-2.5 font-sans text-slate-300 text-xs">Histórico consolidado da evolução do ecossistema</td>
+      <td class="py-2 px-2.5 font-sans text-indigo-300 text-xs font-semibold">Histórico Técnico</td>
+      <td class="py-2 px-2.5"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-semibold">EXISTENTE / ATIVO</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-[11px]">Tamanho: 29307 B | Linhas: 265</td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-center text-xs">17</td>
+      <td class="py-2 px-2.5 font-mono text-white text-xs">DIAGNOSTICO_BOT_WHATSAPP.md</td>
+      <td class="py-2 px-2.5 font-sans text-slate-300 text-xs">Diagnóstico e guia de pareamento oficial Baileys</td>
+      <td class="py-2 px-2.5 font-sans text-indigo-300 text-xs font-semibold">Operacional Bot</td>
+      <td class="py-2 px-2.5"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-semibold">EXISTENTE / ATIVO</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-[11px]">Tamanho: 12846 B | Linhas: 213</td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-center text-xs">18</td>
+      <td class="py-2 px-2.5 font-mono text-white text-xs">transactions.json</td>
+      <td class="py-2 px-2.5 font-sans text-slate-300 text-xs">Persistência local de transações registradas pelo robô WhatsApp</td>
+      <td class="py-2 px-2.5 font-sans text-indigo-300 text-xs font-semibold">Persistência Bot</td>
+      <td class="py-2 px-2.5"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-semibold">EXISTENTE / ATIVO</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-[11px]">Tamanho: 4747 B | Linhas: 162</td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-center text-xs">19</td>
+      <td class="py-2 px-2.5 font-mono text-white text-xs">kyro_settings.json</td>
+      <td class="py-2 px-2.5 font-sans text-slate-300 text-xs">Configurações operacionais locais do bot (grupos, telefone de monitoramento)</td>
+      <td class="py-2 px-2.5 font-sans text-indigo-300 text-xs font-semibold">Configuração Bot</td>
+      <td class="py-2 px-2.5"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-semibold">EXISTENTE / ATIVO</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-[11px]">Tamanho: 618 B | Linhas: 18</td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-center text-xs">20</td>
+      <td class="py-2 px-2.5 font-mono text-white text-xs">credit_cards.json</td>
+      <td class="py-2 px-2.5 font-sans text-slate-300 text-xs">Persistência local de cartões cadastrados pelo WhatsApp</td>
+      <td class="py-2 px-2.5 font-sans text-indigo-300 text-xs font-semibold">Persistência Bot</td>
+      <td class="py-2 px-2.5"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-semibold">EXISTENTE / ATIVO</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-[11px]">Tamanho: 3 B | Linhas: 2</td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-center text-xs">21</td>
+      <td class="py-2 px-2.5 font-mono text-white text-xs">recurring_expenses.json</td>
+      <td class="py-2 px-2.5 font-sans text-slate-300 text-xs">Persistência local de despesas fixas recorrentes do robô</td>
+      <td class="py-2 px-2.5 font-sans text-indigo-300 text-xs font-semibold">Persistência Bot</td>
+      <td class="py-2 px-2.5"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-semibold">EXISTENTE / ATIVO</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-[11px]">Tamanho: 3 B | Linhas: 2</td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-center text-xs">22</td>
+      <td class="py-2 px-2.5 font-mono text-white text-xs">deleted_tx_ids.json</td>
+      <td class="py-2 px-2.5 font-sans text-slate-300 text-xs">Registro de IDs de transações canceladas/deletadas no bot</td>
+      <td class="py-2 px-2.5 font-sans text-indigo-300 text-xs font-semibold">Auditoria Bot</td>
+      <td class="py-2 px-2.5"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-semibold">EXISTENTE / ATIVO</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-[11px]">Tamanho: 275 B | Linhas: 1</td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-center text-xs">23</td>
+      <td class="py-2 px-2.5 font-mono text-white text-xs">monitored_group.json</td>
+      <td class="py-2 px-2.5 font-sans text-slate-300 text-xs">Definição do JID do grupo de WhatsApp monitorado para despesas coletivas</td>
+      <td class="py-2 px-2.5 font-sans text-indigo-300 text-xs font-semibold">Configuração Bot</td>
+      <td class="py-2 px-2.5"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-semibold">EXISTENTE / ATIVO</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-[11px]">Tamanho: 211 B | Linhas: 7</td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-center text-xs">24</td>
+      <td class="py-2 px-2.5 font-mono text-white text-xs">.github/workflows/android-build.yml</td>
+      <td class="py-2 px-2.5 font-sans text-slate-300 text-xs">Pipeline CI/CD GitHub Actions de compilação, assinatura e release do APK</td>
+      <td class="py-2 px-2.5 font-sans text-indigo-300 text-xs font-semibold">Crítica (Automação)</td>
+      <td class="py-2 px-2.5"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-semibold">EXISTENTE / ATIVO</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-[11px]">Tamanho: 4098 B | Linhas: 97</td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-center text-xs">25</td>
+      <td class="py-2 px-2.5 font-mono text-white text-xs">.agent/rules/kyro-apk-delivery.md</td>
+      <td class="py-2 px-2.5 font-sans text-slate-300 text-xs">Regra de governança mandatória de entrega do APK atualizado nas respostas</td>
+      <td class="py-2 px-2.5 font-sans text-indigo-300 text-xs font-semibold">Governança Agente</td>
+      <td class="py-2 px-2.5"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-semibold">EXISTENTE / ATIVO</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-[11px]">Tamanho: 1755 B | Linhas: 18</td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-center text-xs">26</td>
+      <td class="py-2 px-2.5 font-mono text-white text-xs">KYRO-Finance.apk</td>
+      <td class="py-2 px-2.5 font-sans text-slate-300 text-xs">Binário compilado e assinado do aplicativo Android pronto para instalação</td>
+      <td class="py-2 px-2.5 font-sans text-indigo-300 text-xs font-semibold">Artefato Mobile</td>
+      <td class="py-2 px-2.5"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-semibold">EXISTENTE / ATIVO</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-[11px]">Tamanho: 9535171 B | Linhas: 32816</td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-center text-xs">27</td>
+      <td class="py-2 px-2.5 font-mono text-white text-xs">android/app/build.gradle</td>
+      <td class="py-2 px-2.5 font-sans text-slate-300 text-xs">Configuração Gradle do módulo Android (plugins, dependências, SDK version)</td>
+      <td class="py-2 px-2.5 font-sans text-indigo-300 text-xs font-semibold">Compilação Nativa</td>
+      <td class="py-2 px-2.5"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-semibold">EXISTENTE / ATIVO</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-[11px]">Tamanho: 2789 B | Linhas: 73</td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-center text-xs">28</td>
+      <td class="py-2 px-2.5 font-mono text-white text-xs">android/app/capacitor.build.gradle</td>
+      <td class="py-2 px-2.5 font-sans text-slate-300 text-xs">Configuração Gradle injetada pelo Capacitor CLI</td>
+      <td class="py-2 px-2.5 font-sans text-indigo-300 text-xs font-semibold">Compilação Nativa</td>
+      <td class="py-2 px-2.5"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-semibold">EXISTENTE / ATIVO</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-[11px]">Tamanho: 414 B | Linhas: 20</td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-center text-xs">29</td>
+      <td class="py-2 px-2.5 font-mono text-white text-xs">android/app/proguard-rules.pro</td>
+      <td class="py-2 px-2.5 font-sans text-slate-300 text-xs">Regras de ofuscação e otimização ProGuard para Android Release</td>
+      <td class="py-2 px-2.5 font-sans text-indigo-300 text-xs font-semibold">Segurança Binário</td>
+      <td class="py-2 px-2.5"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-semibold">EXISTENTE / ATIVO</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-[11px]">Tamanho: 751 B | Linhas: 22</td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-center text-xs">30</td>
+      <td class="py-2 px-2.5 font-mono text-white text-xs">android/app/src/main/AndroidManifest.xml</td>
+      <td class="py-2 px-2.5 font-sans text-slate-300 text-xs">Manifesto Android de permissões (Áudio, Câmera, Rede, Request Install Packages)</td>
+      <td class="py-2 px-2.5 font-sans text-indigo-300 text-xs font-semibold">Segurança SO</td>
+      <td class="py-2 px-2.5"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-semibold">EXISTENTE / ATIVO</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-[11px]">Tamanho: 2822 B | Linhas: 62</td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-center text-xs">31</td>
+      <td class="py-2 px-2.5 font-mono text-white text-xs">android/app/src/main/java/com/kyro/finance/MainActivity.java</td>
+      <td class="py-2 px-2.5 font-sans text-slate-300 text-xs">Activity Android principal, configuração de WebView, banco e permissões</td>
+      <td class="py-2 px-2.5 font-sans text-indigo-300 text-xs font-semibold">Crítica (Android)</td>
+      <td class="py-2 px-2.5"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-semibold">EXISTENTE / ATIVO</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-[11px]">Tamanho: 2562 B | Linhas: 66</td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-center text-xs">32</td>
+      <td class="py-2 px-2.5 font-mono text-white text-xs">android/app/src/main/java/com/kyro/finance/AppUpdateManagerPlugin.java</td>
+      <td class="py-2 px-2.5 font-sans text-slate-300 text-xs">Plugin nativo Capacitor para download de APK e auto-update via FileProvider</td>
+      <td class="py-2 px-2.5 font-sans text-indigo-300 text-xs font-semibold">Crítica (Update)</td>
+      <td class="py-2 px-2.5"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-semibold">EXISTENTE / ATIVO</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-[11px]">Tamanho: 12208 B | Linhas: 296</td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-center text-xs">33</td>
+      <td class="py-2 px-2.5 font-mono text-white text-xs">android/app/src/main/java/com/kyro/finance/NativeSpeechRecognizerPlugin.java</td>
+      <td class="py-2 px-2.5 font-sans text-slate-300 text-xs">Plugin nativo Capacitor para transcrição de fala por voz via Android Speech API</td>
+      <td class="py-2 px-2.5 font-sans text-indigo-300 text-xs font-semibold">IA de Voz Nativa</td>
+      <td class="py-2 px-2.5"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-semibold">EXISTENTE / ATIVO</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-[11px]">Tamanho: 11503 B | Linhas: 270</td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-center text-xs">34</td>
+      <td class="py-2 px-2.5 font-mono text-white text-xs">api/app-version.ts</td>
+      <td class="py-2 px-2.5 font-sans text-slate-300 text-xs">Rota serverless que fornece a versão e build atuais para verificação de atualização</td>
+      <td class="py-2 px-2.5 font-sans text-indigo-300 text-xs font-semibold">API Versionamento</td>
+      <td class="py-2 px-2.5"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-semibold">EXISTENTE / ATIVO</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-[11px]">Tamanho: 5058 B | Linhas: 128</td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-center text-xs">35</td>
+      <td class="py-2 px-2.5 font-mono text-white text-xs">api/chat.ts</td>
+      <td class="py-2 px-2.5 font-sans text-slate-300 text-xs">Endpoint de assistência por IA (Copilot) com integração OpenAI</td>
+      <td class="py-2 px-2.5 font-sans text-indigo-300 text-xs font-semibold">API IA</td>
+      <td class="py-2 px-2.5"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-semibold">EXISTENTE / ATIVO</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-[11px]">Tamanho: 36182 B | Linhas: 739</td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-center text-xs">36</td>
+      <td class="py-2 px-2.5 font-mono text-white text-xs">api/config/openai.ts</td>
+      <td class="py-2 px-2.5 font-sans text-slate-300 text-xs">Instanciação e configuração do cliente OpenAI API</td>
+      <td class="py-2 px-2.5 font-sans text-indigo-300 text-xs font-semibold">Infraestrutura IA</td>
+      <td class="py-2 px-2.5"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-semibold">EXISTENTE / ATIVO</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-[11px]">Tamanho: 129 B | Linhas: 8</td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-center text-xs">37</td>
+      <td class="py-2 px-2.5 font-mono text-white text-xs">api/database.ts</td>
+      <td class="py-2 px-2.5 font-sans text-slate-300 text-xs">Camada de acesso a dados no Firebase Firestore (Client SDK na API)</td>
+      <td class="py-2 px-2.5 font-sans text-indigo-300 text-xs font-semibold">Crítica (Banco)</td>
+      <td class="py-2 px-2.5"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-semibold">EXISTENTE / ATIVO</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-[11px]">Tamanho: 25766 B | Linhas: 661</td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-center text-xs">38</td>
+      <td class="py-2 px-2.5 font-mono text-white text-xs">api/device-token.ts</td>
+      <td class="py-2 px-2.5 font-sans text-slate-300 text-xs">Presumido em análises anteriores; gerenciava tokens push</td>
+      <td class="py-2 px-2.5 font-sans text-indigo-300 text-xs font-semibold">Presumido / Inexistente</td>
+      <td class="py-2 px-2.5"><span class="badge-bloqueado px-2 py-0.5 rounded text-[10px] font-semibold">AUSENTE NO DISCO</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-[11px]">Arquivo não encontrado no diretório (fs.existsSync = false)</td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-center text-xs">39</td>
+      <td class="py-2 px-2.5 font-mono text-white text-xs">api/generate-rules.ts</td>
+      <td class="py-2 px-2.5 font-sans text-slate-300 text-xs">Presumido em análises anteriores; gerava regras de categorização</td>
+      <td class="py-2 px-2.5 font-sans text-indigo-300 text-xs font-semibold">Presumido / Inexistente</td>
+      <td class="py-2 px-2.5"><span class="badge-bloqueado px-2 py-0.5 rounded text-[10px] font-semibold">AUSENTE NO DISCO</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-[11px]">Arquivo não encontrado no diretório (fs.existsSync = false)</td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-center text-xs">40</td>
+      <td class="py-2 px-2.5 font-mono text-white text-xs">api/group-join.ts</td>
+      <td class="py-2 px-2.5 font-sans text-slate-300 text-xs">Endpoint para adicionar usuário ao grupo de monitoramento WhatsApp</td>
+      <td class="py-2 px-2.5 font-sans text-indigo-300 text-xs font-semibold">API WhatsApp</td>
+      <td class="py-2 px-2.5"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-semibold">EXISTENTE / ATIVO</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-[11px]">Tamanho: 3105 B | Linhas: 86</td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-center text-xs">41</td>
+      <td class="py-2 px-2.5 font-mono text-white text-xs">api/instance-qr.ts</td>
+      <td class="py-2 px-2.5 font-sans text-slate-300 text-xs">Endpoint de exibição do QR Code de pareamento do Baileys</td>
+      <td class="py-2 px-2.5 font-sans text-indigo-300 text-xs font-semibold">API WhatsApp</td>
+      <td class="py-2 px-2.5"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-semibold">EXISTENTE / ATIVO</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-[11px]">Tamanho: 3793 B | Linhas: 98</td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-center text-xs">42</td>
+      <td class="py-2 px-2.5 font-mono text-white text-xs">api/ocr.ts</td>
+      <td class="py-2 px-2.5 font-sans text-slate-300 text-xs">Presumido em análises anteriores; extração de texto em comprovantes</td>
+      <td class="py-2 px-2.5 font-sans text-indigo-300 text-xs font-semibold">Presumido / Inexistente</td>
+      <td class="py-2 px-2.5"><span class="badge-bloqueado px-2 py-0.5 rounded text-[10px] font-semibold">AUSENTE NO DISCO</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-[11px]">Arquivo não encontrado no diretório (fs.existsSync = false)</td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-center text-xs">43</td>
+      <td class="py-2 px-2.5 font-mono text-white text-xs">api/ping.ts</td>
+      <td class="py-2 px-2.5 font-sans text-slate-300 text-xs">Presumido em análises anteriores; health check serverless</td>
+      <td class="py-2 px-2.5 font-sans text-indigo-300 text-xs font-semibold">Presumido / Inexistente</td>
+      <td class="py-2 px-2.5"><span class="badge-bloqueado px-2 py-0.5 rounded text-[10px] font-semibold">AUSENTE NO DISCO</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-[11px]">Arquivo não encontrado no diretório (fs.existsSync = false)</td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-center text-xs">44</td>
+      <td class="py-2 px-2.5 font-mono text-white text-xs">api/prompts/finance.prompt.ts</td>
+      <td class="py-2 px-2.5 font-sans text-slate-300 text-xs">System prompt do modelo OpenAI para categorização e chat contábil</td>
+      <td class="py-2 px-2.5 font-sans text-indigo-300 text-xs font-semibold">Lógica Contábil IA</td>
+      <td class="py-2 px-2.5"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-semibold">EXISTENTE / ATIVO</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-[11px]">Tamanho: 1721 B | Linhas: 24</td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-center text-xs">45</td>
+      <td class="py-2 px-2.5 font-mono text-white text-xs">api/push-notification.ts</td>
+      <td class="py-2 px-2.5 font-sans text-slate-300 text-xs">Presumido em análises anteriores; disparo de notificações push</td>
+      <td class="py-2 px-2.5 font-sans text-indigo-300 text-xs font-semibold">Presumido / Inexistente</td>
+      <td class="py-2 px-2.5"><span class="badge-bloqueado px-2 py-0.5 rounded text-[10px] font-semibold">AUSENTE NO DISCO</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-[11px]">Arquivo não encontrado no diretório (fs.existsSync = false)</td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-center text-xs">46</td>
+      <td class="py-2 px-2.5 font-mono text-white text-xs">api/services/evolution.ts</td>
+      <td class="py-2 px-2.5 font-sans text-slate-300 text-xs">Cliente de integração para APIs externas de mensageria</td>
+      <td class="py-2 px-2.5 font-sans text-indigo-300 text-xs font-semibold">Serviço Externo</td>
+      <td class="py-2 px-2.5"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-semibold">EXISTENTE / ATIVO</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-[11px]">Tamanho: 1669 B | Linhas: 63</td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-center text-xs">47</td>
+      <td class="py-2 px-2.5 font-mono text-white text-xs">api/services/financeAssistant.ts</td>
+      <td class="py-2 px-2.5 font-sans text-slate-300 text-xs">Parser de linguagem natural e regras de negócio para mensagens financeiras</td>
+      <td class="py-2 px-2.5 font-sans text-indigo-300 text-xs font-semibold">Lógica Negócio</td>
+      <td class="py-2 px-2.5"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-semibold">EXISTENTE / ATIVO</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-[11px]">Tamanho: 3385 B | Linhas: 87</td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-center text-xs">48</td>
+      <td class="py-2 px-2.5 font-mono text-white text-xs">api/services/financeDb.ts</td>
+      <td class="py-2 px-2.5 font-sans text-slate-300 text-xs">Helpers auxiliares de persistência no Firestore</td>
+      <td class="py-2 px-2.5 font-sans text-indigo-300 text-xs font-semibold">Banco de Dados</td>
+      <td class="py-2 px-2.5"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-semibold">EXISTENTE / ATIVO</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-[11px]">Tamanho: 2259 B | Linhas: 62</td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-center text-xs">49</td>
+      <td class="py-2 px-2.5 font-mono text-white text-xs">api/sync.ts</td>
+      <td class="py-2 px-2.5 font-sans text-slate-300 text-xs">Presumido em análises anteriores; endpoint central de sincronização</td>
+      <td class="py-2 px-2.5 font-sans text-indigo-300 text-xs font-semibold">Presumido / Inexistente</td>
+      <td class="py-2 px-2.5"><span class="badge-bloqueado px-2 py-0.5 rounded text-[10px] font-semibold">AUSENTE NO DISCO</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-[11px]">Arquivo não encontrado no diretório (fs.existsSync = false)</td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-center text-xs">50</td>
+      <td class="py-2 px-2.5 font-mono text-white text-xs">api/transcribe.ts</td>
+      <td class="py-2 px-2.5 font-sans text-slate-300 text-xs">Endpoint de transcrição de áudio via Whisper na nuvem (fallback para local)</td>
+      <td class="py-2 px-2.5 font-sans text-indigo-300 text-xs font-semibold">API Áudio</td>
+      <td class="py-2 px-2.5"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-semibold">EXISTENTE / ATIVO</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-[11px]">Tamanho: 6915 B | Linhas: 167</td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-center text-xs">51</td>
+      <td class="py-2 px-2.5 font-mono text-white text-xs">api/version.ts</td>
+      <td class="py-2 px-2.5 font-sans text-slate-300 text-xs">Presumido em análises anteriores; duplicata de app-version</td>
+      <td class="py-2 px-2.5 font-sans text-indigo-300 text-xs font-semibold">Presumido / Inexistente</td>
+      <td class="py-2 px-2.5"><span class="badge-bloqueado px-2 py-0.5 rounded text-[10px] font-semibold">AUSENTE NO DISCO</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-[11px]">Arquivo não encontrado no diretório (fs.existsSync = false)</td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-center text-xs">52</td>
+      <td class="py-2 px-2.5 font-mono text-white text-xs">api/webhook.ts</td>
+      <td class="py-2 px-2.5 font-sans text-slate-300 text-xs">Endpoint de recebimento de mensagens e eventos externos do WhatsApp/Evolution</td>
+      <td class="py-2 px-2.5 font-sans text-indigo-300 text-xs font-semibold">Crítica (Webhook)</td>
+      <td class="py-2 px-2.5"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-semibold">EXISTENTE / ATIVO</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-[11px]">Tamanho: 48927 B | Linhas: 1167</td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-center text-xs">53</td>
+      <td class="py-2 px-2.5 font-mono text-white text-xs">api/whatsapp-service.ts</td>
+      <td class="py-2 px-2.5 font-sans text-slate-300 text-xs">Presumido em análises anteriores; serviço abstrato de WhatsApp</td>
+      <td class="py-2 px-2.5 font-sans text-indigo-300 text-xs font-semibold">Presumido / Inexistente</td>
+      <td class="py-2 px-2.5"><span class="badge-bloqueado px-2 py-0.5 rounded text-[10px] font-semibold">AUSENTE NO DISCO</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-[11px]">Arquivo não encontrado no diretório (fs.existsSync = false)</td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-center text-xs">54</td>
+      <td class="py-2 px-2.5 font-mono text-white text-xs">src/App.tsx</td>
+      <td class="py-2 px-2.5 font-sans text-slate-300 text-xs">Componente React principal da aplicação Web e PWA, gerenciamento de estado global</td>
+      <td class="py-2 px-2.5 font-sans text-indigo-300 text-xs font-semibold">Crítica (Front-end)</td>
+      <td class="py-2 px-2.5"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-semibold">EXISTENTE / ATIVO</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-[11px]">Tamanho: 363111 B | Linhas: 7262</td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-center text-xs">55</td>
+      <td class="py-2 px-2.5 font-mono text-white text-xs">src/components/UpdateModal.tsx</td>
+      <td class="py-2 px-2.5 font-sans text-slate-300 text-xs">Modal interativo de alerta e progresso de atualização de APK para o usuário</td>
+      <td class="py-2 px-2.5 font-sans text-indigo-300 text-xs font-semibold">Interface Mobile</td>
+      <td class="py-2 px-2.5"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-semibold">EXISTENTE / ATIVO</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-[11px]">Tamanho: 10256 B | Linhas: 241</td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-center text-xs">56</td>
+      <td class="py-2 px-2.5 font-mono text-white text-xs">src/components/WhatsAppTab.tsx</td>
+      <td class="py-2 px-2.5 font-sans text-slate-300 text-xs">Aba de gerenciamento de conexão WhatsApp e código oficial de pareamento</td>
+      <td class="py-2 px-2.5 font-sans text-indigo-300 text-xs font-semibold">Interface Usuário</td>
+      <td class="py-2 px-2.5"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-semibold">EXISTENTE / ATIVO</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-[11px]">Tamanho: 63741 B | Linhas: 1265</td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-center text-xs">57</td>
+      <td class="py-2 px-2.5 font-mono text-white text-xs">src/firebase.ts</td>
+      <td class="py-2 px-2.5 font-sans text-slate-300 text-xs">Inicialização do cliente Firebase (Auth, Firestore, Storage) via variáveis Vite</td>
+      <td class="py-2 px-2.5 font-sans text-indigo-300 text-xs font-semibold">Crítica (Banco)</td>
+      <td class="py-2 px-2.5"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-semibold">EXISTENTE / ATIVO</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-[11px]">Tamanho: 5616 B | Linhas: 170</td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-center text-xs">58</td>
+      <td class="py-2 px-2.5 font-mono text-white text-xs">src/index.css</td>
+      <td class="py-2 px-2.5 font-sans text-slate-300 text-xs">Estilos CSS base, fontes e diretivas do Tailwind CSS</td>
+      <td class="py-2 px-2.5 font-sans text-indigo-300 text-xs font-semibold">Interface Visual</td>
+      <td class="py-2 px-2.5"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-semibold">EXISTENTE / ATIVO</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-[11px]">Tamanho: 2083 B | Linhas: 92</td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-center text-xs">59</td>
+      <td class="py-2 px-2.5 font-mono text-white text-xs">src/main.tsx</td>
+      <td class="py-2 px-2.5 font-sans text-slate-300 text-xs">Ponto de entrada de montagem da raiz React 19 no DOM</td>
+      <td class="py-2 px-2.5 font-sans text-indigo-300 text-xs font-semibold">Front-end Core</td>
+      <td class="py-2 px-2.5"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-semibold">EXISTENTE / ATIVO</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-[11px]">Tamanho: 309 B | Linhas: 14</td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-center text-xs">60</td>
+      <td class="py-2 px-2.5 font-mono text-white text-xs">src/nativeBridge.ts</td>
+      <td class="py-2 px-2.5 font-sans text-slate-300 text-xs">Ponte de comunicação entre JavaScript e plugins nativos Capacitor</td>
+      <td class="py-2 px-2.5 font-sans text-indigo-300 text-xs font-semibold">Crítica (Mobile)</td>
+      <td class="py-2 px-2.5"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-semibold">EXISTENTE / ATIVO</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-[11px]">Tamanho: 6832 B | Linhas: 190</td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-center text-xs">61</td>
+      <td class="py-2 px-2.5 font-mono text-white text-xs">src/types.ts</td>
+      <td class="py-2 px-2.5 font-sans text-slate-300 text-xs">Declaração central de interfaces e tipos TypeScript de modelos financeiros legados</td>
+      <td class="py-2 px-2.5 font-sans text-indigo-300 text-xs font-semibold">Tipagem Estática</td>
+      <td class="py-2 px-2.5"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-semibold">EXISTENTE / ATIVO</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-[11px]">Tamanho: 3312 B | Linhas: 83</td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-center text-xs">62</td>
+      <td class="py-2 px-2.5 font-mono text-white text-xs">src/utils/aiCopilot.ts</td>
+      <td class="py-2 px-2.5 font-sans text-slate-300 text-xs">Utilitários para comunicação com a IA e formatação de respostas do assistente</td>
+      <td class="py-2 px-2.5 font-sans text-indigo-300 text-xs font-semibold">Utilitários IA</td>
+      <td class="py-2 px-2.5"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-semibold">EXISTENTE / ATIVO</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-[11px]">Tamanho: 46493 B | Linhas: 879</td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-center text-xs">63</td>
+      <td class="py-2 px-2.5 font-mono text-white text-xs">src/utils/appUpdater.ts</td>
+      <td class="py-2 px-2.5 font-sans text-slate-300 text-xs">Lógica cliente de checagem de versão no GitHub e acionamento de auto-update</td>
+      <td class="py-2 px-2.5 font-sans text-indigo-300 text-xs font-semibold">Mobile Updater</td>
+      <td class="py-2 px-2.5"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-semibold">EXISTENTE / ATIVO</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-[11px]">Tamanho: 11050 B | Linhas: 308</td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-center text-xs">64</td>
+      <td class="py-2 px-2.5 font-mono text-white text-xs">src/utils/documentExtractor.ts</td>
+      <td class="py-2 px-2.5 font-sans text-slate-300 text-xs">Extração e parsing de dados em comprovantes e extratos bancários</td>
+      <td class="py-2 px-2.5 font-sans text-indigo-300 text-xs font-semibold">Utilitários OCR</td>
+      <td class="py-2 px-2.5"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-semibold">EXISTENTE / ATIVO</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-[11px]">Tamanho: 2983 B | Linhas: 92</td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-center text-xs">65</td>
+      <td class="py-2 px-2.5 font-mono text-white text-xs">src/utils/financialParser.ts</td>
+      <td class="py-2 px-2.5 font-sans text-slate-300 text-xs">Parser determinístico legado de texto para extração de valores, categorias e datas</td>
+      <td class="py-2 px-2.5 font-sans text-indigo-300 text-xs font-semibold">Parser Financeiro</td>
+      <td class="py-2 px-2.5"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-semibold">EXISTENTE / ATIVO</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-[11px]">Tamanho: 31258 B | Linhas: 688</td>
+    </tr>
+  
+    <tr class="hover:bg-slate-900/40 transition">
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-center text-xs">66</td>
+      <td class="py-2 px-2.5 font-mono text-white text-xs">src/version.ts</td>
+      <td class="py-2 px-2.5 font-sans text-slate-300 text-xs">Constantes de versão oficial do frontend (v1.41 / PR.041)</td>
+      <td class="py-2 px-2.5 font-sans text-indigo-300 text-xs font-semibold">Governança Versão</td>
+      <td class="py-2 px-2.5"><span class="badge-verificado px-2 py-0.5 rounded text-[10px] font-semibold">EXISTENTE / ATIVO</span></td>
+      <td class="py-2 px-2.5 font-mono text-slate-400 text-[11px]">Tamanho: 918 B | Linhas: 11</td>
+    </tr>
+  
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 5. Parecer Objetivo em Quatro Conclusões -->
+    <section class="glass-card rounded-2xl p-6 sm:p-8 space-y-6 border-emerald-900/40">
+      <div class="flex items-center gap-3 border-b border-slate-800 pb-3">
+        <span class="w-7 h-7 rounded-lg bg-emerald-600/20 text-emerald-400 flex items-center justify-center font-bold text-xs">05</span>
+        <h2 class="text-xl font-bold text-white">Parecer Objetivo em Quatro Conclusões Separadas</h2>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+        <div class="p-4 rounded-xl bg-slate-900/80 border border-slate-800 space-y-1">
+          <span class="text-slate-400 block font-semibold">A. Maturidade Arquitetural:</span>
+          <span class="text-emerald-400 font-bold text-sm">APROVADO COM MATURIDADE PLENA</span>
+          <p class="text-slate-400 text-[11px] pt-1">Modelagem financeira, contratos de cartões sem desconto automático de saldo credor e protocolos transacionais atingiram completude conceitual absoluta.</p>
+        </div>
+        <div class="p-4 rounded-xl bg-slate-900/80 border border-slate-800 space-y-1">
+          <span class="text-slate-400 block font-semibold">B. Evidência de Testes:</span>
+          <span class="text-cyan-400 font-bold text-sm">COMPROVADO EM AMBIENTE ISOLADO</span>
+          <p class="text-slate-400 text-[11px] pt-1">16 cenários de cartões e 7 testes determinísticos aprovados em Node.js com evidências físicas. Testes de infraestrutura bloqueados por dependência externa.</p>
+        </div>
+        <div class="p-4 rounded-xl bg-slate-900/80 border border-slate-800 space-y-1">
+          <span class="text-slate-400 block font-semibold">C. Prontidão para Implementação:</span>
+          <span class="text-emerald-400 font-bold text-sm">TOTALMENTE PRONTA PARA A ETAPA 03</span>
+          <p class="text-slate-400 text-[11px] pt-1">Existem condições técnicas claras e contratos à prova de falha para que o plano de implementação da Etapa 03 seja autorizado.</p>
+        </div>
+        <div class="p-4 rounded-xl bg-slate-900/80 border border-slate-800 space-y-1">
+          <span class="text-slate-400 block font-semibold">D. Prontidão para Produção:</span>
+          <span class="text-rose-400 font-bold text-sm">NÃO ESTÁ PRONTA PARA PRODUÇÃO</span>
+          <p class="text-slate-400 text-[11px] pt-1">O código de produção v1.41 não foi alterado. O sistema só estará apto para produção após a refatoração prática na Etapa 03.</p>
+        </div>
+      </div>
+
+      <div class="p-4 rounded-xl bg-rose-950/40 border border-rose-900/60 text-xs text-rose-200 space-y-2">
+        <div class="font-bold flex items-center gap-2 text-rose-400">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          BLOQUEIO MANDATÓRIO DA ETAPA 03 (IMPLEMENTAÇÃO EM CÓDIGO)
+        </div>
+        <p>
+          Em cumprimento estrito às restrições acordadas: <strong>nenhum arquivo da aplicação foi alterado, nenhum dado foi modificado no Firestore, nenhuma migração foi executada e nenhum commit ou push foi disparado</strong>. A base de produção permanece estável na versão <strong class="text-white">v1.41 / Build 41 (PR.041)</strong>. O início da Etapa 03 permanece bloqueado até a expressa autorização do usuário.
+        </p>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="border-t border-slate-800 bg-[#07090e] py-8 text-center text-xs text-slate-500">
+    <div class="max-w-7xl mx-auto px-4 space-y-2">
+      <p>KYRO Finance — Sistema de Gestão Financeira Multiplataforma (Web | Android | WhatsApp)</p>
+      <p class="text-slate-600">Documento emitido e assinado pela Auditoria Autônoma de Arquitetura de Software</p>
+    </div>
+  </footer>
+
+</body>
+</html>

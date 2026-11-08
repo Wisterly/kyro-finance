@@ -8,8 +8,9 @@
  * 5. Automação Event Bridge Antigravity ⇄ Codex (src/engine/eventBridge.test.ts) - 20 testes
  * 6. Homologação da Subetapa 03.6 (src/engine/subetapa_03_6.test.ts) - 138 testes (88 convergência WhatsApp + 50 segurança de fronteira, canal e concorrência)
  * 7. Homologação da Subetapa 03.7 (src/engine/subetapa_03_7.test.ts) - 68 testes (sincronização offline, fila resiliente, requestId estável e tombstones)
+ * 8. Homologação da Etapa 04 (src/engine/etapa_04_chat_web.test.ts) - 47 testes (Chat Web real, texto, voz, ambiguidades sem mutação e campos ausentes)
  * 
- * Total Consolidado: 597 testes (100% aprovados)
+ * Total Consolidado: 644 testes (100% aprovados)
  */
 
 import { spawn } from 'child_process';
@@ -85,12 +86,20 @@ async function main() {
     process.exit(res6.exitCode);
   }
 
-  console.log('\n>>> [7/7] EXECUTANDO BATERIA DA SUBETAPA 03.7: SINCRONIZAÇÃO OFFLINE & RESILIÊNCIA (68 CASOS)...');
+  console.log('\n>>> [7/8] EXECUTANDO BATERIA DA SUBETAPA 03.7: SINCRONIZAÇÃO OFFLINE & RESILIÊNCIA (68 CASOS)...');
   await new Promise(r => setTimeout(r, 1000));
   const res7 = await runCommand('npx.cmd', ['tsx', 'src/engine/subetapa_03_7.test.ts']);
   if (res7.exitCode !== 0) {
     console.error('Falha na suíte da subetapa 03.7!');
     process.exit(res7.exitCode);
+  }
+
+  console.log('\n>>> [8/8] EXECUTANDO BATERIA DA ETAPA 04: CHAT WEB, TEXTO, VOZ & AMBIGUIDADES (47 CASOS)...');
+  await new Promise(r => setTimeout(r, 1000));
+  const res8 = await runCommand('npx.cmd', ['tsx', 'src/engine/etapa_04_chat_web.test.ts']);
+  if (res8.exitCode !== 0) {
+    console.error('Falha na suíte da Etapa 04!');
+    process.exit(res8.exitCode);
   }
 
   console.log('\n================================================================');
@@ -102,9 +111,10 @@ async function main() {
   console.log('5. Event Bridge Auto:   20 / 20 APROVADOS (100%)');
   console.log('6. Subetapa 03.6:       138 / 138 APROVADOS (100%) [88 funcionais + 50 segurança, canal e concorrência]');
   console.log('7. Subetapa 03.7:       68 / 68 APROVADOS (100%) [sincronização offline, fila por UID, requestId e tombstones]');
+  console.log('8. Etapa 04 (Chat Web): 47 / 47 APROVADOS (100%) [texto digitado, voz, ambiguidades sem mutação e campos ausentes]');
   console.log('----------------------------------------------------------------');
-  console.log('TOTAL CONSOLIDADO:     597 / 597 APROVADOS (100%)');
-  console.log('STATUS FINAL:          HOMOLOGADO EM CONTRATO E INSPEÇÃO DE ARTEFATO (PR.048)');
+  console.log('TOTAL CONSOLIDADO:     644 / 644 APROVADOS (100% SUCESSO)');
+  console.log('STATUS FINAL:          HOMOLOGADO EM CONTRATO, MOTOR UNIFICADO E INSPEÇÃO DE ARTEFATO (PR.048)');
   console.log('                       ACEITE ANDROID EM AVD/DISPOSITIVO FÍSICO FORMALMENTE PENDENTE');
   console.log('================================================================\n');
 

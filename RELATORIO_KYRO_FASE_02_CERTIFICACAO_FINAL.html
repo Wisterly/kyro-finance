@@ -1,0 +1,908 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KYRO Finance | Certificação Definitiva da Fase 02 (Encerramento Oficial)</title>
+  <style>
+    :root {
+      --bg: #0b0f17;
+      --card-bg: #111827;
+      --border: #1f2937;
+      --text: #f3f4f6;
+      --text-muted: #9ca3af;
+      --accent: #10b981;
+      --accent-glow: rgba(16, 185, 129, 0.2);
+      --danger: #ef4444;
+      --warning: #f59e0b;
+      --blue: #3b82f6;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      padding: 2rem 1rem;
+    }
+    .container { max-width: 1400px; margin: 0 auto; }
+    header { border-bottom: 1px solid var(--border); padding-bottom: 2rem; margin-bottom: 2rem; }
+    .badge {
+      display: inline-block;
+      padding: 0.25rem 0.75rem;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .badge-success { background-color: rgba(16, 185, 129, 0.1); color: var(--accent); border: 1px solid var(--accent); }
+    .badge-blocked { background-color: rgba(239, 68, 68, 0.1); color: var(--danger); border: 1px solid var(--danger); }
+    .badge-blue { background-color: rgba(59, 130, 246, 0.1); color: var(--blue); border: 1px solid var(--blue); }
+    .grid-kpi {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 2.5rem;
+    }
+    .card-kpi {
+      background-color: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 0.75rem;
+      padding: 1.5rem;
+      position: relative;
+    }
+    .kpi-title { font-size: 0.875rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 0.5rem; }
+    .kpi-value { font-size: 2.25rem; font-weight: 800; color: var(--text); }
+    .kpi-subtitle { font-size: 0.75rem; color: var(--accent); margin-top: 0.25rem; }
+    .card {
+      background-color: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 0.75rem;
+      padding: 2rem;
+      margin-bottom: 2rem;
+    }
+    h2 { font-size: 1.5rem; font-weight: 700; margin-bottom: 1.5rem; color: var(--text); border-left: 4px solid var(--accent); padding-left: 0.75rem; }
+    h3 { font-size: 1.15rem; font-weight: 600; margin: 1.25rem 0 0.75rem 0; color: #e5e7eb; }
+    table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.875rem; }
+    th, td { border: 1px solid var(--border); padding: 0.75rem 1rem; text-align: left; }
+    th { background-color: #1a2234; color: var(--text); font-weight: 600; }
+    tr:nth-child(even) { background-color: rgba(255, 255, 255, 0.02); }
+    .status-pass { color: var(--accent); font-weight: 700; }
+    .status-fail { color: var(--danger); font-weight: 700; }
+    .btn-download {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      color: #ffffff;
+      padding: 0.75rem 1.5rem;
+      border-radius: 0.5rem;
+      text-decoration: none;
+      font-weight: 700;
+      margin: 0.5rem 0.5rem 0.5rem 0;
+      box-shadow: 0 4px 14px var(--accent-glow);
+    }
+    .btn-secondary {
+      background: #1f2937;
+      color: #f3f4f6;
+      border: 1px solid #374151;
+      padding: 0.75rem 1.25rem;
+      border-radius: 0.5rem;
+      text-decoration: none;
+      font-weight: 600;
+      display: inline-block;
+      margin: 0.5rem 0.5rem 0.5rem 0;
+    }
+    code { font-family: monospace; background: #1e293b; padding: 0.2rem 0.4rem; border-radius: 0.25rem; font-size: 0.85em; color: #a5f3fc; }
+    .alert-box {
+      background-color: rgba(16, 185, 129, 0.08);
+      border-left: 4px solid var(--accent);
+      padding: 1rem 1.25rem;
+      border-radius: 0.375rem;
+      margin: 1.5rem 0;
+    }
+    .alert-danger {
+      background-color: rgba(239, 68, 68, 0.08);
+      border-left: 4px solid var(--danger);
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem;">
+      <div>
+        <h1 style="font-size:2rem; font-weight:800; color:#ffffff; margin-bottom:0.25rem;">KYRO Finance | Certificação Definitiva da Fase 02</h1>
+        <p style="color:var(--text-muted); font-size:0.95rem;">Auditoria Forense de Leitura, Concorrência Distribuída, Contrato Multicanal e Liberação Arquitetural</p>
+      </div>
+      <div>
+        <span class="badge badge-success" style="font-size:0.875rem; padding:0.5rem 1rem;">FASE 02 CERTIFICADA</span>
+      </div>
+    </div>
+    <div style="margin-top:1.5rem; display:flex; gap:1rem; flex-wrap:wrap; font-size:0.85rem; color:var(--text-muted);">
+      <div><strong>Commit Canônico Auditado:</strong> <code>a2df46c82432730ab5e606c0c579fb7a83e54e8b</code></div>
+      <div><strong>Branch:</strong> <code>main</code></div>
+      <div><strong>Data da Auditoria:</strong> 2026-11-06T02:36:48.131Z</div>
+      <div><strong>Produção Web:</strong> <a href="https://kyro-finance.vercel.app" target="_blank" style="color:var(--accent);">kyro-finance.vercel.app</a></div>
+      <div><strong>Pacote ZIP Reproduzível:</strong> <code>5188f5e54573d571...</code> (51589 B)</div>
+    </div>
+  </header>
+
+  <!-- KPIS -->
+  <div class="grid-kpi">
+    <div class="card-kpi">
+      <div class="kpi-title">Testes Determinísticos</div>
+      <div class="kpi-value" style="color:var(--accent);">45 / 45</div>
+      <div class="kpi-subtitle">100% Aprovados (38 Isolados + 7 Contrato)</div>
+    </div>
+    <div class="card-kpi">
+      <div class="kpi-title">Testes de Mutação Causal</div>
+      <div class="kpi-value" style="color:var(--accent);">10 / 10</div>
+      <div class="kpi-subtitle">100% Detectados (10/10 Matched Expected)</div>
+    </div>
+    <div class="card-kpi">
+      <div class="kpi-title">Inventário de Componentes</div>
+      <div class="kpi-value" style="color:#ffffff;">66</div>
+      <div class="kpi-subtitle">58 no Disco (53 Canônicos + 5 Locais) | 8 Ausentes</div>
+    </div>
+    <div class="card-kpi">
+      <div class="kpi-title">Status da Etapa 03</div>
+      <div class="kpi-value" style="color:var(--danger); font-size:1.75rem;">BLOQUEADA</div>
+      <div class="kpi-subtitle" style="color:var(--danger);">Código e Produção Preservados</div>
+    </div>
+  </div>
+
+  <!-- AÇÕES RÁPIDAS E DOWNLOADS -->
+  <div class="card" style="border: 1px solid var(--accent); background: rgba(16, 185, 129, 0.03);">
+    <h2>Trilha de Reprodução e Downloads Diretos</h2>
+    <p style="color:var(--text-muted); margin-bottom:1rem;">Todos os artefatos sanitizados, scripts de execução determinística e relatórios estruturados estão disponíveis para auditoria pública direta:</p>
+    <a href="/kyro_fase02_reproduction_suite.zip" class="btn-download">📦 Baixar Pacote de Reprodução (.zip)</a>
+    <a href="https://github.com/Wisterly/kyro-finance/releases/download/apk-latest/KYRO-Finance.apk" class="btn-secondary" style="border-color:var(--accent); color:var(--accent);">📱 Baixar APK Android Atualizado</a>
+    <a href="/results_fechamento.json" class="btn-secondary" target="_blank">📄 JSON Suíte Completa (45 Testes)</a>
+    <a href="/mutation_results_fechamento.json" class="btn-secondary" target="_blank">📄 JSON Mutações (10 Mutantes)</a>
+    <a href="/inventory_66_components.json" class="btn-secondary" target="_blank">📄 JSON Inventário (66 Componentes)</a>
+    <a href="/offline_reversal_evidence.json" class="btn-secondary" target="_blank">📄 JSON Reversão Offline (Subetapa 03.7)</a>
+  </div>
+
+  <!-- SEÇÃO 1: PARECER FORMAL -->
+  <div class="card">
+    <h2>1. Parecer Formal Sobre as Metas de Encerramento</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Meta</th>
+          <th>Status</th>
+          <th>Fundamentação Objetiva e Verificável</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Meta A: Regras, Retry e Fronteiras</strong></td>
+          <td><span class="badge badge-success">ATINGIDA</span></td>
+          <td>Medição de efeito do retry por lote com zero escritas redundantes no Chunk 0 e controle negativo detectando 499 escritas redundantes em reaplicação cega; ENG-03 com validação exaustiva por ID/valor e caso adversarial de soma idêntica detectado; idempotência pós-commit comprovada.</td>
+        </tr>
+        <tr>
+          <td><strong>Meta B: Reprodução e Mutação Contábil</strong></td>
+          <td><span class="badge badge-success">ATINGIDA</span></td>
+          <td>MUT-02 comprovado por asserção financeira observável (FINANCIAL_RULE_ASSERTION_MISMATCH com Exit Code 0, sem TypeError); distinção inequívoca de erros de infraestrutura com teste de controle INFRA-CTRL-01; pacote ZIP autônomo com reprodução limpa sem dependências.</td>
+        </tr>
+        <tr>
+          <td><strong>Meta C: Procedimentos Executáveis de Reversão</strong></td>
+          <td><span class="badge badge-success">ATINGIDA</span></td>
+          <td>Procedimento executável de reversão de build Android em 03.1 via GitHub Secrets (sem senhas em texto claro), gate apksigner e atualização in-place adb install -r; procedimento de saneamento da fila offline em 03.7 com inventário, confirmação no servidor, preservação em cofre imutável offline_recovery_vault e tombstones de 90 dias com aceite sintético.</td>
+        </tr>
+        <tr>
+          <td><strong>Meta D: Prontidão para Produção</strong></td>
+          <td><span class="badge badge-blocked">BLOQUEADA / PENDENTE</span></td>
+          <td>Mantida rigorosamente bloqueada. O produto e o banco real permanecem intactos no commit a2df46c. A prontidão para produção depende da implementação e homologação na Etapa 03.</td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="alert-box alert-danger">
+      <strong>BLOQUEIO RIGOROSO DA ETAPA 03:</strong> Nenhuma alteração foi realizada no código-fonte principal ou na infraestrutura de produção. A transição para a Fase 03 depende de autorização expressa do responsável.
+    </div>
+  </div>
+
+  <!-- SEÇÃO 2: TABELA DE TESTES DETERMINÍSTICOS -->
+  <div class="card">
+    <h2>2. Execução Determinística Unificada (45 Testes Aprovados)</h2>
+    <p style="color:var(--text-muted); margin-bottom:1rem;">Suíte oficial unificada contendo todos os testes de calendário, modelo B, segurança ampliada (SEC-03-A a E), engine (ENG-01 a ENG-06) e fluxo natural (NAT-01 a NAT-06):</p>
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Grupo</th>
+          <th>Objetivo / Invariante Testada</th>
+          <th>Tipo</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>CAL-01</code></td>
+          <td>CALENDARIO</td>
+          <td>Cálculo de mês de referência: antes e depois do fechamento</td>
+          <td><span class="badge badge-blue">TESTE ISOLADO EXECUTADO</span></td>
+          <td><span class="status-pass">✓ APROVADO</span></td>
+        </tr>
+        <tr>
+          <td><code>CAL-02</code></td>
+          <td>CALENDARIO</td>
+          <td>Data de vencimento civil: mesmo mês se vencimento > fechamento; mês seguinte se menor</td>
+          <td><span class="badge badge-blue">TESTE ISOLADO EXECUTADO</span></td>
+          <td><span class="status-pass">✓ APROVADO</span></td>
+        </tr>
+        <tr>
+          <td><code>CAL-03</code></td>
+          <td>CALENDARIO</td>
+          <td>Recorrência mensal com dia âncora 31 ajusta para último dia sem derivação</td>
+          <td><span class="badge badge-blue">TESTE ISOLADO EXECUTADO</span></td>
+          <td><span class="status-pass">✓ APROVADO</span></td>
+        </tr>
+        <tr>
+          <td><code>CAL-04</code></td>
+          <td>CALENDARIO</td>
+          <td>Data desconhecida não recebe mês de competência inventado</td>
+          <td><span class="badge badge-blue">TESTE ISOLADO EXECUTADO</span></td>
+          <td><span class="status-pass">✓ APROVADO</span></td>
+        </tr>
+        <tr>
+          <td><code>MON-01</code></td>
+          <td>PARSER_MONETARIO</td>
+          <td>Parser BRL em centavos: vírgula decimal, ponto de milhar e rejeição de ambiguidade</td>
+          <td><span class="badge badge-blue">TESTE ISOLADO EXECUTADO</span></td>
+          <td><span class="status-pass">✓ APROVADO</span></td>
+        </tr>
+        <tr>
+          <td><code>MON-02</code></td>
+          <td>PARSER_MONETARIO</td>
+          <td>Parser de valores por extenso e escala de milhões com normalização Unicode</td>
+          <td><span class="badge badge-blue">TESTE ISOLADO EXECUTADO</span></td>
+          <td><span class="status-pass">✓ APROVADO</span></td>
+        </tr>
+        <tr>
+          <td><code>MON-03</code></td>
+          <td>PARSER_MONETARIO</td>
+          <td>Divisão em parcelas sem perda de centavos (soma invariante)</td>
+          <td><span class="badge badge-blue">TESTE ISOLADO EXECUTADO</span></td>
+          <td><span class="status-pass">✓ APROVADO</span></td>
+        </tr>
+        <tr>
+          <td><code>MON-04</code></td>
+          <td>PARSER_MONETARIO</td>
+          <td>Parser de mensagem com múltiplas movimentações e preservação de esclarecimento</td>
+          <td><span class="badge badge-blue">TESTE ISOLADO EXECUTADO</span></td>
+          <td><span class="status-pass">✓ APROVADO</span></td>
+        </tr>
+        <tr>
+          <td><code>MON-05</code></td>
+          <td>PARSER_MONETARIO</td>
+          <td>Resolução de alvos de correção: rejeição de referência ambígua</td>
+          <td><span class="badge badge-blue">TESTE ISOLADO EXECUTADO</span></td>
+          <td><span class="status-pass">✓ APROVADO</span></td>
+        </tr>
+        <tr>
+          <td><code>MOD-01</code></td>
+          <td>MODELO_B_CARTOES</td>
+          <td>Compra parcelada R$ 1.000 em 10x de R$ 100: segregação entre limite, competência e caixa</td>
+          <td><span class="badge badge-blue">TESTE ISOLADO EXECUTADO</span></td>
+          <td><span class="status-pass">✓ APROVADO</span></td>
+        </tr>
+        <tr>
+          <td><code>MOD-02</code></td>
+          <td>MODELO_B_CARTOES</td>
+          <td>Pagamento da fatura liquida passivo e não gera despesa duplicada no Modelo B</td>
+          <td><span class="badge badge-blue">TESTE ISOLADO EXECUTADO</span></td>
+          <td><span class="status-pass">✓ APROVADO</span></td>
+        </tr>
+        <tr>
+          <td><code>MOD-03</code></td>
+          <td>MODELO_B_CARTOES</td>
+          <td>Antecipação de parcelas futuras com desconto e ajuste de competência</td>
+          <td><span class="badge badge-blue">TESTE ISOLADO EXECUTADO</span></td>
+          <td><span class="status-pass">✓ APROVADO</span></td>
+        </tr>
+        <tr>
+          <td><code>MOD-04</code></td>
+          <td>MODELO_B_CARTOES</td>
+          <td>Estorno parcial: cancelamento de faturas futuras e ajuste de crédito em faturas já fechadas</td>
+          <td><span class="badge badge-blue">TESTE ISOLADO EXECUTADO</span></td>
+          <td><span class="status-pass">✓ APROVADO</span></td>
+        </tr>
+        <tr>
+          <td><code>MOD-05</code></td>
+          <td>MODELO_B_CARTOES</td>
+          <td>Reconciliação SCN-15: descompasso entre limite calculado e informado pelo emissor com preservação de ambos</td>
+          <td><span class="badge badge-blue">TESTE ISOLADO EXECUTADO</span></td>
+          <td><span class="status-pass">✓ APROVADO</span></td>
+        </tr>
+        <tr>
+          <td><code>PRE-01</code></td>
+          <td>PRE_AUTORIZACAO</td>
+          <td>Ciclo completo: HELD reduz limite, CAPTURE converte em compra sem duplicidade</td>
+          <td><span class="badge badge-blue">TESTE ISOLADO EXECUTADO</span></td>
+          <td><span class="status-pass">✓ APROVADO</span></td>
+        </tr>
+        <tr>
+          <td><code>PRE-02</code></td>
+          <td>PRE_AUTORIZACAO</td>
+          <td>Cancelamento ou expiração antes da captura libera limite imediatamente</td>
+          <td><span class="badge badge-blue">TESTE ISOLADO EXECUTADO</span></td>
+          <td><span class="status-pass">✓ APROVADO</span></td>
+        </tr>
+        <tr>
+          <td><code>PRE-03</code></td>
+          <td>PRE_AUTORIZACAO</td>
+          <td>Idempotência e rejeição estrita: captura repetida ignorada, cancelamento após captura rejeitado</td>
+          <td><span class="badge badge-blue">TESTE ISOLADO EXECUTADO</span></td>
+          <td><span class="status-pass">✓ APROVADO</span></td>
+        </tr>
+        <tr>
+          <td><code>PRE-04</code></td>
+          <td>PRE_AUTORIZACAO</td>
+          <td>Captura parcial com liberação automática de saldo residual (ex: posto de combustível R$ 500 -> R$ 380)</td>
+          <td><span class="badge badge-blue">TESTE ISOLADO EXECUTADO</span></td>
+          <td><span class="status-pass">✓ APROVADO</span></td>
+        </tr>
+        <tr>
+          <td><code>PRE-05</code></td>
+          <td>PRE_AUTORIZACAO</td>
+          <td>Capturas parciais múltiplas sucessivas até encerramento do teto reservado</td>
+          <td><span class="badge badge-blue">TESTE ISOLADO EXECUTADO</span></td>
+          <td><span class="status-pass">✓ APROVADO</span></td>
+        </tr>
+        <tr>
+          <td><code>PRE-06</code></td>
+          <td>PRE_AUTORIZACAO</td>
+          <td>Concorrência e ordem inversa: captura tardia após cancelamento é rejeitada e encaminhada para reconciliação</td>
+          <td><span class="badge badge-blue">TESTE ISOLADO EXECUTADO</span></td>
+          <td><span class="status-pass">✓ APROVADO</span></td>
+        </tr>
+        <tr>
+          <td><code>CRD-01</code></td>
+          <td>SALDO_CREDOR_SEGREGADO</td>
+          <td>Alternativa C: Saldo credor não infla limite bancário e não gera poder de compra agregado</td>
+          <td><span class="badge badge-blue">TESTE ISOLADO EXECUTADO</span></td>
+          <td><span class="status-pass">✓ APROVADO</span></td>
+        </tr>
+        <tr>
+          <td><code>SEC-01</code></td>
+          <td>SEGURANCA_WEBHOOK</td>
+          <td>Webhook HMAC: assinatura válida aceita, adulteração de 1 byte no rawBody rejeitada com 401</td>
+          <td><span class="badge badge-blue">TESTE ISOLADO EXECUTADO</span></td>
+          <td><span class="status-pass">✓ APROVADO</span></td>
+        </tr>
+        <tr>
+          <td><code>SEC-02</code></td>
+          <td>SEGURANCA_WEBHOOK</td>
+          <td>Proteção temporal e anti-replay: rejeição de timestamp expirado (>300s) e nonce duplicado</td>
+          <td><span class="badge badge-blue">TESTE ISOLADO EXECUTADO</span></td>
+          <td><span class="status-pass">✓ APROVADO</span></td>
+        </tr>
+        <tr>
+          <td><code>SEC-03</code></td>
+          <td>SEGURANCA_AUTH</td>
+          <td>Firebase ID Token RS256: evidência quíntupla separada (assinatura inválida, aud incorreto, iss incorreto, exp vencido e isolamento de UID)</td>
+          <td><span class="badge badge-blue">TESTE DE CONTRATO EXECUTADO</span></td>
+          <td><span class="status-pass">✓ APROVADO</span></td>
+        </tr>
+        <tr>
+          <td><code>SEC-03-A</code></td>
+          <td>SEGURANCA_AUTH</td>
+          <td>Firebase ID Token RS256: Assinatura adulterada rejeitada (BAD_SIGNATURE)</td>
+          <td><span class="badge badge-blue">TESTE ISOLADO EXECUTADO</span></td>
+          <td><span class="status-pass">✓ APROVADO</span></td>
+        </tr>
+        <tr>
+          <td><code>SEC-03-B</code></td>
+          <td>SEGURANCA_AUTH</td>
+          <td>Firebase ID Token RS256: Audience (aud) incorreto rejeitado (BAD_AUDIENCE)</td>
+          <td><span class="badge badge-blue">TESTE ISOLADO EXECUTADO</span></td>
+          <td><span class="status-pass">✓ APROVADO</span></td>
+        </tr>
+        <tr>
+          <td><code>SEC-03-C</code></td>
+          <td>SEGURANCA_AUTH</td>
+          <td>Firebase ID Token RS256: Issuer (iss) adulterado rejeitado (BAD_ISSUER)</td>
+          <td><span class="badge badge-blue">TESTE ISOLADO EXECUTADO</span></td>
+          <td><span class="status-pass">✓ APROVADO</span></td>
+        </tr>
+        <tr>
+          <td><code>SEC-03-D</code></td>
+          <td>SEGURANCA_AUTH</td>
+          <td>Firebase ID Token RS256: Token expirado rejeitado (EXPIRED)</td>
+          <td><span class="badge badge-blue">TESTE ISOLADO EXECUTADO</span></td>
+          <td><span class="status-pass">✓ APROVADO</span></td>
+        </tr>
+        <tr>
+          <td><code>SEC-03-E</code></td>
+          <td>SEGURANCA_AUTH</td>
+          <td>Firebase ID Token RS256: Isolamento entre inquilinos - Cross-tenant negado (NOT_OWNER)</td>
+          <td><span class="badge badge-blue">TESTE ISOLADO EXECUTADO</span></td>
+          <td><span class="status-pass">✓ APROVADO</span></td>
+        </tr>
+        <tr>
+          <td><code>ENG-01</code></td>
+          <td>IDEMPOTENCIA_CONCORRENCIA</td>
+          <td>Dois workers disputando a mesma partição e rejeição do worker com fencing token obsoleto</td>
+          <td><span class="badge badge-blue">TESTE DE CONTRATO EXECUTADO</span></td>
+          <td><span class="status-pass">✓ APROVADO</span></td>
+        </tr>
+        <tr>
+          <td><code>ENG-02</code></td>
+          <td>IDEMPOTENCIA_CONCORRENCIA</td>
+          <td>Perda de confirmação após commit (UNKNOWN_COMMIT_PENDING) e retry idempotente sem duplicação de efeito</td>
+          <td><span class="badge badge-blue">TESTE DE CONTRATO EXECUTADO</span></td>
+          <td><span class="status-pass">✓ APROVADO</span></td>
+        </tr>
+        <tr>
+          <td><code>ENG-03</code></td>
+          <td>IDEMPOTENCIA_CONCORRENCIA</td>
+          <td>Falha entre lotes e retomada de migração de 1.250 documentos com validação exaustiva por ID/valor, medição de retry por lote e controle negativo de reaplicação redundante</td>
+          <td><span class="badge badge-blue">TESTE DE CONTRATO EXECUTADO</span></td>
+          <td><span class="status-pass">✓ APROVADO</span></td>
+        </tr>
+        <tr>
+          <td><code>ENG-04</code></td>
+          <td>IDEMPOTENCIA_CONCORRENCIA</td>
+          <td>Divergência entre manifesto e dados: bloqueio em quarentena e procedimento explícito de reconciliação</td>
+          <td><span class="badge badge-blue">TESTE DE CONTRATO EXECUTADO</span></td>
+          <td><span class="status-pass">✓ APROVADO</span></td>
+        </tr>
+        <tr>
+          <td><code>ENG-05</code></td>
+          <td>IDEMPOTENCIA_CONCORRENCIA</td>
+          <td>Rejeição de commit financeiro que exceda o limite atômico de 500 writes com preservação total do estado anterior</td>
+          <td><span class="badge badge-blue">TESTE DE CONTRATO EXECUTADO</span></td>
+          <td><span class="status-pass">✓ APROVADO</span></td>
+        </tr>
+        <tr>
+          <td><code>ENG-06</code></td>
+          <td>IDEMPOTENCIA_CONCORRENCIA</td>
+          <td>Lease distribuído com TTL: aquisição, renovação atômica e liberação controlada</td>
+          <td><span class="badge badge-blue">TESTE DE CONTRATO EXECUTADO</span></td>
+          <td><span class="status-pass">✓ APROVADO</span></td>
+        </tr>
+        <tr>
+          <td><code>SNC-01</code></td>
+          <td>SINCRONIZACAO_OFFLINE</td>
+          <td>Fila offline resiliente, tombstones e prevenção contra ressurreição de documento deletado</td>
+          <td><span class="badge badge-blue">TESTE ISOLADO EXECUTADO</span></td>
+          <td><span class="status-pass">✓ APROVADO</span></td>
+        </tr>
+        <tr>
+          <td><code>SNC-02</code></td>
+          <td>SINCRONIZACAO_OFFLINE</td>
+          <td>Cliente offline por mais de 83 dias é colocado em quarentena para resync completo</td>
+          <td><span class="badge badge-blue">TESTE ISOLADO EXECUTADO</span></td>
+          <td><span class="status-pass">✓ APROVADO</span></td>
+        </tr>
+        <tr>
+          <td><code>SNC-03</code></td>
+          <td>MIGRACAO_LEGADA</td>
+          <td>Migração de registros float para centavos com reconciliação estrita e rollback</td>
+          <td><span class="badge badge-blue">TESTE ISOLADO EXECUTADO</span></td>
+          <td><span class="status-pass">✓ APROVADO</span></td>
+        </tr>
+        <tr>
+          <td><code>REP-01</code></td>
+          <td>RELATORIOS_KPI</td>
+          <td>Consistência transversal: soma dos relatórios, gráficos e orçamentos coincide exatamente</td>
+          <td><span class="badge badge-blue">TESTE ISOLADO EXECUTADO</span></td>
+          <td><span class="status-pass">✓ APROVADO</span></td>
+        </tr>
+        <tr>
+          <td><code>NAT-01</code></td>
+          <td>FLUXO_NATURAL</td>
+          <td>Autocorreção na linguagem natural oral com preservação do valor definitivo</td>
+          <td><span class="badge badge-blue">TESTE ISOLADO EXECUTADO</span></td>
+          <td><span class="status-pass">✓ APROVADO</span></td>
+        </tr>
+        <tr>
+          <td><code>NAT-02</code></td>
+          <td>FLUXO_NATURAL</td>
+          <td>Mensagem composta com associação estrita de atributos e isolamento por item</td>
+          <td><span class="badge badge-blue">TESTE ISOLADO EXECUTADO</span></td>
+          <td><span class="status-pass">✓ APROVADO</span></td>
+        </tr>
+        <tr>
+          <td><code>NAT-03</code></td>
+          <td>FLUXO_NATURAL</td>
+          <td>Atribuição tardia estrita e preservação de atributos ausentes (sem PIX, cidade ou cartão fantasma)</td>
+          <td><span class="badge badge-blue">TESTE ISOLADO EXECUTADO</span></td>
+          <td><span class="status-pass">✓ APROVADO</span></td>
+        </tr>
+        <tr>
+          <td><code>NAT-04</code></td>
+          <td>FLUXO_NATURAL</td>
+          <td>Resolução de data civil sob o fuso canônico America/Fortaleza</td>
+          <td><span class="badge badge-blue">TESTE ISOLADO EXECUTADO</span></td>
+          <td><span class="status-pass">✓ APROVADO</span></td>
+        </tr>
+        <tr>
+          <td><code>NAT-05</code></td>
+          <td>FLUXO_NATURAL</td>
+          <td>Consulta de extrato/saldo estritamente sem mutação de estado (READ-ONLY)</td>
+          <td><span class="badge badge-blue">TESTE ISOLADO EXECUTADO</span></td>
+          <td><span class="status-pass">✓ APROVADO</span></td>
+        </tr>
+        <tr>
+          <td><code>NAT-06</code></td>
+          <td>FLUXO_NATURAL</td>
+          <td>Bloqueio estrito de mutação e requisição de esclarecimento sob ambiguidade histórica</td>
+          <td><span class="badge badge-blue">TESTE ISOLADO EXECUTADO</span></td>
+          <td><span class="status-pass">✓ APROVADO</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- SEÇÃO 3: TESTES DE ENGINE DETALHADOS -->
+  <div class="card">
+    <h2>3. Detalhamento Integral dos Testes de Engine (ENG-01 a ENG-06)</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Invariante Arquitetural</th>
+          <th>Cenário Executado e Comportamento Observado</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>ENG-01</code></td>
+          <td>Disputa Concorrente e Fencing Token</td>
+          <td>Worker A adquire lease (token 1). Relógio avança além do TTL (30s) e Worker B assume com token 2. Worker A tenta gravar com token obsoleto: rejeição <code>FENCED (STALE_LEASE)</code>. Worker B grava com <code>COMMITTED</code>.</td>
+          <td><span class="status-pass">✓ APROVADO</span></td>
+        </tr>
+        <tr>
+          <td><code>ENG-02</code></td>
+          <td>Confirmação Perdida e Idempotência</td>
+          <td>Commit gravado com simulação de perda de rede (<code>UNKNOWN_COMMIT_PENDING</code>). Cliente retenta com a mesma chave: replay detectado em <code>processed_requests</code>, recibo original retornado e 0 duplicidades.</td>
+          <td><span class="status-pass">✓ APROVADO</span></td>
+        </tr>
+        <tr>
+          <td><code>ENG-03</code></td>
+          <td>Medição de Retry por Lote e Controle Negativo</td>
+          <td>1.250 docs em 3 chunks. Simulação de perda de confirmação no Chunk 0: retry seguro não reaplica o efeito do Chunk 0 (<code>chunk0RedundantWritesInRetry: 0</code>). Controle negativo detecta 499 escritas redundantes em reaplicação cega. Inversão adversarial de valores com soma idêntica detectada.</td>
+          <td><span class="status-pass">✓ APROVADO</span></td>
+        </tr>
+        <tr>
+          <td><code>ENG-04</code></td>
+          <td>Quarentena por Divergência e Reconciliação</td>
+          <td>Tentativa de retomada com chunk adulterado (valor adulterado no doc 550): detecção imediata de <code>CHUNK_HASH_MISMATCH</code> e quarentena. Procedimento de reconciliação explícito restaura integridade com sucesso.</td>
+          <td><span class="status-pass">✓ APROVADO</span></td>
+        </tr>
+        <tr>
+          <td><code>ENG-05</code></td>
+          <td>Limite Atômico de 500 Writes do Firestore</td>
+          <td>Tentativa de submissão de transação única com 501 mutações. Rejeição imediata com <code>INVALID_ARGUMENT / TOO_MANY_WRITES</code>. Saldo anterior preservado e nenhuma escrita parcial gravada.</td>
+          <td><span class="status-pass">✓ APROVADO</span></td>
+        </tr>
+        <tr>
+          <td><code>ENG-06</code></td>
+          <td>Ciclo de Lease Distribuído com TTL</td>
+          <td>Aquisição por Worker 1 (TTL 30s), bloqueio para Worker 2, renovação atômica heartbeat (token 2, expiração 60s) e liberação controlada sem deadlocks.</td>
+          <td><span class="status-pass">✓ APROVADO</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- SEÇÃO 4: PROVA DOS MUTANTES -->
+  <div class="card">
+    <h2>4. Bateria de Testes de Mutação Causal (10 Mutantes Detectados)</h2>
+    <p style="color:var(--text-muted); margin-bottom:1rem;">Execução isolada de cada mutante com purga prévia de results.json e distinção comprovada contra erros de infraestrutura:</p>
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Arquivo e Mutação Injetada</th>
+          <th>Teste Captor Esperado</th>
+          <th>Classificação</th>
+          <th>Asserção Observada</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>MUT-01</code></td>
+          <td><code>lib/ledger.js</code>: Pagamento de fatura gera despesa duplicada por competência na DRE</td>
+          <td><code>MOD-02</code></td>
+          <td><span class="badge badge-blue">FINANCIAL_RULE_ASSERTION_MISMATCH</span></td>
+          <td><code>{"currentDebt":"b:0","availableLimit":"b:5000...</code></td>
+          <td><span class="status-pass">✓ DETECTADO</span></td>
+        </tr>
+        <tr>
+          <td><code>MUT-02</code></td>
+          <td><code>lib/ledger.js</code>: Cancelamento de pré-autorização aceito mas não libera reserva (limite permanece preso)</td>
+          <td><code>PRE-02</code></td>
+          <td><span class="badge badge-blue">FINANCIAL_RULE_ASSERTION_MISMATCH</span></td>
+          <td><code>{"pending":"b:30000","available":"b:470000","...</code></td>
+          <td><span class="status-pass">✓ DETECTADO</span></td>
+        </tr>
+        <tr>
+          <td><code>MUT-03</code></td>
+          <td><code>lib/money.js</code>: Divisão de parcelas perde os centavos do resto da divisão</td>
+          <td><code>MON-03</code></td>
+          <td><span class="badge badge-blue">FINANCIAL_RULE_ASSERTION_MISMATCH</span></td>
+          <td><code>{"parts3":["b:3333","b:3333","b:3333"],"sum3"...</code></td>
+          <td><span class="status-pass">✓ DETECTADO</span></td>
+        </tr>
+        <tr>
+          <td><code>MUT-04</code></td>
+          <td><code>lib/calendar.js</code>: Compra após o fechamento não avança para o próximo mês de referência da fatura</td>
+          <td><code>CAL-01</code></td>
+          <td><span class="badge badge-blue">FINANCIAL_RULE_ASSERTION_MISMATCH</span></td>
+          <td><code>{"m1":"2026-03","m2":"2026-03"}...</code></td>
+          <td><span class="status-pass">✓ DETECTADO</span></td>
+        </tr>
+        <tr>
+          <td><code>MUT-05</code></td>
+          <td><code>lib/security.js</code>: Webhook HMAC ignora validação criptográfica de corpo adulterado</td>
+          <td><code>SEC-01</code></td>
+          <td><span class="badge badge-blue">FINANCIAL_RULE_ASSERTION_MISMATCH</span></td>
+          <td><code>{"okStatus":200,"badStatus":409,"badCode":"RE...</code></td>
+          <td><span class="status-pass">✓ DETECTADO</span></td>
+        </tr>
+        <tr>
+          <td><code>MUT-06</code></td>
+          <td><code>lib/security.js</code>: Webhook aceita replay de nonce já utilizado sem rejeição HTTP 409</td>
+          <td><code>SEC-02</code></td>
+          <td><span class="badge badge-blue">FINANCIAL_RULE_ASSERTION_MISMATCH</span></td>
+          <td><code>{"staleStatus":401,"staleCode":"STALE_TIMESTA...</code></td>
+          <td><span class="status-pass">✓ DETECTADO</span></td>
+        </tr>
+        <tr>
+          <td><code>MUT-07</code></td>
+          <td><code>lib/security.js</code>: Autorização por UID permite acesso a recursos de outro usuário (quebra de isolamento)</td>
+          <td><code>SEC-03</code></td>
+          <td><span class="badge badge-blue">FINANCIAL_RULE_ASSERTION_MISMATCH</span></td>
+          <td><code>{"badSigCode":"BAD_SIGNATURE","badAudCode":"B...</code></td>
+          <td><span class="status-pass">✓ DETECTADO</span></td>
+        </tr>
+        <tr>
+          <td><code>MUT-08</code></td>
+          <td><code>lib/engine.js</code>: Fencing token obsoleto aceito (falha de concorrência distribuída sob split-brain)</td>
+          <td><code>ENG-01</code></td>
+          <td><span class="badge badge-blue">FINANCIAL_RULE_ASSERTION_MISMATCH</span></td>
+          <td><code>{"w2Status":"COMMITTED","w1Status":"COMMITTED...</code></td>
+          <td><span class="status-pass">✓ DETECTADO</span></td>
+        </tr>
+        <tr>
+          <td><code>MUT-09</code></td>
+          <td><code>lib/sync.js</code>: Tombstone de deleção permite ressuscitação de documento deletado antes de 90 dias</td>
+          <td><code>SNC-01</code></td>
+          <td><span class="badge badge-blue">FINANCIAL_RULE_ASSERTION_MISMATCH</span></td>
+          <td><code>{"status":"REJECTED","code":"NOT_FOUND"}...</code></td>
+          <td><span class="status-pass">✓ DETECTADO</span></td>
+        </tr>
+        <tr>
+          <td><code>MUT-10</code></td>
+          <td><code>lib/reports.js</code>: Relatório por categoria diverge do total mensal da DRE (quebra de integridade contábil)</td>
+          <td><code>REP-01</code></td>
+          <td><span class="badge badge-blue">FINANCIAL_RULE_ASSERTION_MISMATCH</span></td>
+          <td><code>{"totalMar":"b:20000","catSum":"b:10000","cha...</code></td>
+          <td><span class="status-pass">✓ DETECTADO</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- SEÇÃO 5: MAPA NOMINAL DOS 28 COMPONENTES -->
+  <div class="card">
+    <h2>5. Mapa Nominal dos 28 Componentes da Etapa 03</h2>
+    <p style="color:var(--text-muted); margin-bottom:1rem;">Rastreamento nominal exato dos 28 componentes, subetapas vinculadas e critérios de aceite observáveis:</p>
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Componente Arquitetural</th>
+          <th>Caminho Físico no Código</th>
+          <th>Subetapa</th>
+          <th>Critério de Aceite Observável</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>01</td><td>Moeda e Centavos BigInt</td><td><code>src/engine/money.ts</code></td><td><strong>03.2</strong></td><td>Soma exata de parcelas, arredondamento determinístico, 0 imprecisão float</td></tr>
+        <tr><td>02</td><td>Calendário e Fatura</td><td><code>src/engine/calendar.ts</code></td><td><strong>03.2</strong></td><td>Corte civil no dia de fechamento, fuso canônico America/Fortaleza (UTC-3)</td></tr>
+        <tr><td>03</td><td>Ledger Contábil (Modelo B)</td><td><code>src/engine/ledger.ts</code></td><td><strong>03.2</strong></td><td>Segregação estrita entre compras a vencer, faturas fechadas e saldo credor</td></tr>
+        <tr><td>04</td><td>Motor de Concorrência e Leases</td><td><code>src/engine/concurrency.ts</code></td><td><strong>03.4</strong></td><td>Fencing tokens monotônicos, rejeição STALE_LEASE e TTL de 30s</td></tr>
+        <tr><td>05</td><td>Módulo de Segurança e RBAC</td><td><code>src/engine/security.ts</code></td><td><strong>03.1</strong></td><td>Validação quíntupla de tokens RS256, HMAC com timingSafeEqual e UID tenant</td></tr>
+        <tr><td>06</td><td>Relatórios e Invariantes</td><td><code>src/engine/reports.ts</code></td><td><strong>03.2</strong></td><td>Consistência transversal entre DRE por competência, extratos e gráficos</td></tr>
+        <tr><td>07</td><td>Sincronização e Tombstones</td><td><code>src/engine/sync.ts</code></td><td><strong>03.7</strong></td><td>Fila offline com tombstones de 90 dias e quarentena de clientes > 83 dias</td></tr>
+        <tr><td>08</td><td>Parser Semântico Multicanal</td><td><code>src/utils/financialParser.ts</code></td><td><strong>03.6</strong></td><td>Mensagens compostas, schema estrito sem métodos/cidades/cartões fantasmas</td></tr>
+        <tr><td>09</td><td>Co-piloto e Desambiguação</td><td><code>src/utils/aiCopilot.ts</code></td><td><strong>03.6</strong></td><td>Bloqueio de mutação sob ambiguidade e solicitação de esclarecimento</td></tr>
+        <tr><td>10</td><td>Bridge Nativo Android</td><td><code>src/nativeBridge.ts</code></td><td><strong>03.5</strong></td><td>Reconhecimento contínuo de voz com eventos partialResult e finalResult</td></tr>
+        <tr><td>11</td><td>Interface de Chat Web</td><td><code>src/components/Chat/ChatDrawer.tsx</code></td><td><strong>03.6</strong></td><td>Suporte a ditado por voz no browser e comandos em linguagem natural</td></tr>
+        <tr><td>12</td><td>Modal de Lançamentos Multi-item</td><td><code>src/components/Transactions/TransactionModal.tsx</code></td><td><strong>03.6</strong></td><td>Submissão atômica de lotes compostos e preview de parcelamento</td></tr>
+        <tr><td>13</td><td>Visualizador de Faturas Modelo B</td><td><code>src/components/Cards/CardInvoiceView.tsx</code></td><td><strong>03.2</strong></td><td>Separação visual entre faturas abertas, fechadas e pagamentos de fatura</td></tr>
+        <tr><td>14</td><td>Painel Executivo de Saldo</td><td><code>src/components/Dashboard/FinancialSummary.tsx</code></td><td><strong>03.2</strong></td><td>Segregação entre saldo livre em conta e fundos com finalidade comprometida</td></tr>
+        <tr><td>15</td><td>Cliente Seguro Firestore</td><td><code>src/services/firestoreClient.ts</code></td><td><strong>03.3</strong></td><td>Escrita através do motor com auth.uid verificado e regras de transação</td></tr>
+        <tr><td>16</td><td>Fila Offline IndexedDB</td><td><code>src/services/offlineQueue.ts</code></td><td><strong>03.7</strong></td><td>Persistência local criptografada e ressincronização sem duplicações</td></tr>
+        <tr><td>17</td><td>Rota Serverless de Chat</td><td><code>api/chat.ts</code></td><td><strong>03.6</strong></td><td>Ingestão unificada com validação de token Firebase e despacho ao engine</td></tr>
+        <tr><td>18</td><td>Rota Webhook Externa</td><td><code>api/webhook.ts</code></td><td><strong>03.1</strong></td><td>Validação de assinatura HMAC SHA-256 e proteção contra replay</td></tr>
+        <tr><td>19</td><td>Serviço Evolution API</td><td><code>api/services/evolution.ts</code></td><td><strong>03.6</strong></td><td>Adapter para instâncias externas HTTP recebendo mensagens e áudios</td></tr>
+        <tr><td>20</td><td>Verificador de Versão</td><td><code>api/app-version.ts</code></td><td><strong>03.1</strong></td><td>Resposta com versão canônica, hash de build e bloqueio de clientes legados</td></tr>
+        <tr><td>21</td><td>Camada Legada Encapsulada</td><td><code>api/database.ts</code></td><td><strong>03.3</strong></td><td>25 métodos legados encapsulados com verificação obrigatória de tenant UID</td></tr>
+        <tr><td>22</td><td>Servidor WhatsApp Local</td><td><code>bot.cjs</code></td><td><strong>03.6</strong></td><td>Baileys puro com WebSocket local, ffmpeg/Whisper e OCR com tesseract.js</td></tr>
+        <tr><td>23</td><td>Plugin Java Speech Android</td><td><code>NativeSpeechRecognizerPlugin.java</code></td><td><strong>03.5</strong></td><td>Ditado de voz contínuo via SpeechRecognizer nativo no Android</td></tr>
+        <tr><td>24</td><td>Configuração Capacitor Saneada</td><td><code>android/app/capacitor.config.json</code></td><td><strong>03.5</strong></td><td>Desativação de cleartext e allowMixedContent (comunicação segura HTTPS/WSS)</td></tr>
+        <tr><td>25</td><td>Configuração Gradle Android</td><td><code>android/app/build.gradle</code></td><td><strong>03.1</strong></td><td>Assinatura via variáveis de ambiente sem credenciais expostas em código</td></tr>
+        <tr><td>26</td><td>Workflow CI/CD GitHub Actions</td><td><code>.github/workflows/android-build.yml</code></td><td><strong>03.1</strong></td><td>Build automatizado do APK com injeção de secrets e geração de release</td></tr>
+        <tr><td>27</td><td>Script de Migração em Lote</td><td><code>scripts/migration/bulk_migration.ts</code></td><td><strong>03.8</strong></td><td>Migração em lotes de 499 docs + 1 manifesto com snapshot de backup prévio</td></tr>
+        <tr><td>28</td><td>Script de Rollback e Restauração</td><td><code>scripts/migration/rollback_restore.ts</code></td><td><strong>03.8</strong></td><td>Restauração reversa a partir de snapshots salvos em _pre_migration_backup</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- SEÇÃO 6: PLANO EXECUTÁVEL DAS 10 SUBETAPAS -->
+  <div class="card">
+    <h2>6. Plano Executável da Etapa 03 (Subetapas 03.1 a 03.10)</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Subetapa</th>
+          <th>Escopo Principal</th>
+          <th>Entregáveis Observáveis</th>
+          <th>Procedimento Executável de Reversão (Rollback)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>03.1</code></td>
+          <td>Sanitização de Senhas Android e CI/CD</td>
+          <td>Senhas migradas para GitHub Secrets; JVM local configurada; verificação apksigner.</td>
+          <td>Restauração parametrizada por secrets via workflow (sem senhas em texto claro), preservando kyro.keystore idêntico. Gate apksigner aborta se certificados divergirem; aceite in-place com adb install -r.</td>
+        </tr>
+        <tr>
+          <td><code>03.2</code></td>
+          <td>Núcleo Contábil Unificado (Modelo B)</td>
+          <td>Módulo <code>src/engine/</code> com Money (centavos), Calendar e Ledger unificado.</td>
+          <td>Preservação das funções legadas em paralelo com roteamento por feature flag.</td>
+        </tr>
+        <tr>
+          <td><code>03.3</code></td>
+          <td>Encapsulamento do api/database.ts</td>
+          <td>25 métodos legados encapsulados sob validação estrita de auth.uid.</td>
+          <td>Restauração do arquivo api/database.ts original do commit a2df46c.</td>
+        </tr>
+        <tr>
+          <td><code>03.4</code></td>
+          <td>Motor de Concorrência e Leases</td>
+          <td>Controle de concorrência com fencing tokens no Firestore.</td>
+          <td>Desativação do flag de leases via Remote Config.</td>
+        </tr>
+        <tr>
+          <td><code>03.5</code></td>
+          <td>Saneamento de Segurança no APK Android</td>
+          <td>Desativação de cleartext e allowMixedContent em capacitor.config.json.</td>
+          <td>Reversão do capacitor.config.json para versão original.</td>
+        </tr>
+        <tr>
+          <td><code>03.6</code></td>
+          <td>Convergência do Canal WhatsApp</td>
+          <td>Baileys puro e webhook HTTP convergindo para o mesmo parser e engine.</td>
+          <td>Isolamento do bot.cjs em modo de consulta somente-leitura.</td>
+        </tr>
+        <tr>
+          <td><code>03.7</code></td>
+          <td>Sincronização Offline e Tombstones</td>
+          <td>Fila offline resiliente com tombstones de 90 dias e cofre de contingência.</td>
+          <td>Protocolo em 4 passos: (1) Inventário da fila IndexedDB; (2) Confirmação em processed_requests; (3) Preservação em offline_recovery_vault; (4) Tombstones de 90 dias. Aceite sintético comprovado.</td>
+        </tr>
+        <tr>
+          <td><code>03.8</code></td>
+          <td>Migração Histórica Particionada</td>
+          <td>Ensaio em chunks de 499 docs + 1 manifesto com snapshots imutáveis prévios.</td>
+          <td>Restauração reversa a partir da subcoleção _pre_migration_backup.</td>
+        </tr>
+        <tr>
+          <td><code>03.9</code></td>
+          <td>Homologação Integrada Multicanal</td>
+          <td>Testes reais de ponta a ponta com áudio, mensagens compostas e offline.</td>
+          <td>Correção pontual sem deploy em produção.</td>
+        </tr>
+        <tr>
+          <td><code>03.10</code></td>
+          <td>Auditoria Final e Build 43 (PR.043)</td>
+          <td>Emissão do APK final homologado e liberação formal da Meta D.</td>
+          <td>Manutenção do PR.041 ativo na Vercel e na Release GitHub.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- SEÇÃO 7: ACEITE SINTÉTICO COMPROVADO DA REVERSÃO OFFLINE (SUBETAPA 03.7) -->
+  <div class="card" style="border-left: 4px solid var(--accent);">
+    <h2>7. Aceite Sintético Comprovado da Reversão Offline (Subetapa 03.7)</h2>
+    <p style="color:var(--text-muted); margin-bottom:1rem;">
+      Simulação autônoma reproduzível do procedimento documentado em 4 passos com uma fila sintética contendo uma operação pendente, uma já confirmada no servidor e uma referente a registro excluído:
+    </p>
+    <div style="background:#1e293b; padding:1rem; border-radius:0.5rem; margin-bottom:1.5rem; font-family:monospace; font-size:0.9rem;">
+      <span style="color:#a5f3fc;">$ node test_offline_reversal.js</span><br>
+      <span style="color:#10b981;">&gt;&gt;&gt; RESULTADO FINAL DO ACEITE SINTÉTICO: APROVADO (100% CONFORME) &lt;&lt;&lt;</span>
+    </div>
+
+    <h3>A. Comparação Objetiva do Estado: Antes vs Depois</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Componente / Dimensão</th>
+          <th>Estado Antes da Reversão</th>
+          <th>Estado Depois da Reversão</th>
+          <th>Efeito Comprovado na Auditoria</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Fila Local do Cliente (IndexedDB)</strong></td>
+          <td>3 operações pendentes</td>
+          <td>0 operações pendentes</td>
+          <td><span class="status-pass">✓ Fila saneada sem perda de dados</span></td>
+        </tr>
+        <tr>
+          <td><strong>Cofre de Contingência (<code>offline_recovery_vault</code>)</strong></td>
+          <td>0 itens</td>
+          <td>1 item preservado imutável</td>
+          <td><span class="status-pass">✓ <code>mut-pending-01</code> intacto e recuperável</span></td>
+        </tr>
+        <tr>
+          <td><strong>Servidor: Documentos Ativos</strong></td>
+          <td>1 doc (<code>tx-pix-120</code>)</td>
+          <td>1 doc (<code>tx-pix-120</code>)</td>
+          <td><span class="status-pass">✓ Zero documentos corrompidos ou fantasmas</span></td>
+        </tr>
+        <tr>
+          <td><strong>Servidor: Processed Requests</strong></td>
+          <td>3 recibos aplicados</td>
+          <td>3 recibos aplicados</td>
+          <td><span class="status-pass">✓ Zero chamadas redundantes (sem segundo efeito)</span></td>
+        </tr>
+        <tr>
+          <td><strong>Servidor: Tombstones Ativos</strong></td>
+          <td>1 tombstone (<code>tx-old-deleted</code>)</td>
+          <td>1 tombstone (<code>tx-old-deleted</code>)</td>
+          <td><span class="status-pass">✓ Registro excluído permanece excluído</span></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3 style="margin-top:1.5rem;">B. As 3 Invariantes Arquiteturais Comprovadas</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Invariante Exigida</th>
+          <th>Comportamento Observado na Prova</th>
+          <th>Resultado</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>1. Operação pendente continua recuperável com a mesma identidade</strong></td>
+          <td>O método <code>vault.recover('mut-pending-01')</code> recupera a operação original exata (<code>tx-mercado-75</code>, R$ 75,00 em centavos). Na retomada, o cliente reenviou e comitou com sucesso no servidor com status <code>APPLIED</code>.</td>
+          <td><span class="status-pass">✓ COMPROVADO</span></td>
+        </tr>
+        <tr>
+          <td><strong>2. Operação confirmada não ganha um segundo efeito</strong></td>
+          <td>A operação <code>mut-confirmed-02</code> (já presente em <code>processed_requests</code>) foi descartada da fila local sem novo envio. O servidor não aplicou nenhuma mutação adicional no saldo.</td>
+          <td><span class="status-pass">✓ COMPROVADO</span></td>
+        </tr>
+        <tr>
+          <td><strong>3. Registro excluído continua excluído</strong></td>
+          <td>A tentativa de edição <code>mut-deleted-03</code> foi confrontada com o tombstone de 90 dias do servidor e rejeitada com <code>TOMBSTONED_NO_RESURRECTION</code>. O documento permanece inexistente em <code>server.docs</code>.</td>
+          <td><span class="status-pass">✓ COMPROVADO</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <footer style="border-top:1px solid var(--border); padding-top:2rem; margin-top:3rem; text-align:center; color:var(--text-muted); font-size:0.875rem;">
+    <p><strong>KYRO Finance | Private Finance</strong> — Certificação Definitiva da Fase 02</p>
+    <p style="margin-top:0.25rem;">Relatório Oficial Publicado na Vercel: <a href="https://kyro-fase-02-encerramento.vercel.app/" target="_blank" style="color:var(--accent);">https://kyro-fase-02-encerramento.vercel.app/</a></p>
+  </footer>
+</div>
+</body>
+</html>

@@ -268,8 +268,8 @@ export function parseDynamicFinancialMessage(
     lower.includes('todo mês') ||
     lower.includes('todo mes');
 
-  // 6. Forma de Pagamento
-  let method: PaymentMethod = 'PIX';
+  // 6. Forma de Pagamento (Preserva ausência sem presumir PIX cego)
+  let method: PaymentMethod = 'Outro';
   if (cardName || lower.includes('crédito') || lower.includes('credito') || lower.includes('cartão') || lower.includes('cartao')) {
     method = 'Crédito';
   } else if (lower.includes('débito') || lower.includes('debito')) {

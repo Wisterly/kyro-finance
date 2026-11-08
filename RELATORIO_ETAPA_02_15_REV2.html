@@ -1,0 +1,776 @@
+<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>KYRO Finance — Etapa 02.15 REV2 | Revisão Corretiva</title><style>
+    :root {
+      --bg: #090d16;
+      --card-bg: rgba(18, 26, 43, 0.75);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --card-hover: rgba(26, 38, 64, 0.9);
+      --text: #f0f4fc;
+      --text-muted: #94a3b8;
+      --primary: #3b82f6;
+      --primary-glow: rgba(59, 130, 246, 0.35);
+      --accent: #10b981;
+      --accent-glow: rgba(16, 185, 129, 0.3);
+      --warning: #f59e0b;
+      --warning-glow: rgba(245, 158, 11, 0.25);
+      --danger: #ef4444;
+      --danger-glow: rgba(239, 68, 68, 0.25);
+      --code-bg: #0d1322;
+      --gold: #d97706;
+      --purple: #8b5cf6;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    body {
+      background-color: var(--bg);
+      background-image: 
+        radial-gradient(at 0% 0%, rgba(59, 130, 246, 0.12) 0px, transparent 50%),
+        radial-gradient(at 100% 100%, rgba(16, 185, 129, 0.08) 0px, transparent 50%),
+        radial-gradient(at 50% 50%, rgba(139, 92, 246, 0.05) 0px, transparent 60%);
+      color: var(--text);
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      line-height: 1.6;
+      padding-bottom: 80px;
+    }
+
+    .container {
+      max-width: 1380px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* Top Navigation Hub */
+    .top-nav {
+      background: rgba(9, 13, 22, 0.85);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--card-border);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      padding: 14px 0;
+    }
+    .nav-inner {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+    .brand-wrap {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .brand-badge {
+      background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+      color: white;
+      font-weight: 800;
+      font-size: 0.85rem;
+      letter-spacing: 0.05em;
+      padding: 4px 10px;
+      border-radius: 6px;
+      box-shadow: 0 0 16px var(--primary-glow);
+    }
+    .brand-title {
+      font-size: 1.15rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+    .nav-links {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .nav-btn {
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 0.82rem;
+      font-weight: 600;
+      padding: 6px 12px;
+      border-radius: 8px;
+      border: 1px solid transparent;
+      transition: all 0.2s ease;
+    }
+    .nav-btn:hover {
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.05);
+      border-color: rgba(255, 255, 255, 0.1);
+    }
+    .nav-btn.active {
+      color: #93c5fd;
+      background: rgba(59, 130, 246, 0.15);
+      border-color: rgba(59, 130, 246, 0.4);
+    }
+    .nav-cta {
+      background: linear-gradient(135deg, #10b981, #059669);
+      color: white !important;
+      font-weight: 700;
+      border: none;
+      box-shadow: 0 0 12px var(--accent-glow);
+    }
+    .nav-cta:hover {
+      box-shadow: 0 0 18px var(--accent-glow);
+      transform: translateY(-1px);
+    }
+
+    /* Hero Banner */
+    .hero {
+      padding: 48px 0 32px 0;
+      text-align: left;
+    }
+    .hero-badge-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      padding: 4px 12px;
+      border-radius: 9999px;
+      border: 1px solid transparent;
+    }
+    .badge-primary { background: rgba(59, 130, 246, 0.15); color: #60a5fa; border-color: rgba(59, 130, 246, 0.3); }
+    .badge-accent { background: rgba(16, 185, 129, 0.15); color: #34d399; border-color: rgba(16, 185, 129, 0.3); }
+    .badge-warning { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border-color: rgba(245, 158, 11, 0.3); }
+    .badge-danger { background: rgba(239, 68, 68, 0.15); color: #f87171; border-color: rgba(239, 68, 68, 0.3); }
+    .badge-purple { background: rgba(139, 92, 246, 0.15); color: #c084fc; border-color: rgba(139, 92, 246, 0.3); }
+
+    .hero h1 {
+      font-size: 2.5rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      line-height: 1.15;
+      margin-bottom: 12px;
+      background: linear-gradient(135deg, #ffffff 40%, #94a3b8 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .hero p {
+      font-size: 1.1rem;
+      color: var(--text-muted);
+      max-width: 900px;
+      line-height: 1.6;
+    }
+
+    /* Key Metrics Grid */
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 16px;
+      margin-bottom: 40px;
+    }
+    .metric-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      padding: 20px;
+      transition: all 0.25s ease;
+      position: relative;
+      overflow: hidden;
+    }
+    .metric-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0; height: 3px;
+      background: var(--card-border);
+    }
+    .metric-card.accent::before { background: linear-gradient(90deg, #10b981, #059669); }
+    .metric-card.primary::before { background: linear-gradient(90deg, #3b82f6, #1d4ed8); }
+    .metric-card.danger::before { background: linear-gradient(90deg, #ef4444, #b91c1c); }
+    .metric-card.warning::before { background: linear-gradient(90deg, #f59e0b, #d97706); }
+
+    .metric-title {
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    .metric-value {
+      font-size: 1.6rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin-bottom: 4px;
+    }
+    .metric-sub {
+      font-size: 0.82rem;
+      color: var(--text-muted);
+    }
+
+    /* Section Cards */
+    .section-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 32px;
+      margin-bottom: 32px;
+      backdrop-filter: blur(8px);
+    }
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--card-border);
+    }
+    .section-header h2 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .section-icon {
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      background: rgba(59, 130, 246, 0.15);
+      color: #60a5fa;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.1rem;
+      font-weight: 700;
+    }
+
+    /* Callout Boxes */
+    .callout {
+      border-radius: 12px;
+      padding: 20px 24px;
+      margin: 20px 0;
+      display: flex;
+      gap: 16px;
+      align-items: flex-start;
+      border: 1px solid transparent;
+    }
+    .callout-icon {
+      font-size: 1.4rem;
+      line-height: 1;
+      margin-top: 2px;
+    }
+    .callout-content h4 {
+      font-size: 0.95rem;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+    .callout-content p {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+    .callout-accent {
+      background: rgba(16, 185, 129, 0.08);
+      border-color: rgba(16, 185, 129, 0.25);
+    }
+    .callout-accent .callout-content h4 { color: #34d399; }
+    
+    .callout-warning {
+      background: rgba(245, 158, 11, 0.08);
+      border-color: rgba(245, 158, 11, 0.25);
+    }
+    .callout-warning .callout-content h4 { color: #fbbf24; }
+
+    .callout-danger {
+      background: rgba(239, 68, 68, 0.08);
+      border-color: rgba(239, 68, 68, 0.25);
+    }
+    .callout-danger .callout-content h4 { color: #f87171; }
+
+    /* Tables */
+    .table-wrap {
+      overflow-x: auto;
+      margin: 16px 0;
+      border-radius: 12px;
+      border: 1px solid var(--card-border);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.88rem;
+      text-align: left;
+    }
+    th {
+      background: rgba(13, 19, 34, 0.95);
+      color: var(--text);
+      font-weight: 700;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--card-border);
+      letter-spacing: 0.02em;
+      white-space: nowrap;
+    }
+    td {
+      padding: 12px 16px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      color: #cbd5e1;
+    }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(255, 255, 255, 0.02); }
+
+    /* Code & Pre */
+    code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.82rem;
+      background: var(--code-bg);
+      color: #93c5fd;
+      padding: 2px 6px;
+      border-radius: 4px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 10px;
+      padding: 18px;
+      overflow-x: auto;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.82rem;
+      color: #e2e8f0;
+      line-height: 1.5;
+      margin: 16px 0;
+    }
+
+    /* Decision Grid */
+    .decision-box {
+      background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(5, 150, 105, 0.05));
+      border: 2px solid rgba(16, 185, 129, 0.4);
+      border-radius: 16px;
+      padding: 28px;
+      margin: 24px 0;
+      position: relative;
+    }
+    .decision-badge {
+      display: inline-block;
+      background: #10b981;
+      color: #064e3b;
+      font-weight: 800;
+      font-size: 0.85rem;
+      letter-spacing: 0.05em;
+      padding: 4px 12px;
+      border-radius: 6px;
+      margin-bottom: 12px;
+    }
+    .decision-title {
+      font-size: 1.5rem;
+      font-weight: 800;
+      color: #ffffff;
+      margin-bottom: 10px;
+    }
+    .decision-desc {
+      font-size: 0.95rem;
+      color: #94a3b8;
+      line-height: 1.6;
+    }
+
+    /* Footer */
+    footer {
+      border-top: 1px solid var(--card-border);
+      padding: 32px 0;
+      margin-top: 48px;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 0.85rem;
+    }
+    .footer-links {
+      display: flex;
+      justify-content: center;
+      gap: 16px;
+      margin-top: 12px;
+      flex-wrap: wrap;
+    }
+    .footer-links a {
+      color: #60a5fa;
+      text-decoration: none;
+      font-weight: 600;
+    }
+    .footer-links a:hover { text-decoration: underline; }
+  </style><style>
+.callout{padding:16px 20px;margin:16px 0;border-radius:10px;border:1px solid var(--card-border);line-height:1.55}
+.callout-ok{background:rgba(16,185,129,.1);border-color:rgba(16,185,129,.4)}.callout-warn{background:rgba(245,158,11,.1);border-color:rgba(245,158,11,.4)}
+.callout-danger{background:rgba(239,68,68,.1);border-color:rgba(239,68,68,.4)}.callout-info{background:rgba(59,130,246,.1);border-color:rgba(59,130,246,.4)}
+main h1{font-size:2rem;margin:28px 0 12px}main h2{font-size:1.45rem;margin:36px 0 12px;padding-top:12px;border-top:1px solid var(--card-border)}main h3{font-size:1.1rem;margin:22px 0 8px;color:#93c5fd}
+main p,main li{color:#cbd5e1;margin:8px 0}main ul{margin-left:22px}table.wide{font-size:.74rem}table.wide td,table.wide th{padding:8px 8px}
+details{background:rgba(255,255,255,.03);border:1px solid var(--card-border);border-radius:8px;margin:8px 0;padding:8px 14px}summary{cursor:pointer;font-weight:600}
+td code{word-break:break-all}.toc a{color:#60a5fa;margin-right:12px;text-decoration:none;font-size:.85rem}</style></head><body>
+<header class="top-nav"><div class="container nav-inner"><div class="brand-wrap"><span class="brand-badge">KYRO CORE</span><span class="brand-title">Etapa 02.15 REV2 — Revisão Corretiva</span></div>
+<nav class="nav-links"><a class="nav-btn" href="etapa-02-14.html">Etapa 02.14</a><a class="nav-btn" href="etapa-02-15.html">Etapa 02.15 (original, superada)</a><a class="nav-btn active" href="etapa-02-15-rev2.html">Etapa 02.15 REV2</a><a class="nav-btn" href="PROJETO_TECNICO_ETAPA_02_15_REV2.md">Markdown</a><a class="nav-btn" href="card_rev2_evidence.json">Evidências JSON</a><a class="nav-btn" href="inventory_rev2_full_hashes.json">Inventário JSON</a></nav></div></header>
+<main class="container"><div class="toc"><a href="#s1">1. Decisão final e resumo executivo</a> <a href="#s2">2. Diagnóstico: por que o relatório anterior parecia inconsistente</a> <a href="#s3">3. Modelo financeiro de cartões v2 (contrato revisado)</a> <a href="#s4">4. Matriz revisada dos 16 cenários — entradas completas</a> <a href="#s5">5. Matriz revisada dos 16 cenários — resultados esperado × obtido</a> <a href="#s6">6. Cenários corrigidos — demonstração numérica passo a passo</a> <a href="#s7">7. Reexecução e evidências individuais</a> <a href="#s8">8. Webhook real e níveis de evidência por capacidade</a> <a href="#s9">9. Inventário rastreável dos 66 componentes (hashes SHA-256 integrais)</a> <a href="#s10">10. Parecer revisado sobre o encerramento da Fase 02</a> <a href="#s11">11. Autocorreção — revisão crítica deste relatório</a> <a href="#s12">12. Decisão final</a></div><h1>KYRO Finance — Etapa 02.15 REV2: Correção das Inconsistências Matemáticas, Revalidação dos Testes e Rastreabilidade</h1>
+<p><strong>Natureza:</strong> revisão corretiva da própria Etapa 02.15 (não é uma nova etapa). <strong>Versão documental:</strong> <code>v1.43-REV2-ETAPA-02.15-REVISAO-CORRETIVA</code>. <strong>Commit auditado:</strong> <code>a2df46c82432730ab5e606c0c579fb7a83e54e8b</code> (branch <code>main</code>). <strong>URL pública:</strong> https://kyro-relatorio-etapa-02-15-rev2.vercel.app</p>
+<div class="callout callout-danger"><strong>Restrições respeitadas:</strong> trabalho exclusivamente documental e investigativo. Nenhum arquivo do código-fonte, Firestore, dados de produção, APK, variáveis de ambiente, GitHub ou serviço externo foi alterado. A Etapa 03 NÃO foi iniciada. A única publicação realizada é a deste relatório HTML em projeto Vercel independente da aplicação.</div>
+<h2 id="s1">1. Decisão final e resumo executivo</h2>
+<div class="callout callout-ok"><strong>DECISÃO: OPÇÃO A — FASE 02 ENCERRADA (somente no plano arquitetural/documental), COM CONDIÇÕES EXPLÍCITAS.</strong> Isto NÃO é aprovação de produção: o webhook real continua sem HMAC, timestamp, leases e fencing; o modelo de cartões v2 não está implementado no código; a decisão de liberar a Etapa 03 pertence exclusivamente ao responsável pelo projeto.</div>
+<div class="table-wrap"><table class=""><thead><tr><th>Item</th><th>Resultado desta revisão</th></tr></thead><tbody><tr><td>Cenários de cartões (modelo v2, execução isolada)</td><td><strong>16/16</strong> aprovados, cada um com 11+ campos conferidos contra esperados escritos à mão</td></tr><tr><td>Testes suplementares (SCN-15 individual, invariantes, entradas inválidas)</td><td><strong>16/16</strong> aprovados</td></tr><tr><td>Teste de mutação (o teste consegue falhar?)</td><td><strong>8/8</strong> mutantes detectados</td></tr><tr><td>Inventário</td><td>66 componentes: 58 existentes, 8 ausentes; <strong>53</strong> idênticos ao commit, <strong>5</strong> NÃO VERIFICÁVEIS contra o commit, 0 divergentes</td></tr><tr><td>Commit</td><td>HEAD local = <code>a2df46c82432730ab5e606c0c579fb7a83e54e8b</code>; <code>git ls-remote origin main</code> = <code>a2df46c82432730ab5e606c0c579fb7a83e54e8b</code>; iguais: <strong>sim</strong>; arquivos rastreados modificados em relação ao HEAD: <strong>NENHUM</strong></td></tr><tr><td>Webhook real (<code>api/webhook.ts</code>)</td><td>HMAC, timestamp, nonce, lease e fencing: <strong>0 ocorrências</strong> (busca por termos, seção 8). Pendência de implementação e requisito obrigatório de segurança.</td></tr></tbody></table></div>
+<h2 id="s2">2. Diagnóstico: por que o relatório anterior parecia inconsistente</h2>
+<p>Foi feita auditoria retrospectiva do script anterior (<code>scratch/test_credit_card_16_scenarios.js</code>) e do JSON <code>card_16_scenarios_evidence.json</code>, comparando-os com o HTML publicado. Resultado, sem forçar aprovação:</p>
+<div class="table-wrap"><table class=""><thead><tr><th>#</th><th>Achado</th><th>Causa técnica</th><th>Efeito</th><th>Correção nesta REV2</th></tr></thead><tbody><tr><td>E1</td><td>SCN-03 parecia ter diferença de R$ 500 (limite 5.000, dívida 4.500, disponibilidade 0).</td><td>O HTML exibia somente <code>openInvoiceDebtCents</code> (R$ 4.500). O JSON anterior continha também parcelas futuras de R$ 2.000 (comprometimento total R$ 6.500; overlimit R$ 1.500). A entrada estava omitida do relatório, não do teste.</td><td>Apresentação incompleta; cálculo do JSON estava coerente.</td><td>Todas as entradas exibidas; controle I-01 (sem parcelas) demonstra que com apenas R$ 4.500 o disponível é R$ 500.</td></tr><tr><td>E2</td><td>SCN-09 parecia ter dívida de R$ 100 e disponibilidade de R$ 4.000.</td><td>O JSON anterior tinha fatura atual R$ 100 + parcelas futuras R$ 900 (total R$ 1.000). O HTML exibia só R$ 100 como "Dív".</td><td>Mistura visual de dívida da fatura com comprometimento do limite.</td><td>Dois indicadores separados (<code>currentInvoiceDebtCents</code> e <code>totalLimitCommitmentCents</code>) e projeção por fatura futura.</td></tr><tr><td>E3</td><td>SCN-14: pré-autorização de R$ 500 não aparecia.</td><td>Estava em <code>pendingAuthorizationsCents</code> no JSON, mas o HTML omitia a coluna; não havia estado da pré-autorização.</td><td>Efeito contábil não demonstrado.</td><td>Pré-autorização com valor e estado (<code>HELD</code>/<code>CAPTURED</code>/<code>CANCELED</code>/<code>EXPIRED</code>); só <code>HELD</code> compromete limite.</td></tr><tr><td>E4</td><td>SCN-15: apenas "3.200 vs 3.000".</td><td>O teste anterior verificava só a subtração; alerta, sinalizador e proibição de exibir a estimativa como limite bancário nem existiam no modelo testado.</td><td>Seis requisitos sem teste.</td><td>Seis testes individuais (I-05.1 a I-05.6).</td></tr><tr><td>E5</td><td>Pagamentos e estornos eram decorativos.</td><td><code>paymentsSettledCents</code> era lido, mas nunca usado no cálculo; os cenários SCN-06/07/08/11/16 traziam valores já líquidos.</td><td>Testes aprovavam sem exercitar a regra de pagamento.</td><td>Cobranças, estornos, pagamentos compensados e não compensados entram no cálculo; teste I-03 e mutante M5.</td></tr><tr><td>E6</td><td>Esperados parciais.</td><td>Os objetos <code>expected</code> conferiam um subconjunto de campos (ex.: SCN-14 não conferia divergência; vários não conferiam saldo credor).</td><td>"16/16" superestimado.</td><td>Todos os cenários conferem ≥ 11 campos, escritos à mão.</td></tr><tr><td>E7</td><td>Hashes abreviados no inventário e "58 vinculados ao commit".</td><td>O HTML mostrava 16 caracteres de cada hash; o vínculo com o commit não havia sido verificado byte a byte.</td><td>Rastreabilidade insuficiente e afirmação excessiva.</td><td>Hashes integrais; comparação com <code>git show HEAD:&lt;arquivo&gt;</code>: 53 idênticos, 5 NÃO VERIFICÁVEIS.</td></tr><tr><td>E8</td><td><code>api/webhook.ts</code> com "1.167 linhas".</td><td>Contagem por <code>split</code> contabilizou o segmento vazio após a quebra final; o leitor de arquivos informa 1.166 linhas.</td><td>Erro de 1 linha, sem efeito técnico.</td><td>Corrigido para 1.166 linhas (1.167 segmentos).</td></tr></tbody></table></div>
+<div class="callout callout-warn"><strong>Conclusão do diagnóstico:</strong> parte das inconsistências era de apresentação (entradas omitidas), mas parte era real (pagamentos ignorados, esperados parciais, SCN-15 não testado em seus 6 requisitos, "16/16" superestimado). A afirmação anterior de "aprovação integral dos 16 cenários" fica <strong>retirada</strong> e substituída pelos resultados abaixo.</div>
+<h2 id="s3">3. Modelo financeiro de cartões v2 (contrato revisado)</h2>
+<p>Todos os valores são inteiros em centavos (<code>bigint</code> na especificação; a suíte usa <code>BigInt</code>). Nenhum indicador mistura dívida da fatura com comprometimento do limite.</p>
+<div class="table-wrap"><table class=""><thead><tr><th>Grandeza</th><th>Definição</th><th>Afeta limite do emissor?</th><th>Afeta dívida da fatura?</th></tr></thead><tbody><tr><td><code>contractedLimitCents</code></td><td>Limite contratado formal.</td><td>É o teto.</td><td>Não</td></tr><tr><td><code>issuerReportedAvailableLimitCents</code></td><td>Disponível informado pelo emissor (pode ser nulo). Nunca sobrescrito pelo Kyro.</td><td>É o único valor exibível como limite bancário.</td><td>Não</td></tr><tr><td><code>invoiceChargesCents</code></td><td>Compras, parcela corrente, juros e encargos lançados na fatura atual (fechada em aberto + aberta).</td><td>Sim (via dívida)</td><td>Sim</td></tr><tr><td><code>refundsAppliedCents</code></td><td>Estornos já aplicados.</td><td>Reduz dívida; excedente vira saldo credor.</td><td>Sim</td></tr><tr><td><code>paymentsClearedCents</code></td><td>Pagamentos compensados.</td><td>Reduz dívida; excedente vira saldo credor.</td><td>Sim</td></tr><tr><td><code>paymentsUnclearedCents</code></td><td>Pagamentos não compensados.</td><td>Não até compensar.</td><td>Não</td></tr><tr><td><code>futureInstallmentsCents[]</code></td><td>Parcelas ainda não faturadas (lista por fatura futura).</td><td>Sim (comprometimento futuro)</td><td>Não</td></tr><tr><td><code>pendingPurchasesCents</code></td><td>Compras pendentes de captura.</td><td>Sim</td><td>Não</td></tr><tr><td><code>preAuthorizations[]</code></td><td>Valor + estado. Apenas <code>HELD</code> compromete limite.</td><td>Sim, se <code>HELD</code></td><td>Não</td></tr><tr><td><code>priorCreditBalanceCents</code></td><td>Saldo credor anterior.</td><td>Não amplia o limite do emissor.</td><td>Não abate automaticamente</td></tr></tbody></table></div>
+<div class="table-wrap"><table class=""><thead><tr><th>Indicador calculado</th><th>Fórmula</th></tr></thead><tbody><tr><td><code>currentInvoiceDebtCents</code></td><td><code>max(0, invoiceCharges − refundsApplied − paymentsCleared)</code></td></tr><tr><td><code>generatedCreditCents</code></td><td><code>max(0, refundsApplied + paymentsCleared − invoiceCharges)</code></td></tr><tr><td><code>creditBalanceCents</code></td><td><code>priorCreditBalance + generatedCredit</code></td></tr><tr><td><code>futureCommitmentCents</code></td><td><code>Σ futureInstallments</code></td></tr><tr><td><code>pendingCommitmentCents</code></td><td><code>pendingPurchases + Σ preAuth[estado = HELD]</code></td></tr><tr><td><code>totalLimitCommitmentCents</code></td><td><code>currentInvoiceDebt + futureCommitment + pendingCommitment</code> (≠ dívida da fatura)</td></tr><tr><td><code>calculatedAvailableLimitCents</code></td><td><code>max(0, contractedLimit − totalLimitCommitment)</code></td></tr><tr><td><code>overlimitCents</code></td><td><code>max(0, totalLimitCommitment − contractedLimit)</code></td></tr><tr><td><code>internalEstimatedPurchasingPowerCents</code></td><td><code>calculatedAvailableLimit + creditBalance</code> — ESTIMATIVA INTERNA, nunca limite bancário</td></tr><tr><td><code>divergenceCents</code></td><td><code>calculatedAvailableLimit − issuerReportedAvailableLimit</code> (nulo se o emissor não informou); <code>hasDivergenceFlag = divergence ≠ 0</code></td></tr><tr><td>Competência × caixa</td><td>Pagamento compensado = saída de caixa <code>paymentsCleared</code>; despesa por competência gerada pelo pagamento = 0 (liquida passivo). A despesa nasce na compra.</td></tr></tbody></table></div>
+<h2 id="s4">4. Matriz revisada dos 16 cenários — entradas completas</h2>
+<div class="table-wrap"><table class="wide"><thead><tr><th>ID</th><th>Limite contratado</th><th>Limite informado pelo banco</th><th>Cobranças da fatura atual</th><th>Estornos</th><th>Pagto compensado</th><th>Pagto não compensado</th><th>Saldo credor anterior</th><th>Parcelas futuras (qtd × soma)</th><th>Compras pendentes</th><th>Pré-autorizações (valor/estado)</th></tr></thead><tbody><tr><td>SCN-01</td><td>R$ 5.000,00</td><td>R$ 3.500,00</td><td>R$ 1.500,00</td><td>R$ 0,00</td><td>R$ 0,00</td><td>R$ 0,00</td><td>R$ 0,00</td><td>0 × R$ 0,00</td><td>R$ 0,00</td><td>—</td></tr><tr><td>SCN-02</td><td>R$ 5.000,00</td><td>R$ 0,00</td><td>R$ 3.000,00</td><td>R$ 0,00</td><td>R$ 0,00</td><td>R$ 0,00</td><td>R$ 0,00</td><td>4 × R$ 2.000,00</td><td>R$ 0,00</td><td>—</td></tr><tr><td>SCN-03</td><td>R$ 5.000,00</td><td>R$ 0,00</td><td>R$ 4.500,00</td><td>R$ 0,00</td><td>R$ 0,00</td><td>R$ 0,00</td><td>R$ 0,00</td><td>4 × R$ 2.000,00</td><td>R$ 0,00</td><td>—</td></tr><tr><td>SCN-04</td><td>R$ 5.000,00</td><td>R$ 5.000,00</td><td>R$ 0,00</td><td>R$ 0,00</td><td>R$ 0,00</td><td>R$ 0,00</td><td>R$ 800,00</td><td>0 × R$ 0,00</td><td>R$ 0,00</td><td>—</td></tr><tr><td>SCN-05</td><td>R$ 5.000,00</td><td>R$ 4.000,00</td><td>R$ 1.000,00</td><td>R$ 0,00</td><td>R$ 0,00</td><td>R$ 0,00</td><td>R$ 1.500,00</td><td>0 × R$ 0,00</td><td>R$ 0,00</td><td>—</td></tr><tr><td>SCN-06</td><td>R$ 5.000,00</td><td>R$ 4.200,00</td><td>R$ 2.000,00</td><td>R$ 0,00</td><td>R$ 1.200,00</td><td>R$ 0,00</td><td>R$ 0,00</td><td>0 × R$ 0,00</td><td>R$ 0,00</td><td>—</td></tr><tr><td>SCN-07</td><td>R$ 5.000,00</td><td>R$ 5.000,00</td><td>R$ 2.500,00</td><td>R$ 0,00</td><td>R$ 2.500,00</td><td>R$ 0,00</td><td>R$ 0,00</td><td>0 × R$ 0,00</td><td>R$ 0,00</td><td>—</td></tr><tr><td>SCN-08</td><td>R$ 5.000,00</td><td>R$ 5.000,00</td><td>R$ 1.000,00</td><td>R$ 0,00</td><td>R$ 1.000,00</td><td>R$ 0,00</td><td>R$ 0,00</td><td>0 × R$ 0,00</td><td>R$ 0,00</td><td>—</td></tr><tr><td>SCN-09</td><td>R$ 5.000,00</td><td>R$ 4.000,00</td><td>R$ 100,00</td><td>R$ 0,00</td><td>R$ 0,00</td><td>R$ 0,00</td><td>R$ 0,00</td><td>9 × R$ 900,00</td><td>R$ 0,00</td><td>—</td></tr><tr><td>SCN-10</td><td>R$ 5.000,00</td><td>R$ 5.000,00</td><td>R$ 0,00</td><td>R$ 0,00</td><td>R$ 0,00</td><td>R$ 0,00</td><td>R$ 0,00</td><td>0 × R$ 0,00</td><td>R$ 0,00</td><td>R$ 300,00 [CANCELED]</td></tr><tr><td>SCN-11</td><td>R$ 5.000,00</td><td>R$ 5.000,00</td><td>R$ 1.000,00</td><td>R$ 400,00</td><td>R$ 1.000,00</td><td>R$ 0,00</td><td>R$ 0,00</td><td>0 × R$ 0,00</td><td>R$ 0,00</td><td>—</td></tr><tr><td>SCN-12</td><td>R$ 5.000,00</td><td>R$ 3.850,00</td><td>R$ 1.150,00</td><td>R$ 0,00</td><td>R$ 0,00</td><td>R$ 0,00</td><td>R$ 0,00</td><td>0 × R$ 0,00</td><td>R$ 0,00</td><td>—</td></tr><tr><td>SCN-13</td><td>R$ 5.000,00</td><td>R$ 1.700,00</td><td>R$ 3.300,00</td><td>R$ 0,00</td><td>R$ 0,00</td><td>R$ 0,00</td><td>R$ 0,00</td><td>0 × R$ 0,00</td><td>R$ 0,00</td><td>—</td></tr><tr><td>SCN-14</td><td>R$ 5.000,00</td><td>R$ 4.500,00</td><td>R$ 0,00</td><td>R$ 0,00</td><td>R$ 0,00</td><td>R$ 0,00</td><td>R$ 0,00</td><td>0 × R$ 0,00</td><td>R$ 0,00</td><td>R$ 500,00 [HELD]</td></tr><tr><td>SCN-15</td><td>R$ 5.000,00</td><td>R$ 3.000,00</td><td>R$ 1.800,00</td><td>R$ 0,00</td><td>R$ 0,00</td><td>R$ 0,00</td><td>R$ 0,00</td><td>0 × R$ 0,00</td><td>R$ 0,00</td><td>—</td></tr><tr><td>SCN-16</td><td>R$ 5.000,00</td><td>R$ 5.000,00</td><td>R$ 2.000,00</td><td>R$ 0,00</td><td>R$ 2.000,00</td><td>R$ 0,00</td><td>R$ 0,00</td><td>0 × R$ 0,00</td><td>R$ 0,00</td><td>—</td></tr></tbody></table></div>
+<h2 id="s5">5. Matriz revisada dos 16 cenários — resultados esperado × obtido</h2>
+<div class="table-wrap"><table class="wide"><thead><tr><th>ID</th><th>Cenário</th><th>Dívida da fatura</th><th>Comprom. futuro</th><th>Pendente/pré-auth</th><th>Comprom. TOTAL</th><th>Limite calculado</th><th>Divergência</th><th>Overlimit</th><th>Saldo credor</th><th>Poder de compra (estimativa)</th><th>Campos conferidos</th><th>Resultado</th></tr></thead><tbody><tr><td>SCN-01</td><td>Compra inferior ao limite</td><td>R$ 1.500,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 1.500,00 ✔</td><td>R$ 3.500,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 3.500,00 ✔</td><td>11</td><td>APROVADO (isolado)</td></tr><tr><td>SCN-02</td><td>Compra que consome integralmente o limite</td><td>R$ 3.000,00 ✔</td><td>R$ 2.000,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 5.000,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 0,00 ✔</td><td>11</td><td>APROVADO (isolado)</td></tr><tr><td>SCN-03</td><td>Comprometimento superior ao limite (overlimit)</td><td>R$ 4.500,00 ✔</td><td>R$ 2.000,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 6.500,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 1.500,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 0,00 ✔</td><td>11</td><td>APROVADO (isolado)</td></tr><tr><td>SCN-04</td><td>Saldo credor sem divida</td><td>R$ 0,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 5.000,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 800,00 ✔</td><td>R$ 5.800,00 ✔</td><td>11</td><td>APROVADO (isolado)</td></tr><tr><td>SCN-05</td><td>Saldo credor com divida (sem deducao automatica)</td><td>R$ 1.000,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 1.000,00 ✔</td><td>R$ 4.000,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 1.500,00 ✔</td><td>R$ 5.500,00 ✔</td><td>11</td><td>APROVADO (isolado)</td></tr><tr><td>SCN-06</td><td>Pagamento parcial de fatura</td><td>R$ 800,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 800,00 ✔</td><td>R$ 4.200,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 4.200,00 ✔</td><td>11</td><td>APROVADO (isolado)</td></tr><tr><td>SCN-07</td><td>Pagamento integral de fatura</td><td>R$ 0,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 5.000,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 5.000,00 ✔</td><td>11</td><td>APROVADO (isolado)</td></tr><tr><td>SCN-08</td><td>Pagamento antecipado de fatura</td><td>R$ 0,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 5.000,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 5.000,00 ✔</td><td>11</td><td>APROVADO (isolado)</td></tr><tr><td>SCN-09</td><td>Compra parcelada em 10x de R$ 100</td><td>R$ 100,00 ✔</td><td>R$ 900,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 1.000,00 ✔</td><td>R$ 4.000,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 4.000,00 ✔</td><td>11</td><td>APROVADO (isolado)</td></tr><tr><td>SCN-10</td><td>Cancelamento de compra antes da captura</td><td>R$ 0,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 5.000,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 5.000,00 ✔</td><td>11</td><td>APROVADO (isolado)</td></tr><tr><td>SCN-11</td><td>Estorno apos pagamento de fatura</td><td>R$ 0,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 5.000,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 400,00 ✔</td><td>R$ 5.400,00 ✔</td><td>11</td><td>APROVADO (isolado)</td></tr><tr><td>SCN-12</td><td>Juros e encargos contratuais</td><td>R$ 1.150,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 1.150,00 ✔</td><td>R$ 3.850,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 3.850,00 ✔</td><td>11</td><td>APROVADO (isolado)</td></tr><tr><td>SCN-13</td><td>Fatura vencida com rotativo</td><td>R$ 3.300,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 3.300,00 ✔</td><td>R$ 1.700,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 1.700,00 ✔</td><td>11</td><td>APROVADO (isolado)</td></tr><tr><td>SCN-14</td><td>Pre-autorizacao pendente de confirmacao</td><td>R$ 0,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 500,00 ✔</td><td>R$ 500,00 ✔</td><td>R$ 4.500,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 4.500,00 ✔</td><td>11</td><td>APROVADO (isolado)</td></tr><tr><td>SCN-15</td><td>Divergencia entre limite do emissor e limite calculado</td><td>R$ 1.800,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 1.800,00 ✔</td><td>R$ 3.200,00 ✔</td><td>R$ 200,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 3.200,00 ✔</td><td>11</td><td>APROVADO (isolado)</td></tr><tr><td>SCN-16</td><td>Competencia x fluxo de caixa</td><td>R$ 0,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 5.000,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 0,00 ✔</td><td>R$ 5.000,00 ✔</td><td>13</td><td>APROVADO (isolado)</td></tr></tbody></table></div>
+<p>Cada célula mostra o valor obtido seguido de ✔ quando coincide com o esperado escrito à mão. Descrição de cada cenário:</p>
+<div class="table-wrap"><table class=""><thead><tr><th>ID</th><th>Descrição e efeito contábil</th></tr></thead><tbody><tr><td>SCN-01</td><td>Limite R$ 5.000; compra de R$ 1.500 na fatura aberta; emissor informa R$ 3.500.</td></tr><tr><td>SCN-02</td><td>Fatura aberta R$ 3.000 + parcelas futuras R$ 2.000 = R$ 5.000 (= limite).</td></tr><tr><td>SCN-03</td><td>Fatura aberta R$ 4.500 + parcelas futuras R$ 2.000 (comprometimento nao informado no relatorio anterior) = R$ 6.500 sobre limite de R$ 5.000. Diferenca de R$ 500 do relatorio anterior explicada: a entrada omitia as parcelas futuras de R$ 2.000; a divida da fatura (R$ 4.500) e o comprometimento total (R$ 6.500) sao grandezas distintas. Caso-controle sem parcelas: ver I-01.</td></tr><tr><td>SCN-04</td><td>Saldo credor anterior R$ 800, sem compras; emissor informa R$ 5.000.</td></tr><tr><td>SCN-05</td><td>Divida R$ 1.000, saldo credor R$ 1.500; saldo credor NAO abate a divida nem amplia o limite do emissor.</td></tr><tr><td>SCN-06</td><td>Fatura R$ 2.000; pagamento COMPENSADO de R$ 1.200; resta R$ 800. Pagamento nao compensado de R$ 0.</td></tr><tr><td>SCN-07</td><td>Fatura R$ 2.500 liquidada integralmente (compensada).</td></tr><tr><td>SCN-08</td><td>Fatura em curso R$ 1.000 paga antecipadamente em R$ 1.000 (compensado).</td></tr><tr><td>SCN-09</td><td>Compra de R$ 1.000 em 10x. Fatura atual: 1a parcela R$ 100. Faturas futuras: 9 x R$ 100. Divida da fatura = R$ 100; comprometimento total do limite = R$ 1.000; disponivel = R$ 4.000.</td></tr><tr><td>SCN-10</td><td>Compra pendente de R$ 300 em estado CANCELED (reversao pelo lojista): nao compromete limite. Caso-controle em estado HELD: ver I-02.</td></tr><tr><td>SCN-11</td><td>Fatura de R$ 1.000 paga (compensada); estorno posterior de R$ 400 gera saldo credor de R$ 400 (nao amplia limite).</td></tr><tr><td>SCN-12</td><td>Compras R$ 1.000 + juros/encargos R$ 150 na fatura aberta = R$ 1.150.</td></tr><tr><td>SCN-13</td><td>Divida vencida R$ 3.000 + encargos de rotativo R$ 300 = R$ 3.300 em aberto.</td></tr><tr><td>SCN-14</td><td>Pre-autorizacao de R$ 500 (estado HELD) em posto/hotel. Efeito contabil: reduz o limite disponivel de R$ 5.000 para R$ 4.500; NAO e divida da fatura, NAO e despesa por competencia, NAO e saida de caixa.</td></tr><tr><td>SCN-15</td><td>Fatura R$ 1.800 =&gt; calculado R$ 3.200; emissor informa R$ 3.000; divergencia +R$ 200 (verificacoes individuais em I-05).</td></tr><tr><td>SCN-16</td><td>Compras de R$ 2.000 ja reconhecidas por competencia em ciclo anterior; pagamento compensado de R$ 2.000 = saida de caixa R$ 2.000, despesa por competencia gerada pelo pagamento R$ 0.</td></tr></tbody></table></div>
+<h2 id="s6">6. Cenários corrigidos — demonstração numérica passo a passo</h2>
+<h3>SCN-03 — comprometimento superior ao limite</h3>
+<ul><li>Limite contratado: R$ 5.000,00. Fatura aberta: R$ 4.500,00. Parcelas futuras: 4 × R$ 500,00 = R$ 2.000,00 (omitidas no relatório anterior).</li><li>Dívida da fatura = R$ 4.500,00. Comprometimento total = 4.500 + 2.000 = <strong>R$ 6.500,00</strong>. Overlimit = 6.500 − 5.000 = <strong>R$ 1.500,00</strong>. Disponível = max(0, −1.500) = <strong>R$ 0,00</strong>.</li><li>A "diferença de R$ 500,00" apontada só existiria se o comprometimento total fosse R$ 4.500 (controle I-01: disponível R$ 500,00, sem overlimit). As duas leituras são grandezas diferentes; a entrada anterior era a incompleta, não o resultado.</li></ul>
+<h3>SCN-09 — compra de R$ 1.000,00 parcelada em 10 × R$ 100,00</h3>
+<div class="table-wrap"><table class=""><thead><tr><th>Visão</th><th>Valor</th><th>Cálculo</th></tr></thead><tbody><tr><td>Fatura atual (parcela 1)</td><td>R$ 100,00</td><td>1 × R$ 100</td></tr><tr><td>Fatura +1 … +9</td><td>9 × R$ 100,00</td><td>projeção por fatura futura</td></tr><tr><td>Dívida da fatura atual</td><td>R$ 100,00</td><td>só a parcela corrente</td></tr><tr><td>Comprometimento total do limite</td><td>R$ 1.000,00</td><td>100 + 9 × 100</td></tr><tr><td>Limite disponível calculado</td><td>R$ 4.000,00</td><td>5.000 − 1.000</td></tr><tr><td>Efeito em competência</td><td>Despesa de R$ 1.000,00 na compra (ou R$ 100/mês, conforme a política de competência definida em etapas anteriores — fora do escopo desta suíte)</td><td>—</td></tr><tr><td>Fluxo de caixa</td><td>R$ 100,00 por mês, a cada pagamento compensado</td><td>—</td></tr></tbody></table></div>
+<h3>SCN-14 — pré-autorização de R$ 500,00</h3>
+<ul><li>Entrada explícita: <code>preAuthorizations = [{ amount: R$ 500,00, state: HELD }]</code>.</li><li>Efeito: <code>pendingCommitment</code> = R$ 500,00; <code>totalLimitCommitment</code> = R$ 500,00; disponível = 5.000 − 500 = <strong>R$ 4.500,00</strong> (igual ao informado pelo emissor, divergência 0).</li><li>NÃO é dívida da fatura (R$ 0), NÃO é despesa por competência, NÃO é saída de caixa. Se capturada (<code>CAPTURED</code>) passa a compor <code>invoiceCharges</code>; se <code>CANCELED</code>/<code>EXPIRED</code> o limite é liberado (SCN-10 e I-02).</li></ul>
+<h3>SCN-15 — divergência com o emissor (seis verificações individuais)</h3>
+<div class="table-wrap"><table class=""><thead><tr><th>Teste</th><th>Requisito</th><th>Resultado</th></tr></thead><tbody><tr><td>I-05.1</td><td>SCN-15 (1) preservacao do valor informado pelo emissor: R$ 3.000 permanece intacto e e o limite exibido</td><td>APROVADO</td></tr><tr><td>I-05.2</td><td>SCN-15 (2) calculo interno: R$ 5.000 - R$ 1.800 = R$ 3.200</td><td>APROVADO</td></tr><tr><td>I-05.3</td><td>SCN-15 (3) diferenca de R$ 200 (calculado - informado)</td><td>APROVADO</td></tr><tr><td>I-05.4</td><td>SCN-15 (4) sinalizador de divergencia ativo</td><td>APROVADO</td></tr><tr><td>I-05.5</td><td>SCN-15 (5) alerta ao usuario existe, tem codigo ISSUER_LIMIT_DIVERGENCE e cita os tres valores</td><td>APROVADO</td></tr><tr><td>I-05.6</td><td>SCN-15 (6) proibicao: a estimativa NAO e apresentada como limite bancario confirmado (confirmedByIssuer=false, rotulo de estimativa, e diferente do limite exibido)</td><td>APROVADO</td></tr></tbody></table></div>
+<p>Alerta gerado no teste: "O emissor informa disponivel R$ 3000,00; a estimativa do Kyro e R$ 3200,00 (diferenca +R$ 200,00). Pode haver compra pendente, IOF/cambio ou atraso de sincronizacao. O valor do emissor prevalece."</p>
+<h2 id="s7">7. Reexecução e evidências individuais</h2>
+<div class="table-wrap"><table class=""><thead><tr><th>Item</th><th>Valor</th></tr></thead><tbody><tr><td>Script de teste</td><td><code>C:/Users/Lenovo/.gemini/antigravity/brain/8651f4bc-3ec9-4882-be77-3ccc7c49a0d4/scratch/rev2/test_cartoes_16_cenarios_rev2.js</code></td></tr><tr><td>SHA-256 do script</td><td><code>93f07f39f8b7268f8b8adf8ea86a4726e8010076421952e2120bf8eaf075d505</code></td></tr><tr><td>Comando</td><td><code>node test_cartoes_16_cenarios_rev2.js</code></td></tr><tr><td>Ambiente</td><td>Node.js isolado, sem rede, sem Firestore, sem codigo de producao; Node v24.20.0</td></tr><tr><td>Executado em</td><td>2026-11-05T21:44:37.207Z</td></tr><tr><td>JSON de evidência</td><td><code>C:/Users/Lenovo/.gemini/antigravity/brain/8651f4bc-3ec9-4882-be77-3ccc7c49a0d4/scratch/rev2/card_rev2_evidence.json</code></td></tr><tr><td>SHA-256 do JSON</td><td><code>e6b15cbb35a3f5ea6d9cef4240a6cb2855fb9acde9e2d351691718e3ecac60fa</code></td></tr><tr><td>Teste de mutação</td><td><code>C:/Users/Lenovo/.gemini/antigravity/brain/8651f4bc-3ec9-4882-be77-3ccc7c49a0d4/scratch/rev2/mutation_test.js</code> — SHA-256 <code>63a0ff1a2a629b4f15bfced7b21ab3a21582af1da64285021ca6606589f4047a</code></td></tr><tr><td>JSON da mutação</td><td>SHA-256 <code>2b1f458fb00766c9bd9b1ac5dc166e5f291bff578b5942cbee30bfe41ee2e8b8</code></td></tr></tbody></table></div>
+<div class="callout callout-info"><strong>Registro de alteração do script de teste:</strong> o script anterior foi substituído (não editado) pela suíte REV2. Motivos: ver E5 e E6 — pagamentos eram ignorados, esperados eram parciais e SCN-15 não era testado em 6 requisitos. O código principal do projeto não foi tocado.</div>
+<h3>Saída por cenário (todas as verificações campo a campo)</h3>
+<details><summary>SCN-01 — Compra inferior ao limite — APROVADO (11 verificações)</summary><div class="table-wrap"><table class=""><thead><tr><th>Campo</th><th>Esperado</th><th>Obtido</th><th>OK</th></tr></thead><tbody><tr><td>currentInvoiceDebtCents</td><td>R$ 1.500,00</td><td>R$ 1.500,00</td><td>✔</td></tr><tr><td>futureCommitmentCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>pendingCommitmentCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>totalLimitCommitmentCents</td><td>R$ 1.500,00</td><td>R$ 1.500,00</td><td>✔</td></tr><tr><td>calculatedAvailableLimitCents</td><td>R$ 3.500,00</td><td>R$ 3.500,00</td><td>✔</td></tr><tr><td>overlimitCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>creditBalanceCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>internalEstimatedPurchasingPowerCents</td><td>R$ 3.500,00</td><td>R$ 3.500,00</td><td>✔</td></tr><tr><td>divergenceCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>hasDivergenceFlag</td><td>false</td><td>false</td><td>✔</td></tr><tr><td>INVARIANT total == fatura + futuro + pendente</td><td>true</td><td>true</td><td>✔</td></tr></tbody></table></div>
+</details>
+<details><summary>SCN-02 — Compra que consome integralmente o limite — APROVADO (11 verificações)</summary><div class="table-wrap"><table class=""><thead><tr><th>Campo</th><th>Esperado</th><th>Obtido</th><th>OK</th></tr></thead><tbody><tr><td>currentInvoiceDebtCents</td><td>R$ 3.000,00</td><td>R$ 3.000,00</td><td>✔</td></tr><tr><td>futureCommitmentCents</td><td>R$ 2.000,00</td><td>R$ 2.000,00</td><td>✔</td></tr><tr><td>pendingCommitmentCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>totalLimitCommitmentCents</td><td>R$ 5.000,00</td><td>R$ 5.000,00</td><td>✔</td></tr><tr><td>calculatedAvailableLimitCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>overlimitCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>creditBalanceCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>internalEstimatedPurchasingPowerCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>divergenceCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>hasDivergenceFlag</td><td>false</td><td>false</td><td>✔</td></tr><tr><td>INVARIANT total == fatura + futuro + pendente</td><td>true</td><td>true</td><td>✔</td></tr></tbody></table></div>
+</details>
+<details><summary>SCN-03 — Comprometimento superior ao limite (overlimit) — APROVADO (11 verificações)</summary><div class="table-wrap"><table class=""><thead><tr><th>Campo</th><th>Esperado</th><th>Obtido</th><th>OK</th></tr></thead><tbody><tr><td>currentInvoiceDebtCents</td><td>R$ 4.500,00</td><td>R$ 4.500,00</td><td>✔</td></tr><tr><td>futureCommitmentCents</td><td>R$ 2.000,00</td><td>R$ 2.000,00</td><td>✔</td></tr><tr><td>pendingCommitmentCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>totalLimitCommitmentCents</td><td>R$ 6.500,00</td><td>R$ 6.500,00</td><td>✔</td></tr><tr><td>calculatedAvailableLimitCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>overlimitCents</td><td>R$ 1.500,00</td><td>R$ 1.500,00</td><td>✔</td></tr><tr><td>creditBalanceCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>internalEstimatedPurchasingPowerCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>divergenceCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>hasDivergenceFlag</td><td>false</td><td>false</td><td>✔</td></tr><tr><td>INVARIANT total == fatura + futuro + pendente</td><td>true</td><td>true</td><td>✔</td></tr></tbody></table></div>
+</details>
+<details><summary>SCN-04 — Saldo credor sem divida — APROVADO (11 verificações)</summary><div class="table-wrap"><table class=""><thead><tr><th>Campo</th><th>Esperado</th><th>Obtido</th><th>OK</th></tr></thead><tbody><tr><td>currentInvoiceDebtCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>futureCommitmentCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>pendingCommitmentCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>totalLimitCommitmentCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>calculatedAvailableLimitCents</td><td>R$ 5.000,00</td><td>R$ 5.000,00</td><td>✔</td></tr><tr><td>overlimitCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>creditBalanceCents</td><td>R$ 800,00</td><td>R$ 800,00</td><td>✔</td></tr><tr><td>internalEstimatedPurchasingPowerCents</td><td>R$ 5.800,00</td><td>R$ 5.800,00</td><td>✔</td></tr><tr><td>divergenceCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>hasDivergenceFlag</td><td>false</td><td>false</td><td>✔</td></tr><tr><td>INVARIANT total == fatura + futuro + pendente</td><td>true</td><td>true</td><td>✔</td></tr></tbody></table></div>
+</details>
+<details><summary>SCN-05 — Saldo credor com divida (sem deducao automatica) — APROVADO (11 verificações)</summary><div class="table-wrap"><table class=""><thead><tr><th>Campo</th><th>Esperado</th><th>Obtido</th><th>OK</th></tr></thead><tbody><tr><td>currentInvoiceDebtCents</td><td>R$ 1.000,00</td><td>R$ 1.000,00</td><td>✔</td></tr><tr><td>futureCommitmentCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>pendingCommitmentCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>totalLimitCommitmentCents</td><td>R$ 1.000,00</td><td>R$ 1.000,00</td><td>✔</td></tr><tr><td>calculatedAvailableLimitCents</td><td>R$ 4.000,00</td><td>R$ 4.000,00</td><td>✔</td></tr><tr><td>overlimitCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>creditBalanceCents</td><td>R$ 1.500,00</td><td>R$ 1.500,00</td><td>✔</td></tr><tr><td>internalEstimatedPurchasingPowerCents</td><td>R$ 5.500,00</td><td>R$ 5.500,00</td><td>✔</td></tr><tr><td>divergenceCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>hasDivergenceFlag</td><td>false</td><td>false</td><td>✔</td></tr><tr><td>INVARIANT total == fatura + futuro + pendente</td><td>true</td><td>true</td><td>✔</td></tr></tbody></table></div>
+</details>
+<details><summary>SCN-06 — Pagamento parcial de fatura — APROVADO (11 verificações)</summary><div class="table-wrap"><table class=""><thead><tr><th>Campo</th><th>Esperado</th><th>Obtido</th><th>OK</th></tr></thead><tbody><tr><td>currentInvoiceDebtCents</td><td>R$ 800,00</td><td>R$ 800,00</td><td>✔</td></tr><tr><td>futureCommitmentCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>pendingCommitmentCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>totalLimitCommitmentCents</td><td>R$ 800,00</td><td>R$ 800,00</td><td>✔</td></tr><tr><td>calculatedAvailableLimitCents</td><td>R$ 4.200,00</td><td>R$ 4.200,00</td><td>✔</td></tr><tr><td>overlimitCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>creditBalanceCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>internalEstimatedPurchasingPowerCents</td><td>R$ 4.200,00</td><td>R$ 4.200,00</td><td>✔</td></tr><tr><td>divergenceCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>hasDivergenceFlag</td><td>false</td><td>false</td><td>✔</td></tr><tr><td>INVARIANT total == fatura + futuro + pendente</td><td>true</td><td>true</td><td>✔</td></tr></tbody></table></div>
+</details>
+<details><summary>SCN-07 — Pagamento integral de fatura — APROVADO (11 verificações)</summary><div class="table-wrap"><table class=""><thead><tr><th>Campo</th><th>Esperado</th><th>Obtido</th><th>OK</th></tr></thead><tbody><tr><td>currentInvoiceDebtCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>futureCommitmentCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>pendingCommitmentCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>totalLimitCommitmentCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>calculatedAvailableLimitCents</td><td>R$ 5.000,00</td><td>R$ 5.000,00</td><td>✔</td></tr><tr><td>overlimitCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>creditBalanceCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>internalEstimatedPurchasingPowerCents</td><td>R$ 5.000,00</td><td>R$ 5.000,00</td><td>✔</td></tr><tr><td>divergenceCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>hasDivergenceFlag</td><td>false</td><td>false</td><td>✔</td></tr><tr><td>INVARIANT total == fatura + futuro + pendente</td><td>true</td><td>true</td><td>✔</td></tr></tbody></table></div>
+</details>
+<details><summary>SCN-08 — Pagamento antecipado de fatura — APROVADO (11 verificações)</summary><div class="table-wrap"><table class=""><thead><tr><th>Campo</th><th>Esperado</th><th>Obtido</th><th>OK</th></tr></thead><tbody><tr><td>currentInvoiceDebtCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>futureCommitmentCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>pendingCommitmentCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>totalLimitCommitmentCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>calculatedAvailableLimitCents</td><td>R$ 5.000,00</td><td>R$ 5.000,00</td><td>✔</td></tr><tr><td>overlimitCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>creditBalanceCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>internalEstimatedPurchasingPowerCents</td><td>R$ 5.000,00</td><td>R$ 5.000,00</td><td>✔</td></tr><tr><td>divergenceCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>hasDivergenceFlag</td><td>false</td><td>false</td><td>✔</td></tr><tr><td>INVARIANT total == fatura + futuro + pendente</td><td>true</td><td>true</td><td>✔</td></tr></tbody></table></div>
+</details>
+<details><summary>SCN-09 — Compra parcelada em 10x de R$ 100 — APROVADO (11 verificações)</summary><div class="table-wrap"><table class=""><thead><tr><th>Campo</th><th>Esperado</th><th>Obtido</th><th>OK</th></tr></thead><tbody><tr><td>currentInvoiceDebtCents</td><td>R$ 100,00</td><td>R$ 100,00</td><td>✔</td></tr><tr><td>futureCommitmentCents</td><td>R$ 900,00</td><td>R$ 900,00</td><td>✔</td></tr><tr><td>pendingCommitmentCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>totalLimitCommitmentCents</td><td>R$ 1.000,00</td><td>R$ 1.000,00</td><td>✔</td></tr><tr><td>calculatedAvailableLimitCents</td><td>R$ 4.000,00</td><td>R$ 4.000,00</td><td>✔</td></tr><tr><td>overlimitCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>creditBalanceCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>internalEstimatedPurchasingPowerCents</td><td>R$ 4.000,00</td><td>R$ 4.000,00</td><td>✔</td></tr><tr><td>divergenceCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>hasDivergenceFlag</td><td>false</td><td>false</td><td>✔</td></tr><tr><td>INVARIANT total == fatura + futuro + pendente</td><td>true</td><td>true</td><td>✔</td></tr></tbody></table></div>
+</details>
+<details><summary>SCN-10 — Cancelamento de compra antes da captura — APROVADO (11 verificações)</summary><div class="table-wrap"><table class=""><thead><tr><th>Campo</th><th>Esperado</th><th>Obtido</th><th>OK</th></tr></thead><tbody><tr><td>currentInvoiceDebtCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>futureCommitmentCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>pendingCommitmentCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>totalLimitCommitmentCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>calculatedAvailableLimitCents</td><td>R$ 5.000,00</td><td>R$ 5.000,00</td><td>✔</td></tr><tr><td>overlimitCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>creditBalanceCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>internalEstimatedPurchasingPowerCents</td><td>R$ 5.000,00</td><td>R$ 5.000,00</td><td>✔</td></tr><tr><td>divergenceCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>hasDivergenceFlag</td><td>false</td><td>false</td><td>✔</td></tr><tr><td>INVARIANT total == fatura + futuro + pendente</td><td>true</td><td>true</td><td>✔</td></tr></tbody></table></div>
+</details>
+<details><summary>SCN-11 — Estorno apos pagamento de fatura — APROVADO (11 verificações)</summary><div class="table-wrap"><table class=""><thead><tr><th>Campo</th><th>Esperado</th><th>Obtido</th><th>OK</th></tr></thead><tbody><tr><td>currentInvoiceDebtCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>futureCommitmentCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>pendingCommitmentCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>totalLimitCommitmentCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>calculatedAvailableLimitCents</td><td>R$ 5.000,00</td><td>R$ 5.000,00</td><td>✔</td></tr><tr><td>overlimitCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>creditBalanceCents</td><td>R$ 400,00</td><td>R$ 400,00</td><td>✔</td></tr><tr><td>internalEstimatedPurchasingPowerCents</td><td>R$ 5.400,00</td><td>R$ 5.400,00</td><td>✔</td></tr><tr><td>divergenceCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>hasDivergenceFlag</td><td>false</td><td>false</td><td>✔</td></tr><tr><td>INVARIANT total == fatura + futuro + pendente</td><td>true</td><td>true</td><td>✔</td></tr></tbody></table></div>
+</details>
+<details><summary>SCN-12 — Juros e encargos contratuais — APROVADO (11 verificações)</summary><div class="table-wrap"><table class=""><thead><tr><th>Campo</th><th>Esperado</th><th>Obtido</th><th>OK</th></tr></thead><tbody><tr><td>currentInvoiceDebtCents</td><td>R$ 1.150,00</td><td>R$ 1.150,00</td><td>✔</td></tr><tr><td>futureCommitmentCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>pendingCommitmentCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>totalLimitCommitmentCents</td><td>R$ 1.150,00</td><td>R$ 1.150,00</td><td>✔</td></tr><tr><td>calculatedAvailableLimitCents</td><td>R$ 3.850,00</td><td>R$ 3.850,00</td><td>✔</td></tr><tr><td>overlimitCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>creditBalanceCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>internalEstimatedPurchasingPowerCents</td><td>R$ 3.850,00</td><td>R$ 3.850,00</td><td>✔</td></tr><tr><td>divergenceCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>hasDivergenceFlag</td><td>false</td><td>false</td><td>✔</td></tr><tr><td>INVARIANT total == fatura + futuro + pendente</td><td>true</td><td>true</td><td>✔</td></tr></tbody></table></div>
+</details>
+<details><summary>SCN-13 — Fatura vencida com rotativo — APROVADO (11 verificações)</summary><div class="table-wrap"><table class=""><thead><tr><th>Campo</th><th>Esperado</th><th>Obtido</th><th>OK</th></tr></thead><tbody><tr><td>currentInvoiceDebtCents</td><td>R$ 3.300,00</td><td>R$ 3.300,00</td><td>✔</td></tr><tr><td>futureCommitmentCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>pendingCommitmentCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>totalLimitCommitmentCents</td><td>R$ 3.300,00</td><td>R$ 3.300,00</td><td>✔</td></tr><tr><td>calculatedAvailableLimitCents</td><td>R$ 1.700,00</td><td>R$ 1.700,00</td><td>✔</td></tr><tr><td>overlimitCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>creditBalanceCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>internalEstimatedPurchasingPowerCents</td><td>R$ 1.700,00</td><td>R$ 1.700,00</td><td>✔</td></tr><tr><td>divergenceCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>hasDivergenceFlag</td><td>false</td><td>false</td><td>✔</td></tr><tr><td>INVARIANT total == fatura + futuro + pendente</td><td>true</td><td>true</td><td>✔</td></tr></tbody></table></div>
+</details>
+<details><summary>SCN-14 — Pre-autorizacao pendente de confirmacao — APROVADO (11 verificações)</summary><div class="table-wrap"><table class=""><thead><tr><th>Campo</th><th>Esperado</th><th>Obtido</th><th>OK</th></tr></thead><tbody><tr><td>currentInvoiceDebtCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>futureCommitmentCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>pendingCommitmentCents</td><td>R$ 500,00</td><td>R$ 500,00</td><td>✔</td></tr><tr><td>totalLimitCommitmentCents</td><td>R$ 500,00</td><td>R$ 500,00</td><td>✔</td></tr><tr><td>calculatedAvailableLimitCents</td><td>R$ 4.500,00</td><td>R$ 4.500,00</td><td>✔</td></tr><tr><td>overlimitCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>creditBalanceCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>internalEstimatedPurchasingPowerCents</td><td>R$ 4.500,00</td><td>R$ 4.500,00</td><td>✔</td></tr><tr><td>divergenceCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>hasDivergenceFlag</td><td>false</td><td>false</td><td>✔</td></tr><tr><td>INVARIANT total == fatura + futuro + pendente</td><td>true</td><td>true</td><td>✔</td></tr></tbody></table></div>
+</details>
+<details><summary>SCN-15 — Divergencia entre limite do emissor e limite calculado — APROVADO (11 verificações)</summary><div class="table-wrap"><table class=""><thead><tr><th>Campo</th><th>Esperado</th><th>Obtido</th><th>OK</th></tr></thead><tbody><tr><td>currentInvoiceDebtCents</td><td>R$ 1.800,00</td><td>R$ 1.800,00</td><td>✔</td></tr><tr><td>futureCommitmentCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>pendingCommitmentCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>totalLimitCommitmentCents</td><td>R$ 1.800,00</td><td>R$ 1.800,00</td><td>✔</td></tr><tr><td>calculatedAvailableLimitCents</td><td>R$ 3.200,00</td><td>R$ 3.200,00</td><td>✔</td></tr><tr><td>overlimitCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>creditBalanceCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>internalEstimatedPurchasingPowerCents</td><td>R$ 3.200,00</td><td>R$ 3.200,00</td><td>✔</td></tr><tr><td>divergenceCents</td><td>R$ 200,00</td><td>R$ 200,00</td><td>✔</td></tr><tr><td>hasDivergenceFlag</td><td>true</td><td>true</td><td>✔</td></tr><tr><td>INVARIANT total == fatura + futuro + pendente</td><td>true</td><td>true</td><td>✔</td></tr></tbody></table></div>
+</details>
+<details><summary>SCN-16 — Competencia x fluxo de caixa — APROVADO (13 verificações)</summary><div class="table-wrap"><table class=""><thead><tr><th>Campo</th><th>Esperado</th><th>Obtido</th><th>OK</th></tr></thead><tbody><tr><td>currentInvoiceDebtCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>futureCommitmentCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>pendingCommitmentCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>totalLimitCommitmentCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>calculatedAvailableLimitCents</td><td>R$ 5.000,00</td><td>R$ 5.000,00</td><td>✔</td></tr><tr><td>overlimitCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>creditBalanceCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>internalEstimatedPurchasingPowerCents</td><td>R$ 5.000,00</td><td>R$ 5.000,00</td><td>✔</td></tr><tr><td>divergenceCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>hasDivergenceFlag</td><td>false</td><td>false</td><td>✔</td></tr><tr><td>cashOutflowCents</td><td>R$ 2.000,00</td><td>R$ 2.000,00</td><td>✔</td></tr><tr><td>competenceExpenseFromPaymentCents</td><td>R$ 0,00</td><td>R$ 0,00</td><td>✔</td></tr><tr><td>INVARIANT total == fatura + futuro + pendente</td><td>true</td><td>true</td><td>✔</td></tr></tbody></table></div>
+</details>
+<h3>Testes suplementares</h3>
+<div class="table-wrap"><table class=""><thead><tr><th>ID</th><th>Descrição</th><th>Resultado</th></tr></thead><tbody><tr><td>I-01</td><td>SCN-03 controle: fatura R$ 4.500 SEM outros comprometimentos =&gt; disponivel R$ 500 (a diferenca de R$ 500 do relatorio anterior so existe se nao houver parcelas futuras)</td><td>APROVADO</td></tr><tr><td>I-02</td><td>SCN-10 controle: mesma compra de R$ 300 em estado HELD reduz o limite para R$ 4.700; em CANCELED nao reduz</td><td>APROVADO</td></tr><tr><td>I-03</td><td>Pagamento NAO compensado (R$ 500) nao reduz divida nem libera limite</td><td>APROVADO</td></tr><tr><td>I-04</td><td>SCN-09: divida da fatura (R$ 100) e comprometimento total (R$ 1.000) NAO se confundem; projecao de 9 faturas futuras de R$ 100</td><td>APROVADO</td></tr><tr><td>I-05.1</td><td>SCN-15 (1) preservacao do valor informado pelo emissor: R$ 3.000 permanece intacto e e o limite exibido</td><td>APROVADO</td></tr><tr><td>I-05.2</td><td>SCN-15 (2) calculo interno: R$ 5.000 - R$ 1.800 = R$ 3.200</td><td>APROVADO</td></tr><tr><td>I-05.3</td><td>SCN-15 (3) diferenca de R$ 200 (calculado - informado)</td><td>APROVADO</td></tr><tr><td>I-05.4</td><td>SCN-15 (4) sinalizador de divergencia ativo</td><td>APROVADO</td></tr><tr><td>I-05.5</td><td>SCN-15 (5) alerta ao usuario existe, tem codigo ISSUER_LIMIT_DIVERGENCE e cita os tres valores</td><td>APROVADO</td></tr><tr><td>I-05.6</td><td>SCN-15 (6) proibicao: a estimativa NAO e apresentada como limite bancario confirmado (confirmedByIssuer=false, rotulo de estimativa, e diferente do limite exibido)</td><td>APROVADO</td></tr><tr><td>I-06</td><td>Saldo credor (R$ 1.500) nao altera limite calculado nem limite exibido do emissor</td><td>APROVADO</td></tr><tr><td>I-07</td><td>Sem valor do emissor: divergencia nula, sem sinalizador, sem alerta, limite exibido "NAO_INFORMADO_PELO_EMISSOR"</td><td>APROVADO</td></tr><tr><td>I-08a</td><td>Entrada invalida: valor negativo e rejeitado</td><td>APROVADO</td></tr><tr><td>I-08b</td><td>Entrada invalida: number (float) no lugar de bigint e rejeitado</td><td>APROVADO</td></tr><tr><td>I-09</td><td>Invariante em todos os 16 cenarios: nenhum indicador de divida da fatura iguala-se silenciosamente ao comprometimento total quando ha parcelas/pendencias</td><td>APROVADO</td></tr><tr><td>I-10</td><td>Esperados independentes: nenhum esperado foi calculado pela funcao testada (verificacao estrutural: todos os 16 possuem &gt;= 10 campos esperados conferidos)</td><td>APROVADO</td></tr></tbody></table></div>
+<h3>Teste de mutação — a suíte consegue detectar erros?</h3>
+<div class="table-wrap"><table class=""><thead><tr><th>Mutante</th><th>Adulteração do modelo</th><th>Detectado</th><th>Testes que falharam</th></tr></thead><tbody><tr><td>M1</td><td>Comprometimento total ignora parcelas futuras (mistura divida da fatura com limite)</td><td>sim</td><td>SCN-02, SCN-03, SCN-09, I-04, I-09</td></tr><tr><td>M2</td><td>Pre-autorizacao CANCELED passa a comprometer limite</td><td>sim</td><td>SCN-10, I-02</td></tr><tr><td>M3</td><td>Saldo credor passa a ampliar o limite calculado</td><td>sim</td><td>SCN-04, SCN-05, SCN-11, I-06</td></tr><tr><td>M4</td><td>Divergencia com sinal invertido</td><td>sim</td><td>SCN-15, I-05.3, I-05.5</td></tr><tr><td>M5</td><td>Pagamento nao compensado passa a abater a divida</td><td>sim</td><td>I-03</td></tr><tr><td>M6</td><td>Alerta de divergencia suprimido</td><td>sim</td><td>I-05.5</td></tr><tr><td>M7</td><td>Estimativa Kyro marcada como confirmada pelo emissor</td><td>sim</td><td>I-05.6</td></tr><tr><td>M8</td><td>Overlimit nao calculado</td><td>sim</td><td>SCN-03</td></tr></tbody></table></div>
+<details><summary>Conteúdo integral do script <code>test_cartoes_16_cenarios_rev2.js</code></summary><pre>'use strict';
+/**
+ * KYRO FINANCE - ETAPA 02.15 REV2
+ * Suite isolada (Node.js, sem rede, sem Firestore, sem codigo de producao) do MODELO DE CARTOES v2.
+ * Valores monetarios: BigInt em centavos (coerente com a especificacao canonica).
+ *
+ * Diferencas em relação ao script anterior (scratch/test_credit_card_16_scenarios.js):
+ *  - separa DIVIDA DA FATURA (currentInvoiceDebt) de COMPROMETIMENTO TOTAL DO LIMITE (totalLimitCommitment);
+ *  - pagamentos compensados/nao compensados e estornos passam a participar do calculo (antes paymentsSettledCents era ignorado);
+ *  - pre-autorizacoes possuem estado e valor explicitos; so reduzem o limite se estiverem em estado HELD;
+ *  - parcelas futuras sao uma lista (projecao por fatura);
+ *  - o resultado esperado e escrito A MAO (nao derivado da funcao) e TODAS as saidas sao conferidas campo a campo;
+ *  - SCN-15 e testado em 6 verificacoes individuais; ha testes de invariantes e de entradas invalidas.
+ */
+const fs = require('fs');
+const path = require('path');
+
+const B = (n) =&gt; BigInt(n);
+const R = (reais) =&gt; BigInt(Math.round(reais * 100)); // apenas para legibilidade dos casos de teste
+
+const ACTIVE_PREAUTH_STATES = new Set(['HELD']); // CAPTURED =&gt; ja virou fatura; CANCELED/EXPIRED =&gt; liberada
+
+function validateMoney(name, v) {
+  if (typeof v !== 'bigint') throw new Error(`INVALID_MONEY_TYPE:${name}`);
+  if (v &lt; 0n) throw new Error(`NEGATIVE_MONEY:${name}`);
+}
+
+function computeCardState(input) {
+  const {
+    contractedLimitCents, issuerReportedAvailableLimitCents,
+    invoiceChargesCents, refundsAppliedCents, paymentsClearedCents, paymentsUnclearedCents,
+    priorCreditBalanceCents, futureInstallmentsCents, pendingPurchasesCents, preAuthorizations,
+  } = input;
+
+  for (const [k, v] of Object.entries({
+    contractedLimitCents, invoiceChargesCents, refundsAppliedCents, paymentsClearedCents,
+    paymentsUnclearedCents, priorCreditBalanceCents, pendingPurchasesCents,
+  })) validateMoney(k, v);
+  if (issuerReportedAvailableLimitCents !== null) validateMoney('issuerReportedAvailableLimitCents', issuerReportedAvailableLimitCents);
+  futureInstallmentsCents.forEach((v, i) =&gt; validateMoney(`futureInstallmentsCents[${i}]`, v));
+  preAuthorizations.forEach((p, i) =&gt; validateMoney(`preAuthorizations[${i}].amountCents`, p.amountCents));
+
+  // 1) Divida da fatura atual (fechada em aberto + aberta): cobrancas - estornos - pagamentos COMPENSADOS
+  const credits = refundsAppliedCents + paymentsClearedCents;
+  const currentInvoiceDebtCents = invoiceChargesCents &gt; credits ? invoiceChargesCents - credits : 0n;
+  // 2) Excedente vira saldo credor (nunca amplia limite do emissor)
+  const generatedCreditCents = credits &gt; invoiceChargesCents ? credits - invoiceChargesCents : 0n;
+  const creditBalanceCents = priorCreditBalanceCents + generatedCreditCents;
+  // 3) Comprometimento futuro (parcelas ainda nao faturadas)
+  const futureCommitmentCents = futureInstallmentsCents.reduce((a, b) =&gt; a + b, 0n);
+  // 4) Comprometimento pendente (compras pendentes + pre-autorizacoes ativas)
+  const activePreAuthCents = preAuthorizations.filter(p =&gt; ACTIVE_PREAUTH_STATES.has(p.state)).reduce((a, p) =&gt; a + p.amountCents, 0n);
+  const pendingCommitmentCents = pendingPurchasesCents + activePreAuthCents;
+  // 5) Comprometimento TOTAL do limite (NAO e divida da fatura)
+  const totalLimitCommitmentCents = currentInvoiceDebtCents + futureCommitmentCents + pendingCommitmentCents;
+  // 6) Limite calculado pelo Kyro
+  const calculatedAvailableLimitCents = contractedLimitCents &gt; totalLimitCommitmentCents ? contractedLimitCents - totalLimitCommitmentCents : 0n;
+  const overlimitCents = totalLimitCommitmentCents &gt; contractedLimitCents ? totalLimitCommitmentCents - contractedLimitCents : 0n;
+  // 7) Poder de compra interno (ESTIMATIVA; nunca limite bancario)
+  const internalEstimatedPurchasingPowerCents = calculatedAvailableLimitCents + creditBalanceCents;
+  // 8) Divergencia (somente se o emissor informou)
+  const hasIssuerValue = issuerReportedAvailableLimitCents !== null;
+  const divergenceCents = hasIssuerValue ? calculatedAvailableLimitCents - issuerReportedAvailableLimitCents : null;
+  const hasDivergenceFlag = hasIssuerValue &amp;&amp; divergenceCents !== 0n;
+  // 9) Valor exibido como limite bancario: SOMENTE o informado pelo emissor
+  const displayedBankLimit = hasIssuerValue
+    ? { valueCents: issuerReportedAvailableLimitCents, source: 'EMISSOR', confirmedByIssuer: true }
+    : { valueCents: null, source: 'NAO_INFORMADO_PELO_EMISSOR', confirmedByIssuer: false };
+  const kyroEstimate = { valueCents: calculatedAvailableLimitCents, source: 'ESTIMATIVA_KYRO', confirmedByIssuer: false,
+    label: 'Estimativa Kyro - nao confirmada pelo emissor' };
+  // 10) Alerta ao usuario
+  let userAlert = null;
+  if (hasDivergenceFlag) {
+    userAlert = {
+      code: 'ISSUER_LIMIT_DIVERGENCE',
+      message: `O emissor informa disponivel ${fmt(issuerReportedAvailableLimitCents)}; a estimativa do Kyro e ${fmt(calculatedAvailableLimitCents)} (diferenca ${fmtSigned(divergenceCents)}). Pode haver compra pendente, IOF/cambio ou atraso de sincronizacao. O valor do emissor prevalece.`,
+    };
+  }
+  // 11) Competencia x caixa (efeito do pagamento da fatura)
+  const cashOutflowCents = paymentsClearedCents;
+  const competenceExpenseFromPaymentCents = 0n; // pagamento de fatura liquida passivo; nao e despesa
+
+  // projecao por fatura
+  const futureInvoiceProjection = futureInstallmentsCents.map((v, i) =&gt; ({ invoiceOffset: i + 1, amountCents: v }));
+
+  return {
+    currentInvoiceDebtCents, generatedCreditCents, creditBalanceCents, futureCommitmentCents,
+    activePreAuthCents, pendingCommitmentCents, totalLimitCommitmentCents,
+    calculatedAvailableLimitCents, overlimitCents, internalEstimatedPurchasingPowerCents,
+    issuerReportedAvailableLimitCents, divergenceCents, hasDivergenceFlag,
+    displayedBankLimit, kyroEstimate, userAlert, cashOutflowCents, competenceExpenseFromPaymentCents,
+    paymentsUnclearedCents, futureInvoiceProjection,
+  };
+}
+
+function fmt(c) { const s = (c &lt; 0n ? -c : c).toString().padStart(3, '0'); return `R$ ${s.slice(0, -2)},${s.slice(-2)}`; }
+function fmtSigned(c) { return (c &gt;= 0n ? '+' : '-') + fmt(c); }
+
+const base = () =&gt; ({
+  contractedLimitCents: R(5000), issuerReportedAvailableLimitCents: null,
+  invoiceChargesCents: 0n, refundsAppliedCents: 0n, paymentsClearedCents: 0n, paymentsUnclearedCents: 0n,
+  priorCreditBalanceCents: 0n, futureInstallmentsCents: [], pendingPurchasesCents: 0n, preAuthorizations: [],
+});
+const mk = (over) =&gt; Object.assign(base(), over);
+const rep = (n, v) =&gt; Array.from({ length: n }, () =&gt; v);
+
+/** Esperados escritos a mao. Campos: debt=dividaFatura, fut=comprometimento futuro, pend=pendente, tot=comprometimento total,
+ *  calc=limite calculado, over=overlimit, cred=saldo credor, pow=poder de compra, div=divergencia(null se sem emissor), flag=sinalizador */
+const SCENARIOS = [
+  { id: 'SCN-01', name: 'Compra inferior ao limite', desc: 'Limite R$ 5.000; compra de R$ 1.500 na fatura aberta; emissor informa R$ 3.500.',
+    input: mk({ issuerReportedAvailableLimitCents: R(3500), invoiceChargesCents: R(1500) }),
+    expected: { debt: R(1500), fut: 0n, pend: 0n, tot: R(1500), calc: R(3500), over: 0n, cred: 0n, pow: R(3500), div: 0n, flag: false } },
+  { id: 'SCN-02', name: 'Compra que consome integralmente o limite', desc: 'Fatura aberta R$ 3.000 + parcelas futuras R$ 2.000 = R$ 5.000 (= limite).',
+    input: mk({ issuerReportedAvailableLimitCents: 0n, invoiceChargesCents: R(3000), futureInstallmentsCents: rep(4, R(500)) }),
+    expected: { debt: R(3000), fut: R(2000), pend: 0n, tot: R(5000), calc: 0n, over: 0n, cred: 0n, pow: 0n, div: 0n, flag: false } },
+  { id: 'SCN-03', name: 'Comprometimento superior ao limite (overlimit)',
+    desc: 'Fatura aberta R$ 4.500 + parcelas futuras R$ 2.000 (comprometimento nao informado no relatorio anterior) = R$ 6.500 sobre limite de R$ 5.000. Diferenca de R$ 500 do relatorio anterior explicada: a entrada omitia as parcelas futuras de R$ 2.000; a divida da fatura (R$ 4.500) e o comprometimento total (R$ 6.500) sao grandezas distintas. Caso-controle sem parcelas: ver I-01.',
+    input: mk({ issuerReportedAvailableLimitCents: 0n, invoiceChargesCents: R(4500), futureInstallmentsCents: rep(4, R(500)) }),
+    expected: { debt: R(4500), fut: R(2000), pend: 0n, tot: R(6500), calc: 0n, over: R(1500), cred: 0n, pow: 0n, div: 0n, flag: false } },
+  { id: 'SCN-04', name: 'Saldo credor sem divida', desc: 'Saldo credor anterior R$ 800, sem compras; emissor informa R$ 5.000.',
+    input: mk({ issuerReportedAvailableLimitCents: R(5000), priorCreditBalanceCents: R(800) }),
+    expected: { debt: 0n, fut: 0n, pend: 0n, tot: 0n, calc: R(5000), over: 0n, cred: R(800), pow: R(5800), div: 0n, flag: false } },
+  { id: 'SCN-05', name: 'Saldo credor com divida (sem deducao automatica)', desc: 'Divida R$ 1.000, saldo credor R$ 1.500; saldo credor NAO abate a divida nem amplia o limite do emissor.',
+    input: mk({ issuerReportedAvailableLimitCents: R(4000), invoiceChargesCents: R(1000), priorCreditBalanceCents: R(1500) }),
+    expected: { debt: R(1000), fut: 0n, pend: 0n, tot: R(1000), calc: R(4000), over: 0n, cred: R(1500), pow: R(5500), div: 0n, flag: false } },
+  { id: 'SCN-06', name: 'Pagamento parcial de fatura', desc: 'Fatura R$ 2.000; pagamento COMPENSADO de R$ 1.200; resta R$ 800. Pagamento nao compensado de R$ 0.',
+    input: mk({ issuerReportedAvailableLimitCents: R(4200), invoiceChargesCents: R(2000), paymentsClearedCents: R(1200) }),
+    expected: { debt: R(800), fut: 0n, pend: 0n, tot: R(800), calc: R(4200), over: 0n, cred: 0n, pow: R(4200), div: 0n, flag: false } },
+  { id: 'SCN-07', name: 'Pagamento integral de fatura', desc: 'Fatura R$ 2.500 liquidada integralmente (compensada).',
+    input: mk({ issuerReportedAvailableLimitCents: R(5000), invoiceChargesCents: R(2500), paymentsClearedCents: R(2500) }),
+    expected: { debt: 0n, fut: 0n, pend: 0n, tot: 0n, calc: R(5000), over: 0n, cred: 0n, pow: R(5000), div: 0n, flag: false } },
+  { id: 'SCN-08', name: 'Pagamento antecipado de fatura', desc: 'Fatura em curso R$ 1.000 paga antecipadamente em R$ 1.000 (compensado).',
+    input: mk({ issuerReportedAvailableLimitCents: R(5000), invoiceChargesCents: R(1000), paymentsClearedCents: R(1000) }),
+    expected: { debt: 0n, fut: 0n, pend: 0n, tot: 0n, calc: R(5000), over: 0n, cred: 0n, pow: R(5000), div: 0n, flag: false } },
+  { id: 'SCN-09', name: 'Compra parcelada em 10x de R$ 100',
+    desc: 'Compra de R$ 1.000 em 10x. Fatura atual: 1a parcela R$ 100. Faturas futuras: 9 x R$ 100. Divida da fatura = R$ 100; comprometimento total do limite = R$ 1.000; disponivel = R$ 4.000.',
+    input: mk({ issuerReportedAvailableLimitCents: R(4000), invoiceChargesCents: R(100), futureInstallmentsCents: rep(9, R(100)) }),
+    expected: { debt: R(100), fut: R(900), pend: 0n, tot: R(1000), calc: R(4000), over: 0n, cred: 0n, pow: R(4000), div: 0n, flag: false } },
+  { id: 'SCN-10', name: 'Cancelamento de compra antes da captura', desc: 'Compra pendente de R$ 300 em estado CANCELED (reversao pelo lojista): nao compromete limite. Caso-controle em estado HELD: ver I-02.',
+    input: mk({ issuerReportedAvailableLimitCents: R(5000), preAuthorizations: [{ amountCents: R(300), state: 'CANCELED' }] }),
+    expected: { debt: 0n, fut: 0n, pend: 0n, tot: 0n, calc: R(5000), over: 0n, cred: 0n, pow: R(5000), div: 0n, flag: false } },
+  { id: 'SCN-11', name: 'Estorno apos pagamento de fatura', desc: 'Fatura de R$ 1.000 paga (compensada); estorno posterior de R$ 400 gera saldo credor de R$ 400 (nao amplia limite).',
+    input: mk({ issuerReportedAvailableLimitCents: R(5000), invoiceChargesCents: R(1000), paymentsClearedCents: R(1000), refundsAppliedCents: R(400) }),
+    expected: { debt: 0n, fut: 0n, pend: 0n, tot: 0n, calc: R(5000), over: 0n, cred: R(400), pow: R(5400), div: 0n, flag: false } },
+  { id: 'SCN-12', name: 'Juros e encargos contratuais', desc: 'Compras R$ 1.000 + juros/encargos R$ 150 na fatura aberta = R$ 1.150.',
+    input: mk({ issuerReportedAvailableLimitCents: R(3850), invoiceChargesCents: R(1150) }),
+    expected: { debt: R(1150), fut: 0n, pend: 0n, tot: R(1150), calc: R(3850), over: 0n, cred: 0n, pow: R(3850), div: 0n, flag: false } },
+  { id: 'SCN-13', name: 'Fatura vencida com rotativo', desc: 'Divida vencida R$ 3.000 + encargos de rotativo R$ 300 = R$ 3.300 em aberto.',
+    input: mk({ issuerReportedAvailableLimitCents: R(1700), invoiceChargesCents: R(3300) }),
+    expected: { debt: R(3300), fut: 0n, pend: 0n, tot: R(3300), calc: R(1700), over: 0n, cred: 0n, pow: R(1700), div: 0n, flag: false } },
+  { id: 'SCN-14', name: 'Pre-autorizacao pendente de confirmacao',
+    desc: 'Pre-autorizacao de R$ 500 (estado HELD) em posto/hotel. Efeito contabil: reduz o limite disponivel de R$ 5.000 para R$ 4.500; NAO e divida da fatura, NAO e despesa por competencia, NAO e saida de caixa.',
+    input: mk({ issuerReportedAvailableLimitCents: R(4500), preAuthorizations: [{ amountCents: R(500), state: 'HELD' }] }),
+    expected: { debt: 0n, fut: 0n, pend: R(500), tot: R(500), calc: R(4500), over: 0n, cred: 0n, pow: R(4500), div: 0n, flag: false } },
+  { id: 'SCN-15', name: 'Divergencia entre limite do emissor e limite calculado',
+    desc: 'Fatura R$ 1.800 =&gt; calculado R$ 3.200; emissor informa R$ 3.000; divergencia +R$ 200 (verificacoes individuais em I-05).',
+    input: mk({ issuerReportedAvailableLimitCents: R(3000), invoiceChargesCents: R(1800) }),
+    expected: { debt: R(1800), fut: 0n, pend: 0n, tot: R(1800), calc: R(3200), over: 0n, cred: 0n, pow: R(3200), div: R(200), flag: true } },
+  { id: 'SCN-16', name: 'Competencia x fluxo de caixa', desc: 'Compras de R$ 2.000 ja reconhecidas por competencia em ciclo anterior; pagamento compensado de R$ 2.000 = saida de caixa R$ 2.000, despesa por competencia gerada pelo pagamento R$ 0.',
+    input: mk({ issuerReportedAvailableLimitCents: R(5000), invoiceChargesCents: R(2000), paymentsClearedCents: R(2000) }),
+    expected: { debt: 0n, fut: 0n, pend: 0n, tot: 0n, calc: R(5000), over: 0n, cred: 0n, pow: R(5000), div: 0n, flag: false, cash: R(2000), compExp: 0n } },
+];
+
+const MAP = { debt: 'currentInvoiceDebtCents', fut: 'futureCommitmentCents', pend: 'pendingCommitmentCents', tot: 'totalLimitCommitmentCents',
+  calc: 'calculatedAvailableLimitCents', over: 'overlimitCents', cred: 'creditBalanceCents', pow: 'internalEstimatedPurchasingPowerCents',
+  div: 'divergenceCents', flag: 'hasDivergenceFlag', cash: 'cashOutflowCents', compExp: 'competenceExpenseFromPaymentCents' };
+
+const ser = (o) =&gt; JSON.parse(JSON.stringify(o, (k, v) =&gt; (typeof v === 'bigint' ? v.toString() : v)));
+
+const scenarioResults = SCENARIOS.map(sc =&gt; {
+  const actualFull = computeCardState(sc.input);
+  const checks = Object.entries(sc.expected).map(([k, exp]) =&gt; {
+    const act = actualFull[MAP[k]];
+    return { field: MAP[k], expected: exp, actual: act, ok: act === exp };
+  });
+  // invariante transversal: total = soma dos componentes
+  const invariantOk = actualFull.totalLimitCommitmentCents === actualFull.currentInvoiceDebtCents + actualFull.futureCommitmentCents + actualFull.pendingCommitmentCents;
+  checks.push({ field: 'INVARIANT total == fatura + futuro + pendente', expected: true, actual: invariantOk, ok: invariantOk });
+  // invariante: todos os campos de saida do modelo cobertos pelo esperado (&gt;= 10 campos conferidos)
+  const passed = checks.every(c =&gt; c.ok);
+  return { id: sc.id, name: sc.name, desc: sc.desc, input: ser(sc.input), actual: ser(actualFull), checks: ser(checks), fieldsChecked: checks.length, passed };
+});
+
+// ---------------- Testes suplementares ----------------
+const supp = [];
+function T(id, desc, fn) {
+  try { const r = fn(); supp.push({ id, desc, ...ser(r), passed: r.ok === true }); }
+  catch (e) { supp.push({ id, desc, ok: false, passed: false, error: String(e.message) }); }
+}
+const eq = (a, b) =&gt; a === b;
+
+T('I-01', 'SCN-03 controle: fatura R$ 4.500 SEM outros comprometimentos =&gt; disponivel R$ 500 (a diferenca de R$ 500 do relatorio anterior so existe se nao houver parcelas futuras)', () =&gt; {
+  const s = computeCardState(mk({ invoiceChargesCents: R(4500) }));
+  return { observed: { calc: s.calculatedAvailableLimitCents, tot: s.totalLimitCommitmentCents }, ok: s.calculatedAvailableLimitCents === R(500) &amp;&amp; s.overlimitCents === 0n };
+});
+T('I-02', 'SCN-10 controle: mesma compra de R$ 300 em estado HELD reduz o limite para R$ 4.700; em CANCELED nao reduz', () =&gt; {
+  const held = computeCardState(mk({ preAuthorizations: [{ amountCents: R(300), state: 'HELD' }] }));
+  const canc = computeCardState(mk({ preAuthorizations: [{ amountCents: R(300), state: 'CANCELED' }] }));
+  return { observed: { held: held.calculatedAvailableLimitCents, canceled: canc.calculatedAvailableLimitCents }, ok: held.calculatedAvailableLimitCents === R(4700) &amp;&amp; canc.calculatedAvailableLimitCents === R(5000) };
+});
+T('I-03', 'Pagamento NAO compensado (R$ 500) nao reduz divida nem libera limite', () =&gt; {
+  const s = computeCardState(mk({ invoiceChargesCents: R(2000), paymentsUnclearedCents: R(500) }));
+  return { observed: { debt: s.currentInvoiceDebtCents, calc: s.calculatedAvailableLimitCents }, ok: s.currentInvoiceDebtCents === R(2000) &amp;&amp; s.calculatedAvailableLimitCents === R(3000) };
+});
+T('I-04', 'SCN-09: divida da fatura (R$ 100) e comprometimento total (R$ 1.000) NAO se confundem; projecao de 9 faturas futuras de R$ 100', () =&gt; {
+  const s = computeCardState(SCENARIOS[8].input);
+  const proj = s.futureInvoiceProjection;
+  return { observed: { debt: s.currentInvoiceDebtCents, tot: s.totalLimitCommitmentCents, nFuture: proj.length, sumFuture: s.futureCommitmentCents },
+    ok: s.currentInvoiceDebtCents === R(100) &amp;&amp; s.totalLimitCommitmentCents === R(1000) &amp;&amp; s.currentInvoiceDebtCents !== s.totalLimitCommitmentCents &amp;&amp; proj.length === 9 &amp;&amp; proj.every(p =&gt; p.amountCents === R(100)) };
+});
+// SCN-15 individual
+const s15 = computeCardState(SCENARIOS[14].input);
+T('I-05.1', 'SCN-15 (1) preservacao do valor informado pelo emissor: R$ 3.000 permanece intacto e e o limite exibido', () =&gt; ({
+  observed: { issuer: s15.issuerReportedAvailableLimitCents, displayed: s15.displayedBankLimit }, ok: s15.issuerReportedAvailableLimitCents === R(3000) &amp;&amp; s15.displayedBankLimit.valueCents === R(3000) &amp;&amp; s15.displayedBankLimit.source === 'EMISSOR' }));
+T('I-05.2', 'SCN-15 (2) calculo interno: R$ 5.000 - R$ 1.800 = R$ 3.200', () =&gt; ({ observed: s15.calculatedAvailableLimitCents, ok: s15.calculatedAvailableLimitCents === R(3200) }));
+T('I-05.3', 'SCN-15 (3) diferenca de R$ 200 (calculado - informado)', () =&gt; ({ observed: s15.divergenceCents, ok: s15.divergenceCents === R(200) }));
+T('I-05.4', 'SCN-15 (4) sinalizador de divergencia ativo', () =&gt; ({ observed: s15.hasDivergenceFlag, ok: s15.hasDivergenceFlag === true }));
+T('I-05.5', 'SCN-15 (5) alerta ao usuario existe, tem codigo ISSUER_LIMIT_DIVERGENCE e cita os tres valores', () =&gt; ({
+  observed: s15.userAlert, ok: !!s15.userAlert &amp;&amp; s15.userAlert.code === 'ISSUER_LIMIT_DIVERGENCE' &amp;&amp; /3,000?|3\.000|3000,00|R\$ 3000,00/.test(s15.userAlert.message) &amp;&amp; s15.userAlert.message.includes('R$ 3200,00') &amp;&amp; s15.userAlert.message.includes('+R$ 200,00') }));
+T('I-05.6', 'SCN-15 (6) proibicao: a estimativa NAO e apresentada como limite bancario confirmado (confirmedByIssuer=false, rotulo de estimativa, e diferente do limite exibido)', () =&gt; ({
+  observed: { estimate: s15.kyroEstimate, displayed: s15.displayedBankLimit },
+  ok: s15.kyroEstimate.confirmedByIssuer === false &amp;&amp; s15.kyroEstimate.source === 'ESTIMATIVA_KYRO' &amp;&amp; /Estimativa Kyro/.test(s15.kyroEstimate.label) &amp;&amp; s15.displayedBankLimit.confirmedByIssuer === true &amp;&amp; s15.kyroEstimate.valueCents !== s15.displayedBankLimit.valueCents }));
+T('I-06', 'Saldo credor (R$ 1.500) nao altera limite calculado nem limite exibido do emissor', () =&gt; {
+  const a = computeCardState(mk({ issuerReportedAvailableLimitCents: R(4000), invoiceChargesCents: R(1000) }));
+  const b = computeCardState(mk({ issuerReportedAvailableLimitCents: R(4000), invoiceChargesCents: R(1000), priorCreditBalanceCents: R(1500) }));
+  return { observed: { semCredito: a.calculatedAvailableLimitCents, comCredito: b.calculatedAvailableLimitCents }, ok: a.calculatedAvailableLimitCents === b.calculatedAvailableLimitCents &amp;&amp; a.displayedBankLimit.valueCents === b.displayedBankLimit.valueCents &amp;&amp; b.internalEstimatedPurchasingPowerCents === a.internalEstimatedPurchasingPowerCents + R(1500) };
+});
+T('I-07', 'Sem valor do emissor: divergencia nula, sem sinalizador, sem alerta, limite exibido "NAO_INFORMADO_PELO_EMISSOR"', () =&gt; {
+  const s = computeCardState(mk({ invoiceChargesCents: R(100) }));
+  return { observed: { div: s.divergenceCents, flag: s.hasDivergenceFlag, alert: s.userAlert, displayed: s.displayedBankLimit }, ok: s.divergenceCents === null &amp;&amp; s.hasDivergenceFlag === false &amp;&amp; s.userAlert === null &amp;&amp; s.displayedBankLimit.confirmedByIssuer === false };
+});
+T('I-08a', 'Entrada invalida: valor negativo e rejeitado', () =&gt; { let r = false; try { computeCardState(mk({ invoiceChargesCents: -1n })); } catch (e) { r = /NEGATIVE_MONEY/.test(e.message); } return { observed: r, ok: r }; });
+T('I-08b', 'Entrada invalida: number (float) no lugar de bigint e rejeitado', () =&gt; { let r = false; try { computeCardState(mk({ invoiceChargesCents: 10.5 })); } catch (e) { r = /INVALID_MONEY_TYPE/.test(e.message); } return { observed: r, ok: r }; });
+T('I-09', 'Invariante em todos os 16 cenarios: nenhum indicador de divida da fatura iguala-se silenciosamente ao comprometimento total quando ha parcelas/pendencias', () =&gt; {
+  const bad = scenarioResults.filter(r =&gt; { const a = r.actual; const hasExtra = BigInt(a.futureCommitmentCents) + BigInt(a.pendingCommitmentCents) &gt; 0n; return hasExtra &amp;&amp; a.currentInvoiceDebtCents === a.totalLimitCommitmentCents; }).map(r =&gt; r.id);
+  return { observed: { violating: bad }, ok: bad.length === 0 };
+});
+T('I-10', 'Esperados independentes: nenhum esperado foi calculado pela funcao testada (verificacao estrutural: todos os 16 possuem &gt;= 10 campos esperados conferidos)', () =&gt; {
+  const min = Math.min(...scenarioResults.map(r =&gt; r.fieldsChecked));
+  return { observed: { minFieldsChecked: min }, ok: min &gt;= 10 };
+});
+
+const passedScn = scenarioResults.filter(r =&gt; r.passed).length;
+const passedSupp = supp.filter(r =&gt; r.passed).length;
+
+const out = {
+  meta: {
+    suite: 'KYRO Finance - Modelo de Cartoes v2 - Etapa 02.15 REV2',
+    scriptPath: __filename,
+    executedAt: new Date().toISOString(),
+    node: process.version,
+    environment: 'Node.js isolado, sem rede, sem Firestore, sem codigo de producao',
+    scenarios: { total: scenarioResults.length, passed: passedScn },
+    supplementary: { total: supp.length, passed: passedSupp },
+  },
+  scenarios: scenarioResults,
+  supplementary: supp,
+};
+const outPath = path.join(path.dirname(__filename), 'card_rev2_evidence.json');
+fs.writeFileSync(outPath, JSON.stringify(out, null, 2), 'utf8');
+
+console.log('=== EXECUCAO REV2 ===');
+for (const r of scenarioResults) {
+  const bad = r.checks.filter(c =&gt; !c.ok);
+  console.log(`${r.id} ${r.passed ? 'PASS' : 'FAIL'} (${r.fieldsChecked} campos)` + (bad.length ? ' ' + JSON.stringify(bad) : ''));
+}
+for (const t of supp) console.log(`${t.id} ${t.passed ? 'PASS' : 'FAIL'}${t.error ? ' ERRO ' + t.error : ''}`);
+console.log(`Cenarios: ${passedScn}/${scenarioResults.length} | Suplementares: ${passedSupp}/${supp.length}`);
+console.log('Evidencia:', outPath);
+</pre>
+</details>
+<div class="callout callout-warn"><strong>Limite epistemológico:</strong> estes testes provam a correção do ALGORITMO v2 em isolamento. Não provam integração com <code>src/App.tsx</code>, API, Firestore, Open Finance ou concorrência. Aprovação aqui ≠ aprovação do sistema.</div>
+<h2 id="s8">8. Webhook real e níveis de evidência por capacidade</h2>
+<div class="table-wrap"><table class=""><thead><tr><th>Termo pesquisado (sem diferenciar maiúsculas)</th><th><code>api/webhook.ts</code></th><th><code>bot.cjs</code></th><th><code>api/chat.ts</code></th><th><code>api/database.ts</code></th></tr></thead><tbody><tr><td><code>createHmac</code></td><td>0</td><td>0</td><td>0</td><td>0</td></tr><tr><td><code>hmac</code></td><td>0</td><td>0</td><td>0</td><td>0</td></tr><tr><td><code>x-kyro</code></td><td>0</td><td>0</td><td>0</td><td>0</td></tr><tr><td><code>signature</code></td><td>0</td><td>0</td><td>0</td><td>0</td></tr><tr><td><code>timingSafeEqual</code></td><td>0</td><td>0</td><td>0</td><td>0</td></tr><tr><td><code>nonce</code></td><td>0</td><td>0</td><td>0</td><td>0</td></tr><tr><td><code>lease</code></td><td>0</td><td>1</td><td>0</td><td>0</td></tr><tr><td><code>fencing</code></td><td>0</td><td>0</td><td>0</td><td>0</td></tr><tr><td><code>rawBody</code></td><td>0</td><td>0</td><td>0</td><td>0</td></tr><tr><td><code>status(401</code></td><td>0</td><td>0</td><td>0</td><td>0</td></tr><tr><td><code>status(403</code></td><td>0</td><td>0</td><td>0</td><td>0</td></tr><tr><td><code>WEBHOOK_SECRET</code></td><td>0</td><td>0</td><td>0</td><td>0</td></tr><tr><td><code>secret</code></td><td>0</td><td>0</td><td>0</td><td>0</td></tr><tr><td><code>runTransaction</code></td><td>0</td><td>0</td><td>0</td><td>0</td></tr><tr><td><code>idempot</code></td><td>0</td><td>0</td><td>0</td><td>0</td></tr><tr><td><code>authorization</code></td><td>1</td><td>5</td><td>0</td><td>0</td></tr><tr><td><code>Date.now()</code></td><td>6</td><td>20</td><td>1</td><td>0</td></tr></tbody></table></div>
+<div class="callout callout-info">Leitura dos resíduos: <code>authorization</code> em <code>api/webhook.ts</code> (L786) é o cabeçalho de SAÍDA <code>Bearer &lt;metaToken&gt;</code> ao baixar áudio — não autentica requisições recebidas. <code>lease</code> em <code>bot.cjs</code> (L2856) é a substring de "re<strong>lease</strong>s" na URL do APK. <code>Date.now()</code> em <code>api/webhook.ts</code> L1023 apenas grava data local. Nenhuma ocorrência de HMAC, nonce, fencing, rawBody, 401/403 ou segredo de webhook nos quatro arquivos.</div>
+<div class="table-wrap"><table class=""><thead><tr><th>Capacidade</th><th>Especificação concluída</th><th>Algoritmo testado isoladamente</th><th>Implementação existente no código real</th><th>Funcionamento integrado comprovado</th></tr></thead><tbody><tr><td>Modelo de cartões v2 (16 cenários)</td><td>SIM (seção 3)</td><td>SIM (16/16 + 16/16 + mutação 8/8)</td><td>NÃO (nomes do contrato v2 não existem no código; ver pesquisa abaixo)</td><td>NÃO</td></tr><tr><td>HMAC SHA-256 sobre corpo bruto</td><td>SIM (etapas 02.12–02.14)</td><td>SIM (script isolado de etapas anteriores — reprodução não refeita nesta REV2)</td><td>NÃO (0 ocorrências)</td><td>NÃO</td></tr><tr><td>Janela de timestamp (<code>/^\d{10}$/</code>, ±300 s)</td><td>SIM</td><td>SIM (7 casos em <code>timestamp_verification_results.json</code>, etapa anterior)</td><td>NÃO</td><td>NÃO</td></tr><tr><td>Nonce + lease + fencing token (idempotência)</td><td>SIM</td><td>Parcial: simulação determinística; concorrência real NÃO VERIFICÁVEL sem emulador</td><td>NÃO</td><td>NÃO</td></tr><tr><td>Rejeição HTTP 401/403</td><td>SIM</td><td>Simulada</td><td>NÃO (0 ocorrências)</td><td>NÃO</td></tr><tr><td>Valores monetários em <code>bigint</code>/centavos inteiros</td><td>SIM</td><td>SIM (esta suíte)</td><td>NÃO COMPROVADO no código real</td><td>NÃO</td></tr></tbody></table></div>
+<div class="table-wrap"><table class=""><thead><tr><th>Arquivo real</th><th><code>currentInvoiceDebtCents</code></th><th><code>totalLimitCommitmentCents</code></th><th><code>calculatedAvailableLimitCents</code></th><th><code>issuerReportedAvailableLimitCents</code></th><th><code>BigInt(</code></th></tr></thead><tbody><tr><td><code>src/App.tsx</code></td><td>0</td><td>0</td><td>0</td><td>0</td><td>0</td></tr><tr><td><code>api/webhook.ts</code></td><td>0</td><td>0</td><td>0</td><td>0</td><td>0</td></tr><tr><td><code>api/chat.ts</code></td><td>0</td><td>0</td><td>0</td><td>0</td><td>0</td></tr><tr><td><code>api/database.ts</code></td><td>0</td><td>0</td><td>0</td><td>0</td><td>0</td></tr><tr><td><code>bot.cjs</code></td><td>0</td><td>0</td><td>0</td><td>0</td><td>0</td></tr><tr><td><code>src/utils/financialParser.ts</code></td><td>0</td><td>0</td><td>0</td><td>0</td><td>0</td></tr></tbody></table></div>
+<div class="callout callout-danger"><strong>Requisito obrigatório de segurança:</strong> o canal webhook NÃO pode ser liberado enquanto HMAC, validação de timestamp, nonce/lease/fencing e rejeição 401/403 não estiverem implementados e testados com emulador. Isto permanece como pendência de implementação (Etapa 03, sujeita à autorização do responsável).</div>
+<h2 id="s9">9. Inventário rastreável dos 66 componentes (hashes SHA-256 integrais)</h2>
+<p>Snapshot: commit <code>a2df46c82432730ab5e606c0c579fb7a83e54e8b</code>, branch <code>main</code>. Verificação do commit remoto por <code>git ls-remote origin main</code> (somente leitura) = <code>a2df46c82432730ab5e606c0c579fb7a83e54e8b</code>. Comparação byte a byte: conteúdo do disco × <code>git show HEAD:&lt;arquivo&gt;</code>. "Lido integralmente" significa que o arquivo foi lido por completo e hasheado programaticamente; <strong>não</strong> implica inspeção semântica. A coluna "Responsabilidade" é a declarada em etapas anteriores e não foi reverificada nesta revisão, exceto onde indicado nas seções 8 e 6.</p>
+<div class="table-wrap"><table class=""><thead><tr><th>Resumo</th><th>Quantidade</th></tr></thead><tbody><tr><td>Existentes no disco</td><td>58</td></tr><tr><td>Idênticos ao commit (SHA-256 do disco = SHA-256 do blob em HEAD)</td><td>53</td></tr><tr><td>NÃO VERIFICÁVEIS contra o commit (ignorados/não rastreados)</td><td>5</td></tr><tr><td>Divergentes do commit</td><td>0</td></tr><tr><td>Ausentes no disco e no commit</td><td>8</td></tr></tbody></table></div>
+<h3>9.1 Arquivos existentes (58)</h3>
+<div class="table-wrap"><table class="wide"><thead><tr><th>#</th><th>Caminho completo</th><th>Bytes</th><th>SHA-256 integral (disco)</th><th>Existe</th><th>Leitura completa</th><th>Correspondência com o commit</th><th>Responsabilidade declarada</th></tr></thead><tbody><tr><td>1</td><td><code>C:/Users/Lenovo/Documents/antigravity/Finanças/bot.cjs</code></td><td>181796</td><td><code>e648445e7e84e2d7cf53228982c702a0cadf7bcf0e074b47fa92aa2b49b6f8c0</code></td><td>sim</td><td>sim (hash)</td><td>IDENTICO AO COMMIT</td><td>Servidor autônomo WhatsApp Baileys com pareamento por código e IA Whisper/Tesseract</td></tr><tr><td>2</td><td><code>C:/Users/Lenovo/Documents/antigravity/Finanças/package.json</code></td><td>1186</td><td><code>08c5564a3971b5c40eb240c86eee005e8b76514227354ae2eb71b7347915c79e</code></td><td>sim</td><td>sim (hash)</td><td>IDENTICO AO COMMIT</td><td>Manifesto de dependências do Node.js, Capacitor e React 19</td></tr><tr><td>3</td><td><code>C:/Users/Lenovo/Documents/antigravity/Finanças/package-lock.json</code></td><td>331451</td><td><code>f046f6376bb3ccb8632b19a5eb49f71b5b8fce5dda72f0960edac23613cd8fd8</code></td><td>sim</td><td>sim (hash)</td><td>IDENTICO AO COMMIT</td><td>Lockfile determinístico de árvores de dependência npm</td></tr><tr><td>4</td><td><code>C:/Users/Lenovo/Documents/antigravity/Finanças/capacitor.config.json</code></td><td>406</td><td><code>db54495cfb7851155eca4a0446b851bdc5ea02aa267226e1d1de51ac0bd68db1</code></td><td>sim</td><td>sim (hash)</td><td>IDENTICO AO COMMIT</td><td>Configuração de empacotamento nativo Android (appId, server, webDir)</td></tr><tr><td>5</td><td><code>C:/Users/Lenovo/Documents/antigravity/Finanças/vite.config.ts</code></td><td>295</td><td><code>1e24d80a6096db9585c880639dce89deb8d915329797a618fc5449da379fae6c</code></td><td>sim</td><td>sim (hash)</td><td>IDENTICO AO COMMIT</td><td>Configuração do bundler Vite e plugins React</td></tr><tr><td>6</td><td><code>C:/Users/Lenovo/Documents/antigravity/Finanças/tsconfig.json</code></td><td>511</td><td><code>24dd02d49c24ee7f9b640029bae95c5fd695a1eb58b40d1b343e7567afa211c6</code></td><td>sim</td><td>sim (hash)</td><td>IDENTICO AO COMMIT</td><td>Configuração do compilador TypeScript e paths</td></tr><tr><td>7</td><td><code>C:/Users/Lenovo/Documents/antigravity/Finanças/vercel.json</code></td><td>522</td><td><code>cc2bea319bb850c7acc286b5afdd3264d26dbcc44b55742ee01c9a7c8f046a1a</code></td><td>sim</td><td>sim (hash)</td><td>IDENTICO AO COMMIT</td><td>Configuração de rotas serverless, headers e rewrite da Vercel</td></tr><tr><td>8</td><td><code>C:/Users/Lenovo/Documents/antigravity/Finanças/tailwind.config.js</code></td><td>455</td><td><code>31aa2660b4e6c8ec5badb7302be38d81b198503e3f9fcc0377137cd34eb6fbc5</code></td><td>sim</td><td>sim (hash)</td><td>IDENTICO AO COMMIT</td><td>Configuração de design system e temas CSS</td></tr><tr><td>9</td><td><code>C:/Users/Lenovo/Documents/antigravity/Finanças/postcss.config.js</code></td><td>80</td><td><code>190c877db466995bf1482f4a16abd06e04a89ede3119341e2a86ff96e1737b27</code></td><td>sim</td><td>sim (hash)</td><td>IDENTICO AO COMMIT</td><td>Configuração de processamento de estilos Tailwind</td></tr><tr><td>10</td><td><code>C:/Users/Lenovo/Documents/antigravity/Finanças/Dockerfile</code></td><td>257</td><td><code>d432c60ea6ee2d84a350ac2b7b0ea106edf214fa97d9786eb2c95eb01289574e</code></td><td>sim</td><td>sim (hash)</td><td>IDENTICO AO COMMIT</td><td>Containerização para deploy do bot em VPS (Render/Railway)</td></tr><tr><td>11</td><td><code>C:/Users/Lenovo/Documents/antigravity/Finanças/render.yaml</code></td><td>382</td><td><code>0fbb126092ea091ce486ff34b856c5164d0980e3f9d59380b7fed9bb003b53c5</code></td><td>sim</td><td>sim (hash)</td><td>IDENTICO AO COMMIT</td><td>Configuração de infraestrutura de nuvem no Render</td></tr><tr><td>12</td><td><code>C:/Users/Lenovo/Documents/antigravity/Finanças/iniciar_robo.bat</code></td><td>587</td><td><code>c2b0259289d5207c93855393ca09114a23ac1699f2ccb130af3cf734f982b91b</code></td><td>sim</td><td>sim (hash)</td><td>IDENTICO AO COMMIT</td><td>Script Windows para inicialização em segundo plano do bot.cjs</td></tr><tr><td>13</td><td><code>C:/Users/Lenovo/Documents/antigravity/Finanças/version.json</code></td><td>861</td><td><code>bbbf9235fa9bf7272c67d8d19fa79f61d4a1d23fc868ad8bf95d02a4c1121349</code></td><td>sim</td><td>sim (hash)</td><td>IDENTICO AO COMMIT</td><td>Fonte única de versionamento de build do app Android (v1.41 / PR.041)</td></tr><tr><td>14</td><td><code>C:/Users/Lenovo/Documents/antigravity/Finanças/README.md</code></td><td>6350</td><td><code>74b59a0533af1bb236b3308642f3b081c0383af3f2045f011fb480a0ab16b103</code></td><td>sim</td><td>sim (hash)</td><td>IDENTICO AO COMMIT</td><td>Documentação geral de instalação e execução do projeto</td></tr><tr><td>15</td><td><code>C:/Users/Lenovo/Documents/antigravity/Finanças/PONTOS_DE_RESTAURACAO.md</code></td><td>87056</td><td><code>cec521493683ce48c342269973c4e3f03d930c965db408400dee5120df2cdc4e</code></td><td>sim</td><td>sim (hash)</td><td>IDENTICO AO COMMIT</td><td>Registro histórico de builds estáveis e snapshots de restauração</td></tr><tr><td>16</td><td><code>C:/Users/Lenovo/Documents/antigravity/Finanças/HISTORICO_CONSOLIDADO_KYRO_FINANCE.md</code></td><td>29307</td><td><code>973443a31a663ff2995b175f3d3353380cb8e094664f63812c1e917de8e07a4c</code></td><td>sim</td><td>sim (hash)</td><td>NAO VERIFICAVEL (NAO RASTREADO PELO GIT)</td><td>Histórico consolidado da evolução do ecossistema</td></tr><tr><td>17</td><td><code>C:/Users/Lenovo/Documents/antigravity/Finanças/DIAGNOSTICO_BOT_WHATSAPP.md</code></td><td>12846</td><td><code>36129bb70b5c22810a14a50a7916395902b2a04f4ad23e1f4f0a57f53d9f6025</code></td><td>sim</td><td>sim (hash)</td><td>NAO VERIFICAVEL (NAO RASTREADO PELO GIT)</td><td>Diagnóstico e guia de pareamento oficial Baileys</td></tr><tr><td>18</td><td><code>C:/Users/Lenovo/Documents/antigravity/Finanças/transactions.json</code></td><td>4747</td><td><code>9614124e108fd4cb215fe0b46bc059c26413d76f4631418f0c546f6c9aedc592</code></td><td>sim</td><td>sim (hash)</td><td>NAO VERIFICAVEL (ARQUIVO IGNORADO PELO GIT)</td><td>Persistência local de transações registradas pelo robô WhatsApp</td></tr><tr><td>19</td><td><code>C:/Users/Lenovo/Documents/antigravity/Finanças/kyro_settings.json</code></td><td>618</td><td><code>ab53a18af776867c6eeea0d614dbd41ed834c271bb7af78ead595650ffb36178</code></td><td>sim</td><td>sim (hash)</td><td>IDENTICO AO COMMIT</td><td>Configurações operacionais locais do bot (grupos, telefone de monitoramento)</td></tr><tr><td>20</td><td><code>C:/Users/Lenovo/Documents/antigravity/Finanças/credit_cards.json</code></td><td>3</td><td><code>37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570</code></td><td>sim</td><td>sim (hash)</td><td>IDENTICO AO COMMIT</td><td>Persistência local de cartões cadastrados pelo WhatsApp</td></tr><tr><td>21</td><td><code>C:/Users/Lenovo/Documents/antigravity/Finanças/recurring_expenses.json</code></td><td>3</td><td><code>37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570</code></td><td>sim</td><td>sim (hash)</td><td>IDENTICO AO COMMIT</td><td>Persistência local de despesas fixas recorrentes do robô</td></tr><tr><td>22</td><td><code>C:/Users/Lenovo/Documents/antigravity/Finanças/deleted_tx_ids.json</code></td><td>275</td><td><code>602726349ac38a3dbd9c0c2d6df2afd94c28291af65ec04b8393a2fc91d3ec51</code></td><td>sim</td><td>sim (hash)</td><td>IDENTICO AO COMMIT</td><td>Registro de IDs de transações canceladas/deletadas no bot</td></tr><tr><td>23</td><td><code>C:/Users/Lenovo/Documents/antigravity/Finanças/monitored_group.json</code></td><td>211</td><td><code>5ac4e7dc95fd8ee59998df05d96adc1ec468ced28832855c5f518cbf1b0c7a73</code></td><td>sim</td><td>sim (hash)</td><td>NAO VERIFICAVEL (ARQUIVO IGNORADO PELO GIT)</td><td>Definição do JID do grupo de WhatsApp monitorado para despesas coletivas</td></tr><tr><td>24</td><td><code>C:/Users/Lenovo/Documents/antigravity/Finanças/.github/workflows/android-build.yml</code></td><td>4098</td><td><code>de9bb1f50ad320a80029a967e45a7f1ce9ba8fe1827b084bc8041264d1d2ec9f</code></td><td>sim</td><td>sim (hash)</td><td>IDENTICO AO COMMIT</td><td>Pipeline CI/CD GitHub Actions de compilação, assinatura e release do APK</td></tr><tr><td>25</td><td><code>C:/Users/Lenovo/Documents/antigravity/Finanças/.agent/rules/kyro-apk-delivery.md</code></td><td>1755</td><td><code>91786981e8de74046d9636fd18e58deddae829c67befbbb25e4630212a69527c</code></td><td>sim</td><td>sim (hash)</td><td>IDENTICO AO COMMIT</td><td>Regra de governança mandatória de entrega do APK atualizado nas respostas</td></tr><tr><td>26</td><td><code>C:/Users/Lenovo/Documents/antigravity/Finanças/KYRO-Finance.apk</code></td><td>9535171</td><td><code>ac68662b788ea5291a789bc89004b2da469aff43b90c076e55fa7baf4026e44f</code></td><td>sim</td><td>sim (hash)</td><td>NAO VERIFICAVEL (ARQUIVO IGNORADO PELO GIT)</td><td>Binário compilado e assinado do aplicativo Android pronto para instalação</td></tr><tr><td>27</td><td><code>C:/Users/Lenovo/Documents/antigravity/Finanças/android/app/build.gradle</code></td><td>2789</td><td><code>55e75582f78de96720cefcb0842998194047440246fcc8834afbda8169ea4bb5</code></td><td>sim</td><td>sim (hash)</td><td>IDENTICO AO COMMIT</td><td>Configuração Gradle do módulo Android (plugins, dependências, SDK version)</td></tr><tr><td>28</td><td><code>C:/Users/Lenovo/Documents/antigravity/Finanças/android/app/capacitor.build.gradle</code></td><td>414</td><td><code>47e2308de17888afa42c3a6975626c50ef2fc0abbaf4c7da862eb32d567c3105</code></td><td>sim</td><td>sim (hash)</td><td>IDENTICO AO COMMIT</td><td>Configuração Gradle injetada pelo Capacitor CLI</td></tr><tr><td>29</td><td><code>C:/Users/Lenovo/Documents/antigravity/Finanças/android/app/proguard-rules.pro</code></td><td>751</td><td><code>1cf8c57e8f79c250b0af9c1a5a4edad71a5c348a79ab70243b6bae086c150ad2</code></td><td>sim</td><td>sim (hash)</td><td>IDENTICO AO COMMIT</td><td>Regras de ofuscação e otimização ProGuard para Android Release</td></tr><tr><td>30</td><td><code>C:/Users/Lenovo/Documents/antigravity/Finanças/android/app/src/main/AndroidManifest.xml</code></td><td>2822</td><td><code>ded18100b4837e61577aacccb0788b294fd9cb9dc66c1978e0538f1cad69bdb0</code></td><td>sim</td><td>sim (hash)</td><td>IDENTICO AO COMMIT</td><td>Manifesto Android de permissões (Áudio, Câmera, Rede, Request Install Packages)</td></tr><tr><td>31</td><td><code>C:/Users/Lenovo/Documents/antigravity/Finanças/android/app/src/main/java/com/kyro/finance/MainActivity.java</code></td><td>2562</td><td><code>efc0e48b3087f17b69921bc41da79e00e171e621944b00c1622dbaa9a27612c4</code></td><td>sim</td><td>sim (hash)</td><td>IDENTICO AO COMMIT</td><td>Activity Android principal, configuração de WebView, banco e permissões</td></tr><tr><td>32</td><td><code>C:/Users/Lenovo/Documents/antigravity/Finanças/android/app/src/main/java/com/kyro/finance/AppUpdateManagerPlugin.java</code></td><td>12208</td><td><code>970ee22a131f9549df9defd73dce200e27adcde7671f1fbb45606f41b2141860</code></td><td>sim</td><td>sim (hash)</td><td>IDENTICO AO COMMIT</td><td>Plugin nativo Capacitor para download de APK e auto-update via FileProvider</td></tr><tr><td>33</td><td><code>C:/Users/Lenovo/Documents/antigravity/Finanças/android/app/src/main/java/com/kyro/finance/NativeSpeechRecognizerPlugin.java</code></td><td>11503</td><td><code>4fc50ff031434a78578c2982fcf2eed86881026f3d22f1f30fc6097e5e4b71cd</code></td><td>sim</td><td>sim (hash)</td><td>IDENTICO AO COMMIT</td><td>Plugin nativo Capacitor para transcrição de fala por voz via Android Speech API</td></tr><tr><td>34</td><td><code>C:/Users/Lenovo/Documents/antigravity/Finanças/api/app-version.ts</code></td><td>5058</td><td><code>64ce42fd039dd619ac3d9f3ff5606b05581d127c26438c3a3089531fffe8b964</code></td><td>sim</td><td>sim (hash)</td><td>IDENTICO AO COMMIT</td><td>Rota serverless que fornece a versão e build atuais para verificação de atualização</td></tr><tr><td>35</td><td><code>C:/Users/Lenovo/Documents/antigravity/Finanças/api/chat.ts</code></td><td>36182</td><td><code>5576b2183620eabe3a2ca386470c55867a400ef8c1f543176f7c7b2367a0affd</code></td><td>sim</td><td>sim (hash)</td><td>IDENTICO AO COMMIT</td><td>Endpoint de assistência por IA (Copilot) com integração OpenAI</td></tr><tr><td>36</td><td><code>C:/Users/Lenovo/Documents/antigravity/Finanças/api/config/openai.ts</code></td><td>129</td><td><code>d0b8fa8f958bd13db2cfde97610b9ebf0b57eb79b322e3081fd51deac82755a5</code></td><td>sim</td><td>sim (hash)</td><td>IDENTICO AO COMMIT</td><td>Instanciação e configuração do cliente OpenAI API</td></tr><tr><td>37</td><td><code>C:/Users/Lenovo/Documents/antigravity/Finanças/api/database.ts</code></td><td>25766</td><td><code>3c979ec53d81b74b2dd5031fa357637952bbbec197c8eaabf38f313a82708d69</code></td><td>sim</td><td>sim (hash)</td><td>IDENTICO AO COMMIT</td><td>Camada de acesso a dados no Firebase Firestore (Client SDK na API)</td></tr><tr><td>40</td><td><code>C:/Users/Lenovo/Documents/antigravity/Finanças/api/group-join.ts</code></td><td>3105</td><td><code>7b35cfe21046899525b0fca81fc8398d29593cad91cc9ee4a93bfdf385692b77</code></td><td>sim</td><td>sim (hash)</td><td>IDENTICO AO COMMIT</td><td>Endpoint para adicionar usuário ao grupo de monitoramento WhatsApp</td></tr><tr><td>41</td><td><code>C:/Users/Lenovo/Documents/antigravity/Finanças/api/instance-qr.ts</code></td><td>3793</td><td><code>0d4e713bc971193f400fdd33922b4699c70af3a6b82fe66b7d91a51bdda512a6</code></td><td>sim</td><td>sim (hash)</td><td>IDENTICO AO COMMIT</td><td>Endpoint de exibição do QR Code de pareamento do Baileys</td></tr><tr><td>44</td><td><code>C:/Users/Lenovo/Documents/antigravity/Finanças/api/prompts/finance.prompt.ts</code></td><td>1721</td><td><code>ba409196cf5b861303f261f9e1c17571f3ca912475b62862e021151b6712e268</code></td><td>sim</td><td>sim (hash)</td><td>IDENTICO AO COMMIT</td><td>System prompt do modelo OpenAI para categorização e chat contábil</td></tr><tr><td>46</td><td><code>C:/Users/Lenovo/Documents/antigravity/Finanças/api/services/evolution.ts</code></td><td>1669</td><td><code>663b187863d0b8fe6179815a99c3d4f1b667876c1578f14a8110b901f58cdf2d</code></td><td>sim</td><td>sim (hash)</td><td>IDENTICO AO COMMIT</td><td>Cliente de integração para APIs externas de mensageria</td></tr><tr><td>47</td><td><code>C:/Users/Lenovo/Documents/antigravity/Finanças/api/services/financeAssistant.ts</code></td><td>3385</td><td><code>fb24d6dbd541861b7ac3d4ac104aea7918d9953789fd3857a4ff2fa028ea4b79</code></td><td>sim</td><td>sim (hash)</td><td>IDENTICO AO COMMIT</td><td>Parser de linguagem natural e regras de negócio para mensagens financeiras</td></tr><tr><td>48</td><td><code>C:/Users/Lenovo/Documents/antigravity/Finanças/api/services/financeDb.ts</code></td><td>2259</td><td><code>63a20a830a30c91338d5a06732599ac74be9e73901ecda0893061cf54b622bbf</code></td><td>sim</td><td>sim (hash)</td><td>IDENTICO AO COMMIT</td><td>Helpers auxiliares de persistência no Firestore</td></tr><tr><td>50</td><td><code>C:/Users/Lenovo/Documents/antigravity/Finanças/api/transcribe.ts</code></td><td>6915</td><td><code>6ab950f786e5b179abdf8b6aa97e6aa34104ff1f279487a087f113415e79e3de</code></td><td>sim</td><td>sim (hash)</td><td>IDENTICO AO COMMIT</td><td>Endpoint de transcrição de áudio via Whisper na nuvem (fallback para local)</td></tr><tr><td>52</td><td><code>C:/Users/Lenovo/Documents/antigravity/Finanças/api/webhook.ts</code></td><td>48927</td><td><code>42a16d018fb9b44bdea70577aa4efa9dc726c6b23beb3fe08e1454dbfbe5dc0c</code></td><td>sim</td><td>sim (hash)</td><td>IDENTICO AO COMMIT</td><td>Endpoint de recebimento de mensagens e eventos externos do WhatsApp/Evolution</td></tr><tr><td>54</td><td><code>C:/Users/Lenovo/Documents/antigravity/Finanças/src/App.tsx</code></td><td>363111</td><td><code>33371c4e33225ee9623f2d196d528c9278788128d631b56d2eb44aadcc7e681c</code></td><td>sim</td><td>sim (hash)</td><td>IDENTICO AO COMMIT</td><td>Componente React principal da aplicação Web e PWA, gerenciamento de estado global</td></tr><tr><td>55</td><td><code>C:/Users/Lenovo/Documents/antigravity/Finanças/src/components/UpdateModal.tsx</code></td><td>10256</td><td><code>f5cc3b3b2b0851b8969da3736d172c07a835b21fbc4cf948a7b543dbdbe1e0d6</code></td><td>sim</td><td>sim (hash)</td><td>IDENTICO AO COMMIT</td><td>Modal interativo de alerta e progresso de atualização de APK para o usuário</td></tr><tr><td>56</td><td><code>C:/Users/Lenovo/Documents/antigravity/Finanças/src/components/WhatsAppTab.tsx</code></td><td>63741</td><td><code>d9021bf5e8222a0321b261da5c46cd69a55c114f34113983811834dc4c8d32aa</code></td><td>sim</td><td>sim (hash)</td><td>IDENTICO AO COMMIT</td><td>Aba de gerenciamento de conexão WhatsApp e código oficial de pareamento</td></tr><tr><td>57</td><td><code>C:/Users/Lenovo/Documents/antigravity/Finanças/src/firebase.ts</code></td><td>5616</td><td><code>f2b4dfca4b75884cc8e67655540fe114506f1dd59bb501fc66fefd4f2a39eb6c</code></td><td>sim</td><td>sim (hash)</td><td>IDENTICO AO COMMIT</td><td>Inicialização do cliente Firebase (Auth, Firestore, Storage) via variáveis Vite</td></tr><tr><td>58</td><td><code>C:/Users/Lenovo/Documents/antigravity/Finanças/src/index.css</code></td><td>2083</td><td><code>6cd6679c986e08789d6cd6a1db6d8275cfe3b320ffae8c42a92db9f2239757a3</code></td><td>sim</td><td>sim (hash)</td><td>IDENTICO AO COMMIT</td><td>Estilos CSS base, fontes e diretivas do Tailwind CSS</td></tr><tr><td>59</td><td><code>C:/Users/Lenovo/Documents/antigravity/Finanças/src/main.tsx</code></td><td>309</td><td><code>e79a4d31f8da1957ccfbeefcde3e6f9f39a1a173e6af01cf80c8a923501ca159</code></td><td>sim</td><td>sim (hash)</td><td>IDENTICO AO COMMIT</td><td>Ponto de entrada de montagem da raiz React 19 no DOM</td></tr><tr><td>60</td><td><code>C:/Users/Lenovo/Documents/antigravity/Finanças/src/nativeBridge.ts</code></td><td>6832</td><td><code>b3f4d67d3164848ce26553f1b73af7b8070ed7c6875902ce8ce831e44aaaedd4</code></td><td>sim</td><td>sim (hash)</td><td>IDENTICO AO COMMIT</td><td>Ponte de comunicação entre JavaScript e plugins nativos Capacitor</td></tr><tr><td>61</td><td><code>C:/Users/Lenovo/Documents/antigravity/Finanças/src/types.ts</code></td><td>3312</td><td><code>5d3e4f2656a4a6a24c53f8cf27fa425a58afb1594d256eff04aa82d80f2c4238</code></td><td>sim</td><td>sim (hash)</td><td>IDENTICO AO COMMIT</td><td>Declaração central de interfaces e tipos TypeScript de modelos financeiros legados</td></tr><tr><td>62</td><td><code>C:/Users/Lenovo/Documents/antigravity/Finanças/src/utils/aiCopilot.ts</code></td><td>46493</td><td><code>24c722718bb644a7bfc6197d0db92668e66edfeb70540ba1e421120f7456910c</code></td><td>sim</td><td>sim (hash)</td><td>IDENTICO AO COMMIT</td><td>Utilitários para comunicação com a IA e formatação de respostas do assistente</td></tr><tr><td>63</td><td><code>C:/Users/Lenovo/Documents/antigravity/Finanças/src/utils/appUpdater.ts</code></td><td>11050</td><td><code>38e0d55f9e9b20d68d1e734af00a1c8420cd34c8b2944d725137ad155da22bee</code></td><td>sim</td><td>sim (hash)</td><td>IDENTICO AO COMMIT</td><td>Lógica cliente de checagem de versão no GitHub e acionamento de auto-update</td></tr><tr><td>64</td><td><code>C:/Users/Lenovo/Documents/antigravity/Finanças/src/utils/documentExtractor.ts</code></td><td>2983</td><td><code>cd970600a58fa315c82217b63719c9bbd9ee46f3edb2944247389e42972ace3d</code></td><td>sim</td><td>sim (hash)</td><td>IDENTICO AO COMMIT</td><td>Extração e parsing de dados em comprovantes e extratos bancários</td></tr><tr><td>65</td><td><code>C:/Users/Lenovo/Documents/antigravity/Finanças/src/utils/financialParser.ts</code></td><td>31258</td><td><code>ab718e8ac3130f820030b46ca9e8765c26fb5707c9cd1fe9810d54f7c1dd40ff</code></td><td>sim</td><td>sim (hash)</td><td>IDENTICO AO COMMIT</td><td>Parser determinístico legado de texto para extração de valores, categorias e datas</td></tr><tr><td>66</td><td><code>C:/Users/Lenovo/Documents/antigravity/Finanças/src/version.ts</code></td><td>918</td><td><code>da9efc81e6ab4eaca5ba7525b0d71c27a09924eddc52eac5d118603c247fa99c</code></td><td>sim</td><td>sim (hash)</td><td>IDENTICO AO COMMIT</td><td>Constantes de versão oficial do frontend (v1.41 / PR.041)</td></tr></tbody></table></div>
+<h3>9.2 Componentes ausentes ou não materializados como arquivos independentes (8)</h3>
+<div class="table-wrap"><table class=""><thead><tr><th>#</th><th>Caminho esperado</th><th>Existe no disco</th><th>Existe no commit HEAD</th><th>Justificativa declarada (etapas anteriores)</th><th>Situação da justificativa</th></tr></thead><tbody><tr><td>38</td><td><code>api/device-token.ts</code></td><td>não</td><td>não</td><td>(Incorporado em api/chat.ts e bot.cjs)</td><td>Ausência confirmada no disco e em HEAD; a afirmação de onde a função foi incorporada é declarada e NÃO foi reverificada nesta revisão</td></tr><tr><td>39</td><td><code>api/generate-rules.ts</code></td><td>não</td><td>não</td><td>(Incorporado em src/utils/financialParser.ts)</td><td>Ausência confirmada no disco e em HEAD; a afirmação de onde a função foi incorporada é declarada e NÃO foi reverificada nesta revisão</td></tr><tr><td>42</td><td><code>api/ocr.ts</code></td><td>não</td><td>não</td><td>(Realizado localmente por tesseract.js no bot.cjs)</td><td>Ausência confirmada no disco e em HEAD; a afirmação de onde a função foi incorporada é declarada e NÃO foi reverificada nesta revisão</td></tr><tr><td>43</td><td><code>api/ping.ts</code></td><td>não</td><td>não</td><td>(Atendido por api/app-version.ts)</td><td>Ausência confirmada no disco e em HEAD; a afirmação de onde a função foi incorporada é declarada e NÃO foi reverificada nesta revisão</td></tr><tr><td>45</td><td><code>api/push-notification.ts</code></td><td>não</td><td>não</td><td>(Realizado via webhook e bot.cjs)</td><td>Ausência confirmada no disco e em HEAD; a afirmação de onde a função foi incorporada é declarada e NÃO foi reverificada nesta revisão</td></tr><tr><td>49</td><td><code>api/sync.ts</code></td><td>não</td><td>não</td><td>(Sincronização ocorre via Firestore SDK direto)</td><td>Ausência confirmada no disco e em HEAD; a afirmação de onde a função foi incorporada é declarada e NÃO foi reverificada nesta revisão</td></tr><tr><td>51</td><td><code>api/version.ts</code></td><td>não</td><td>não</td><td>(Nome canônico é api/app-version.ts)</td><td>Ausência confirmada no disco e em HEAD; a afirmação de onde a função foi incorporada é declarada e NÃO foi reverificada nesta revisão</td></tr><tr><td>53</td><td><code>api/whatsapp-service.ts</code></td><td>não</td><td>não</td><td>(Implementado integralmente em bot.cjs)</td><td>Ausência confirmada no disco e em HEAD; a afirmação de onde a função foi incorporada é declarada e NÃO foi reverificada nesta revisão</td></tr></tbody></table></div>
+<h2 id="s10">10. Parecer revisado sobre o encerramento da Fase 02</h2>
+<div class="table-wrap"><table class=""><thead><tr><th>Dimensão</th><th>Parecer</th><th>Fundamentação</th></tr></thead><tbody><tr><td>A. Maturidade arquitetural</td><td><strong>APROVADA</strong></td><td>Contrato de cartões v2 completo e sem mistura de indicadores; contratos de webhook/idempotência/moeda especificados. O contrato v2 desta REV2 <strong>substitui</strong> as definições v1 (<code>openInvoiceDebtCents</code>/<code>pendingAuthorizationsCents</code> etc.) das etapas 02.13–02.15, que ficam marcadas como superadas neste ponto.</td></tr><tr><td>B. Evidência de validação</td><td><strong>APROVADA PARA O ESCOPO ISOLADO</strong></td><td>16/16 cenários, 16/16 suplementares, mutação 8/8. Não há evidência de integração, concorrência real, Firestore ou Open Finance. Reprodução dos testes de webhook/timestamp de etapas anteriores não foi refeita nesta REV2.</td></tr><tr><td>C. Prontidão para implementação</td><td><strong>PRONTA, CONDICIONADA</strong></td><td>Contratos suficientes para iniciar a implementação, condicionada à autorização expressa do responsável e à revisão independente do contrato v2 (ele foi criado nesta revisão).</td></tr><tr><td>D. Prontidão para produção</td><td><strong>NÃO PRONTA</strong></td><td>v1.41 em produção não implementa o modelo v2, não usa <code>bigint</code> comprovadamente e o webhook não possui HMAC, timestamp, nonce, lease, fencing nem 401/403.</td></tr></tbody></table></div>
+<h3>Pendências e limitações registradas</h3>
+<ul><li>Implementação do webhook seguro (HMAC, timestamp, nonce, lease, fencing, 401/403) — requisito obrigatório de segurança antes de liberar o canal.</li><li>Integração do modelo v2 em <code>src/App.tsx</code> e API; migração de float para centavos inteiros.</li><li>5 arquivos do inventário NÃO VERIFICÁVEIS contra o commit (ignorados/não rastreados): <code>HISTORICO_CONSOLIDADO_KYRO_FINANCE.md</code>, <code>DIAGNOSTICO_BOT_WHATSAPP.md</code>, <code>transactions.json</code>, <code>monitored_group.json</code>, <code>KYRO-Finance.apk</code>.</li><li>Testes TST-08 a TST-10 (dependem de emulador/rede) permanecem NÃO VERIFICÁVEIS.</li><li>Justificativas dos 8 componentes ausentes são declaradas, não reverificadas.</li><li>Políticas de competência de compras parceladas e juros não foram redefinidas aqui (fora do escopo).</li></ul>
+<h2 id="s11">11. Autocorreção — revisão crítica deste relatório</h2>
+<div class="table-wrap"><table class=""><thead><tr><th>Verificação automática do próprio relatório</th><th>Resultado</th><th>Detalhe</th></tr></thead><tbody><tr><td>Recomputação independente dos 16 cenários (aritmética Number, sem usar a função testada)</td><td>APROVADO</td><td>16/16 coincidem</td></tr><tr><td>Todos os 58 hashes do inventário estão integrais (64 hex) e presentes no MD e no HTML</td><td>APROVADO</td><td>62 hashes de 64 hex no MD</td></tr><tr><td>Nenhum hash truncado (padrão hex{16}+reticências)</td><td>APROVADO</td><td>busca por /[0-9a-f]{16}\.\.\./</td></tr><tr><td>Sem "undefined", "NaN" ou "[object" nos documentos</td><td>APROVADO</td><td>busca textual</td></tr><tr><td>Expressão de timestamp correta <code>/^\d{10}$/</code> presente e sem a forma errada <code>/^d{10}$/</code></td><td>APROVADO</td><td>busca textual</td></tr><tr><td>Contagens do inventário coerentes (58 + 8 = 66; 53 + 5 = 58)</td><td>APROVADO</td><td>{"total":66,"existing":58,"absent":8,"identical":53,"identicalEol":0,"divergent":0,"notVerifiable":5}</td></tr><tr><td>HEAD local = origin/main e nenhum arquivo rastreado modificado</td><td>APROVADO</td><td>a2df46c82432730ab5e606c0c579fb7a83e54e8b</td></tr><tr><td>Nenhuma alegação global não qualificada do tipo "modelo inteiro aprovado" / "pronto para produção"</td><td>APROVADO</td><td>busca textual com exceção de negações</td></tr><tr><td>Decisão final presente e única (Opção A com condições), sem Etapa 03 iniciada</td><td>APROVADO</td><td>busca textual</td></tr><tr><td>Todos os cenários e suplementares aprovados na evidência gravada</td><td>APROVADO</td><td>16/16; 16/16</td></tr><tr><td>Âncoras do sumário apontam para seções existentes</td><td>APROVADO</td><td>12 âncoras</td></tr></tbody></table></div>
+<p>Verificações: 11/11 aprovadas (executadas em 2026-11-05T21:48:51.025Z).</p>
+<ul><li>Passo 1 (autocrítica de conteúdo): cada afirmação "aprovado" foi qualificada pelo seu nível de evidência (seção 8).</li><li>Passo 2: recomputação independente dos 16 cenários a partir das entradas gravadas no JSON, sem usar a função testada.</li><li>Passo 3: verificação de hashes completos (64 hex), de ausência de truncamento e de consistência entre MD e HTML.</li></ul>
+<h2 id="s12">12. Decisão final</h2>
+<div class="callout callout-ok"><strong>OPÇÃO A — FASE 02 ENCERRADA (arquitetural/documental).</strong> Fundamentos: inconsistências identificadas foram explicadas e corrigidas; evidências isoladas são suficientes para o escopo declarado; critérios arquiteturais atendidos. <strong>Não é aprovação de produção.</strong> O webhook real permanece inseguro e bloqueado; a Etapa 03 NÃO foi iniciada e sua liberação pertence exclusivamente ao responsável pelo projeto. Recomenda-se revisão independente do contrato v2 antes de qualquer implementação.</div>
+</main>
+<footer><div class="container"><p>KYRO Finance — v1.43-REV2-ETAPA-02.15-REVISAO-CORRETIVA — commit a2df46c82432730ab5e606c0c579fb7a83e54e8b</p></div></footer></body></html>

@@ -132,15 +132,15 @@ function extractMonetaryValueStrict(text: string): number {
   return 0;
 }
 
-// Extrator de Método de Pagamento
-function extractPaymentMethod(text: string): 'PIX' | 'Débito' | 'Crédito' | 'Dinheiro' | 'Transferência' {
+// Extrator de Método de Pagamento (Preserva campos ausentes sem fallback cego para PIX)
+function extractPaymentMethod(text: string): 'PIX' | 'Débito' | 'Crédito' | 'Dinheiro' | 'Transferência' | undefined {
   const lower = (text || '').toLowerCase();
   if (lower.includes('débito') || lower.includes('debito')) return 'Débito';
   if (lower.includes('crédito') || lower.includes('credito') || lower.includes('cartão') || lower.includes('cartao')) return 'Crédito';
   if (lower.includes('pix')) return 'PIX';
   if (lower.includes('transferência') || lower.includes('transferencia') || lower.includes('ted') || lower.includes('doc')) return 'Transferência';
   if (lower.includes('dinheiro') || lower.includes('espécie') || lower.includes('especie')) return 'Dinheiro';
-  return 'PIX';
+  return undefined;
 }
 
 // Extrator de Cidade (apenas se mencionada explicitamente!)
@@ -444,11 +444,12 @@ function fallbackCognitiveProcess(text: string, context: any, userAiRules: strin
       }
     }
 
+    const methodLine = method ? `\n- 💳 **Forma:** ${method}` : '';
     const cityLine = city ? `\n- 📍 **Cidade/Local:** ${city}` : '';
     const estLine = establishment ? `\n- 🏢 **Estabelecimento:** ${establishment}` : '';
 
     return {
-      reply: `✅ **Lançamento Registrado com Sucesso!**\n\n- 📝 **Descrição:** ${description}\n- 💰 **Valor:** R$ ${amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n- 🏷️ **Categoria:** ${category}\n- 🛍️ **Produto:** ${product}\n- 💳 **Forma:** ${method}${estLine}${cityLine}\n- 📊 **Tipo:** ${isIncome ? 'Entrada (+)' : 'Saída (-)'}\n\n*Os valores foram atualizados no saldo geral e nos gráficos.*`,
+      reply: `✅ **Lançamento Registrado com Sucesso!**\n\n- 📝 **Descrição:** ${description}\n- 💰 **Valor:** R$ ${amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n- 🏷️ **Categoria:** ${category}\n- 🛍️ **Produto:** ${product}${methodLine}${estLine}${cityLine}\n- 📊 **Tipo:** ${isIncome ? 'Entrada (+)' : 'Saída (-)'}\n\n*Os valores foram atualizados no saldo geral e nos gráficos.*`,
       action: {
         type: 'create_transaction',
         transaction: {
@@ -459,7 +460,7 @@ function fallbackCognitiveProcess(text: string, context: any, userAiRules: strin
           type: isIncome ? 'Entrada' : 'Saída',
           category,
           subcategory: product || category,
-          method,
+          method: method || 'Outro',
           city: city || '',
           date: new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }),
           status: 'Concluído'

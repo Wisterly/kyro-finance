@@ -1,4 +1,4 @@
-export type PaymentMethod = 'PIX' | 'Débito' | 'Crédito' | 'Dinheiro' | 'Transferência';
+export type PaymentMethod = 'PIX' | 'Débito' | 'Crédito' | 'Dinheiro' | 'Transferência' | 'Outro';
 
 export type TransactionType = 'Entrada' | 'Saída';
 
