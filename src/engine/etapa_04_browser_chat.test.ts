@@ -202,7 +202,8 @@ export async function runEtapa04BrowserChatTests(): Promise<{ total: number; pas
     interface CapturedMutation {
       url: string;
       method: string;
-      requestId: string;
+      sentRequestId: string;
+      receivedRequestId: string;
       payload: any;
       responseStatus: number;
       receipt?: any;
@@ -217,12 +218,16 @@ export async function runEtapa04BrowserChatTests(): Promise<{ total: number; pas
           const req = res.request();
           let reqBody: any = {};
           try { reqBody = JSON.parse(req.postData() || '{}'); } catch {}
+          const headers = req.headers();
+          const sentRequestId = (headers['x-request-id'] as string) || reqBody.requestId || '';
+          const receivedRequestId = json.receipt?.requestId || '';
           const isFinancialMutation = req.method() === 'POST' && (reqBody?.action === 'save_transaction' || reqBody?.transaction || json?.receipt);
           if (isFinancialMutation) {
             capturedMutations.push({
               url,
               method: req.method(),
-              requestId: json.receipt?.requestId || reqBody.requestId || '',
+              sentRequestId,
+              receivedRequestId,
               payload: reqBody,
               responseStatus: res.status(),
               receipt: json.receipt
@@ -267,6 +272,9 @@ export async function runEtapa04BrowserChatTests(): Promise<{ total: number; pas
     console.log('\n--- [CENÁRIO 1: NAVEGADOR] Texto Digitado no Input do Chat ---');
     const typedText = 'Gasolina 73 reais e 45 centavos no débito';
 
+    const bubblesBeforeScenario1 = await page.$$eval('[data-testid="chat-message-bubble"][data-sender="ia"]', els => els.length);
+    const mutationsBeforeScenario1 = capturedMutations.length;
+
     await page.click(inputSelector);
     await page.type(inputSelector, typedText);
 
@@ -276,23 +284,7 @@ export async function runEtapa04BrowserChatTests(): Promise<{ total: number; pas
     await page.click(btnSendSelector);
     assertBrowser(true, 'Mensagem digitada e submetida pelo botão de envio da interface');
 
-    // 1. Aguarda o chat renderizar a resposta da IA no DOM
-    await page.waitForFunction(
-      () => {
-        const bubbles = Array.from(document.querySelectorAll('[data-testid="chat-message-bubble"][data-sender="ia"]'));
-        return bubbles.some((b: any) => (b.textContent || '').includes('73,45') || (b.textContent || '').includes('Gasolina'));
-      },
-      { timeout: 15000 }
-    );
-
-    const bubbleText1 = await page.evaluate(() => {
-      const bubbles = Array.from(document.querySelectorAll('[data-testid="chat-message-bubble"][data-sender="ia"]'));
-      return bubbles.map((b: any) => b.textContent || '').join('\n');
-    });
-    assertBrowser(bubbleText1.includes('73,45') || bubbleText1.includes('Gasolina'), 'Confirmação visual do lançamento exibida na bolha de resposta da interface');
-
-    // 2. Aguarda a aplicação disparar e sincronizar a mutação com o backend
-    // (Disparado pela própria aplicação via syncSaveToCentralDb / OfflineSyncEngine)
+    // Sincroniza a mutação disparada pela aplicação
     await page.evaluate(async (uid: string) => {
       const offline = (window as any).offlineSyncEngine;
       if (offline) {
@@ -300,23 +292,40 @@ export async function runEtapa04BrowserChatTests(): Promise<{ total: number; pas
       }
     }, testUid);
 
-    // 3. Aguarda o saldo no Firestore Emulator ser atualizado pela aplicação
-    const balCen1 = await waitForBalance(92655);
-    assertBrowser(balCen1?.balanceCents === 92655, 'Saldo no Firestore Emulator debitado para R$ 926,55 pela própria aplicação (zero commit artificial)');
+    // 1. Captura separadamente sentRequestId e receivedRequestId da mutação emitida
+    const mut1 = capturedMutations.slice(mutationsBeforeScenario1).find(m => Boolean(m.sentRequestId) || Boolean(m.receivedRequestId));
+    assertBrowser(Boolean(mut1), 'Requisição financeira emitida pela interface web capturada');
+    assertBrowser(Boolean(mut1?.sentRequestId), `sentRequestId presente na requisição emitida pela interface: ${mut1?.sentRequestId}`);
+    assertBrowser(Boolean(mut1?.receivedRequestId), `receivedRequestId presente no recibo oficial devolvido: ${mut1?.receivedRequestId}`);
+    assertBrowser(mut1?.sentRequestId === mut1?.receivedRequestId, 'sentRequestId enviado é estritamente igual ao receivedRequestId devolvido no recibo');
+    assertBrowser(mut1?.receipt?.status === 'APPLIED', 'Recibo oficial do servidor emitido com status estrito APPLIED');
 
-    // 4. Correlaciona: requisição disparada pelo navegador, requestId e recibo oficial
+    const expectedRequestId1 = mut1!.sentRequestId;
+
+    // 2. Localiza o registro no Firestore EXCLUSIVAMENTE pelo requestId (elimina busca alternativa por valor)
     const txList1 = await adapter.listUserTransactions(testUid);
-    const savedTx1 = txList1.find(t => t.amountCents === 7345n);
-    assertBrowser(Boolean(savedTx1), 'Lançamento de Gasolina (7.345 centavos) persistido no Firestore Emulator pela aplicação');
-    assertBrowser(Boolean(savedTx1?.requestId && savedTx1.requestId.length > 5), `RequestId estável comprovado no documento do Firestore: ${savedTx1?.requestId}`);
-    assertBrowser(savedTx1?.amountCents === 7345n, 'Valor contábil persistido corresponde a exatamente 7.345 centavos BigInt');
+    const savedTx1 = txList1.find(t => t.requestId === expectedRequestId1);
+    assertBrowser(Boolean(savedTx1), `Lançamento de Gasolina localizado no Firestore exclusivamente pelo requestId: ${expectedRequestId1}`);
+    assertBrowser(savedTx1?.requestId === expectedRequestId1, 'requestId persistido no documento do Firestore é idêntico ao enviado e ao do recibo');
+    assertBrowser(savedTx1?.amountCents === 7345n, 'Valor contábil do lançamento localizado por requestId é de exatos 7.345 centavos BigInt');
+    assertBrowser(txList1.filter(t => t.requestId === expectedRequestId1).length === 1, 'UNICIDADE CONTÁBIL: Exatamente um único lançamento com este requestId gravado no Firestore (sem duplicação)');
 
-    const mut1 = capturedMutations.find(m => m.receipt?.requestId === savedTx1?.requestId || m.payload?.transaction?.amountCents === '7345' || m.payload?.transaction?.amount === 73.45);
-    assertBrowser(Boolean(mut1), 'CORRELAÇÃO QUADRUPLA (1/4): Requisição financeira emitida pela interface web capturada');
-    assertBrowser(mut1?.receipt?.status === 'APPLIED', 'CORRELAÇÃO QUADRUPLA (2/4): Recibo oficial do servidor emitido com status estrito APPLIED');
-    assertBrowser(Boolean(savedTx1?.requestId && (savedTx1.requestId === mut1?.requestId || mut1?.receipt?.requestId === savedTx1.requestId)), 'CORRELAÇÃO QUADRUPLA (3/4): RequestId estável persistido idêntico ao emitido pela interface e ao recibo');
-    assertBrowser(bubbleText1.includes('73,45') || bubbleText1.includes('Gasolina'), 'CORRELAÇÃO QUADRUPLA (4/4): Confirmação visual no DOM derivada do lançamento oficial');
-    assertBrowser(txList1.filter(t => t.amountCents === 7345n).length === 1, 'UNICIDADE CONTÁBIL: Exatamente um único lançamento de Gasolina registrado no Firestore (sem duplicação)');
+    // 3. Aguarda e confere a nova confirmação renderizada no DOM após o recibo APPLIED
+    await page.waitForFunction(
+      (beforeCount) => document.querySelectorAll('[data-testid="chat-message-bubble"][data-sender="ia"]').length > beforeCount,
+      { timeout: 15000 },
+      bubblesBeforeScenario1
+    );
+
+    const bubbleText1 = await page.evaluate(() => {
+      const bubbles = Array.from(document.querySelectorAll('[data-testid="chat-message-bubble"][data-sender="ia"]'));
+      return bubbles[bubbles.length - 1]?.textContent || '';
+    });
+    assertBrowser(bubbleText1.includes('73,45') || bubbleText1.includes('Gasolina'), 'Nova confirmação visual renderizada no DOM após o recibo APPLIED');
+
+    // 4. Aguarda e verifica o saldo no Firestore debitado exatamente em 7.345 centavos (efeito contábil único)
+    const balCen1 = await waitForBalance(92655);
+    assertBrowser(balCen1?.balanceCents === 92655, 'Saldo debitado exatamente em 7.345 centavos para R$ 926,55 (efeito contábil único)');
 
     // =========================================================================
     // CENÁRIO 2: ENTRADA DE VOZ COM BOTÃO "LANÇAR" RENDERIZADO
@@ -324,6 +333,9 @@ export async function runEtapa04BrowserChatTests(): Promise<{ total: number; pas
     // =========================================================================
     console.log('\n--- [CENÁRIO 2: NAVEGADOR] Entrada por Voz e Clique no Botão "Lançar" Renderizado ---');
     const voiceTranscript = 'Almoço executivo 42 reais e 50 centavos no débito';
+
+    const bubblesBeforeScenario2 = await page.$$eval('[data-testid="chat-message-bubble"][data-sender="ia"]', els => els.length);
+    const mutationsBeforeScenario2 = capturedMutations.length;
 
     // 1. Clica no microfone para abrir o modo de gravação de voz na interface
     const micSelector = '[data-testid="btn-chat-mic"]';
@@ -374,36 +386,40 @@ export async function runEtapa04BrowserChatTests(): Promise<{ total: number; pas
     }
     assertBrowser(true, 'Botão "Lançar" renderizado no DOM foi acionado pelo clique do usuário');
 
-    // 4. Aguarda a confirmação visual no chat gerada pela própria aplicação
+    // 4. Captura separadamente sentRequestId e receivedRequestId da mutação de voz
+    const mut2 = capturedMutations.slice(mutationsBeforeScenario2).find(m => Boolean(m.sentRequestId) || Boolean(m.receivedRequestId));
+    assertBrowser(Boolean(mut2), 'Requisição originada pelo botão "Lançar" capturada');
+    assertBrowser(Boolean(mut2?.sentRequestId), `sentRequestId de voz presente na requisição emitida pela interface: ${mut2?.sentRequestId}`);
+    assertBrowser(Boolean(mut2?.receivedRequestId), `receivedRequestId de voz presente no recibo oficial devolvido: ${mut2?.receivedRequestId}`);
+    assertBrowser(mut2?.sentRequestId === mut2?.receivedRequestId, 'sentRequestId de voz enviado é estritamente igual ao receivedRequestId devolvido no recibo');
+    assertBrowser(mut2?.receipt?.status === 'APPLIED', 'Recibo oficial de voz emitido com status estrito APPLIED');
+
+    const expectedRequestId2 = mut2!.sentRequestId;
+
+    // 5. Localiza o registro de voz no Firestore EXCLUSIVAMENTE pelo requestId (elimina busca por valor)
+    const txList2 = await adapter.listUserTransactions(testUid);
+    const savedTx2 = txList2.find(t => t.requestId === expectedRequestId2);
+    assertBrowser(Boolean(savedTx2), `Lançamento de voz localizado no Firestore exclusivamente pelo requestId: ${expectedRequestId2}`);
+    assertBrowser(savedTx2?.requestId === expectedRequestId2, 'requestId de voz no Firestore é idêntico ao enviado e ao do recibo');
+    assertBrowser(savedTx2?.amountCents === 4250n, 'Valor contábil da voz localizado por requestId é de exatos 4.250 centavos BigInt');
+    assertBrowser(txList2.filter(t => t.requestId === expectedRequestId2).length === 1, 'VOZ - UNICIDADE CONTÁBIL: Exatamente um único lançamento de voz com este requestId no Firestore');
+
+    // 6. Aguarda e confere a nova confirmação renderizada no DOM após o recibo APPLIED
     await page.waitForFunction(
-      () => {
-        const bubbles = Array.from(document.querySelectorAll('[data-testid="chat-message-bubble"][data-sender="ia"]'));
-        return bubbles.some((b: any) => (b.textContent || '').includes('42,50') || (b.textContent || '').includes('Almoço'));
-      },
-      { timeout: 15000 }
+      (beforeCount) => document.querySelectorAll('[data-testid="chat-message-bubble"][data-sender="ia"]').length > beforeCount,
+      { timeout: 15000 },
+      bubblesBeforeScenario2
     );
 
     const bubbleText2 = await page.evaluate(() => {
       const bubbles = Array.from(document.querySelectorAll('[data-testid="chat-message-bubble"][data-sender="ia"]'));
-      return bubbles.map((b: any) => b.textContent || '').join('\n');
+      return bubbles[bubbles.length - 1]?.textContent || '';
     });
-    assertBrowser(bubbleText2.includes('42,50') || bubbleText2.includes('Almoço'), 'Confirmação visual da operação de voz exibida na bolha de resposta do chat');
+    assertBrowser(bubbleText2.includes('42,50') || bubbleText2.includes('Almoço'), 'Nova confirmação visual de voz renderizada no DOM após o recibo APPLIED');
 
-    // 5. Verifica o saldo debitado no Firestore Emulator pelo fluxo de voz do app
+    // 7. Verifica o saldo debitado com precisão para R$ 884,05 (efeito contábil único)
     const balCen2 = await waitForBalance(88405);
     assertBrowser(balCen2?.balanceCents === 88405, 'Saldo no Firestore Emulator debitado com precisão para R$ 884,05 pela ação na UI (88.405 centavos)');
-
-    // 6. Confere o registro persistido no banco com recibo oficial
-    const txList2 = await adapter.listUserTransactions(testUid);
-    const savedTx2 = txList2.find(t => t.amountCents === 4250n);
-    assertBrowser(Boolean(savedTx2), 'Lançamento de voz persistido no Firestore Emulator');
-    assertBrowser(savedTx2?.amountCents === 4250n, 'Valor contábil da voz persistido em exatos 4.250 centavos (R$ 42,50)');
-
-    const mut2 = capturedMutations.find(m => m.receipt?.requestId === savedTx2?.requestId || m.payload?.transaction?.amountCents === '4250' || m.payload?.transaction?.amount === 42.5);
-    assertBrowser(Boolean(mut2), 'VOZ - CORRELAÇÃO QUADRUPLA (1/4): Requisição originada pelo botão "Lançar" capturada');
-    assertBrowser(mut2?.receipt?.status === 'APPLIED', 'VOZ - CORRELAÇÃO QUADRUPLA (2/4): Recibo oficial de voz emitido com status APPLIED');
-    assertBrowser(Boolean(savedTx2?.requestId && (savedTx2.requestId === mut2?.requestId || mut2?.receipt?.requestId === savedTx2.requestId)), 'VOZ - CORRELAÇÃO QUADRUPLA (3/4): RequestId de voz persistido no Firestore idêntico ao do recibo');
-    assertBrowser(txList2.filter(t => t.amountCents === 4250n).length === 1, 'VOZ - UNICIDADE CONTÁBIL: Exatamente um único lançamento de voz no Firestore (sem efeito duplo)');
 
     // =========================================================================
     // CENÁRIO 3: AMBIGUIDADE POR AUSÊNCIA DE VALOR (ZERO MUTAÇÃO CONTÁBIL)
@@ -487,13 +503,43 @@ export async function runEtapa04BrowserChatTests(): Promise<{ total: number; pas
     const noMethodNoCity = 'Padaria 15 reais';
 
     const bubblesBeforeScenario4 = await page.$$eval('[data-testid="chat-message-bubble"][data-sender="ia"]', els => els.length);
+    const mutationsBeforeScenario4 = capturedMutations.length;
 
     await submitTextViaReact(noMethodNoCity);
 
-    // 1. Aguarda NOVA bolha de resposta no DOM
+    // Sincroniza a mutação disparada pela aplicação
+    await page.evaluate(async (uid: string) => {
+      const offline = (window as any).offlineSyncEngine;
+      if (offline) {
+        await offline.sync({ baseUrl: 'http://127.0.0.1:3001', userId: uid });
+      }
+    }, testUid);
+
+    // 1. Captura separadamente sentRequestId e receivedRequestId da mutação de campos ausentes
+    const mut4 = capturedMutations.slice(mutationsBeforeScenario4).find(m => Boolean(m.sentRequestId) || Boolean(m.receivedRequestId));
+    assertBrowser(Boolean(mut4), 'Requisição de campos ausentes emitida pela interface web capturada');
+    assertBrowser(Boolean(mut4?.sentRequestId), `sentRequestId de campos ausentes presente na requisição: ${mut4?.sentRequestId}`);
+    assertBrowser(Boolean(mut4?.receivedRequestId), `receivedRequestId de campos ausentes presente no recibo devolvido: ${mut4?.receivedRequestId}`);
+    assertBrowser(mut4?.sentRequestId === mut4?.receivedRequestId, 'sentRequestId de campos ausentes enviado é estritamente igual ao receivedRequestId devolvido no recibo');
+    assertBrowser(mut4?.receipt?.status === 'APPLIED', 'Recibo oficial emitido com status estrito APPLIED');
+
+    const expectedRequestId4 = mut4!.sentRequestId;
+
+    // 2. Localiza o registro de Padaria no Firestore EXCLUSIVAMENTE pelo requestId (elimina busca por valor)
+    const txList4 = await adapter.listUserTransactions(testUid);
+    const savedTx4 = txList4.find(t => t.requestId === expectedRequestId4);
+    assertBrowser(Boolean(savedTx4), `Lançamento de Padaria localizado no Firestore exclusivamente pelo requestId: ${expectedRequestId4}`);
+    assertBrowser(savedTx4?.requestId === expectedRequestId4, 'requestId de Padaria no Firestore é idêntico ao enviado e ao do recibo');
+    assertBrowser(savedTx4?.method === 'Outro', 'REGRA 10.1 NO BANCO: Campo method registrado estritamente como "Outro" (sem PIX presumido)');
+    assertBrowser(!savedTx4?.city || savedTx4.city === '', 'REGRA 10.2 NO BANCO: Campo city registrado vazio "" (sem Teresina presumida)');
+    assertBrowser(savedTx4?.amountCents === 1500n, 'Valor contábil registrado como exatos 1.500 centavos BigInt');
+    assertBrowser(txList4.filter(t => t.requestId === expectedRequestId4).length === 1, 'CAMPOS AUSENTES - UNICIDADE CONTÁBIL: Exatamente um único lançamento de Padaria com este requestId no Firestore');
+
+    // 3. Aguarda e confere a nova confirmação renderizada no DOM após o recibo APPLIED
     await page.waitForFunction(
-      `document.querySelectorAll('[data-testid="chat-message-bubble"][data-sender="ia"]').length > ${bubblesBeforeScenario4}`,
-      { timeout: 15000 }
+      (beforeCount) => document.querySelectorAll('[data-testid="chat-message-bubble"][data-sender="ia"]').length > beforeCount,
+      { timeout: 15000 },
+      bubblesBeforeScenario4
     );
 
     const bubbleText4 = await page.evaluate(() => {
@@ -504,32 +550,11 @@ export async function runEtapa04BrowserChatTests(): Promise<{ total: number; pas
     // REGRA 10.1 & 10.2: Não inventa PIX nem Teresina na bolha do chat
     assertBrowser(!bubbleText4.includes('PIX'), 'REGRA 10.1 CUMPRIDA NO DOM: Forma de pagamento NÃO foi inferida cegamente como PIX');
     assertBrowser(!bubbleText4.includes('Teresina'), 'REGRA 10.2 CUMPRIDA NO DOM: Cidade NÃO foi inventada como Teresina, PI');
+    assertBrowser(bubbleText4.includes('15') || bubbleText4.includes('Padaria'), 'Nova confirmação visual renderizada no DOM após o recibo APPLIED');
 
-    // 2. Sincroniza a mutação disparada pela aplicação
-    await page.evaluate(async (uid: string) => {
-      const offline = (window as any).offlineSyncEngine;
-      if (offline) {
-        await offline.sync({ baseUrl: 'http://127.0.0.1:3001', userId: uid });
-      }
-    }, testUid);
-
-    // 3. Aguarda o saldo no banco ser debitado em 1.500 centavos
+    // 4. Aguarda o saldo no banco ser debitado exatamente em 1.500 centavos
     const balCen4 = await waitForBalance(86905);
-    assertBrowser(balCen4?.balanceCents === 86905, 'Saldo debitado exatamente em 1.500 centavos para R$ 869,05 pelo app');
-
-    // 4. Confere no registro criado pelo app no Firestore que método e cidade seguem o contrato de ausência
-    const txList4 = await adapter.listUserTransactions(testUid);
-    const savedTx4 = txList4.find(t => t.amountCents === 1500n);
-    assertBrowser(Boolean(savedTx4), 'Lançamento de Padaria criado pela aplicação persistido no banco');
-    assertBrowser(savedTx4?.method === 'Outro', 'REGRA 10.1 NO BANCO: Campo method registrado estritamente como "Outro" (sem PIX presumido)');
-    assertBrowser(!savedTx4?.city || savedTx4.city === '', 'REGRA 10.2 NO BANCO: Campo city registrado vazio "" (sem Teresina presumida)');
-    assertBrowser(savedTx4?.amountCents === 1500n, 'Valor contábil registrado como exatos 1.500 centavos BigInt');
-
-    const mut4 = capturedMutations.find(m => m.receipt?.requestId === savedTx4?.requestId || m.payload?.transaction?.amountCents === '1500' || m.payload?.transaction?.amount === 15);
-    assertBrowser(Boolean(mut4), 'CAMPOS AUSENTES - CORRELAÇÃO QUADRUPLA (1/4): Requisição da interface sem método/cidade capturada');
-    assertBrowser(mut4?.receipt?.status === 'APPLIED', 'CAMPOS AUSENTES - CORRELAÇÃO QUADRUPLA (2/4): Recibo oficial emitido com status APPLIED');
-    assertBrowser(Boolean(savedTx4?.requestId && (savedTx4.requestId === mut4?.requestId || mut4?.receipt?.requestId === savedTx4.requestId)), 'CAMPOS AUSENTES - CORRELAÇÃO QUADRUPLA (3/4): RequestId estável persistido idêntico ao do recibo');
-    assertBrowser(txList4.filter(t => t.amountCents === 1500n).length === 1, 'CAMPOS AUSENTES - UNICIDADE CONTÁBIL: Exatamente um único lançamento de Padaria no Firestore (sem efeito duplo)');
+    assertBrowser(balCen4?.balanceCents === 86905, 'Saldo debitado exatamente em 1.500 centavos para R$ 869,05 pelo app (efeito contábil único)');
 
     console.log('\n================================================================');
     console.log(`SUÍTE DE NAVEGADOR CONCLUÍDA: ${passedBrowserTests} de ${totalBrowserTests} ASSERÇÕES APROVADAS (100% SUCESSO)`);
