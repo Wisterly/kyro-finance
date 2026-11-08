@@ -13,7 +13,7 @@
  * Total Consolidado: 644 testes (100% aprovados)
  */
 
-import { spawn } from 'child_process';
+import { spawn, execSync } from 'child_process';
 import path from 'path';
 
 async function runCommand(command: string, args: string[]): Promise<{ exitCode: number; output: string }> {
@@ -35,18 +35,29 @@ async function runCommand(command: string, args: string[]): Promise<{ exitCode: 
 }
 
 async function main() {
+  let gitSha = 'unknown';
+  let gitStatusClean = true;
+  try {
+    gitSha = execSync('git rev-parse HEAD').toString().trim();
+    const statusOut = execSync('git status --porcelain').toString().trim();
+    gitStatusClean = statusOut.length === 0;
+  } catch {}
+
   console.log('================================================================');
-  console.log('KYRO FINANCE | EXECUÇÃO INTEGRADA DE TODAS AS SUÍTES');
+  console.log(`CHECKOUT SHA:    ${gitSha}`);
+  console.log(`CHECKOUT STATUS: ${gitStatusClean ? 'CLEAN (working tree clean)' : 'DIRTY (uncommitted changes)'}`);
+  console.log('COMANDO:         npx.cmd tsx src/engine/runAllTests.ts');
+  console.log('EMULADORES:      Firestore 127.0.0.1:8080 | Auth 127.0.0.1:9099');
   console.log('================================================================\n');
 
-  console.log('>>> [1/6] EXECUTANDO BATERIA DO NÚCLEO CONTÁBIL (51 CASOS)...');
+  console.log('>>> [1/8] EXECUTANDO BATERIA DO NÚCLEO CONTÁBIL (51 CASOS)...');
   const res1 = await runCommand('npx.cmd', ['tsx', 'src/engine/engine.test.ts']);
   if (res1.exitCode !== 0) {
     console.error('Falha na suíte do núcleo contábil!');
     process.exit(res1.exitCode);
   }
 
-  console.log('\n>>> [2/6] EXECUTANDO BATERIA DA SUBETAPA 03.3 (53 CASOS)...');
+  console.log('\n>>> [2/8] EXECUTANDO BATERIA DA SUBETAPA 03.3 (53 CASOS)...');
   await new Promise(r => setTimeout(r, 1000));
   const res2 = await runCommand('npx.cmd', ['tsx', 'src/engine/subetapa_03_3.test.ts']);
   if (res2.exitCode !== 0) {
@@ -54,7 +65,7 @@ async function main() {
     process.exit(res2.exitCode);
   }
 
-  console.log('\n>>> [3/6] EXECUTANDO BATERIA DA SUBETAPA 03.4 (141 CASOS)...');
+  console.log('\n>>> [3/8] EXECUTANDO BATERIA DA SUBETAPA 03.4 (141 CASOS)...');
   await new Promise(r => setTimeout(r, 1000));
   const res3 = await runCommand('npx.cmd', ['tsx', 'src/engine/subetapa_03_4.test.ts']);
   if (res3.exitCode !== 0) {
@@ -62,7 +73,7 @@ async function main() {
     process.exit(res3.exitCode);
   }
 
-  console.log('\n>>> [4/6] EXECUTANDO BATERIA DA SUBETAPA 03.5 (126 CASOS)...');
+  console.log('\n>>> [4/8] EXECUTANDO BATERIA DA SUBETAPA 03.5 (126 CASOS)...');
   await new Promise(r => setTimeout(r, 1000));
   const res4 = await runCommand('npx.cmd', ['tsx', 'src/engine/subetapa_03_5.test.ts']);
   if (res4.exitCode !== 0) {
@@ -70,7 +81,7 @@ async function main() {
     process.exit(res4.exitCode);
   }
 
-  console.log('\n>>> [5/6] EXECUTANDO BATERIA DO EVENT BRIDGE: ANTIGRAVITY ⇄ CODEX (20 CASOS)...');
+  console.log('\n>>> [5/8] EXECUTANDO BATERIA DO EVENT BRIDGE: ANTIGRAVITY ⇄ CODEX (20 CASOS)...');
   await new Promise(r => setTimeout(r, 1000));
   const res5 = await runCommand('npx.cmd', ['tsx', 'src/engine/eventBridge.test.ts']);
   if (res5.exitCode !== 0) {
@@ -78,7 +89,7 @@ async function main() {
     process.exit(res5.exitCode);
   }
 
-  console.log('\n>>> [6/7] EXECUTANDO BATERIA DA SUBETAPA 03.6: CONVERGÊNCIA WHATSAPP & SEGURANÇA (138 CASOS)...');
+  console.log('\n>>> [6/8] EXECUTANDO BATERIA DA SUBETAPA 03.6: CONVERGÊNCIA WHATSAPP & SEGURANÇA (138 CASOS)...');
   await new Promise(r => setTimeout(r, 1000));
   const res6 = await runCommand('npx.cmd', ['tsx', 'src/engine/subetapa_03_6.test.ts']);
   if (res6.exitCode !== 0) {
