@@ -394,6 +394,267 @@ export class FirestoreLedgerAdapter {
   }
 
   /**
+   * Executa a mutação contábil atômica de um LOTE de transações financeiras no mesmo commit:
+   * 1. Se qualquer item falhar (validação, conflito, simulação de falha), faz rollback de 100% do lote (zero mutações).
+   * 2. Idempotência estrita pelo batchRequestId: se reenviado com o mesmo payload, retorna replay: true e os mesmos recibos.
+   * 3. Aplica todos os efeitos de crédito/débito nas contas envolvidas de forma agregada no mesmo commit.
+   * 4. Grava cada documento de transação, cada recibo individual e o recibo atômico do lote.
+   */
+  public async commitBatchTransactions(
+    userId: string,
+    params: {
+      batchRequestId: string;
+      items: Array<{
+        id: string;
+        requestId?: string;
+        type: TransactionType;
+        amountCents: Cents;
+        sourceAccountId?: string;
+        targetAccountId?: string;
+        category: string;
+        description: string;
+        date?: string;
+        isEstimated?: boolean;
+        product?: string;
+        establishment?: string;
+        city?: string;
+        method?: string;
+        cardName?: string;
+        currentInstallment?: number;
+        totalInstallments?: number;
+      }>;
+      fencingToken?: number;
+      holderId?: string;
+      simulateItemFailureIndex?: number;
+    }
+  ): Promise<{
+    status: 'APPLIED';
+    code: 'BATCH_COMMITTED';
+    batchRequestId: string;
+    resultingRev: number;
+    replay?: boolean;
+    receipts: MutationReceipt[];
+    savedTransactions: StoredTransactionRecord[];
+  }> {
+    if (!userId) throw new Error('[FirestoreLedgerAdapter] userId é obrigatório');
+    if (!params.batchRequestId) throw new Error('[FirestoreLedgerAdapter] batchRequestId é obrigatório');
+    if (!params.items || params.items.length === 0) {
+      throw new LedgerTransactionError('O lote deve conter pelo menos uma transação.', 'EMPTY_BATCH');
+    }
+
+    const payloadHash = computePayloadHash({
+      batchRequestId: params.batchRequestId,
+      items: params.items.map(it => ({
+        id: it.id,
+        requestId: it.requestId,
+        type: it.type,
+        amountCents: it.amountCents.toString(),
+        sourceAccountId: it.sourceAccountId,
+        targetAccountId: it.targetAccountId,
+        category: it.category,
+        description: it.description,
+        isEstimated: it.isEstimated
+      }))
+    });
+
+    const batchIdempotencyPath = `users/${userId}/idempotency/${params.batchRequestId}`;
+
+    return await this.store.runTransaction(async (t) => {
+      // 1. Verificação de Idempotência do Lote
+      const existingBatch = await t.get(batchIdempotencyPath) as StoredIdempotencyRecord | null;
+      if (existingBatch) {
+        if (existingBatch.payloadHash === payloadHash) {
+          // Replay do lote: retorna os recibos e dados previamente comitados
+          const snap = existingBatch.responseSnapshot;
+          return {
+            status: 'APPLIED',
+            code: 'BATCH_COMMITTED',
+            batchRequestId: params.batchRequestId,
+            resultingRev: existingBatch.resultingRev,
+            replay: true,
+            receipts: snap?.receipts?.map((r: any) => ({ ...r, replay: true })) || [],
+            savedTransactions: snap?.savedTransactions || []
+          };
+        } else {
+          throw new IdempotencyConflictError(
+            `Conflito de Idempotência: O lote '${params.batchRequestId}' já foi processado anteriormente com parâmetros diferentes. Nova mutação rejeitada.`
+          );
+        }
+      }
+
+      // 2. Validação prévia de cada item do lote
+      for (let i = 0; i < params.items.length; i++) {
+        const item = params.items[i];
+        if (params.simulateItemFailureIndex === i) {
+          throw new LedgerTransactionError(
+            `Simulação de falha proposital no item ${i + 1} do lote.`,
+            'SIMULATED_BATCH_ITEM_FAILURE'
+          );
+        }
+        if (item.amountCents <= 0n) {
+          throw new LedgerTransactionError(
+            `O valor do item ${i + 1} deve ser estritamente positivo.`,
+            'INVALID_AMOUNT_NON_POSITIVE'
+          );
+        }
+        const tombstone = await t.get(`users/${userId}/tombstones/${item.id}`);
+        if (tombstone) {
+          throw new LedgerTransactionError(
+            `Item ${item.id} foi excluído previamente (Tombstone ativo). Ressurreição proibida.`,
+            'TOMBSTONED_NO_RESURRECTION'
+          );
+        }
+        const existingTx = await t.get(`users/${userId}/transactions/${item.id}`);
+        if (existingTx) {
+          throw new LedgerTransactionError(
+            `Transação com id '${item.id}' já existe no ledger.`,
+            'TRANSACTION_ALREADY_EXISTS'
+          );
+        }
+      }
+
+      // 3. Carregamento e Atualização das Contas Envolvidas
+      const accountsMap = new Map<string, StoredAccountRecord>();
+      const nowIso = new Date().toISOString();
+      const fencing = params.fencingToken || 1;
+
+      for (const item of params.items) {
+        const isEstimated = item.isEstimated || false;
+        if (!isEstimated) {
+          const accId = item.type === 'INCOME' ? item.targetAccountId : item.sourceAccountId;
+          if (!accId) {
+            throw new LedgerTransactionError(`Item requer conta de ${item.type === 'INCOME' ? 'destino' : 'origem'}.`);
+          }
+
+          let acc = accountsMap.get(accId);
+          if (!acc) {
+            const fetched = await t.get(`users/${userId}/accounts/${accId}`) as StoredAccountRecord | null;
+            if (fetched) {
+              acc = fetched;
+            } else {
+              acc = {
+                id: accId,
+                userId,
+                name: 'Conta Principal',
+                balanceCents: 0,
+                rev: 1,
+                fencingToken: fencing,
+                updatedAt: nowIso
+              };
+            }
+          }
+
+          const currentCents = SafeMoneySerializer.fromFirestoreCents(acc.balanceCents);
+          const newCents = item.type === 'INCOME' ? currentCents + item.amountCents : currentCents - item.amountCents;
+          acc = {
+            ...acc,
+            balanceCents: SafeMoneySerializer.toFirestoreCents(newCents),
+            rev: acc.rev + 1,
+            fencingToken: fencing,
+            updatedAt: nowIso
+          };
+          accountsMap.set(accId, acc);
+        }
+      }
+
+      // Persiste as contas atualizadas
+      let maxRev = 1;
+      for (const [accId, accRecord] of accountsMap.entries()) {
+        t.set(`users/${userId}/accounts/${accId}`, accRecord);
+        if (accRecord.rev > maxRev) maxRev = accRecord.rev;
+      }
+
+      // 4. Persiste cada transação e emite recibos individuais
+      const receipts: MutationReceipt[] = [];
+      const savedTransactions: StoredTransactionRecord[] = [];
+
+      for (let i = 0; i < params.items.length; i++) {
+        const item = params.items[i];
+        const isEstimated = item.isEstimated || false;
+        const firestoreCents = SafeMoneySerializer.toFirestoreCents(item.amountCents);
+        const itemReqId = item.requestId || `${params.batchRequestId}_item_${i + 1}`;
+
+        const txDoc: StoredTransactionRecord = {
+          id: item.id,
+          userId,
+          requestId: itemReqId,
+          type: item.type,
+          amountCents: firestoreCents,
+          sourceAccountId: item.sourceAccountId,
+          targetAccountId: item.targetAccountId,
+          category: item.category,
+          description: item.description,
+          date: item.date || nowIso.split('T')[0],
+          isEstimated,
+          rev: maxRev,
+          fencingToken: fencing,
+          createdAt: nowIso,
+          updatedAt: nowIso,
+          amount: firestoreCents / 100
+        };
+
+        t.set(`users/${userId}/transactions/${item.id}`, txDoc);
+        savedTransactions.push(txDoc);
+
+        const receipt: MutationReceipt = {
+          status: 'APPLIED',
+          code: 'TRANSACTION_COMMITTED',
+          requestId: itemReqId,
+          resultingRev: maxRev,
+          fencingToken: fencing
+        };
+        receipts.push(receipt);
+
+        // Idempotência individual por item
+        const itemPayloadHash = computePayloadHash({
+          id: item.id,
+          type: item.type,
+          amountCents: item.amountCents.toString(),
+          sourceAccountId: item.sourceAccountId,
+          targetAccountId: item.targetAccountId,
+          category: item.category,
+          description: item.description,
+          isEstimated: item.isEstimated
+        });
+
+        t.set(`users/${userId}/idempotency/${itemReqId}`, {
+          requestId: itemReqId,
+          payloadHash: itemPayloadHash,
+          status: 'APPLIED',
+          code: 'TRANSACTION_COMMITTED',
+          resultingRev: maxRev,
+          fencingToken: fencing,
+          createdAt: nowIso,
+          responseSnapshot: txDoc
+        });
+      }
+
+      // 5. Idempotência do Lote Consolidado no mesmo commit
+      const batchResult = {
+        status: 'APPLIED' as const,
+        code: 'BATCH_COMMITTED' as const,
+        batchRequestId: params.batchRequestId,
+        resultingRev: maxRev,
+        receipts,
+        savedTransactions
+      };
+
+      t.set(batchIdempotencyPath, {
+        requestId: params.batchRequestId,
+        payloadHash,
+        status: 'APPLIED',
+        code: 'BATCH_COMMITTED',
+        resultingRev: maxRev,
+        fencingToken: fencing,
+        createdAt: nowIso,
+        responseSnapshot: batchResult
+      });
+
+      return batchResult;
+    });
+  }
+
+  /**
    * Estorna uma transação financeira no Firestore:
    * 1. Verifica idempotência pelo requestId
    * 2. Localiza a transação original

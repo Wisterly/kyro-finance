@@ -773,7 +773,148 @@ async function saveTransaction(tx: any, userId: string = 'usr_default') {
 }
 
 // 5. Transcrever Áudio via OpenAI Whisper
+export type AudioFetcherFn = (params: any) => Promise<{ buffer: Buffer; mimetype: string } | null>;
+export type AudioTranscriberFn = (buffer: Buffer, mimetype: string) => Promise<string | null>;
+
+export interface CapturedWhatsAppReply {
+  targetRecipient: string;
+  message: string;
+  timestamp: string;
+  serverUrl?: string;
+  instance?: string;
+}
+
+export function setTestAudioFetcher(fn: AudioFetcherFn | null): void {
+  globalAny.__KYRO_TEST_AUDIO_FETCHER__ = fn;
+}
+
+export function setTestAudioTranscriber(fn: AudioTranscriberFn | null): void {
+  globalAny.__KYRO_TEST_AUDIO_TRANSCRIBER__ = fn;
+}
+
+export function getAudioPipelineTrace(): Array<{ step: string; timestamp: string; details: any }> {
+  return globalAny.__KYRO_AUDIO_PIPELINE_TRACE__ || [];
+}
+
+export function clearAudioPipelineTrace(): void {
+  globalAny.__KYRO_AUDIO_PIPELINE_TRACE__ = [];
+}
+
+export function getCapturedWhatsAppReplies(): CapturedWhatsAppReply[] {
+  return globalAny.__KYRO_CAPTURED_WHATSAPP_REPLIES__ || [];
+}
+
+export function clearCapturedWhatsAppReplies(): void {
+  globalAny.__KYRO_CAPTURED_WHATSAPP_REPLIES__ = [];
+}
+
+export function buildWhatsAppConfirmationMessage(params: {
+  receipts: MutationReceipt[];
+  savedTransactions: any[];
+  isComposite: boolean;
+  rawText: string;
+  isAudio?: boolean;
+  isReplay?: boolean;
+}): string {
+  const { receipts, savedTransactions, isComposite, rawText, isAudio, isReplay } = params;
+  const prefix = isAudio ? '🎙️ [Áudio de Voz]: ' : '💬 ';
+
+  if (isComposite) {
+    let msg = `⚡ Lote de Lançamentos adicionado ao KYRO Finance (${savedTransactions.length} itens)!\n\n${prefix}"${rawText.trim()}"\n\n`;
+    let totalCents = 0;
+
+    savedTransactions.forEach((tx, idx) => {
+      const valorStr = (tx.amountCents / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+      totalCents += tx.amountCents;
+      const estadoStr = tx.isEstimated 
+        ? '🟡 Previsto / Fatura a Vencer (Não debitado)' 
+        : '🟢 Realizado / Debitado em conta';
+
+      msg += `${idx + 1}. *${tx.description}* (${tx.category})\n` +
+        `   • Valor: ${tx.type === 'INCOME' ? '+' : '-'} R$ ${valorStr}\n` +
+        `   • Estado: ${estadoStr}\n` +
+        `   • Recibo: ${receipts[idx]?.status || 'APPLIED'}\n`;
+      
+      if (tx.establishment && String(tx.establishment).trim()) {
+        msg += `   • Estabelecimento: ${tx.establishment}\n`;
+      }
+      if (tx.cardName && String(tx.cardName).trim()) {
+        msg += `   • Cartão: 💳 ${tx.cardName}\n`;
+      }
+      if (tx.city && String(tx.city).trim()) {
+        msg += `   • Local / Cidade: ${tx.city}\n`;
+      }
+    });
+
+    const totalStr = (totalCents / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+    msg += `\n💰 *Total do Lote:* R$ ${totalStr}\n` +
+      `✅ Todos os ${savedTransactions.length} lançamentos foram comitados com sucesso no motor contábil!`;
+
+    if (isReplay) {
+      msg += `\n\n*(Recibo prévio recuperado: replay de rede detectado, zero alteração no saldo)*`;
+    }
+    return msg;
+  }
+
+  // Item único
+  const tx = savedTransactions[0];
+  const receipt = receipts[0];
+  const valorStr = (tx.amountCents / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+  const tipoStr = tx.type === 'INCOME' ? '💰 Entrada (Receita)' : '💸 Saída (Despesa)';
+  const estadoStr = tx.isEstimated 
+    ? '🟡 Previsto / Fatura a Vencer (Não debitado)' 
+    : '🟢 Realizado / Debitado em conta';
+
+  let msg = `⚡ Lançamento adicionado ao KYRO Finance!\n\n${prefix}"${rawText.trim()}"\n\n` +
+    `• *Tipo:* ${tipoStr}\n` +
+    `• *Descrição / Item:* ${tx.description}\n` +
+    `• *Categoria:* ${tx.category}\n` +
+    `• *Valor:* ${tx.type === 'INCOME' ? '+' : '-'} R$ ${valorStr}\n` +
+    `• *Forma de Pagamento:* ${tx.method || (tx.type === 'INCOME' ? 'Recebimento' : 'Débito')}\n` +
+    `• *Estado:* ${estadoStr}\n` +
+    `• *Recibo Contábil:* ${receipt?.status || 'APPLIED'} (Rev ${receipt?.resultingRev || 1})`;
+
+  if (tx.establishment && String(tx.establishment).trim()) {
+    msg += `\n• *Estabelecimento:* ${tx.establishment}`;
+  }
+  if (tx.cardName && String(tx.cardName).trim()) {
+    msg += `\n• *Cartão Vinculado:* 💳 ${tx.cardName}`;
+    msg += `\n• *Fatura:* Adicionado à fatura do cartão ${tx.cardName}`;
+  }
+  if (tx.city && String(tx.city).trim()) {
+    msg += `\n• *Local / Cidade:* ${tx.city}`;
+  }
+
+  msg += `\n\n✅ Atualizado em tempo real no Dashboard, Entradas e Saídas!`;
+
+  if (isReplay) {
+    msg += `\n\n*(Recibo prévio recuperado: replay de rede detectado, zero alteração no saldo)*`;
+  }
+
+  return msg;
+}
+
 async function transcribeAudioBuffer(audioBuffer: Buffer, mimetype: string): Promise<string | null> {
+  if (globalAny.__KYRO_TEST_AUDIO_TRANSCRIBER__) {
+    if (!globalAny.__KYRO_AUDIO_PIPELINE_TRACE__) globalAny.__KYRO_AUDIO_PIPELINE_TRACE__ = [];
+    globalAny.__KYRO_AUDIO_PIPELINE_TRACE__.push({
+      step: 'TRANSCRIBE_AUDIO_BUFFER',
+      timestamp: new Date().toISOString(),
+      details: { bufferBytes: audioBuffer.length, mimetype, source: 'SIMULATED_TEST_TRANSCRIBER' }
+    });
+    return await globalAny.__KYRO_TEST_AUDIO_TRANSCRIBER__(audioBuffer, mimetype);
+  }
+
+  if (globalAny.__KYRO_TEST_AUDIO_MOCK_ACTIVE__) {
+    if (!globalAny.__KYRO_AUDIO_PIPELINE_TRACE__) globalAny.__KYRO_AUDIO_PIPELINE_TRACE__ = [];
+    globalAny.__KYRO_AUDIO_PIPELINE_TRACE__.push({
+      step: 'TRANSCRIBE_AUDIO_BUFFER',
+      timestamp: new Date().toISOString(),
+      details: { bufferBytes: audioBuffer.length, mimetype, source: 'SIMULATED_TEST_TRANSCRIBER_HTTP' }
+    });
+    return globalAny.__KYRO_TEST_AUDIO_TRANSCRIPTION__ || 'Gasolina 73 reais e 45 centavos no débito';
+  }
+
   if (!process.env.OPENAI_API_KEY || process.env.OPENAI_API_KEY === 'dummy_key') {
     return null;
   }
@@ -807,6 +948,36 @@ async function fetchAudioMedia({
   audioUrl,
   metaToken
 }: any): Promise<{ buffer: Buffer; mimetype: string } | null> {
+  if (globalAny.__KYRO_TEST_AUDIO_FETCHER__) {
+    if (!globalAny.__KYRO_AUDIO_PIPELINE_TRACE__) globalAny.__KYRO_AUDIO_PIPELINE_TRACE__ = [];
+    globalAny.__KYRO_AUDIO_PIPELINE_TRACE__.push({
+      step: 'FETCH_AUDIO_MEDIA',
+      timestamp: new Date().toISOString(),
+      details: { messageId, source: 'SIMULATED_TEST_MEDIA_FETCHER' }
+    });
+    return await globalAny.__KYRO_TEST_AUDIO_FETCHER__({
+      evolutionServerUrl,
+      evolutionApiKey,
+      evolutionInstance,
+      messageId,
+      audioUrl,
+      metaToken
+    });
+  }
+
+  if (globalAny.__KYRO_TEST_AUDIO_MOCK_ACTIVE__) {
+    if (!globalAny.__KYRO_AUDIO_PIPELINE_TRACE__) globalAny.__KYRO_AUDIO_PIPELINE_TRACE__ = [];
+    globalAny.__KYRO_AUDIO_PIPELINE_TRACE__.push({
+      step: 'FETCH_AUDIO_MEDIA',
+      timestamp: new Date().toISOString(),
+      details: { messageId, source: 'SIMULATED_TEST_MEDIA_FETCHER_HTTP' }
+    });
+    return {
+      buffer: globalAny.__KYRO_TEST_AUDIO_BUFFER__ || Buffer.from('synthetic_ogg_voice_payload', 'utf-8'),
+      mimetype: globalAny.__KYRO_TEST_AUDIO_MIMETYPE__ || 'audio/ogg'
+    };
+  }
+
   // Caso 1: Meta WhatsApp Cloud API (Graph API)
   if (audioUrl && metaToken) {
     try {
@@ -855,6 +1026,17 @@ async function fetchAudioMedia({
 
 // 7. Enviar Mensagem de Resposta no WhatsApp
 async function sendWhatsAppReply({ targetRecipient, message, serverUrl, apiKey, instance }: any) {
+  if (!globalAny.__KYRO_CAPTURED_WHATSAPP_REPLIES__) {
+    globalAny.__KYRO_CAPTURED_WHATSAPP_REPLIES__ = [];
+  }
+  globalAny.__KYRO_CAPTURED_WHATSAPP_REPLIES__.push({
+    targetRecipient,
+    message,
+    timestamp: new Date().toISOString(),
+    serverUrl,
+    instance
+  });
+
   const activeUrl = serverUrl || process.env.EVOLUTION_SERVER_URL;
   const activeKey = apiKey || process.env.EVOLUTION_API_KEY;
   const activeInstance = instance || process.env.EVOLUTION_INSTANCE;
@@ -1097,6 +1279,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json({ success: true });
     }
 
+    // Ações de teste para captura de envio e rastreio de pipeline de mídia
+    if (payload?.action === 'get_captured_replies') {
+      return res.status(200).json({ success: true, replies: globalAny.__KYRO_CAPTURED_WHATSAPP_REPLIES__ || [] });
+    }
+
+    if (payload?.action === 'clear_captured_replies') {
+      globalAny.__KYRO_CAPTURED_WHATSAPP_REPLIES__ = [];
+      return res.status(200).json({ success: true });
+    }
+
+    if (payload?.action === 'get_audio_pipeline_trace') {
+      return res.status(200).json({ success: true, trace: globalAny.__KYRO_AUDIO_PIPELINE_TRACE__ || [] });
+    }
+
+    if (payload?.action === 'clear_audio_pipeline_trace') {
+      globalAny.__KYRO_AUDIO_PIPELINE_TRACE__ = [];
+      return res.status(200).json({ success: true });
+    }
+
+    if (payload?.action === 'set_test_audio_mocks') {
+      globalAny.__KYRO_TEST_AUDIO_MOCK_ACTIVE__ = true;
+      globalAny.__KYRO_TEST_AUDIO_TRANSCRIPTION__ = payload.transcription || 'Gasolina 73 reais e 45 centavos no débito';
+      globalAny.__KYRO_TEST_AUDIO_MIMETYPE__ = payload.mimetype || 'audio/ogg';
+      globalAny.__KYRO_TEST_AUDIO_BUFFER__ = Buffer.from(payload.audioBase64 || 'synthetic_ogg_voice_payload', 'utf-8');
+      return res.status(200).json({ success: true });
+    }
+
     // Suporte a ping de diagnóstico e teste de conectividade
     if (payload?.action === 'ping' || payload?.testPing === true) {
       return res.status(200).json({
@@ -1282,9 +1491,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     console.log(`[Webhook WhatsApp] ${isAudio ? '🎙️ Áudio' : '💬 Texto'} de ${phoneNumber} (UID: ${authUid}): "${messageText}"`);
 
+    const customServerUrl = (req.headers['x-evolution-url'] as string) || payload?.evolutionServerUrl;
+    const customApiKey = (req.headers['x-evolution-key'] as string) || payload?.evolutionApiKey;
+    const customInstance = (req.headers['x-evolution-instance'] as string) || payload?.evolutionInstance;
+    const targetRecipient = isGroup ? remoteJid : phoneNumber;
+
     // 6. Detecção de Ambiguidade Relevante (Bloqueia Mutações e Pede Esclarecimento)
     const ambiguity = detectFinancialAmbiguity(messageText);
     if (ambiguity.isAmbiguous) {
+      if (targetRecipient && targetRecipient !== 'test') {
+        await sendWhatsAppReply({
+          targetRecipient,
+          message: ambiguity.clarificationPrompt,
+          serverUrl: customServerUrl,
+          apiKey: customApiKey,
+          instance: customInstance
+        });
+      }
       return res.status(200).json({
         status: 'clarification_requested',
         replySent: ambiguity.clarificationPrompt,
@@ -1423,25 +1646,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const adapter = getWebhookAdapter();
-    const receipts: MutationReceipt[] = [];
-    const savedTxs: any[] = [];
     const isComposite = parsedComposite.isComposite;
+    const batchRequestId = messageId ? `req_wa_${messageId}` : `req_wa_batch_${Date.now()}`;
+    const targetAcc = payload?.accountId || `acc_${authUid}`;
 
-    for (let i = 0; i < parsedComposite.items.length; i++) {
-      const item = parsedComposite.items[i];
+    const batchItems = parsedComposite.items.map((item, i) => {
       const tx = item.savedTx!;
       const baseSuffix = isComposite ? `_item_${i + 1}` : '';
       const txId = messageId ? `tx_wa_${messageId}${baseSuffix}` : (tx.id ? String(tx.id) : `tx_wa_${Date.now()}${baseSuffix}`);
-      const itemReqId = messageId ? `req_wa_${messageId}${baseSuffix}` : `req_wa_${txId}`;
-
+      const itemReqId = `${batchRequestId}${baseSuffix}`;
       const amountCents = parseToCents(tx.amount);
       const isExpense = tx.type !== 'Entrada';
-      const type = isExpense ? 'EXPENSE' : 'INCOME';
-      const targetAcc = payload?.accountId || `acc_${authUid}`;
+      const type: 'EXPENSE' | 'INCOME' = isExpense ? 'EXPENSE' : 'INCOME';
+      const isCreditCard = tx.method === 'Crédito' || !!tx.cardName || !!(tx.totalInstallments && tx.totalInstallments > 1);
+      const isEstimated = (tx as any).isEstimated !== undefined ? !!(tx as any).isEstimated : isCreditCard;
 
-      const receipt = await adapter.commitTransaction(authUid, {
-        requestId: itemReqId,
+      return {
         id: txId,
+        requestId: itemReqId,
         type,
         amountCents,
         sourceAccountId: isExpense ? targetAcc : undefined,
@@ -1449,42 +1671,77 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         category: tx.category || 'Geral',
         description: tx.description || tx.product || 'Lançamento via WhatsApp',
         date: tx.date || new Date().toISOString().split('T')[0],
-        isEstimated: !!tx.currentInstallment && tx.currentInstallment > 1
-      });
-
-      receipts.push(receipt);
-
-      const savedTxPayload = {
-        ...tx,
-        id: txId,
-        userId: authUid,
-        requestId: itemReqId,
-        amountCents: SafeMoneySerializer.toFirestoreCents(amountCents),
-        amount: Number(amountCents) / 100,
-        type,
-        accountId: targetAcc,
-        status: 'Concluído',
-        createdAt: new Date().toISOString(),
-        receipt
+        isEstimated,
+        product: tx.product,
+        establishment: tx.establishment,
+        city: tx.city,
+        method: tx.method,
+        cardName: tx.cardName,
+        currentInstallment: tx.currentInstallment,
+        totalInstallments: tx.totalInstallments
       };
+    });
 
-      savedTxs.push(savedTxPayload);
+    let batchResult: any;
+    try {
+      batchResult = await adapter.commitBatchTransactions(authUid, {
+        batchRequestId,
+        items: batchItems,
+        simulateItemFailureIndex: payload?.simulateItemFailureIndex
+      });
+    } catch (batchErr: any) {
+      console.warn('[Webhook Batch Transaction Error]:', batchErr?.message || batchErr);
+      const failureMsg = `❌ Falha ao processar lote no KYRO Finance: ${batchErr?.message || 'Erro na transação atômica'}.\n\n` +
+        `🛡️ *Garantia Contábil:* Todas as movimentações foram canceladas (Rollback total). Seu saldo e extrato permanecem 100% inalterados.`;
+      
+      if (targetRecipient && targetRecipient !== 'test') {
+        await sendWhatsAppReply({
+          targetRecipient,
+          message: failureMsg,
+          serverUrl: customServerUrl,
+          apiKey: customApiKey,
+          instance: customInstance
+        });
+      }
 
-      globalAny.__KYRO_WEBHOOK_TRANSACTIONS__.unshift(savedTxPayload);
+      return res.status(400).json({
+        status: 'batch_failure',
+        success: false,
+        error: batchErr?.code || batchErr?.message || 'BATCH_FAILED',
+        message: batchErr?.message,
+        replySent: failureMsg,
+        mutations: 0,
+        rolledBack: true
+      });
     }
 
-    let finalReply = parsedComposite.reply;
-    const isAnyReplay = receipts.some(r => r.replay);
-    if (isAnyReplay) {
-      finalReply += `\n\n*(Recibo prévio recuperado: replay de rede detectado, zero alteração no saldo)*`;
-    }
+    const receipts = batchResult.receipts;
+    const isAnyReplay = batchResult.replay === true || receipts.some((r: any) => r.replay);
+
+    // Mapeia as transações salvas enriquecidas com o recibo
+    const savedTxs = batchResult.savedTransactions.map((txDoc: any, idx: number) => {
+      const originalItem = parsedComposite.items[idx]?.savedTx;
+      const txPayload = {
+        ...originalItem,
+        ...txDoc,
+        amount: txDoc.amountCents / 100,
+        receipt: receipts[idx]
+      };
+      globalAny.__KYRO_WEBHOOK_TRANSACTIONS__.unshift(txPayload);
+      return txPayload;
+    });
+
+    // 10. Constrói a mensagem enviada ao WhatsApp a partir dos recibos e dados persistidos
+    const finalReply = buildWhatsAppConfirmationMessage({
+      receipts,
+      savedTransactions: savedTxs,
+      isComposite,
+      rawText: messageText,
+      isAudio,
+      isReplay: isAnyReplay
+    });
 
     // 10. Envia Resposta de Feedback no WhatsApp
-    const customServerUrl = (req.headers['x-evolution-url'] as string) || payload?.evolutionServerUrl;
-    const customApiKey = (req.headers['x-evolution-key'] as string) || payload?.evolutionApiKey;
-    const customInstance = (req.headers['x-evolution-instance'] as string) || payload?.evolutionInstance;
-    const targetRecipient = isGroup ? remoteJid : phoneNumber;
-
     if (finalReply && targetRecipient && targetRecipient !== 'test') {
       await sendWhatsAppReply({
         targetRecipient,

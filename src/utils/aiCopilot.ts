@@ -99,12 +99,18 @@ export function searchTransactionsByTerm(searchTerm: string, transactions: Trans
     `);
 
     // 1. Se o termo consolidado direto bater
-    if (rawTerm && consolidatedText.includes(rawTerm)) return true;
+    if (rawTerm && consolidatedText.includes(rawTerm)) {
+      if (numVal > 0) return Math.abs(t.amount - numVal) < 0.01;
+      return true;
+    }
 
     // 2. Se houver palavras-chave extraídas (ex: "caxias", "agua", "chocolate")
     if (keywords.length > 0) {
       const matchAny = keywords.some(k => consolidatedText.includes(k));
-      if (matchAny) return true;
+      if (matchAny) {
+        if (numVal > 0) return Math.abs(t.amount - numVal) < 0.01;
+        return true;
+      }
     }
 
     // 3. Busca por valor monetário

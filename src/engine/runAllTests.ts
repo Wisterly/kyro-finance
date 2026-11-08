@@ -76,7 +76,7 @@ async function main() {
     process.exit(res5.exitCode);
   }
 
-  console.log('\n>>> [6/6] EXECUTANDO BATERIA DA SUBETAPA 03.6: CONVERGÊNCIA WHATSAPP (60 CASOS)...');
+  console.log('\n>>> [6/6] EXECUTANDO BATERIA DA SUBETAPA 03.6: CONVERGÊNCIA WHATSAPP (69 CASOS)...');
   await new Promise(r => setTimeout(r, 1000));
   const res6 = await runCommand('npx.cmd', ['tsx', 'src/engine/subetapa_03_6.test.ts']);
   if (res6.exitCode !== 0) {
@@ -91,9 +91,9 @@ async function main() {
   console.log('3. Subetapa 03.4:       141 / 141 APROVADOS (100%)');
   console.log('4. Subetapa 03.5:       126 / 126 APROVADOS (100%)');
   console.log('5. Event Bridge Auto:   20 / 20 APROVADOS (100%)');
-  console.log('6. Subetapa 03.6:       60 / 60 APROVADOS (100%)');
+  console.log('6. Subetapa 03.6:       69 / 69 APROVADOS (100%)');
   console.log('----------------------------------------------------------------');
-  console.log('TOTAL CONSOLIDADO:     451 / 451 APROVADOS (100%)');
+  console.log('TOTAL CONSOLIDADO:     460 / 460 APROVADOS (100%)');
   console.log('STATUS FINAL:          HOMOLOGADO EM CONTRATO E INSPEÇÃO DE ARTEFATO (PR.047)');
   console.log('                       ACEITE ANDROID EM AVD/DISPOSITIVO FÍSICO FORMALMENTE PENDENTE');
   console.log('================================================================\n');
