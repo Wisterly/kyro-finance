@@ -21,6 +21,8 @@
     "verifiableExecution": {
       "executionId": "ag-exec-runner-PR046-1794087126230",
       "conversationId": "f8b33d26-b8ff-4e0f-a2ac-0454cd8bc465",
+      "destinationSubagentId": "eeba3533-ae13-4690-b8ec-adbce1ebe0f8",
+      "officialArtifact": "artefato_execucao_round-real-codex-035-1794084339750.md",
       "prompt": "Validação contábil de idempotência e conferência de débitos na PR.046",
       "status": "COMPLETED",
       "durationMs": 0.28,
