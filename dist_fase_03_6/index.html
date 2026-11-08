@@ -236,12 +236,14 @@
           <span class="badge badge-warning">Aceite Dinâmico Android: Formalmente Pendente AVD/Host</span>
         </div>
         <div style="font-size: 0.85rem; color: var(--text-muted);">
-          Data da Homologação: <strong>07/11/2026 23:45 BRT</strong> | SHA Completo da Entrega: <code>631441febb22083ea5543b19fada026a48551bd5</code> | Checkout Base: <code>7858a56166b5bcb3c62312650168c6da729bdaa6</code>
+          Data da Homologação: <strong>07/11/2026 23:59 BRT</strong> | 
+          SHA da Entrega: <a href="https://github.com/Wisterly/kyro-finance/commit/743233142c2dab3bedea360e5905f0523201b863" target="_blank" style="color:var(--accent); text-decoration: underline;"><code>743233142c2dab3bedea360e5905f0523201b863</code></a> | 
+          Revisão Pública Base: <a href="https://github.com/Wisterly/kyro-finance/commit/e4f233e3acd49680138957504f484b9c6122769a" target="_blank" style="color:var(--blue); text-decoration: underline;"><code>e4f233e3acd49680138957504f484b9c6122769a</code></a>
         </div>
       </div>
       <h1>KYRO Finance | Auditoria Técnica Completa da Subetapa 03.6: Convergência do WhatsApp com o Motor Contábil Compartilhado</h1>
       <p class="subtitle">
-        Relatório oficial consolidado da Subetapa 03.6 do KYRO Finance. Convergência integral do webhook de texto e áudio do WhatsApp ao mesmo motor financeiro compartilhado (<code>LedgerEngine</code>, <code>SafeMoneySerializer</code>, <code>FirestoreLedgerAdapter</code>) utilizado pelo chat Web e pelo APK Android. Execução de lote com contrato transacional atômico (<code>commitBatchTransactions</code>) onde falha no segundo item resulta em rollback de 100% de saldo e registros, mensagens de WhatsApp montadas estritamente a partir dos recibos e dados persistidos (previsto vs realizado e ausência de campos inventados), evento sintético de mídia no formato nativo do provedor Baileys/Evolution (<code>audioMessage</code>) sem chamadas externas a servidores reais, paridade estrita da mesma frase natural no Chat Web e no WhatsApp (7.345 centavos inteiros com recibo <code>APPLIED</code>), e histórico com estorno via Tombstone de 90 dias ativo.
+        Relatório oficial consolidado da Subetapa 03.6 do KYRO Finance. Convergência integral do webhook de texto e áudio do WhatsApp ao mesmo motor financeiro compartilhado (<code>LedgerEngine</code>, <code>SafeMoneySerializer</code>, <code>FirestoreLedgerAdapter</code>) utilizado pelo chat Web e pelo APK Android. Execução de lote com contrato transacional atômico (<code>commitBatchTransactions</code>) onde falha no segundo item resulta em rollback de 100% de saldo e registros, imunidade total do payload público contra injeção de parâmetros de teste, mensagens de WhatsApp montadas estritamente a partir dos recibos e dados persistidos (previsto vs realizado e ausência de campos inventados), evento sintético de mídia no formato nativo do provedor Baileys/Evolution (<code>audioMessage</code>) sem chamadas externas a servidores reais, paridade estrita da mesma frase natural no Chat Web e no WhatsApp (7.345 centavos inteiros com recibo <code>APPLIED</code>), e histórico com estorno via Tombstone de 90 dias ativo.
       </p>
     </header>
 
@@ -254,7 +256,7 @@
       </div>
       <div class="card-kpi">
         <div class="kpi-title">Convergência WhatsApp</div>
-        <div class="kpi-value">69 / 69</div>
+        <div class="kpi-value">88 / 88</div>
         <div class="kpi-subtitle">7 Grupos de Teste Homologados</div>
       </div>
       <div class="card-kpi">
@@ -275,10 +277,10 @@
       
       <div style="background: rgba(16, 185, 129, 0.08); border-left: 3px solid var(--accent); padding: 1rem; margin-bottom: 1.25rem; font-size: 0.9rem; color: var(--text-muted);">
         <strong style="color: #ffffff;">4 Frentes Homologadas na Subetapa 03.6:</strong><br/>
-        • <strong>1. Contrato Atômico Real do Lote no Motor Compartilhado:</strong> O webhook substituiu chamadas sequenciais pelo método <code>commitBatchTransactions</code> sob transação única do Firestore. Uma falha no segundo item (<code>simulateItemFailureIndex: 1</code>) reverte 100% dos efeitos (saldo de Alice intacto em R$ 1.000,00 e 0 transações salvas). Reentrega concorrente com <code>Promise.all</code> é deduplicada com <code>replay: true</code> e um único débito. Reenvio pós-commit recupera os mesmos recibos com status <code>APPLIED</code> sem duplo débito.<br/>
-        • <strong>2. Mensagem Derivada dos Recibos e Dados Persistidos:</strong> O texto enviado ao WhatsApp é construído por <code>buildWhatsAppConfirmationMessage</code> a partir dos documentos gravados e recibos emitidos. O envio é capturado e verificado no teste (valores de R$ 35,00 e R$ 120,00 somando R$ 155,00, estado <code>🟢 Realizado / Debitado em conta</code> vs <code>🟡 Previsto / Fatura a Vencer</code>, preservação de campos ausentes sem cidades fantasmas e cobertura de sucesso, replay e falha do lote).<br/>
-        • <strong>3. Evento de Mídia Sintético no Formato do Provedor (Baileys/Evolution):</strong> Exercitado com payload nativo <code>data.message.audioMessage</code>. Busca e transcrição operam sobre serviços de teste controlados sem dependências externas, com registro no trace (<code>FETCH_AUDIO_MEDIA</code> e <code>TRANSCRIBE_AUDIO_BUFFER</code>). A mesma frase natural (<em>"Gasolina 73 reais e 45 centavos no débito"</em>) atesta exata paridade contábil no Chat Web e no WhatsApp (7.345 centavos inteiros com recibo <code>APPLIED</code>).<br/>
-        • <strong>4. Publicação e Rastreabilidade Integral:</strong> SHA completo e registros vinculados ao mesmo checkout. CI da 03.5 (Run ID <code>42411151138</code>, Job <code>128519377910</code>, Commit <code>e34dbfe992d7d388ac2c7915c25f3a64f18b4fca</code>) documentada como evidência histórica. Aceite dinâmico Android catalogado formalmente como <strong>PENDENTE</strong> por ausência de dispositivo configurado no host descartável.
+        • <strong>1. Paridade Estrita pela Entrada Natural dos Dois Chats:</strong> Envio da mesma frase natural pura (<em>"Gasolina 73 reais e 45 centavos no débito"</em>) pelo Chat Web (via <code>launchTransactionFromChatVoice</code>) e pelo WhatsApp Webhook (<code>/api/webhook</code>). Cada canal interpretou a frase autonomamente, resultando na gravação de exatamente 7.345 centavos inteiros (<code>amountCents === 7345</code>), débito exato de 7.345 centavos no saldo no Firestore Emulator (Bob: R$ 926,55 / Alice: R$ 691,55), persistência idêntica (<code>type: EXPENSE</code>, <code>category: Transporte</code>, <code>subcategory: Combustível</code>, <code>method: Débito</code>) e confirmação apresentada derivada do recibo contábil <code>APPLIED</code>. Teste de mídia nativa (<code>audioMessage</code>) validado com substituição controlada das fronteiras <code>FETCH_AUDIO_MEDIA</code> e <code>TRANSCRIBE_AUDIO_BUFFER</code>.<br/>
+        • <strong>2. Contrato Atômico de Lote e Imunidade de Payload:</strong> Remoção de <code>simulateItemFailureIndex</code> do payload público aceito pelo webhook: requisições com esse campo são aceitas e o lote comita normalmente (imunidade total). A prova de rollback é realizada exclusivamente via infraestrutura de teste (<code>set_test_batch_failure_index</code>), demonstrando HTTP 400 <code>batch_failure</code> (<code>rolledBack: true</code>), saldo intacto em R$ 960,00, zero transações órfãs e mensagem enviada ao WhatsApp comunicando rollback total. Concorrência com <code>Promise.all</code> deduplicada com <code>replay: true</code> e reenvio recuperando recibos <code>APPLIED</code> sem segundo efeito.<br/>
+        • <strong>3. Mensagem Derivada dos Recibos e Dados Persistidos:</strong> Mensagem montada por <code>buildWhatsAppConfirmationMessage</code> a partir dos recibos e registros no banco, refletindo total R$ 155,00, itens de R$ 35,00 e R$ 120,00 em centavos, estado <code>🟢 Realizado / Debitado em conta</code> vs <code>🟡 Previsto</code>, preservação de campos ausentes sem cidades fantasmas e cobertura de sucesso, replay e rollback.<br/>
+        • <strong>4. Reconciliação do SHA e Rastreabilidade Total:</strong> Revisão pública base de partida: <a href="https://github.com/Wisterly/kyro-finance/commit/e4f233e3acd49680138957504f484b9c6122769a" target="_blank" style="color:var(--blue); text-decoration: underline;"><code>e4f233e</code></a>. Commit da entrega atual: <a href="https://github.com/Wisterly/kyro-finance/commit/743233142c2dab3bedea360e5905f0523201b863" target="_blank" style="color:var(--accent); text-decoration: underline;"><code>7432331</code></a>. CI da Subetapa 03.5 catalogada como histórica: <a href="https://github.com/Wisterly/kyro-finance/actions/runs/42411151138" target="_blank" style="color:var(--purple); text-decoration: underline;">Run 42411151138</a> (Job 128519377910, commit <code>e34dbfe992d7d388ac2c7915c25f3a64f18b4fca</code>). Aceite de runtime Android formalmente catalogado como <strong>PENDENTE</strong> por ausência de dispositivo móvel/AVD no host de CI descartável.
       </div>
 
       <table>
@@ -1112,6 +1114,18 @@ tokens used: 23.408</div>
             <td><code>239b448cae36edce6f4e9113d3414a5cb154e226</code></td>
             <td>Barramento de eventos e runner verificável</td>
             <td><strong>Zero alteração embarcada:</strong> acréscimo de scripts de automação isolados em <code>src/automation/</code>.</td>
+          </tr>
+          <tr>
+            <td><strong>Revisão Pública Base da Subetapa 03.6</strong></td>
+            <td><a href="https://github.com/Wisterly/kyro-finance/commit/e4f233e3acd49680138957504f484b9c6122769a" target="_blank" style="color:var(--blue); text-decoration: underline;"><code>e4f233e3acd49680138957504f484b9c6122769a</code></a></td>
+            <td>Suíte e lote transacional no motor compartilhado</td>
+            <td>Lote atômico com rollback e evento de áudio nativo do provedor.</td>
+          </tr>
+          <tr>
+            <td><strong>Entrega Final da Subetapa 03.6 (PR.047)</strong></td>
+            <td><a href="https://github.com/Wisterly/kyro-finance/commit/743233142c2dab3bedea360e5905f0523201b863" target="_blank" style="color:var(--accent); text-decoration: underline;"><code>743233142c2dab3bedea360e5905f0523201b863</code></a></td>
+            <td>Suíte consolidada (460/460 testes aprovados)</td>
+            <td>Paridade rigorosa de frase natural nos dois chats, imunidade pública do webhook contra <code>simulateItemFailureIndex</code> e persistência de método/categoria.</td>
           </tr>
         </tbody>
       </table>
