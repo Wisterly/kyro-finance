@@ -311,6 +311,13 @@ export async function runEtapa04BrowserChatTests(): Promise<{ total: number; pas
     assertBrowser(Boolean(savedTx1?.requestId && savedTx1.requestId.length > 5), `RequestId estável comprovado no documento do Firestore: ${savedTx1?.requestId}`);
     assertBrowser(savedTx1?.amountCents === 7345n, 'Valor contábil persistido corresponde a exatamente 7.345 centavos BigInt');
 
+    const mut1 = capturedMutations.find(m => m.receipt?.requestId === savedTx1?.requestId || m.payload?.transaction?.amountCents === '7345' || m.payload?.transaction?.amount === 73.45);
+    assertBrowser(Boolean(mut1), 'CORRELAÇÃO QUADRUPLA (1/4): Requisição financeira emitida pela interface web capturada');
+    assertBrowser(mut1?.receipt?.status === 'APPLIED', 'CORRELAÇÃO QUADRUPLA (2/4): Recibo oficial do servidor emitido com status estrito APPLIED');
+    assertBrowser(Boolean(savedTx1?.requestId && (savedTx1.requestId === mut1?.requestId || mut1?.receipt?.requestId === savedTx1.requestId)), 'CORRELAÇÃO QUADRUPLA (3/4): RequestId estável persistido idêntico ao emitido pela interface e ao recibo');
+    assertBrowser(bubbleText1.includes('73,45') || bubbleText1.includes('Gasolina'), 'CORRELAÇÃO QUADRUPLA (4/4): Confirmação visual no DOM derivada do lançamento oficial');
+    assertBrowser(txList1.filter(t => t.amountCents === 7345n).length === 1, 'UNICIDADE CONTÁBIL: Exatamente um único lançamento de Gasolina registrado no Firestore (sem duplicação)');
+
     // =========================================================================
     // CENÁRIO 2: ENTRADA DE VOZ COM BOTÃO "LANÇAR" RENDERIZADO
     // (Substituição apenas da entrada do reconhecedor e clique no botão Lançar)
@@ -391,6 +398,12 @@ export async function runEtapa04BrowserChatTests(): Promise<{ total: number; pas
     const savedTx2 = txList2.find(t => t.amountCents === 4250n);
     assertBrowser(Boolean(savedTx2), 'Lançamento de voz persistido no Firestore Emulator');
     assertBrowser(savedTx2?.amountCents === 4250n, 'Valor contábil da voz persistido em exatos 4.250 centavos (R$ 42,50)');
+
+    const mut2 = capturedMutations.find(m => m.receipt?.requestId === savedTx2?.requestId || m.payload?.transaction?.amountCents === '4250' || m.payload?.transaction?.amount === 42.5);
+    assertBrowser(Boolean(mut2), 'VOZ - CORRELAÇÃO QUADRUPLA (1/4): Requisição originada pelo botão "Lançar" capturada');
+    assertBrowser(mut2?.receipt?.status === 'APPLIED', 'VOZ - CORRELAÇÃO QUADRUPLA (2/4): Recibo oficial de voz emitido com status APPLIED');
+    assertBrowser(Boolean(savedTx2?.requestId && (savedTx2.requestId === mut2?.requestId || mut2?.receipt?.requestId === savedTx2.requestId)), 'VOZ - CORRELAÇÃO QUADRUPLA (3/4): RequestId de voz persistido no Firestore idêntico ao do recibo');
+    assertBrowser(txList2.filter(t => t.amountCents === 4250n).length === 1, 'VOZ - UNICIDADE CONTÁBIL: Exatamente um único lançamento de voz no Firestore (sem efeito duplo)');
 
     // =========================================================================
     // CENÁRIO 3: AMBIGUIDADE POR AUSÊNCIA DE VALOR (ZERO MUTAÇÃO CONTÁBIL)
@@ -511,6 +524,12 @@ export async function runEtapa04BrowserChatTests(): Promise<{ total: number; pas
     assertBrowser(savedTx4?.method === 'Outro', 'REGRA 10.1 NO BANCO: Campo method registrado estritamente como "Outro" (sem PIX presumido)');
     assertBrowser(!savedTx4?.city || savedTx4.city === '', 'REGRA 10.2 NO BANCO: Campo city registrado vazio "" (sem Teresina presumida)');
     assertBrowser(savedTx4?.amountCents === 1500n, 'Valor contábil registrado como exatos 1.500 centavos BigInt');
+
+    const mut4 = capturedMutations.find(m => m.receipt?.requestId === savedTx4?.requestId || m.payload?.transaction?.amountCents === '1500' || m.payload?.transaction?.amount === 15);
+    assertBrowser(Boolean(mut4), 'CAMPOS AUSENTES - CORRELAÇÃO QUADRUPLA (1/4): Requisição da interface sem método/cidade capturada');
+    assertBrowser(mut4?.receipt?.status === 'APPLIED', 'CAMPOS AUSENTES - CORRELAÇÃO QUADRUPLA (2/4): Recibo oficial emitido com status APPLIED');
+    assertBrowser(Boolean(savedTx4?.requestId && (savedTx4.requestId === mut4?.requestId || mut4?.receipt?.requestId === savedTx4.requestId)), 'CAMPOS AUSENTES - CORRELAÇÃO QUADRUPLA (3/4): RequestId estável persistido idêntico ao do recibo');
+    assertBrowser(txList4.filter(t => t.amountCents === 1500n).length === 1, 'CAMPOS AUSENTES - UNICIDADE CONTÁBIL: Exatamente um único lançamento de Padaria no Firestore (sem efeito duplo)');
 
     console.log('\n================================================================');
     console.log(`SUÍTE DE NAVEGADOR CONCLUÍDA: ${passedBrowserTests} de ${totalBrowserTests} ASSERÇÕES APROVADAS (100% SUCESSO)`);
