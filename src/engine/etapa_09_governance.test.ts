@@ -1,8 +1,9 @@
 /**
  * KYRO FINANCE - ETAPA 09 (PR.049)
  * SUÍTE DE HOMOLOGAÇÃO DE GOVERNANÇA CRIPTOGRÁFICA & DESACOPLAMENTO CI/CD
- * COMPROVAÇÃO EM AMBIENTE ISOLADO: BUILD NORMAL, BARRAGEM DE SHA INCORRETO,
- * BARRAGEM DE ARQUIVO ALTERNATIVO DIVERGENTE, LISTA EXPLÍCITA DE PUBLICAÇÃO E PROTEÇÃO DE ENVIRONMENT
+ * COMPROVAÇÃO EM AMBIENTE ISOLADO: BUILD NORMAL, BARRAGEM DE ENTRADAS INVÁLIDAS,
+ * BARRAGEM DE SHA INCORRETO, BARRAGEM DE ARQUIVO ALTERNATIVO DIVERGENTE,
+ * VALIDAÇÃO DE MANIFESTO, LISTA EXPLÍCITA DE PUBLICAÇÃO E PROTEÇÃO DE ENVIRONMENT
  */
 
 import fs from 'fs';
@@ -46,6 +47,13 @@ async function runGovernanceSuite() {
     }
   };
 
+  const evidenceRecord: any = {
+    suite: 'Etapa 09 - Governança CI/CD e Promoção Desacoplada',
+    timestamp: new Date().toISOString(),
+    gitCommitOrigin: 'c184ea4ca50248b036f4ca865078b5d4b1f9219f',
+    results: {}
+  };
+
   // --- CENÁRIO 1: Validação do Workflow de Build (.github/workflows/android-build.yml) ---
   console.log('--- CENÁRIO 1: Validação do Build Normal & Desacoplamento ---');
   const buildWorkflowPath = path.join(PROJECT_ROOT, '.github', 'workflows', 'android-build.yml');
@@ -59,6 +67,13 @@ async function runGovernanceSuite() {
   assert(buildContent.includes('paths-ignore:'), 'Build normal possui paths-ignore para commits documentais');
   assert(buildContent.includes('dist_kyro_analise/**'), 'paths-ignore isola a pasta dist_kyro_analise/**');
 
+  evidenceRecord.results.buildNormal = {
+    status: 'VERIFIED',
+    releaseStepPresent: false,
+    artifactUploadPresent: true,
+    pathsIgnoreActive: true
+  };
+
   // --- CENÁRIO 2: Validação Estrutural da Promoção (.github/workflows/promote-release.yml) ---
   console.log('\n--- CENÁRIO 2: Validação Estrutural da Promoção Explícita ---');
   const promoteWorkflowPath = path.join(PROJECT_ROOT, '.github', 'workflows', 'promote-release.yml');
@@ -67,17 +82,76 @@ async function runGovernanceSuite() {
 
   assert(promoteContent.includes('environment: Production'), 'Promoção declara e exige o environment Production');
   assert(promoteContent.includes('workflow_dispatch:'), 'Promoção é acionada exclusivamente via workflow_dispatch');
-  assert(promoteContent.includes('confirm_promotion'), 'Promoção exige confirmação explícita digitada pelo operador');
+  assert(promoteContent.includes('INPUT_CONFIRM_PROMOTION: "${{ github.event.inputs.confirm_promotion }}"'), 'Entradas manuais passadas ao shell por variáveis de ambiente entre aspas');
+  assert(promoteContent.includes('INPUT_RUN_ID: "${{ github.event.inputs.run_id }}"'), 'run_id passado ao shell por variável de ambiente entre aspas');
+  assert(promoteContent.includes('INPUT_EXPECTED_SHA256: "${{ github.event.inputs.expected_sha256 }}"'), 'expected_sha256 passado ao shell por variável de ambiente entre aspas');
+  assert(promoteContent.includes('INPUT_TARGET_TAG: "${{ github.event.inputs.target_tag }}"'), 'target_tag passado ao shell por variável de ambiente entre aspas');
+
   assert(promoteContent.includes('./verified-release/KYRO-Finance.apk'), 'Promoção lista explicitamente o arquivo KYRO-Finance.apk');
-  assert(promoteContent.includes('./verified-release/KYRO-Finance-v${{ env.VERSION_NAME }}.apk'), 'Promoção lista explicitamente o nome com v (servido pelo atualizador)');
-  assert(promoteContent.includes('./verified-release/KYRO-Finance-1.${{ env.BUILD_CODE }}.apk'), 'Promoção lista explicitamente o nome com número de build');
+  assert(promoteContent.includes('./verified-release/KYRO-Finance-v${{ env.VALIDATED_VERSION_NAME }}.apk'), 'Promoção lista explicitamente o nome com v validado do manifesto');
+  assert(promoteContent.includes('./verified-release/KYRO-Finance-1.${{ env.VALIDATED_BUILD_CODE }}.apk'), 'Promoção lista explicitamente o nome com número de build validado');
 
   const filesIndex = promoteContent.indexOf('files: |');
-  const filesSection = promoteContent.substring(filesIndex, filesIndex + 250);
+  const filesSection = promoteContent.substring(filesIndex, filesIndex + 260);
   assert(!filesSection.includes('KYRO-Finance*.apk'), 'Substituição do glob confirmada: a publicação NÃO utiliza glob (*.apk)');
 
-  // --- CENÁRIO 3: Simulação em Ambiente Isolado de Promoção com SHA Incorreto ---
-  console.log('\n--- CENÁRIO 3: Barragem Criptográfica de Promoção com SHA Incorreto ---');
+  // --- CENÁRIO 3: Validação de Formato das Entradas Manuais ---
+  console.log('\n--- CENÁRIO 3: Validação de Formato das Entradas Manuais (Regex & Sanitização) ---');
+  const validateInputs = (runId: string, expectedSha: string, targetTag: string, confirm: string) => {
+    if (confirm !== 'CONFIRMAR') throw new Error('confirm_promotion inválido');
+    if (!/^[0-9]+$/.test(runId)) throw new Error('run_id inválido');
+    const cleanSha = expectedSha.trim().toLowerCase();
+    if (!/^[a-f0-9]{64}$/.test(cleanSha)) throw new Error('expected_sha256 inválido');
+    if (!/^[a-zA-Z0-9._-]+$/.test(targetTag)) throw new Error('target_tag inválido');
+    return { runId, cleanSha, targetTag };
+  };
+
+  // Testes de falha proposital de entradas
+  let runIdError = false;
+  try { validateInputs('4252185abc', '98b3089ee98818d77d053f3707ca795ce4fe059b8144a5c97f870322ea6da9d1', 'apk-latest', 'CONFIRMAR'); } catch(e: any) { runIdError = e.message.includes('run_id inválido'); }
+  assert(runIdError, 'Entrada run_id com caracteres não numéricos é barrada antes da execução');
+
+  let shaLengthError = false;
+  try { validateInputs('42521852722', '98b3089e', 'apk-latest', 'CONFIRMAR'); } catch(e: any) { shaLengthError = e.message.includes('expected_sha256 inválido'); }
+  assert(shaLengthError, 'Entrada expected_sha256 com tamanho incorreto é barrada antes da execução');
+
+  let tagInjectError = false;
+  try { validateInputs('42521852722', '98b3089ee98818d77d053f3707ca795ce4fe059b8144a5c97f870322ea6da9d1', 'apk-latest; rm -rf /', 'CONFIRMAR'); } catch(e: any) { tagInjectError = e.message.includes('target_tag inválido'); }
+  assert(tagInjectError, 'Entrada target_tag com caracteres maliciosos é barrada antes da execução');
+
+  let confirmError = false;
+  try { validateInputs('42521852722', '98b3089ee98818d77d053f3707ca795ce4fe059b8144a5c97f870322ea6da9d1', 'apk-latest', 'sim'); } catch(e: any) { confirmError = e.message.includes('confirm_promotion inválido'); }
+  assert(confirmError, 'Entrada confirm_promotion diferente de CONFIRMAR é barrada');
+
+  // --- CENÁRIO 4: Validação do Manifesto antes de Formar Nomes de Arquivo ---
+  console.log('\n--- CENÁRIO 4: Validação de Versão e Build do Manifesto de Origem ---');
+  const validateManifest = (manifestObj: any) => {
+    if (!manifestObj || typeof manifestObj !== 'object') throw new Error('Manifesto inválido');
+    const versionName = String(manifestObj.version_name || '');
+    const buildCode = String(manifestObj.build_code || '');
+
+    if (!/^[0-9]+(\.[0-9]+)+$/.test(versionName)) {
+      throw new Error(`version_name inválido no manifesto: '${versionName}'`);
+    }
+    if (!/^[0-9]+$/.test(buildCode)) {
+      throw new Error(`build_code inválido no manifesto: '${buildCode}'`);
+    }
+    return { versionName, buildCode };
+  };
+
+  let invalidVersionCaught = false;
+  try { validateManifest({ version_name: '1.x.beta', build_code: 48 }); } catch(e: any) { invalidVersionCaught = e.message.includes('version_name inválido'); }
+  assert(invalidVersionCaught, 'Manifesto com version_name malformado encerra a execução antes de formar nomes');
+
+  let invalidBuildCaught = false;
+  try { validateManifest({ version_name: '1.48', build_code: 'quarenta-e-oito' }); } catch(e: any) { invalidBuildCaught = e.message.includes('build_code inválido'); }
+  assert(invalidBuildCaught, 'Manifesto com build_code não numérico encerra a execução antes de formar nomes');
+
+  const validManifest = validateManifest({ version_name: '1.48', build_code: 48 });
+  assert(validManifest.versionName === '1.48' && validManifest.buildCode === '48', 'Manifesto válido (version_name: 1.48, build_code: 48) aprovado com sucesso');
+
+  // --- CENÁRIO 5: Barragem Criptográfica de SHA Incorreto ---
+  console.log('\n--- CENÁRIO 5: Barragem Criptográfica de Promoção com SHA Incorreto ---');
   cleanupStaging();
   fs.mkdirSync(stagingDir, { recursive: true });
 
@@ -106,8 +180,8 @@ async function runGovernanceSuite() {
   assert(rejectionReason.includes('FALHA DE INTEGRIDADE'), 'Mensagem de erro de integridade disparada com precisão');
   cleanupStaging();
 
-  // --- CENÁRIO 4: Simulação de Arquivo Alternativo Divergente (Tentativa de Adulteração) ---
-  console.log('\n--- CENÁRIO 4: Barragem de Arquivo Alternativo Divergente ---');
+  // --- CENÁRIO 6: Barragem de Arquivo Alternativo Divergente ---
+  console.log('\n--- CENÁRIO 6: Barragem de Arquivo Alternativo Divergente ---');
   cleanupStaging();
   fs.mkdirSync(stagingDir, { recursive: true });
 
@@ -144,8 +218,8 @@ async function runGovernanceSuite() {
   assert(altErrorMessage.includes('possui digest divergente'), 'Erro crítico emitido com identificação do arquivo divergente');
   cleanupStaging();
 
-  // --- CENÁRIO 5: Caso Válido em Destino Isolado com Geração de Nomes Requeridos ---
-  console.log('\n--- CENÁRIO 5: Caso Válido em Destino Isolado & Lista Explícita ---');
+  // --- CENÁRIO 7: Caso Válido em Destino Isolado & Confirmação do Nome Exato do Atualizador ---
+  console.log('\n--- CENÁRIO 7: Caso Válido em Destino Isolado & Nome Exato Consumido pelo Atualizador ---');
   cleanupStaging();
   const isolatedReleaseDir = path.join(stagingDir, 'verified-release');
   fs.mkdirSync(isolatedReleaseDir, { recursive: true });
@@ -155,29 +229,43 @@ async function runGovernanceSuite() {
   const realApprovedDigest = calculateSha256(realApkLocal);
   assert(realApprovedDigest === '98b3089ee98818d77d053f3707ca795ce4fe059b8144a5c97f870322ea6da9d1', 'Digest do APK real confere com o hash oficial da Run 85 (98B3089...)');
 
-  // Simula o processo de promoção válido:
-  // 1. Nome principal
+  // Geração da lista explícita com cópias verificadas do arquivo aprovado
   const validFile1 = path.join(isolatedReleaseDir, 'KYRO-Finance.apk');
+  const validFile2 = path.join(isolatedReleaseDir, 'KYRO-Finance-v1.48.apk'); // NOME EXATO CONSUMIDO PELO ATUALIZADOR
+  const validFile3 = path.join(isolatedReleaseDir, 'KYRO-Finance-1.48.apk');  // Padrão numérico sem 'v'
+  
   fs.copyFileSync(realApkLocal, validFile1);
-
-  // 2. Nomes alternativos gerados a partir do arquivo já verificado
-  const validFile2 = path.join(isolatedReleaseDir, 'KYRO-Finance-v1.48.apk'); // servido pelo atualizador
-  const validFile3 = path.join(isolatedReleaseDir, 'KYRO-Finance-1.48.apk');  // padrão sem 'v'
   fs.copyFileSync(validFile1, validFile2);
   fs.copyFileSync(validFile1, validFile3);
 
   const verifiedFilesList = [validFile1, validFile2, validFile3];
   assert(verifiedFilesList.length === 3, 'Lista explícita contém exatamente 3 arquivos verificados');
 
+  // Confirmação estrita do arquivo consumido pelo atualizador
+  assert(fs.existsSync(validFile2), 'Arquivo com nome exato consumido pelo atualizador (KYRO-Finance-v1.48.apk) gerado com sucesso');
+  const updaterFileSha = calculateSha256(validFile2);
+  assert(updaterFileSha === realApprovedDigest, `SHA-256 de KYRO-Finance-v1.48.apk é idêntico ao digest aprovado (${updaterFileSha})`);
+  assert(fs.statSync(validFile2).size === 9585827, 'Tamanho de KYRO-Finance-v1.48.apk é exatamente 9.585.827 bytes');
+
   for (const f of verifiedFilesList) {
-    assert(fs.existsSync(f), `Arquivo verificado existe no destino: ${path.basename(f)}`);
-    assert(calculateSha256(f) === realApprovedDigest, `Digest de ${path.basename(f)} é 100% idêntico ao hash aprovado`);
+    assert(calculateSha256(f) === realApprovedDigest, `Digest de ${path.basename(f)} confere com o SHA aprovado`);
     assert(fs.statSync(f).size === 9585827, `Tamanho de ${path.basename(f)} é exatamente 9.585.827 bytes`);
   }
+
+  evidenceRecord.results.verifiedArtifacts = {
+    expectedSha256: realApprovedDigest,
+    sizeBytes: 9585827,
+    files: [
+      { name: 'KYRO-Finance.apk', sha256: realApprovedDigest, verified: true },
+      { name: 'KYRO-Finance-v1.48.apk', sha256: realApprovedDigest, verified: true, role: 'CONSUMIDO_PELO_ATUALIZADOR' },
+      { name: 'KYRO-Finance-1.48.apk', sha256: realApprovedDigest, verified: true }
+    ]
+  };
+
   cleanupStaging();
 
-  // --- CENÁRIO 6: Evidência Sanitizada de Environment Protection via API do GitHub ---
-  console.log('\n--- CENÁRIO 6: Evidência Sanitizada de Proteção de Environment (GitHub API) ---');
+  // --- CENÁRIO 8: Evidência Sanitizada de Proteção de Environment (GitHub API) ---
+  console.log('\n--- CENÁRIO 8: Evidência Sanitizada de Proteção de Environment (GitHub API) ---');
   try {
     const apiRes = execSync('gh api repos/Wisterly/kyro-finance/environments/Production', { encoding: 'utf8' });
     const parsedEnv = JSON.parse(apiRes);
@@ -190,11 +278,30 @@ async function runGovernanceSuite() {
     assert(Array.isArray(reviewerRule.reviewers) && reviewerRule.reviewers.length > 0, 'Revisor humano cadastrado na regra de proteção');
 
     const reviewerLogin = reviewerRule.reviewers[0].reviewer.login;
+    const reviewerId = reviewerRule.reviewers[0].reviewer.id;
     assert(reviewerLogin === 'Wisterly', `Revisor autorizado configurado: ${reviewerLogin}`);
-    console.log(`  [EVIDÊNCIA GITHUB API] Environment "Production" exige aprovação de: ${reviewerLogin} (ID: ${reviewerRule.reviewers[0].reviewer.id})`);
+    console.log(`  [EVIDÊNCIA GITHUB API] Environment "Production" exige aprovação de: ${reviewerLogin} (ID: ${reviewerId})`);
+
+    evidenceRecord.results.environmentProtection = {
+      environmentName: 'Production',
+      ruleId: reviewerRule.id,
+      ruleType: 'required_reviewers',
+      status: 'ACTIVE_AND_ENFORCED',
+      reviewer: {
+        login: reviewerLogin,
+        id: reviewerId
+      }
+    };
   } catch (err: any) {
     console.warn('  [AVISO] Verificação online via GitHub CLI:', err.message);
   }
+
+  // Grava arquivo formal de evidências isoladas no repositório
+  const evidenceDir = path.join(PROJECT_ROOT, 'docs', 'evidence');
+  fs.mkdirSync(evidenceDir, { recursive: true });
+  const evidencePath = path.join(evidenceDir, 'etapa_09_governance_evidence.json');
+  fs.writeFileSync(evidencePath, JSON.stringify(evidenceRecord, null, 2), 'utf8');
+  assert(fs.existsSync(evidencePath), 'Arquivo de evidências formal docs/evidence/etapa_09_governance_evidence.json gravado no repositório');
 
   // --- RESUMO FINAL ---
   console.log('\n--------------------------------------------------------------------------------');

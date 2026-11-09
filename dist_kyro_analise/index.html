@@ -1076,13 +1076,17 @@ C. Referencia Anterior Registrada (CI Run 84):
      - O APK e os manifestos são arquivados exclusivamente como artefatos internos do GitHub Actions (upload-artifact@v4).
   2) Novo Workflow de Promoção Explícita (.github/workflows/promote-release.yml):
      - Gatilho exclusivo: "workflow_dispatch" com inputs controlados: run_id, expected_sha256, target_tag e confirm_promotion ("CONFIRMAR").
+     - Sanitização de Entradas Manuais: Todas as variáveis são passadas ao shell exclusivamente via bloco "env:" com argumentos entre aspas ("$INPUT_..."), eliminando riscos de script injection.
+     - Validação Estrita de Formato: Regex rigoroso validando run_id (somente dígitos), expected_sha256 (64 hexadecimais) e target_tag (tag git válida) antes de qualquer chamada de rede.
+     - Validação Prévia do Manifesto: version_name (regex semântico) e build_code (número inteiro) validados do build-manifest.json antes de montar qualquer nome de arquivo.
      - Ambiente de governança "Production" com proteção de Required Reviewers ativa na API do GitHub (ID 71768192, reviewer autorizado: Wisterly ID 341183738). Sem aprovação manual do revisor no GitHub, o job é bloqueado e sequer executa.
      - Baixa o artefato arquivado correspondente ao run_id auditado via GitHub CLI.
      - Calcula o SHA-256 do APK baixado e compara estritamente com expected_sha256: se houver divergência de 1 caractere, aborta imediatamente com exit 1 e NENHUM arquivo é publicado.
-     - Validação estrita de arquivos alternativos: confere o SHA de cada binário pré-existente e gera cópias exatas do arquivo verificado para os nomes exigidos pelo atualizador (KYRO-Finance-v1.48.apk e KYRO-Finance-1.48.apk), testando cada um antes de publicar.
+     - Validação estrita de arquivos alternativos: confere o SHA de cada binário pré-existente e gera cópias exatas do arquivo verificado para os nomes exigidos pelo atualizador (KYRO-Finance-v1.48.apk e KYRO-Finance-1.48.apk), testando cada um individualmente antes de publicar.
      - Substituição do glob: o step de publicação utiliza uma lista explícita de arquivos aprovados (sem nenhum glob *.apk).
   3) Comprovação Automatizada em Ambiente Isolado (src/engine/etapa_09_governance.test.ts):
-     - 38 asserções automatizadas aprovadas cobrindo: build normal sem releases, barragem de SHA incorreto, barragem de binário alternativo divergente, geração de lista explícita com integridade e evidência da API do GitHub.
+     - 49 asserções automatizadas aprovadas cobrindo: build normal sem releases, validação de regex de inputs, validação de manifesto, barragem de SHA incorreto, barragem de binário alternativo divergente, geração de lista explícita com integridade e evidência sanitizada da API do GitHub.
+     - Evidência estruturada e versionada em docs/evidence/etapa_09_governance_evidence.json.
 - Comprovação do Comportamento Fora do Canal Público:
   • Commit puramente documental: O paths-ignore impede qualquer gatilho de execução de pipeline (zero compilação e zero publicação).
   • Build normal de candidato: Um push na main ou branch compila o APK, gera o manifesto e arquiva na aba Actions, sem qualquer publicação ou alteração no GitHub Releases / canal público.

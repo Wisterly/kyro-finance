@@ -1,0 +1,45 @@
+{
+  "suite": "Etapa 09 - Governança CI/CD e Promoção Desacoplada",
+  "timestamp": "2026-11-09T03:49:00.856Z",
+  "gitCommitOrigin": "c184ea4ca50248b036f4ca865078b5d4b1f9219f",
+  "results": {
+    "buildNormal": {
+      "status": "VERIFIED",
+      "releaseStepPresent": false,
+      "artifactUploadPresent": true,
+      "pathsIgnoreActive": true
+    },
+    "verifiedArtifacts": {
+      "expectedSha256": "98b3089ee98818d77d053f3707ca795ce4fe059b8144a5c97f870322ea6da9d1",
+      "sizeBytes": 9585827,
+      "files": [
+        {
+          "name": "KYRO-Finance.apk",
+          "sha256": "98b3089ee98818d77d053f3707ca795ce4fe059b8144a5c97f870322ea6da9d1",
+          "verified": true
+        },
+        {
+          "name": "KYRO-Finance-v1.48.apk",
+          "sha256": "98b3089ee98818d77d053f3707ca795ce4fe059b8144a5c97f870322ea6da9d1",
+          "verified": true,
+          "role": "CONSUMIDO_PELO_ATUALIZADOR"
+        },
+        {
+          "name": "KYRO-Finance-1.48.apk",
+          "sha256": "98b3089ee98818d77d053f3707ca795ce4fe059b8144a5c97f870322ea6da9d1",
+          "verified": true
+        }
+      ]
+    },
+    "environmentProtection": {
+      "environmentName": "Production",
+      "ruleId": 71768192,
+      "ruleType": "required_reviewers",
+      "status": "ACTIVE_AND_ENFORCED",
+      "reviewer": {
+        "login": "Wisterly",
+        "id": 341183738
+      }
+    }
+  }
+}
