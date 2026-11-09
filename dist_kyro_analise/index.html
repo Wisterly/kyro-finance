@@ -1040,29 +1040,55 @@ CHECKOUT TESTADO: 8bbb987ecec60d5f2650e8e35da10f731e76757e
 
       <!-- Conferência do Estado Real de Publicação, Tríplice Distinção e Ação de Contenção -->
       <h4 style="font-size: 0.95rem; margin-top: 1.5rem; margin-bottom: 0.35rem; color: var(--cyan);">
-        Conferência Somente de Leitura do Estado Real da Publicação, Tríplice Distinção e Plano de Contenção
+        Conferência Somente de Leitura do Estado Real da Publicação, Diagnóstico Arquitetural e Plano de Contenção
       </h4>
-      <div class="code-box terminal"># 1. Leitura em Tempo Real do Endpoint /api/app-version (Executada em 08/11/2026 21:31 GMT):
-A. Em Producao (https://kyro-finance.vercel.app/api/app-version):
-   HTTP/1.1 200 OK | Date: Sun, 08 Nov 2026 21:31:03 GMT
-   {"latestVersion":"1.48","buildNumber":48,"apkUrl":"https://github.com/Wisterly/kyro-finance/releases/download/apk-latest/KYRO-Finance-v1.48.apk", ...}
+      <div class="code-box terminal"># 1. Identificacao do APK Efetivamente Servido (URL de Atualizacao vs CI Run 85):
+A. URL de Atualizacao Oficial:
+   https://github.com/Wisterly/kyro-finance/releases/download/apk-latest/KYRO-Finance-v1.48.apk
+   SHA-256: 98B3089EE98818D77D053F3707CA795CE4FE059B8144A5C97F870322EA6DA9D1
+   Tamanho: 9.585.827 bytes | Application ID: com.kyro.finance | versionCode: 48 (versionName: "1.48")
+   Certificado: CN=KYRO Finance, OU=Mobile, O=KYRO, L=Teresina, ST=PI, C=BR (SHA-256 Digest: 9b2b95a9...)
 
-B. No Preview Isolado (https://kyro-finance-2x1oaung0-wisterly-s.vercel.app/api/app-version):
-   HTTP/1.1 200 OK | Date: Sun, 08 Nov 2026 21:31:23 GMT
-   {"latestVersion":"1.48","buildNumber":48,"apkUrl":"https://github.com/Wisterly/kyro-finance/releases/download/apk-latest/KYRO-Finance-v1.48.apk", ...}
+B. Execucao de Origem (CI Run 85):
+   GitHub Actions Run 42521852722 (Job 128856608553) | Checkout Compilado: b66866f967efef0b31ec1cb9518ec39c35af5878
+   Artefato CI: ID 13633971447 (KYRO-Finance-APK)
+   Coincidencia Criptografica: 100% identico byte a byte ao arquivo servido na release publica apk-latest.
 
-# 2. Triplice Distincao Operacional:
-  [1] Disponibilidade Publica do APK: O arquivo KYRO-Finance-v1.48.apk (SHA-256 98B3089...) encontra-se hospedado publicamente na tag apk-latest do GitHub Releases (publicado na Run 85 as 20:48 GMT).
-  [2] Oferta pelo Atualizador: O endpoint /api/app-version (Serverless) consulta o version.json do GitHub main e a API de releases em tempo real, anunciando a v1.48/build 48 aos clientes ativos do aplicativo.
-  [3] Instalacao Efetiva em Dispositivos: O aplicativo Capacitor NAO instala atualizacoes de forma silenciosa ou arbitraria. A rotina appUpdater.ts aciona a Intent nativa de instalacao do Android, exigindo obrigatoriamente a interacao voluntaria e confirmacao do usuario final no dialogo do sistema.
+C. Referencia Anterior Registrada (CI Run 84):
+   GitHub Actions Run 42521353317 (Job 128855336435) | Checkout Compilado: 306def6310eb491ab6fcdafdbe57d91e40c57cfc
+   Artefato CI: ID 13633651782 (KYRO-Finance-APK) | SHA-256: 80CF7BBE7CC6CAE5A12E6702D84C8F854B4FD548EAD415EB5638DA70681DCE73
+   Tamanho: 9.585.827 bytes | Mantido como referencia historica de compilação da revisao escolhida.
 
-# 3. Analise de Exposicao e Acoes de Contencao para Decisao do Usuario / OpenAI Codex:
-  - Situacao Observada: A atualizacao de version.json no commit 306def6 provocou a promocao automatica do canal publico no GitHub Actions e no endpoint /api/app-version.
-  - Acao de Contencao A (Reversao Imediata da Oferta para v1.46):
-      Reverter version.json no branch main para 1.46 (build 46) e despublicar os assets da tag apk-latest no GitHub, restaurando a v1.46 como unica versao oferecida aos clientes de producao.
-  - Acao de Contencao B (Manutencao da v1.48 como Candidata Homologada):
-      Manter a v1.48 ativa no canal, uma vez que possui 100% de paridade estatica com a base estabilizada 8bbb987 e 691 verificacoes automatizadas aprovadas com sucesso, aguardando a revisao manual do Codex para homologar a promocao.
-  * DIRETIVA DE SEGURANCA: Nenhuma alteracao no canal publico sera realizada sem a previa e expressa autorizacao do usuario.</div>
+# 2. Diagnostico Arquitetural: Por Que o Commit Documental b66866f Disparou o Build Android?
+- Causa Raiz: O arquivo de workflow .github/workflows/android-build.yml continha o gatilho:
+    on:
+      push:
+        branches: [ "main", "master" ]
+  sem nenhum filtro de paths (paths-ignore:). Dessa forma, qualquer push na branch main (inclusive commits puramente documentais em dist_kyro_analise/) dispara a pipeline completa de build do APK.
+- Acoplamento entre Build e Publicacao:
+  Nas linhas 83-100 do workflow, o step "Publicar APK pronto para download direto em Releases" executava incondicionalmente para qualquer push na main via action softprops/action-gh-release@v2, sobrescrevendo a tag publica apk-latest sem passar por gate de aprovacao manual.
+- Correcao de Desacoplamento Preparada:
+  1) Adicionar paths-ignore no gatilho de push para isolar arquivos de relatorio (dist_kyro_analise/**, *.md, docs/**).
+  2) Desacoplar a geracao de artefatos da publicacao publica: o job de build deve apenas arquivar o APK na aba Actions (upload-artifact), enquanto a publicacao em releases publicas sera vinculada a tags explicitas (refs/tags/v*) ou aprovacao manual via workflow_dispatch.
+
+# 3. Triplice Distincao e Analise de Impacto em Dispositivos:
+  [1] Disponibilidade Publica do APK: O arquivo v1.48 (SHA-256 98B3089...) esta disponivel publicamente na tag apk-latest do GitHub Releases para download voluntario.
+  [2] Oferta pelo Atualizador: O endpoint Serverless /api/app-version (consultando version.json da main e a release publica ao vivo) responde com latestVersion: "1.48" e buildNumber: 48.
+  [3] Instalacao Efetiva em Dispositivos: O aplicativo Capacitor NAO realiza instalacao silenciosa. A rotina appUpdater.ts emite uma Intent do sistema Android (PackageInstaller), exigindo consentimento manual do usuario no dialogo nativo.
+
+# 4. Plano de Contencao Multi-Fonte para Decisao do Usuario / OpenAI Codex:
+Para anular a oferta publica em todas as fontes consultadas por /api/app-version:
+  a) Fonte 1 (version.json na main): Reverter version para "1.46" e buildNumber para 46 no commit de contencao.
+  b) Fonte 2 (Release Publica GitHub): Reverter o asset ativo da tag apk-latest para KYRO-Finance-v1.46.apk (ou remover temporariamente os assets v1.48 da release publica).
+  c) Fonte 3 (Manifesto local do deploy Vercel): Realizar deploy da Vercel com version.json local em 1.46.
+- Como Verificar o Funcionamento da Contencao:
+  Executar: curl.exe https://kyro-finance.vercel.app/api/app-version
+  Aferir se o retorno exibe: {"latestVersion":"1.46","buildNumber":46,"apkUrl":".../KYRO-Finance-v1.46.apk"}
+- Diferenciacao de Impacto:
+  • Usuarios que AINDA NAO atualizaram (build <= 46): A rotina appUpdater.ts avalia remoteBuild (46) > installedBuild (46) como FALSO. Nenhum aviso, modal ou download ocorrera.
+  • Usuarios que possivelmente JA INSTALARAM a build 48: A rotina appUpdater.ts avalia remoteBuild (46) > installedBuild (48) como FALSO. O aplicativo NAO tenta downgrade (evitando o erro INSTALL_FAILED_VERSION_DOWNGRADE do Android). Caso seja necessario reverter esses aparelhos, aplica-se o procedimento oficial de Rollback Forward (build 49 ou 50 com base estavel).
+
+* DIRETIVA DE SEGURANCA: O canal publico permanece inalterado aguardando decisao expressa do usuario.</div>
 
       <!-- 3. Protocolo de Atualização e Reversão -->
       <h3 style="font-size: 1.15rem; margin-top: 2rem; margin-bottom: 0.75rem; color: #ffffff;">
