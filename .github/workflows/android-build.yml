@@ -3,12 +3,21 @@ name: Gerar Aplicativo Android (KYRO Finance APK)
 on:
   push:
     branches: [ "main", "master" ]
+    paths-ignore:
+      - 'dist_kyro_analise/**'
+      - 'docs/**'
+      - '**.md'
+      - '.github/workflows/promote-release.yml'
   pull_request:
     branches: [ "main", "master" ]
+    paths-ignore:
+      - 'dist_kyro_analise/**'
+      - 'docs/**'
+      - '**.md'
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build-apk:
@@ -72,30 +81,34 @@ jobs:
           cp app/build/outputs/apk/debug/app-debug.apk ../KYRO-Finance-debug.apk
           cp app/build/outputs/apk/debug/app-debug.apk ../KYRO-Finance-${VERSION_NAME}-debug.apk
 
-      - name: Disponibilizar KYRO-Finance.apk na aba Actions
+      - name: Gerar Manifesto Criptográfico e Registrar SHA de Origem
+        run: |
+          sha256sum KYRO-Finance*.apk > build-sha256.txt
+          RELEASE_SHA=$(sha256sum KYRO-Finance.apk | awk '{print $1}')
+          cat <<EOF > build-manifest.json
+          {
+            "commit_sha": "${{ github.sha }}",
+            "git_ref": "${{ github.ref }}",
+            "run_id": "${{ github.run_id }}",
+            "run_number": "${{ github.run_number }}",
+            "build_code": "${{ env.BUILD_CODE }}",
+            "version_name": "${{ env.VERSION_NAME }}",
+            "created_at_utc": "$(date -u +'%Y-%m-%dT%H:%M:%SZ')",
+            "sha256_release_apk": "$RELEASE_SHA",
+            "status": "CANDIDATE_READY_FOR_REVIEW"
+          }
+          EOF
+          echo "--- MANIFESTO DO CANDIDATO ---"
+          cat build-manifest.json
+          echo "--- HASHES SHA-256 ---"
+          cat build-sha256.txt
+
+      - name: Arquivar APK e Manifesto como Artefato de Revisão (Aba Actions)
         uses: actions/upload-artifact@v4
         with:
           name: KYRO-Finance-APK
           path: |
             KYRO-Finance*.apk
+            build-manifest.json
+            build-sha256.txt
           if-no-files-found: error
-
-      - name: Publicar APK pronto para download direto em Releases
-        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: apk-latest
-          name: "📱 KYRO Finance v${{ env.VERSION_NAME }} (Build ${{ env.BUILD_CODE }})"
-          body: |
-            ### 🚀 Aplicativo Oficial Android — KYRO | Private Finance
-            - **Download da Versão Atualizada:** Baixe o arquivo **`KYRO-Finance-1.${{ env.BUILD_CODE }}.apk`** abaixo para instalar ou atualizar diretamente no seu celular Android.
-            - **Versão:** v${{ env.VERSION_NAME }} (Build ${{ env.BUILD_CODE }})
-            - **Sincronização 24h:** Conectado automaticamente ao banco central e WhatsApp na Vercel (`https://kyro-finance.vercel.app`).
-            - **Carregamento Instantâneo:** Interface empacotada nativamente na memória do aparelho.
-          files: |
-            KYRO-Finance.apk
-            KYRO-Finance-*.apk
-          prerelease: false
-          make_latest: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

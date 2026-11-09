@@ -1,0 +1,106 @@
+name: Promover e Publicar APK no Canal de Releases (Ação Explícita de Governança)
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: 'ID da Execução do CI (Run ID) cujo artefato foi auditado'
+        required: true
+        type: string
+      expected_sha256:
+        description: 'Hash SHA-256 esperado do APK oficial para conferência estrita'
+        required: true
+        type: string
+      target_tag:
+        description: 'Tag de destino no GitHub Releases (ex: apk-latest ou v1.48)'
+        required: true
+        default: 'apk-latest'
+        type: string
+      confirm_promotion:
+        description: 'Digite CONFIRMAR para autorizar a publicação pública'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  promote-apk:
+    name: Promover APK com Conferência Criptográfica
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Validar Autorização Explícita
+        run: |
+          if [ "${{ github.event.inputs.confirm_promotion }}" != "CONFIRMAR" ]; then
+            echo "ERRO: Promoção não confirmada explicitamente. Operação abortada."
+            exit 1
+          fi
+          echo "Promoção explicitamente confirmada pelo operador."
+
+      - name: Baixar Artefato Auditado da Execução CI
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          RUN_ID="${{ github.event.inputs.run_id }}"
+          echo "Baixando artefato da Run ID: $RUN_ID..."
+          mkdir -p ./downloaded-artifact
+          gh run download "$RUN_ID" --name KYRO-Finance-APK --dir ./downloaded-artifact
+          ls -la ./downloaded-artifact
+
+      - name: Conferência Estrita de SHA-256 Pré-Publicação
+        run: |
+          EXPECTED_SHA="${{ github.event.inputs.expected_sha256 }}"
+          # Normalizar para minúsculas
+          EXPECTED_SHA_LOWER=$(echo "$EXPECTED_SHA" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')
+          
+          if [ ! -f ./downloaded-artifact/KYRO-Finance.apk ]; then
+            echo "ERRO CRÍTICO: Arquivo KYRO-Finance.apk não encontrado no artefato baixado!"
+            exit 1
+          fi
+
+          CALCULATED_SHA=$(sha256sum ./downloaded-artifact/KYRO-Finance.apk | awk '{print $1}' | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')
+          echo "Hash Calculado: $CALCULATED_SHA"
+          echo "Hash Esperado:   $EXPECTED_SHA_LOWER"
+
+          if [ "$CALCULATED_SHA" != "$EXPECTED_SHA_LOWER" ]; then
+            echo "=========================================================="
+            echo "FALHA DE INTEGRIDADE: O SHA-256 do arquivo baixado diverge!"
+            echo "Calculado: $CALCULATED_SHA"
+            echo "Esperado:  $EXPECTED_SHA_LOWER"
+            echo "Operação abortada imediatamente. NENHUM arquivo foi publicado."
+            echo "=========================================================="
+            exit 1
+          fi
+
+          echo "SUCESSO: Conferência criptográfica 100% aprovada!"
+
+      - name: Exibir Manifesto de Build de Origem
+        run: |
+          if [ -f ./downloaded-artifact/build-manifest.json ]; then
+            echo "--- MANIFESTO DE ORIGEM AUDITADO ---"
+            cat ./downloaded-artifact/build-manifest.json
+          else
+            echo "Aviso: build-manifest.json não presente no artefato (versão legado de build)."
+          fi
+
+      - name: Publicar Artefato Aprovado no GitHub Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.target_tag }}
+          name: "📱 KYRO Finance (Build Promovida via Auditoria Criptográfica)"
+          body: |
+            ### 🚀 Aplicativo Oficial Android — KYRO | Private Finance
+            - **Promoção Homologada:** Binário verificado criptograficamente antes da liberação.
+            - **Origem CI:** Run ID `${{ github.event.inputs.run_id }}`
+            - **SHA-256 Conferido:** `${{ github.event.inputs.expected_sha256 }}`
+            - **Carregamento Instantâneo:** Interface empacotada nativamente na memória do aparelho.
+          files: |
+            ./downloaded-artifact/KYRO-Finance.apk
+            ./downloaded-artifact/KYRO-Finance-*.apk
+          prerelease: false
+          make_latest: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
