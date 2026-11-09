@@ -814,6 +814,8 @@ async function testApkCandidateInspection() {
   console.log(`  ApplicationId Oficial:      com.kyro.finance`);
 
   const validHashes = [
+    '98B3089EE98818D77D053F3707CA795CE4FE059B8144A5C97F870322EA6DA9D1', // Compilação CI 42521852722 (Run 85 - SHA b66866f - APK Servido na Release apk-latest v1.48)
+    '80CF7BBE7CC6CAE5A12E6702D84C8F854B4FD548EAD415EB5638DA70681DCE73', // Compilação Oficial CI 42521353317 (Run 84 - SHA 306def6 - Candidato Homologado v1.48)
     '3FDFB4581971B43E078285B5084B56D698F9D3B810FEFF24BD2D7E5ABE24E8E3', // Compilação Oficial Subetapa 03.7 CI 42452451878 (PR.048 - Sincronização Offline)
     '8CDFB55B21A23566BC03FF24DC5722F551C608167A53785ED311AC3AEA77F638', // Compilação Final Oficial CI 42411151138 (SHA e34dbfe - EventBridge e Auth Emulator saneado)
     '00C3D6D4B5349999E9427AB8F477D72269CF1E332E4FC916D56181A92A937168', // Compilação Intermediária CI 42409482915 (SHA d39b83e)

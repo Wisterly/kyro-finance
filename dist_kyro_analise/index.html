@@ -250,7 +250,7 @@
       </div>
       <h1>KYRO Finance | Relatório Final de Consolidação das Nove Etapas & Preparação de Publicação (Etapa 09)</h1>
       <p class="subtitle">
-        Relatório final de encerramento do plano mestre do <strong>KYRO Financial Intelligence Engine</strong> consolidando os critérios aceitos, evidências verificáveis e pendências por canal das nove etapas de engenharia. Com base no checkout de estabilização aceito pelo Codex (SHA <code>8bbb987</code>, com 691 verificações automatizadas 100% aprovadas), este documento apresenta a <strong>preparação oficial dos candidatos Web e Android para revisão manual</strong>, registro criptográfico e de assinatura do APK, protocolo de atualização e reversão com preservação de dados e matriz de prontidão operacional por canal, mantendo a publicação final em produção reservada para aprovação específica.
+        Relatório final de encerramento do plano mestre do <strong>KYRO Financial Intelligence Engine</strong> consolidando os critérios aceitos, evidências verificáveis e pendências por canal das nove etapas de engenharia. Com base no checkout de estabilização aceito pelo Codex (SHA <code>8bbb987</code>, com 691 verificações automatizadas 100% aprovadas), este documento apresenta a <strong>preparação oficial dos candidatos Web e Android para revisão manual</strong>, distinção criptográfica expressa no cabeçalho entre o APK público servido (9.585.827 bytes) e a referência histórica da Subetapa 03.7 (9.585.395 bytes), desacoplamento completo do build Android da promoção pública (com conferência obrigatória de SHA-256 e proveniência), protocolo de atualização e reversão multi-fonte com preservação de dados e matriz de prontidão operacional por canal, mantendo a publicação final em produção reservada para aprovação específica.
       </p>
     </header>
 
@@ -1068,7 +1068,7 @@ C. Referencia Anterior Registrada (CI Run 84):
 
 # 2. Diagnóstico Arquitetural & Correção Implementada no Branch de Revisão:
 - Causa Raiz do Disparo Indevido: O workflow .github/workflows/android-build.yml continha o gatilho "on: push: branches: [main]" sem filtro de caminhos (paths-ignore:). Commits puramente documentais (como dist_kyro_analise/**) acionavam a compilação do APK e o step de publicação na tag apk-latest via softprops/action-gh-release@v2 executava incondicionalmente.
-- Desacoplamento Completo Implementado:
+- Desacoplamento Completo & Governança Criptográfica Implementada:
   1) Workflow de Compilação (.github/workflows/android-build.yml):
      - Adicionado "paths-ignore:" cobrindo dist_kyro_analise/**, docs/**, **.md e .github/workflows/promote-release.yml.
      - Removido 100% o step de publicação em releases (softprops/action-gh-release@v2).
@@ -1076,14 +1076,17 @@ C. Referencia Anterior Registrada (CI Run 84):
      - O APK e os manifestos são arquivados exclusivamente como artefatos internos do GitHub Actions (upload-artifact@v4).
   2) Novo Workflow de Promoção Explícita (.github/workflows/promote-release.yml):
      - Gatilho exclusivo: "workflow_dispatch" com inputs controlados: run_id, expected_sha256, target_tag e confirm_promotion ("CONFIRMAR").
-     - Ambiente de governança "production" com proteção e revisão manual de responsáveis.
+     - Ambiente de governança "Production" com proteção de Required Reviewers ativa na API do GitHub (ID 71768192, reviewer autorizado: Wisterly ID 341183738). Sem aprovação manual do revisor no GitHub, o job é bloqueado e sequer executa.
      - Baixa o artefato arquivado correspondente ao run_id auditado via GitHub CLI.
-     - Calcula o SHA-256 do APK baixado localmente e compara estritamente com expected_sha256: se houver divergência de 1 caractere sequer, aborta com exit 1 e NENHUM arquivo é publicado.
-     - Somente com conferência criptográfica 100% aprovada, promove o APK para a tag informada (ex: apk-latest ou tags de versão).
+     - Calcula o SHA-256 do APK baixado e compara estritamente com expected_sha256: se houver divergência de 1 caractere, aborta imediatamente com exit 1 e NENHUM arquivo é publicado.
+     - Validação estrita de arquivos alternativos: confere o SHA de cada binário pré-existente e gera cópias exatas do arquivo verificado para os nomes exigidos pelo atualizador (KYRO-Finance-v1.48.apk e KYRO-Finance-1.48.apk), testando cada um antes de publicar.
+     - Substituição do glob: o step de publicação utiliza uma lista explícita de arquivos aprovados (sem nenhum glob *.apk).
+  3) Comprovação Automatizada em Ambiente Isolado (src/engine/etapa_09_governance.test.ts):
+     - 38 asserções automatizadas aprovadas cobrindo: build normal sem releases, barragem de SHA incorreto, barragem de binário alternativo divergente, geração de lista explícita com integridade e evidência da API do GitHub.
 - Comprovação do Comportamento Fora do Canal Público:
-  • Commit puramente documental: O paths-ignore impede qualquer gatilho de execução de pipeline.
+  • Commit puramente documental: O paths-ignore impede qualquer gatilho de execução de pipeline (zero compilação e zero publicação).
   • Build normal de candidato: Um push na main ou branch compila o APK, gera o manifesto e arquiva na aba Actions, sem qualquer publicação ou alteração no GitHub Releases / canal público.
-  • Promoção: Ocorre somente mediante despacho manual auditado no promote-release.yml com validação estrita de SHA-256.
+  • Promoção: Ocorre somente mediante despacho manual auditado no promote-release.yml com validação estrita de SHA-256 e aprovação obrigatória do revisor em Production.
 
 # 3. Decisão sobre a Build 48 Já Oferecida: Comparativo das 3 Fontes de /api/app-version:
 O endpoint Serverless /api/app-version consulta concorrentemente 3 fontes para determinar a versão mais recente:

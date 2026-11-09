@@ -15,6 +15,7 @@
     "test:subetapa-03-4": "tsx src/engine/subetapa_03_4.test.ts",
     "test:subetapa-03-5": "tsx src/engine/subetapa_03_5.test.ts",
     "test:subetapa-03-6": "tsx src/engine/subetapa_03_6.test.ts",
+    "test:governance": "tsx src/engine/etapa_09_governance.test.ts",
     "test:all": "tsx src/engine/runAllTests.ts",
     "apk:sync": "npm run build && npx cap sync android"
   },

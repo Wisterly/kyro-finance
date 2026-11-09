@@ -27,9 +27,9 @@ permissions:
 
 jobs:
   promote-apk:
-    name: Promover APK com Conferência Criptográfica
+    name: Promover APK com Conferência Criptográfica Estrita
     runs-on: ubuntu-latest
-    environment: production
+    environment: Production
 
     steps:
       - name: Validar Autorização Explícita
@@ -50,32 +50,78 @@ jobs:
           gh run download "$RUN_ID" --name KYRO-Finance-APK --dir ./downloaded-artifact
           ls -la ./downloaded-artifact
 
-      - name: Conferência Estrita de SHA-256 Pré-Publicação
+      - name: Conferência Criptográfica do APK e Validação Estrita de Arquivos Alternativos
         run: |
           EXPECTED_SHA="${{ github.event.inputs.expected_sha256 }}"
-          # Normalizar para minúsculas
           EXPECTED_SHA_LOWER=$(echo "$EXPECTED_SHA" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')
           
           if [ ! -f ./downloaded-artifact/KYRO-Finance.apk ]; then
-            echo "ERRO CRÍTICO: Arquivo KYRO-Finance.apk não encontrado no artefato baixado!"
+            echo "ERRO CRÍTICO: Arquivo principal KYRO-Finance.apk não encontrado no artefato baixado!"
             exit 1
           fi
 
-          CALCULATED_SHA=$(sha256sum ./downloaded-artifact/KYRO-Finance.apk | awk '{print $1}' | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')
-          echo "Hash Calculado: $CALCULATED_SHA"
-          echo "Hash Esperado:   $EXPECTED_SHA_LOWER"
+          BASE_SHA=$(sha256sum ./downloaded-artifact/KYRO-Finance.apk | awk '{print $1}' | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')
+          echo "Hash Calculado (KYRO-Finance.apk): $BASE_SHA"
+          echo "Hash Esperado:                     $EXPECTED_SHA_LOWER"
 
-          if [ "$CALCULATED_SHA" != "$EXPECTED_SHA_LOWER" ]; then
+          if [ "$BASE_SHA" != "$EXPECTED_SHA_LOWER" ]; then
             echo "=========================================================="
             echo "FALHA DE INTEGRIDADE: O SHA-256 do arquivo baixado diverge!"
-            echo "Calculado: $CALCULATED_SHA"
+            echo "Calculado: $BASE_SHA"
             echo "Esperado:  $EXPECTED_SHA_LOWER"
             echo "Operação abortada imediatamente. NENHUM arquivo foi publicado."
             echo "=========================================================="
             exit 1
           fi
 
-          echo "SUCESSO: Conferência criptográfica 100% aprovada!"
+          # Se houver arquivos alternativos que vieram junto no artefato, conferir cada um
+          for alt_file in ./downloaded-artifact/*.apk; do
+            if [ -f "$alt_file" ]; then
+              ALT_SHA=$(sha256sum "$alt_file" | awk '{print $1}' | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')
+              if [ "$ALT_SHA" != "$EXPECTED_SHA_LOWER" ]; then
+                echo "ERRO CRÍTICO: Arquivo alternativo pré-existente $alt_file possui digest divergente ($ALT_SHA != $EXPECTED_SHA_LOWER)!"
+                exit 1
+              fi
+              echo "Arquivo alternativo do artefato auditado com sucesso: $alt_file"
+            fi
+          done
+
+          # Obter metadados de versão do manifesto
+          VERSION_NAME="1.48"
+          BUILD_CODE="48"
+          if [ -f ./downloaded-artifact/build-manifest.json ]; then
+            VERSION_NAME=$(node -p "require('./downloaded-artifact/build-manifest.json').version_name || '1.48'")
+            BUILD_CODE=$(node -p "require('./downloaded-artifact/build-manifest.json').build_code || '48'")
+          fi
+          echo "VERSION_NAME=$VERSION_NAME" >> $GITHUB_ENV
+          echo "BUILD_CODE=$BUILD_CODE" >> $GITHUB_ENV
+
+          # Preparar diretório isolado com lista explícita de arquivos aprovados
+          mkdir -p ./verified-release
+          
+          # Nome principal
+          cp ./downloaded-artifact/KYRO-Finance.apk ./verified-release/KYRO-Finance.apk
+          
+          # Nomes alternativos requeridos pelo atualizador (/api/app-version) gerados como cópias exatas do arquivo verificado
+          cp ./verified-release/KYRO-Finance.apk "./verified-release/KYRO-Finance-v${VERSION_NAME}.apk"
+          cp ./verified-release/KYRO-Finance.apk "./verified-release/KYRO-Finance-1.${BUILD_CODE}.apk"
+          
+          # Verificação estrita final: assegurar que 100% dos arquivos na pasta isolada batem com o SHA aprovado
+          echo "--- CONFERÊNCIA FINAL DA LISTA EXPLÍCITA DE ARQUIVOS APROVADOS ---"
+          for verified_file in ./verified-release/KYRO-Finance.apk "./verified-release/KYRO-Finance-v${VERSION_NAME}.apk" "./verified-release/KYRO-Finance-1.${BUILD_CODE}.apk"; do
+            if [ ! -f "$verified_file" ]; then
+              echo "ERRO: Arquivo verificado não encontrado: $verified_file"
+              exit 1
+            fi
+            CHECK_SHA=$(sha256sum "$verified_file" | awk '{print $1}' | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')
+            if [ "$CHECK_SHA" != "$EXPECTED_SHA_LOWER" ]; then
+              echo "FALHA CRÍTICA: Arquivo verificado $verified_file divergiu ($CHECK_SHA != $EXPECTED_SHA_LOWER)!"
+              exit 1
+            fi
+            echo "APROVADO: $verified_file -> SHA-256: $CHECK_SHA"
+          done
+
+          echo "SUCESSO: Todos os arquivos da lista explícita conferem com o digest aprovado!"
 
       - name: Exibir Manifesto de Build de Origem
         run: |
@@ -83,14 +129,14 @@ jobs:
             echo "--- MANIFESTO DE ORIGEM AUDITADO ---"
             cat ./downloaded-artifact/build-manifest.json
           else
-            echo "Aviso: build-manifest.json não presente no artefato (versão legado de build)."
+            echo "Aviso: build-manifest.json não presente no artefato."
           fi
 
-      - name: Publicar Artefato Aprovado no GitHub Releases
+      - name: Publicar Lista Explícita de Arquivos Aprovados no GitHub Releases
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event.inputs.target_tag }}
-          name: "📱 KYRO Finance (Build Promovida via Auditoria Criptográfica)"
+          name: "📱 KYRO Finance v${{ env.VERSION_NAME }} (Build ${{ env.BUILD_CODE }} Promovida via Auditoria Criptográfica)"
           body: |
             ### 🚀 Aplicativo Oficial Android — KYRO | Private Finance
             - **Promoção Homologada:** Binário verificado criptograficamente antes da liberação.
@@ -98,8 +144,9 @@ jobs:
             - **SHA-256 Conferido:** `${{ github.event.inputs.expected_sha256 }}`
             - **Carregamento Instantâneo:** Interface empacotada nativamente na memória do aparelho.
           files: |
-            ./downloaded-artifact/KYRO-Finance.apk
-            ./downloaded-artifact/KYRO-Finance-*.apk
+            ./verified-release/KYRO-Finance.apk
+            ./verified-release/KYRO-Finance-v${{ env.VERSION_NAME }}.apk
+            ./verified-release/KYRO-Finance-1.${{ env.BUILD_CODE }}.apk
           prerelease: false
           make_latest: true
         env:

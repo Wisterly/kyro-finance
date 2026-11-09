@@ -5,15 +5,20 @@ on:
     branches: [ "main", "master" ]
     paths-ignore:
       - 'dist_kyro_analise/**'
-      - 'docs/**'
       - '**.md'
+      - 'docs/**'
       - '.github/workflows/promote-release.yml'
+      - '.gitignore'
+      - 'LICENSE'
   pull_request:
     branches: [ "main", "master" ]
     paths-ignore:
       - 'dist_kyro_analise/**'
-      - 'docs/**'
       - '**.md'
+      - 'docs/**'
+      - '.github/workflows/promote-release.yml'
+      - '.gitignore'
+      - 'LICENSE'
   workflow_dispatch:
 
 permissions:
@@ -83,8 +88,14 @@ jobs:
 
       - name: Gerar Manifesto Criptográfico e Registrar SHA de Origem
         run: |
+          echo "=== CALCULANDO HASHES CRIPTOGRÁFICOS DOS APKS ==="
           sha256sum KYRO-Finance*.apk > build-sha256.txt
+          cp build-sha256.txt SHA256SUMS.txt
+          cat build-sha256.txt
+          
           RELEASE_SHA=$(sha256sum KYRO-Finance.apk | awk '{print $1}')
+          echo "RELEASE_SHA=$RELEASE_SHA" >> $GITHUB_ENV
+          
           cat <<EOF > build-manifest.json
           {
             "commit_sha": "${{ github.sha }}",
@@ -95,13 +106,14 @@ jobs:
             "version_name": "${{ env.VERSION_NAME }}",
             "created_at_utc": "$(date -u +'%Y-%m-%dT%H:%M:%SZ')",
             "sha256_release_apk": "$RELEASE_SHA",
+            "application_id": "com.kyro.finance",
             "status": "CANDIDATE_READY_FOR_REVIEW"
           }
           EOF
-          echo "--- MANIFESTO DO CANDIDATO ---"
+          
+          cp build-manifest.json provenance.json
+          echo "=== MANIFESTO DO CANDIDATO GERADO ==="
           cat build-manifest.json
-          echo "--- HASHES SHA-256 ---"
-          cat build-sha256.txt
 
       - name: Arquivar APK e Manifesto como Artefato de Revisão (Aba Actions)
         uses: actions/upload-artifact@v4
@@ -110,5 +122,7 @@ jobs:
           path: |
             KYRO-Finance*.apk
             build-manifest.json
+            provenance.json
             build-sha256.txt
+            SHA256SUMS.txt
           if-no-files-found: error
