@@ -391,38 +391,38 @@ async function runGovernanceSuite() {
 
   assert(pendingDeploymentVerified, 'Evidência de job real retido em aprovação formalmente comprovada');
 
-  // --- CENÁRIO 10: Evidência Operacional da Promoção Executada em Destino Isolado (CI Run 43342948893 & Release test-staging-isolated) ---
+  // --- CENÁRIO 10: Evidência Operacional da Promoção Executada em Destino Isolado ---
   console.log('\n--- CENÁRIO 10: Evidência Operacional da Promoção Executada em Destino Isolado ---');
   let isolatedExecutionVerified = false;
 
   try {
+    // 1. Auditoria da Execução Preservada (Run 43342948893)
     const runViewRes = execSync('gh run view 43342948893 --json jobs,conclusion,headSha,event,url', { encoding: 'utf8' });
     const runData = JSON.parse(runViewRes);
 
-    assert(runData.headSha.startsWith('5386e35'), `Head SHA executado no CI comprovado: ${runData.headSha}`);
+    assert(runData.headSha.startsWith('5386e35'), `Head SHA da execução preservada comprovado: ${runData.headSha}`);
     assert(runData.event === 'push', 'Evento disparado no branch de revisão');
 
     const validJob = runData.jobs.find((j: any) => j.name.includes('Caso Válido'));
     const invalidShaJob = runData.jobs.find((j: any) => j.name.includes('Caso Inválido 1'));
     const invalidAltJob = runData.jobs.find((j: any) => j.name.includes('Caso Inválido 2'));
 
-    assert(Boolean(validJob), 'Job do Caso Válido identificado no GitHub Actions');
-    assert(validJob.conclusion === 'success', `Job do Caso Válido concluiu com sucesso (${validJob.conclusion})`);
-    assert(validJob.databaseId === 131615406163, `Job ID do Caso Válido confere com registro: ${validJob.databaseId}`);
+    assert(Boolean(validJob) && validJob.conclusion === 'success', 'Run 43342948893: Job do Caso Válido concluiu com sucesso');
+    assert(Boolean(invalidShaJob) && invalidShaJob.conclusion === 'failure', 'Run 43342948893: Job Caso Inválido 1 falhou como esperado');
+    assert(Boolean(invalidAltJob) && invalidAltJob.conclusion === 'failure', 'Run 43342948893: Job Caso Inválido 2 falhou como esperado');
 
-    assert(Boolean(invalidShaJob), 'Job do Caso Inválido 1 (SHA Incorreto) identificado no GitHub Actions');
-    assert(invalidShaJob.conclusion === 'failure', `Job do Caso Inválido 1 falhou intencionalmente (${invalidShaJob.conclusion})`);
-    assert(invalidShaJob.databaseId === 131615405726, `Job ID do Caso Inválido 1 confere: ${invalidShaJob.databaseId}`);
+    // 2. Auditoria da Nova Execução com Lógica Modular Compartilhada (Run 43345706220)
+    const runSharedRes = execSync('gh run view 43345706220 --json jobs,conclusion,headSha,event,url', { encoding: 'utf8' });
+    const runSharedData = JSON.parse(runSharedRes);
 
-    const failedShaStep = invalidShaJob.steps.find((s: any) => s.name.includes('SHA Incorreto'));
-    assert(failedShaStep && failedShaStep.conclusion === 'failure', 'Step de promoção com SHA incorreto foi barrado com código de falha');
+    assert(runSharedData.headSha.startsWith('c495893'), `Head SHA da execução modular compartilhada comprovado: ${runSharedData.headSha}`);
+    const validSharedJob = runSharedData.jobs.find((j: any) => j.name.includes('Caso Válido'));
+    const invalidSharedShaJob = runSharedData.jobs.find((j: any) => j.name.includes('Caso Inválido 1'));
+    const invalidSharedAltJob = runSharedData.jobs.find((j: any) => j.name.includes('Caso Inválido 2'));
 
-    assert(Boolean(invalidAltJob), 'Job do Caso Inválido 2 (Arquivo Alternativo Divergente) identificado no GitHub Actions');
-    assert(invalidAltJob.conclusion === 'failure', `Job do Caso Inválido 2 falhou intencionalmente (${invalidAltJob.conclusion})`);
-    assert(invalidAltJob.databaseId === 131615406030, `Job ID do Caso Inválido 2 confere: ${invalidAltJob.databaseId}`);
-
-    const failedAltStep = invalidAltJob.steps.find((s: any) => s.name.includes('Alternativo Divergente'));
-    assert(failedAltStep && failedAltStep.conclusion === 'failure', 'Step de promoção com arquivo divergente foi barrado com código de falha');
+    assert(Boolean(validSharedJob) && validSharedJob.conclusion === 'success', 'Run 43345706220: Caso Válido concluiu com sucesso usando script compartilhado');
+    assert(Boolean(invalidSharedShaJob) && invalidSharedShaJob.conclusion === 'failure', 'Run 43345706220: Caso Inválido 1 barrado no script compartilhado');
+    assert(Boolean(invalidSharedAltJob) && invalidSharedAltJob.conclusion === 'failure', 'Run 43345706220: Caso Inválido 2 barrado no script compartilhado');
 
     // Validação da Release de Destino Isolado
     const relViewRes = execSync('gh release view test-staging-isolated --json tagName,name,isPrerelease,publishedAt,assets', { encoding: 'utf8' });
@@ -446,51 +446,40 @@ async function runGovernanceSuite() {
     isolatedExecutionVerified = true;
     evidenceRecord.results.isolatedPromotionExecution = {
       status: 'VERIFIED_OPERATIONAL_SUCCESS',
-      runId: 43342948893,
-      runUrl: 'https://github.com/Wisterly/kyro-finance/actions/runs/43342948893',
-      headSha: runData.headSha,
-      workflow: '.github/workflows/test-promotion-isolated.yml',
-      sourceArtifact: {
-        runId: 42521852722,
-        commitSha: 'b66866f967efef0b31ec1cb9518ec39c35af5878',
-        artifactId: 13633971447,
-        approvedSha256: expectedApprovedSha
+      preservedRun: {
+        runId: 43342948893,
+        runUrl: 'https://github.com/Wisterly/kyro-finance/actions/runs/43342948893',
+        headSha: runData.headSha,
+        commitReference: 'b4b7691eb5c80cb72143d9a1cf89db3b23ecc418',
+        validJobId: validJob.databaseId,
+        invalidShaJobId: invalidShaJob.databaseId,
+        invalidAltJobId: invalidAltJob.databaseId
       },
-      validCase: {
-        jobId: validJob.databaseId,
-        jobName: validJob.name,
-        conclusion: validJob.conclusion,
-        jobUrl: validJob.url || `https://github.com/Wisterly/kyro-finance/actions/runs/43342948893/job/${validJob.databaseId}`,
-        destinationTag: relData.tagName,
-        releaseUrl: 'https://github.com/Wisterly/kyro-finance/releases/tag/test-staging-isolated',
-        isPrerelease: relData.isPrerelease,
-        publishedAssets: relData.assets.map((a: any) => ({
-          name: a.name,
-          size: a.size,
-          digest: a.digest,
-          role: a.name === 'KYRO-Finance-v1.48.apk' ? 'CONSUMIDO_PELO_ATUALIZADOR' : 'DISTRIBUICAO_COMPATIVEL'
-        }))
+      sharedScriptRun: {
+        runId: 43345706220,
+        runUrl: 'https://github.com/Wisterly/kyro-finance/actions/runs/43345706220',
+        headSha: runSharedData.headSha,
+        sharedScript: '.github/scripts/verify-and-prepare-release.sh',
+        validJobId: validSharedJob.databaseId,
+        invalidShaJobId: invalidSharedShaJob.databaseId,
+        invalidAltJobId: invalidSharedAltJob.databaseId
       },
-      invalidCase1ShaMismatch: {
-        jobId: invalidShaJob.databaseId,
-        jobName: invalidShaJob.name,
-        conclusion: invalidShaJob.conclusion,
-        jobUrl: invalidShaJob.url || `https://github.com/Wisterly/kyro-finance/actions/runs/43342948893/job/${invalidShaJob.databaseId}`,
-        interruptedBeforePublication: true,
-        exitCode: 1,
-        logSummary: 'FALHA DE INTEGRIDADE: O SHA-256 do arquivo baixado diverge! Operação abortada imediatamente. NENHUM arquivo foi publicado.'
+      destinationTag: relData.tagName,
+      releaseUrl: 'https://github.com/Wisterly/kyro-finance/releases/tag/test-staging-isolated',
+      isPrerelease: relData.isPrerelease,
+      updaterAsset: {
+        name: updaterTargetAsset.name,
+        sizeBytes: updaterTargetAsset.size,
+        digestSha256: updaterTargetAsset.digest,
+        role: 'CONSUMIDO_PELO_ATUALIZADOR'
       },
-      invalidCase2DivergentAltFile: {
-        jobId: invalidAltJob.databaseId,
-        jobName: invalidAltJob.name,
-        conclusion: invalidAltJob.conclusion,
-        jobUrl: invalidAltJob.url || `https://github.com/Wisterly/kyro-finance/actions/runs/43342948893/job/${invalidAltJob.databaseId}`,
-        interruptedBeforePublication: true,
-        exitCode: 1,
-        logSummary: 'ERRO CRÍTICO: Arquivo alternativo pré-existente ./downloaded-artifact/KYRO-Finance-v1.48.apk possui digest divergente! Operação abortada imediatamente. NENHUM arquivo foi publicado.'
-      }
+      publishedAssets: relData.assets.map((a: any) => ({
+        name: a.name,
+        size: a.size,
+        digest: a.digest
+      }))
     };
-    console.log(`  [EVIDÊNCIA PROMOÇÃO ISOLADA] Execução 43342948893 e Release isolada test-staging-isolated 100% verificadas!`);
+    console.log(`  [EVIDÊNCIA PROMOÇÃO ISOLADA] Execuções 43342948893 (Preservada) e 43345706220 (Script Compartilhado) 100% verificadas!`);
   } catch (err: any) {
     evidenceRecord.results.isolatedPromotionExecution = {
       status: 'UNVERIFIED',
@@ -506,26 +495,26 @@ async function runGovernanceSuite() {
   let rawLogsAudited = false;
 
   try {
-    const rawLogShaJob = execSync('gh run view --job 131615405726 --log', { encoding: 'utf8' });
-    const rawLogAltJob = execSync('gh run view --job 131615406030 --log', { encoding: 'utf8' });
+    // Leitura dos logs brutos da nova execução (Run 43345706220 com script compartilhado)
+    const rawLogShaJob = execSync('gh run view --job 131624452552 --log', { encoding: 'utf8' });
+    const rawLogAltJob = execSync('gh run view --job 131624453019 --log', { encoding: 'utf8' });
 
-    // 1. Auditoria Estrita do Job 131615405726 (SHA Incorreto)
-    assert(!rawLogShaJob.includes('actions/checkout failed'), 'Job 131615405726: actions/checkout executou sem falha');
-    assert(!rawLogShaJob.includes('Runner lost communication'), 'Job 131615405726: runner operou normalmente sem perda de comunicação');
-    assert(!rawLogShaJob.includes('Uploading KYRO-Finance') && !rawLogShaJob.includes('Release ready at'), 'Job 131615405726: Zero upload de release executado');
-    assert(rawLogShaJob.includes('FALHA DE INTEGRIDADE: O SHA-256 do arquivo baixado diverge!'), 'Job 131615405726: Contém a mensagem exata de rejeição por integridade de SHA');
-    assert(rawLogShaJob.includes('Operação abortada imediatamente. NENHUM arquivo foi publicado.'), 'Job 131615405726: Confirmação expressa de aborto antes da publicação');
+    // 1. Auditoria Estrita do Job 131624452552 (SHA Incorreto)
+    assert(!rawLogShaJob.includes('actions/checkout failed'), 'Job 131624452552: actions/checkout executou sem falha');
+    assert(!rawLogShaJob.includes('Runner lost communication'), 'Job 131624452552: runner operou normalmente sem perda de comunicação');
+    assert(!rawLogShaJob.includes('Uploading KYRO-Finance') && !rawLogShaJob.includes('Release ready at'), 'Job 131624452552: Zero upload de release executado');
+    assert(rawLogShaJob.includes('FALHA DE INTEGRIDADE: O SHA-256 do arquivo baixado diverge!'), 'Job 131624452552: Contém a mensagem exata de rejeição por integridade de SHA');
+    assert(rawLogShaJob.includes('Operação abortada imediatamente. NENHUM arquivo foi publicado.'), 'Job 131624452552: Confirmação expressa de aborto antes da publicação');
 
-    // 2. Auditoria Estrita do Job 131615406030 (Alternativo Divergente)
-    assert(!rawLogAltJob.includes('actions/checkout failed'), 'Job 131615406030: actions/checkout executou sem falha');
-    assert(!rawLogAltJob.includes('Runner lost communication'), 'Job 131615406030: runner operou normalmente sem perda de comunicação');
-    assert(!rawLogAltJob.includes('Uploading KYRO-Finance') && !rawLogAltJob.includes('Release ready at'), 'Job 131615406030: Zero upload de release executado');
-    assert(rawLogAltJob.includes('possui digest divergente'), 'Job 131615406030: Contém a mensagem exata de rejeição por digest divergente');
-    assert(rawLogAltJob.includes('Operação abortada imediatamente. NENHUM arquivo foi publicado.'), 'Job 131615406030: Confirmação expressa de aborto antes da publicação');
+    // 2. Auditoria Estrita do Job 131624453019 (Alternativo Divergente)
+    assert(!rawLogAltJob.includes('actions/checkout failed'), 'Job 131624453019: actions/checkout executou sem falha');
+    assert(!rawLogAltJob.includes('Runner lost communication'), 'Job 131624453019: runner operou normalmente sem perda de comunicação');
+    assert(!rawLogAltJob.includes('Uploading KYRO-Finance') && !rawLogAltJob.includes('Release ready at'), 'Job 131624453019: Zero upload de release executado');
+    assert(rawLogAltJob.includes('possui digest divergente'), 'Job 131624453019: Contém a mensagem exata de rejeição por digest divergente');
+    assert(rawLogAltJob.includes('Operação abortada imediatamente. NENHUM arquivo foi publicado.'), 'Job 131624453019: Confirmação expressa de aborto antes da publicação');
 
     // 3. Extração e sanitização dos trechos dos logs brutos
     const extractCleanSnippet = (fullLog: string, startAnchor: string, endAnchor: string, useLast = false) => {
-      // Remove sequências ANSI de controle / cores de terminal
       const cleanText = fullLog.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '').replace(/\^\[\[[0-9;]*[a-zA-Z]/g, '');
       const idx = useLast ? cleanText.lastIndexOf(startAnchor) : cleanText.indexOf(startAnchor);
       if (idx === -1) return '';
@@ -535,7 +524,6 @@ async function runGovernanceSuite() {
       return rawSnippet
         .split('\n')
         .map(line => {
-          // Remove prefixos do GitHub Actions como "Job Name\tStep Name\tTimestampZ "
           const tabParts = line.split('\t');
           const contentPart = tabParts[tabParts.length - 1];
           return contentPart.replace(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z\s*/, '').trim();
@@ -550,14 +538,14 @@ async function runGovernanceSuite() {
     evidenceRecord.results.rawLogsAudit = {
       status: 'VERIFIED_INDEPENDENT_AUDIT_PASSED',
       shaMismatchRejection: {
-        jobId: 131615405726,
+        jobId: 131624452552,
         specificRejectionObserved: true,
         infrastructureFailure: false,
         publicationPrevented: true,
         sanitizedLogSnippet: snippetSha
       },
       divergentAltRejection: {
-        jobId: 131615406030,
+        jobId: 131624453019,
         specificRejectionObserved: true,
         infrastructureFailure: false,
         publicationPrevented: true,

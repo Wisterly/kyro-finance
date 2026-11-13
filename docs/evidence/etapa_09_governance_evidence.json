@@ -1,7 +1,7 @@
 {
   "suite": "Etapa 09 - Governança CI/CD e Promoção Desacoplada",
-  "timestamp": "2026-11-13T01:28:22.108Z",
-  "gitCommitTested": "b4b7691eb5c80cb72143d9a1cf89db3b23ecc418",
+  "timestamp": "2026-11-13T01:36:17.450Z",
+  "gitCommitTested": "c495893288ab6fc34339aad6ba97b21ae8653e75",
   "executionCommand": "npx tsx src/engine/etapa_09_governance.test.ts",
   "branch": "review/etapa-09-desacoplamento-ci",
   "repositoryUrl": "https://github.com/Wisterly/kyro-finance",
@@ -67,79 +67,66 @@
     },
     "isolatedPromotionExecution": {
       "status": "VERIFIED_OPERATIONAL_SUCCESS",
-      "runId": 43342948893,
-      "runUrl": "https://github.com/Wisterly/kyro-finance/actions/runs/43342948893",
-      "headSha": "5386e35b44a9839dd27ac63d20c4038abe0061a4",
-      "workflow": ".github/workflows/test-promotion-isolated.yml",
-      "sourceArtifact": {
-        "runId": 42521852722,
-        "commitSha": "b66866f967efef0b31ec1cb9518ec39c35af5878",
-        "artifactId": 13633971447,
-        "approvedSha256": "98b3089ee98818d77d053f3707ca795ce4fe059b8144a5c97f870322ea6da9d1"
+      "preservedRun": {
+        "runId": 43342948893,
+        "runUrl": "https://github.com/Wisterly/kyro-finance/actions/runs/43342948893",
+        "headSha": "5386e35b44a9839dd27ac63d20c4038abe0061a4",
+        "commitReference": "b4b7691eb5c80cb72143d9a1cf89db3b23ecc418",
+        "validJobId": 131615406163,
+        "invalidShaJobId": 131615405726,
+        "invalidAltJobId": 131615406030
       },
-      "validCase": {
-        "jobId": 131615406163,
-        "jobName": "Caso Válido (Destino Isolado test-staging-isolated)",
-        "conclusion": "success",
-        "jobUrl": "https://github.com/Wisterly/kyro-finance/actions/runs/43342948893/job/131615406163",
-        "destinationTag": "test-staging-isolated",
-        "releaseUrl": "https://github.com/Wisterly/kyro-finance/releases/tag/test-staging-isolated",
-        "isPrerelease": true,
-        "publishedAssets": [
-          {
-            "name": "KYRO-Finance-1.48.apk",
-            "size": 9585827,
-            "digest": "sha256:98b3089ee98818d77d053f3707ca795ce4fe059b8144a5c97f870322ea6da9d1",
-            "role": "DISTRIBUICAO_COMPATIVEL"
-          },
-          {
-            "name": "KYRO-Finance-v1.48.apk",
-            "size": 9585827,
-            "digest": "sha256:98b3089ee98818d77d053f3707ca795ce4fe059b8144a5c97f870322ea6da9d1",
-            "role": "CONSUMIDO_PELO_ATUALIZADOR"
-          },
-          {
-            "name": "KYRO-Finance.apk",
-            "size": 9585827,
-            "digest": "sha256:98b3089ee98818d77d053f3707ca795ce4fe059b8144a5c97f870322ea6da9d1",
-            "role": "DISTRIBUICAO_COMPATIVEL"
-          }
-        ]
+      "sharedScriptRun": {
+        "runId": 43345706220,
+        "runUrl": "https://github.com/Wisterly/kyro-finance/actions/runs/43345706220",
+        "headSha": "c495893288ab6fc34339aad6ba97b21ae8653e75",
+        "sharedScript": ".github/scripts/verify-and-prepare-release.sh",
+        "validJobId": 131624452678,
+        "invalidShaJobId": 131624452552,
+        "invalidAltJobId": 131624453019
       },
-      "invalidCase1ShaMismatch": {
-        "jobId": 131615405726,
-        "jobName": "Caso Inválido 1 (Barragem por SHA Incorreto)",
-        "conclusion": "failure",
-        "jobUrl": "https://github.com/Wisterly/kyro-finance/actions/runs/43342948893/job/131615405726",
-        "interruptedBeforePublication": true,
-        "exitCode": 1,
-        "logSummary": "FALHA DE INTEGRIDADE: O SHA-256 do arquivo baixado diverge! Operação abortada imediatamente. NENHUM arquivo foi publicado."
+      "destinationTag": "test-staging-isolated",
+      "releaseUrl": "https://github.com/Wisterly/kyro-finance/releases/tag/test-staging-isolated",
+      "isPrerelease": true,
+      "updaterAsset": {
+        "name": "KYRO-Finance-v1.48.apk",
+        "sizeBytes": 9585827,
+        "digestSha256": "sha256:98b3089ee98818d77d053f3707ca795ce4fe059b8144a5c97f870322ea6da9d1",
+        "role": "CONSUMIDO_PELO_ATUALIZADOR"
       },
-      "invalidCase2DivergentAltFile": {
-        "jobId": 131615406030,
-        "jobName": "Caso Inválido 2 (Barragem por Arquivo Alternativo Divergente)",
-        "conclusion": "failure",
-        "jobUrl": "https://github.com/Wisterly/kyro-finance/actions/runs/43342948893/job/131615406030",
-        "interruptedBeforePublication": true,
-        "exitCode": 1,
-        "logSummary": "ERRO CRÍTICO: Arquivo alternativo pré-existente ./downloaded-artifact/KYRO-Finance-v1.48.apk possui digest divergente! Operação abortada imediatamente. NENHUM arquivo foi publicado."
-      }
+      "publishedAssets": [
+        {
+          "name": "KYRO-Finance-1.48.apk",
+          "size": 9585827,
+          "digest": "sha256:98b3089ee98818d77d053f3707ca795ce4fe059b8144a5c97f870322ea6da9d1"
+        },
+        {
+          "name": "KYRO-Finance-v1.48.apk",
+          "size": 9585827,
+          "digest": "sha256:98b3089ee98818d77d053f3707ca795ce4fe059b8144a5c97f870322ea6da9d1"
+        },
+        {
+          "name": "KYRO-Finance.apk",
+          "size": 9585827,
+          "digest": "sha256:98b3089ee98818d77d053f3707ca795ce4fe059b8144a5c97f870322ea6da9d1"
+        }
+      ]
     },
     "rawLogsAudit": {
       "status": "VERIFIED_INDEPENDENT_AUDIT_PASSED",
       "shaMismatchRejection": {
-        "jobId": 131615405726,
+        "jobId": 131624452552,
         "specificRejectionObserved": true,
         "infrastructureFailure": false,
         "publicationPrevented": true,
         "sanitizedLogSnippet": "Calculado: 98b3089ee98818d77d053f3707ca795ce4fe059b8144a5c97f870322ea6da9d1\nEsperado:  0000000000000000000000000000000000000000000000000000000000000000\nOperação abortada imediatamente. NENHUM arquivo foi publicado.\n==========================================================\n##[error]Process completed with exit code 1."
       },
       "divergentAltRejection": {
-        "jobId": 131615406030,
+        "jobId": 131624453019,
         "specificRejectionObserved": true,
         "infrastructureFailure": false,
         "publicationPrevented": true,
-        "sanitizedLogSnippet": "ERRO CRÍTICO: Arquivo alternativo pré-existente ./downloaded-artifact/KYRO-Finance-1.48-debug.apk possui digest divergente!\nArquivo:   ./downloaded-artifact/KYRO-Finance-1.48-debug.apk\nDigest:    9ee993d41ee17c75f1f8f31d2534285a6c7898413bd5531e8eaf49f7fec4676e\nEsperado:  98b3089ee98818d77d053f3707ca795ce4fe059b8144a5c97f870322ea6da9d1\nOperação abortada imediatamente. NENHUM arquivo foi publicado.\n==========================================================\n##[error]Process completed with exit code 1."
+        "sanitizedLogSnippet": "ERRO CRÍTICO: Arquivo alternativo pré-existente ./downloaded-artifact/KYRO-Finance-v1.48.apk possui digest divergente!\nArquivo:   ./downloaded-artifact/KYRO-Finance-v1.48.apk\nDigest:    2cb104416ca94d9955ce4161291ec5b40b0063c48d5ec50bbcac79a905f2c3b9\nEsperado:  98b3089ee98818d77d053f3707ca795ce4fe059b8144a5c97f870322ea6da9d1\nOperação abortada imediatamente. NENHUM arquivo foi publicado.\n==========================================================\n##[error]Process completed with exit code 1."
       }
     }
   }
