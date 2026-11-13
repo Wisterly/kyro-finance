@@ -112,6 +112,20 @@ async function runGovernanceSuite() {
   const filesSection = promoteContent.substring(filesIndex, filesIndex + 260);
   assert(!filesSection.includes('KYRO-Finance*.apk'), 'Substituição do glob confirmada: a publicação NÃO utiliza glob (*.apk)');
 
+  // Validação do Script Compartilhado de Auditoria e Preparação
+  const sharedScriptPath = path.join(PROJECT_ROOT, '.github', 'scripts', 'verify-and-prepare-release.sh');
+  assert(fs.existsSync(sharedScriptPath), 'Script compartilhado verify-and-prepare-release.sh existe no repositório');
+  const sharedScriptContent = fs.readFileSync(sharedScriptPath, 'utf8');
+  assert(sharedScriptContent.includes('FALHA DE INTEGRIDADE: O SHA-256 do arquivo baixado diverge!'), 'Script compartilhado contém lógica de rejeição de SHA incorreto');
+  assert(sharedScriptContent.includes('ERRO CRÍTICO: Arquivo alternativo pré-existente'), 'Script compartilhado contém lógica de rejeição de arquivo alternativo divergente');
+  assert(sharedScriptContent.includes('build-manifest.json'), 'Script compartilhado valida o manifesto de origem');
+  assert(promoteContent.includes('.github/scripts/verify-and-prepare-release.sh'), 'promote-release.yml reaproveita a lógica comum invocando o script compartilhado');
+
+  const testIsolatedWorkflowPath = path.join(PROJECT_ROOT, '.github', 'workflows', 'test-promotion-isolated.yml');
+  assert(fs.existsSync(testIsolatedWorkflowPath), 'Workflow de teste isolado existe no repositório');
+  const testIsolatedContent = fs.readFileSync(testIsolatedWorkflowPath, 'utf8');
+  assert(testIsolatedContent.includes('.github/scripts/verify-and-prepare-release.sh'), 'test-promotion-isolated.yml reaproveita rigorosamente a mesma lógica comum invocando o script compartilhado');
+
   // --- CENÁRIO 3: Validação de Formato das Entradas Manuais (Regex & Sanitização) ---
   console.log('\n--- CENÁRIO 3: Validação de Formato das Entradas Manuais (Regex & Sanitização) ---');
   const validateInputs = (runId: string, expectedSha: string, targetTag: string, confirm: string) => {
@@ -486,6 +500,81 @@ async function runGovernanceSuite() {
   }
 
   assert(isolatedExecutionVerified, 'Evidência operacional da promoção isolada formalmente comprovada');
+
+  // --- CENÁRIO 11: Auditoria Independente dos Logs Brutos (Confirmação de Rejeição Específica & Ausência de Falha de Infra) ---
+  console.log('\n--- CENÁRIO 11: Auditoria Independente dos Logs Brutos ---');
+  let rawLogsAudited = false;
+
+  try {
+    const rawLogShaJob = execSync('gh run view --job 131615405726 --log', { encoding: 'utf8' });
+    const rawLogAltJob = execSync('gh run view --job 131615406030 --log', { encoding: 'utf8' });
+
+    // 1. Auditoria Estrita do Job 131615405726 (SHA Incorreto)
+    assert(!rawLogShaJob.includes('actions/checkout failed'), 'Job 131615405726: actions/checkout executou sem falha');
+    assert(!rawLogShaJob.includes('Runner lost communication'), 'Job 131615405726: runner operou normalmente sem perda de comunicação');
+    assert(!rawLogShaJob.includes('Uploading KYRO-Finance') && !rawLogShaJob.includes('Release ready at'), 'Job 131615405726: Zero upload de release executado');
+    assert(rawLogShaJob.includes('FALHA DE INTEGRIDADE: O SHA-256 do arquivo baixado diverge!'), 'Job 131615405726: Contém a mensagem exata de rejeição por integridade de SHA');
+    assert(rawLogShaJob.includes('Operação abortada imediatamente. NENHUM arquivo foi publicado.'), 'Job 131615405726: Confirmação expressa de aborto antes da publicação');
+
+    // 2. Auditoria Estrita do Job 131615406030 (Alternativo Divergente)
+    assert(!rawLogAltJob.includes('actions/checkout failed'), 'Job 131615406030: actions/checkout executou sem falha');
+    assert(!rawLogAltJob.includes('Runner lost communication'), 'Job 131615406030: runner operou normalmente sem perda de comunicação');
+    assert(!rawLogAltJob.includes('Uploading KYRO-Finance') && !rawLogAltJob.includes('Release ready at'), 'Job 131615406030: Zero upload de release executado');
+    assert(rawLogAltJob.includes('possui digest divergente'), 'Job 131615406030: Contém a mensagem exata de rejeição por digest divergente');
+    assert(rawLogAltJob.includes('Operação abortada imediatamente. NENHUM arquivo foi publicado.'), 'Job 131615406030: Confirmação expressa de aborto antes da publicação');
+
+    // 3. Extração e sanitização dos trechos dos logs brutos
+    const extractCleanSnippet = (fullLog: string, startAnchor: string, endAnchor: string, useLast = false) => {
+      // Remove sequências ANSI de controle / cores de terminal
+      const cleanText = fullLog.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '').replace(/\^\[\[[0-9;]*[a-zA-Z]/g, '');
+      const idx = useLast ? cleanText.lastIndexOf(startAnchor) : cleanText.indexOf(startAnchor);
+      if (idx === -1) return '';
+      const tail = cleanText.substring(idx);
+      const endIdx = tail.indexOf(endAnchor);
+      const rawSnippet = endIdx !== -1 ? tail.substring(0, endIdx + endAnchor.length) : tail.substring(0, 500);
+      return rawSnippet
+        .split('\n')
+        .map(line => {
+          // Remove prefixos do GitHub Actions como "Job Name\tStep Name\tTimestampZ "
+          const tabParts = line.split('\t');
+          const contentPart = tabParts[tabParts.length - 1];
+          return contentPart.replace(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z\s*/, '').trim();
+        })
+        .filter(line => line.length > 0)
+        .join('\n');
+    };
+
+    const snippetSha = extractCleanSnippet(rawLogShaJob, 'Calculado: 98b3089ee98818d77d053f3707ca795ce4fe059b8144a5c97f870322ea6da9d1', 'Process completed with exit code 1.', true);
+    const snippetAlt = extractCleanSnippet(rawLogAltJob, 'ERRO CRÍTICO: Arquivo alternativo pré-existente ./downloaded-artifact/', 'Process completed with exit code 1.', true);
+
+    evidenceRecord.results.rawLogsAudit = {
+      status: 'VERIFIED_INDEPENDENT_AUDIT_PASSED',
+      shaMismatchRejection: {
+        jobId: 131615405726,
+        specificRejectionObserved: true,
+        infrastructureFailure: false,
+        publicationPrevented: true,
+        sanitizedLogSnippet: snippetSha
+      },
+      divergentAltRejection: {
+        jobId: 131615406030,
+        specificRejectionObserved: true,
+        infrastructureFailure: false,
+        publicationPrevented: true,
+        sanitizedLogSnippet: snippetAlt
+      }
+    };
+    rawLogsAudited = true;
+    console.log('  [EVIDÊNCIA LOGS BRUTOS] Rejeição específica confirmada e ausência de falha de infraestrutura validada em ambos os jobs!');
+  } catch (err: any) {
+    evidenceRecord.results.rawLogsAudit = {
+      status: 'UNVERIFIED',
+      error: err.message
+    };
+    assert(false, `FALHA EXPLÍCITA: Auditoria dos logs brutos falhou: ${err.message}`);
+  }
+
+  assert(rawLogsAudited, 'Auditoria independente dos logs brutos dos casos negativos confirmada com sucesso');
 
   // Grava arquivo formal de evidências com dados dinâmicos em docs/evidence/
   const evidenceDir = path.join(PROJECT_ROOT, 'docs', 'evidence');

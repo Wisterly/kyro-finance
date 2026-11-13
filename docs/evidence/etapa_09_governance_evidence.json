@@ -1,7 +1,7 @@
 {
   "suite": "Etapa 09 - Governança CI/CD e Promoção Desacoplada",
-  "timestamp": "2026-11-13T01:17:05.600Z",
-  "gitCommitTested": "5386e35b44a9839dd27ac63d20c4038abe0061a4",
+  "timestamp": "2026-11-13T01:28:22.108Z",
+  "gitCommitTested": "b4b7691eb5c80cb72143d9a1cf89db3b23ecc418",
   "executionCommand": "npx tsx src/engine/etapa_09_governance.test.ts",
   "branch": "review/etapa-09-desacoplamento-ci",
   "repositoryUrl": "https://github.com/Wisterly/kyro-finance",
@@ -123,6 +123,23 @@
         "interruptedBeforePublication": true,
         "exitCode": 1,
         "logSummary": "ERRO CRÍTICO: Arquivo alternativo pré-existente ./downloaded-artifact/KYRO-Finance-v1.48.apk possui digest divergente! Operação abortada imediatamente. NENHUM arquivo foi publicado."
+      }
+    },
+    "rawLogsAudit": {
+      "status": "VERIFIED_INDEPENDENT_AUDIT_PASSED",
+      "shaMismatchRejection": {
+        "jobId": 131615405726,
+        "specificRejectionObserved": true,
+        "infrastructureFailure": false,
+        "publicationPrevented": true,
+        "sanitizedLogSnippet": "Calculado: 98b3089ee98818d77d053f3707ca795ce4fe059b8144a5c97f870322ea6da9d1\nEsperado:  0000000000000000000000000000000000000000000000000000000000000000\nOperação abortada imediatamente. NENHUM arquivo foi publicado.\n==========================================================\n##[error]Process completed with exit code 1."
+      },
+      "divergentAltRejection": {
+        "jobId": 131615406030,
+        "specificRejectionObserved": true,
+        "infrastructureFailure": false,
+        "publicationPrevented": true,
+        "sanitizedLogSnippet": "ERRO CRÍTICO: Arquivo alternativo pré-existente ./downloaded-artifact/KYRO-Finance-1.48-debug.apk possui digest divergente!\nArquivo:   ./downloaded-artifact/KYRO-Finance-1.48-debug.apk\nDigest:    9ee993d41ee17c75f1f8f31d2534285a6c7898413bd5531e8eaf49f7fec4676e\nEsperado:  98b3089ee98818d77d053f3707ca795ce4fe059b8144a5c97f870322ea6da9d1\nOperação abortada imediatamente. NENHUM arquivo foi publicado.\n==========================================================\n##[error]Process completed with exit code 1."
       }
     }
   }

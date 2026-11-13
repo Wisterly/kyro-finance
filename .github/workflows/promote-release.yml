@@ -35,152 +35,38 @@ jobs:
       - name: Baixar código do repositório
         uses: actions/checkout@v4
 
-      - name: Validar Sanitização e Formato das Entradas Manuais
+      - name: Baixar Artefato Auditado da Execução CI
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          INPUT_RUN_ID: "${{ github.event.inputs.run_id }}"
+          REPO: "${{ github.repository }}"
+        run: |
+          echo "=== 1. DOWNLOAD DO ARTEFATO CI ==="
+          # Pré-validação rápida de run_id antes do download
+          if ! [[ "$INPUT_RUN_ID" =~ ^[0-9]+$ ]]; then
+            echo "ERRO DE VALIDAÇÃO: run_id inválido. Deve conter estritamente dígitos numéricos: '$INPUT_RUN_ID'."
+            exit 1
+          fi
+          echo "Baixando artefato da Run ID: $INPUT_RUN_ID no repositório $REPO..."
+          mkdir -p ./downloaded-artifact
+          gh run download "$INPUT_RUN_ID" --repo "$REPO" --name "KYRO-Finance-APK" --dir "./downloaded-artifact"
+          ls -la ./downloaded-artifact
+
+      - name: Executar Auditoria Criptográfica e Preparação da Lista Explícita
         env:
           INPUT_CONFIRM_PROMOTION: "${{ github.event.inputs.confirm_promotion }}"
           INPUT_RUN_ID: "${{ github.event.inputs.run_id }}"
           INPUT_EXPECTED_SHA256: "${{ github.event.inputs.expected_sha256 }}"
           INPUT_TARGET_TAG: "${{ github.event.inputs.target_tag }}"
+          ARTIFACT_DIR: "./downloaded-artifact"
+          OUTPUT_DIR: "./verified-release"
         run: |
-          echo "=== 1. VALIDAÇÃO DE ENTRADAS MANUAIS ==="
-          
-          # Validação estrita de autorização
-          if [ "$INPUT_CONFIRM_PROMOTION" != "CONFIRMAR" ]; then
-            echo "ERRO DE SEGURANÇA: confirm_promotion inválido. Esperado 'CONFIRMAR', recebido '$INPUT_CONFIRM_PROMOTION'."
-            exit 1
-          fi
-
-          # Validação de formato de run_id (somente dígitos numéricos)
-          if ! [[ "$INPUT_RUN_ID" =~ ^[0-9]+$ ]]; then
-            echo "ERRO DE VALIDAÇÃO: run_id inválido. Deve conter estritamente dígitos numéricos. Recebido: '$INPUT_RUN_ID'."
-            exit 1
-          fi
-
-          # Validação de formato de expected_sha256 (64 caracteres hexadecimais)
-          CLEAN_SHA=$(echo "$INPUT_EXPECTED_SHA256" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')
-          if ! [[ "$CLEAN_SHA" =~ ^[a-f0-9]{64}$ ]]; then
-            echo "ERRO DE VALIDAÇÃO: expected_sha256 inválido. Deve ser um hash SHA-256 hexadecimal de 64 caracteres. Recebido: '$INPUT_EXPECTED_SHA256'."
-            exit 1
-          fi
-
-          # Validação de formato de target_tag (alfanuméricos, ponto, hífen, underscore)
-          if ! [[ "$INPUT_TARGET_TAG" =~ ^[a-zA-Z0-9._-]+$ ]]; then
-            echo "ERRO DE VALIDAÇÃO: target_tag possui formato inválido. Recebido: '$INPUT_TARGET_TAG'."
-            exit 1
-          fi
-
-          echo "Entradas manuais validadas com sucesso."
-          echo "VALIDATED_RUN_ID=$INPUT_RUN_ID" >> $GITHUB_ENV
-          echo "VALIDATED_EXPECTED_SHA256=$CLEAN_SHA" >> $GITHUB_ENV
-          echo "VALIDATED_TARGET_TAG=$INPUT_TARGET_TAG" >> $GITHUB_ENV
-
-      - name: Baixar Artefato Auditado da Execução CI
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RUN_ID: "${{ env.VALIDATED_RUN_ID }}"
-          REPO: "${{ github.repository }}"
-        run: |
-          echo "=== 2. DOWNLOAD DO ARTEFATO CI ==="
-          echo "Baixando artefato da Run ID: $RUN_ID no repositório $REPO..."
-          mkdir -p ./downloaded-artifact
-          gh run download "$RUN_ID" --repo "$REPO" --name "KYRO-Finance-APK" --dir "./downloaded-artifact"
-          ls -la ./downloaded-artifact
-
-      - name: Conferência Criptográfica do APK e Validação Estrita de Arquivos Alternativos
-        env:
-          EXPECTED_SHA_LOWER: "${{ env.VALIDATED_EXPECTED_SHA256 }}"
-        run: |
-          echo "=== 3. CONFERÊNCIA CRIPTOGRÁFICA DO BINÁRIO PRINCIPAL ==="
-          if [ ! -f ./downloaded-artifact/KYRO-Finance.apk ]; then
-            echo "ERRO CRÍTICO: Arquivo principal KYRO-Finance.apk não encontrado no artefato baixado!"
-            exit 1
-          fi
-
-          BASE_SHA=$(sha256sum ./downloaded-artifact/KYRO-Finance.apk | awk '{print $1}' | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')
-          echo "Hash Calculado (KYRO-Finance.apk): $BASE_SHA"
-          echo "Hash Esperado:                     $EXPECTED_SHA_LOWER"
-
-          if [ "$BASE_SHA" != "$EXPECTED_SHA_LOWER" ]; then
-            echo "=========================================================="
-            echo "FALHA DE INTEGRIDADE: O SHA-256 do arquivo baixado diverge!"
-            echo "Calculado: $BASE_SHA"
-            echo "Esperado:  $EXPECTED_SHA_LOWER"
-            echo "Operação abortada imediatamente. NENHUM arquivo foi publicado."
-            echo "=========================================================="
-            exit 1
-          fi
-
-          # Se houver arquivos alternativos que vieram junto no artefato, conferir cada um
-          for alt_file in ./downloaded-artifact/*.apk; do
-            if [ -f "$alt_file" ]; then
-              ALT_SHA=$(sha256sum "$alt_file" | awk '{print $1}' | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')
-              if [ "$ALT_SHA" != "$EXPECTED_SHA_LOWER" ]; then
-                echo "ERRO CRÍTICO: Arquivo alternativo pré-existente $alt_file possui digest divergente ($ALT_SHA != $EXPECTED_SHA_LOWER)!"
-                exit 1
-              fi
-              echo "Arquivo alternativo do artefato auditado com sucesso: $alt_file"
-            fi
-          done
-
-      - name: Validação Estrita do Manifesto e Formação dos Nomes de Arquivo
-        env:
-          EXPECTED_SHA_LOWER: "${{ env.VALIDATED_EXPECTED_SHA256 }}"
-        run: |
-          echo "=== 4. VALIDAÇÃO DO MANIFESTO E FORMAÇÃO DE NOMES ==="
-          if [ ! -f ./downloaded-artifact/build-manifest.json ]; then
-            echo "ERRO CRÍTICO: build-manifest.json não encontrado no artefato auditado!"
-            exit 1
-          fi
-
-          MANIFEST_VERSION=$(node -p "try { const m = require('./downloaded-artifact/build-manifest.json'); String(m.version_name || ''); } catch(e){ '' }")
-          MANIFEST_BUILD=$(node -p "try { const m = require('./downloaded-artifact/build-manifest.json'); String(m.build_code || ''); } catch(e){ '' }")
-
-          # Validação de formato de versão (ex: 1.48)
-          if ! [[ "$MANIFEST_VERSION" =~ ^[0-9]+(\.[0-9]+)+$ ]]; then
-            echo "ERRO DE VALIDAÇÃO: version_name no manifesto possui formato inválido: '$MANIFEST_VERSION'!"
-            exit 1
-          fi
-
-          # Validação de formato de build (número inteiro positivo, ex: 48)
-          if ! [[ "$MANIFEST_BUILD" =~ ^[0-9]+$ ]]; then
-            echo "ERRO DE VALIDAÇÃO: build_code no manifesto possui formato inválido: '$MANIFEST_BUILD'!"
-            exit 1
-          fi
-
-          echo "Manifesto validado: version_name='$MANIFEST_VERSION', build_code='$MANIFEST_BUILD'"
-          echo "VALIDATED_VERSION_NAME=$MANIFEST_VERSION" >> $GITHUB_ENV
-          echo "VALIDATED_BUILD_CODE=$MANIFEST_BUILD" >> $GITHUB_ENV
-
-          # Preparar diretório isolado com lista explícita de arquivos aprovados
-          mkdir -p ./verified-release
-          
-          # 1. Nome principal
-          cp ./downloaded-artifact/KYRO-Finance.apk ./verified-release/KYRO-Finance.apk
-          
-          # 2. Nomes alternativos requeridos pelo atualizador (/api/app-version) gerados como cópias exatas do arquivo verificado
-          cp ./verified-release/KYRO-Finance.apk "./verified-release/KYRO-Finance-v${MANIFEST_VERSION}.apk"
-          cp ./verified-release/KYRO-Finance.apk "./verified-release/KYRO-Finance-1.${MANIFEST_BUILD}.apk"
-          
-          # Verificação estrita final: assegurar que 100% dos arquivos na pasta isolada batem com o SHA aprovado
-          echo "--- CONFERÊNCIA FINAL DA LISTA EXPLÍCITA DE ARQUIVOS APROVADOS ---"
-          for verified_file in ./verified-release/KYRO-Finance.apk "./verified-release/KYRO-Finance-v${MANIFEST_VERSION}.apk" "./verified-release/KYRO-Finance-1.${MANIFEST_BUILD}.apk"; do
-            if [ ! -f "$verified_file" ]; then
-              echo "ERRO: Arquivo verificado não encontrado: $verified_file"
-              exit 1
-            fi
-            CHECK_SHA=$(sha256sum "$verified_file" | awk '{print $1}' | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')
-            if [ "$CHECK_SHA" != "$EXPECTED_SHA_LOWER" ]; then
-              echo "FALHA CRÍTICA: Arquivo verificado $verified_file divergiu ($CHECK_SHA != $EXPECTED_SHA_LOWER)!"
-              exit 1
-            fi
-            echo "APROVADO: $verified_file -> SHA-256: $CHECK_SHA"
-          done
-
-          echo "SUCESSO: Todos os arquivos da lista explícita conferem rigorosamente com o digest aprovado!"
+          chmod +x ./.github/scripts/verify-and-prepare-release.sh
+          ./.github/scripts/verify-and-prepare-release.sh
 
       - name: Exibir Manifesto de Build de Origem
         run: |
-          echo "=== 5. MANIFESTO AUDITADO DE ORIGEM ==="
+          echo "=== 3. MANIFESTO AUDITADO DE ORIGEM ==="
           cat ./downloaded-artifact/build-manifest.json
 
       - name: Publicar Lista Explícita de Arquivos Aprovados no GitHub Releases

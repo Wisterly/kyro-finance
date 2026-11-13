@@ -1084,8 +1084,11 @@ C. Referencia Anterior Registrada (CI Run 84):
      - Calcula o SHA-256 do APK baixado e compara estritamente com expected_sha256: se houver divergência de 1 caractere, aborta imediatamente com exit 1 e NENHUM arquivo é publicado.
      - Validação estrita de arquivos alternativos: confere o SHA de cada binário pré-existente e gera cópias exatas do arquivo verificado para os nomes exigidos pelo atualizador (KYRO-Finance-v1.48.apk e KYRO-Finance-1.48.apk), testando cada um individualmente antes de publicar.
      - Substituição do glob: o step de publicação utiliza uma lista explícita de arquivos aprovados (sem nenhum glob *.apk).
-  3) Comprovação Automatizada & Evidência de Job Retido no Gate (src/engine/etapa_09_governance.test.ts):
-     - 79 asserções automatizadas aprovadas (100% sucesso) cobrindo: build normal sem releases, validação de regex de inputs manuais, validação prévia de manifesto, barragem de SHA incorreto, barragem de binário alternativo divergente, geração de lista explícita com integridade, evidência sanitizada da API do GitHub e demonstração operacional da promoção em destino isolado.
+  3) Comprovação Automatizada & Governança Criptográfica (src/engine/etapa_09_governance.test.ts):
+     - 97 asserções automatizadas aprovadas (100% sucesso) cobrindo: build normal sem releases, validação de regex de inputs manuais, validação prévia de manifesto, barragem de SHA incorreto, barragem de binário alternativo divergente, geração de lista explícita com integridade, evidência sanitizada da API do GitHub, demonstração operacional da promoção em destino isolado e auditoria independente dos logs brutos.
+     - Lógica Comum Reutilizada nos Dois Caminhos (.github/scripts/verify-and-prepare-release.sh):
+       • O script compartilhado é invocado de forma idêntica tanto por promote-release.yml quanto por test-promotion-isolated.yml, eliminando divergências entre o ensaio isolado e a promoção oficial.
+       • Executa validação de formato de entradas (confirm_promotion, run_id, expected_sha256, target_tag), conferência de digest do APK base, auditoria de cada arquivo alternativo pré-existente, conferência de versão e build do manifesto de origem e geração da lista explícita com tripla checagem de hash.
      - Evidência Real de Job em Aguardo de Aprovação Humana (Run 43341910073, Job 131611988172): Comprovado via API que o job entrou compulsoriamente no status "waiting" com pending_deployments ativo para o environment Production, aguardando aprovação explícita do revisor Wisterly antes de executar qualquer step de publicação.
      - Evidência Operacional da Promoção Executada em Destino Isolado (GitHub Actions Run 43342948893):
        • Caso Válido (Job 131615406163 - Concluído com Sucesso): Baixou o artefato da Run 85 (b66866f / 42521852722), validou o SHA-256 (98B3089...), gerou as cópias auditadas e publicou na tag isolada de homologação "test-staging-isolated" (prerelease: true, make_latest: false).
@@ -1093,8 +1096,28 @@ C. Referencia Anterior Registrada (CI Run 84):
          - KYRO-Finance-v1.48.apk (Nome consumido pelo atualizador): 9.585.827 bytes | SHA-256: 98B3089EE98818D77D053F3707CA795CE4FE059B8144A5C97F870322EA6DA9D1
          - KYRO-Finance.apk (Compatibilidade de distribuição): 9.585.827 bytes | SHA-256: 98B3089EE98818D77D053F3707CA795CE4FE059B8144A5C97F870322EA6DA9D1
          - KYRO-Finance-1.48.apk (Compatibilidade numérica): 9.585.827 bytes | SHA-256: 98B3089EE98818D77D053F3707CA795CE4FE059B8144A5C97F870322EA6DA9D1
-       • Caso Inválido 1 (Job 131615405726 - Interrompido antes da publicação): Fornecido SHA esperado divergente (0000000...). O step "Tentar Promoção com SHA Incorreto" falhou com código 1 emitindo "FALHA DE INTEGRIDADE: O SHA-256 do arquivo baixado diverge! Operação abortada imediatamente. NENHUM arquivo foi publicado."
-       • Caso Inválido 2 (Job 131615406030 - Interrompido antes da publicação): Injetado arquivo alternativo adulterado com hash divergente. O step "Tentar Promoção com Arquivo Alternativo Divergente" falhou com código 1 emitindo "ERRO CRÍTICO: Arquivo alternativo pré-existente ... possui digest divergente! Operação abortada imediatamente. NENHUM arquivo foi publicado."
+     - Auditoria Independente dos Logs Brutos (Confirmação de Rejeição Específica & Zero Falha de Infra):
+       • Caso Inválido 1 (Job 131615405726 - Log Bruto Auditado):
+         [Trecho Sanitizado]:
+         Calculado: 98b3089ee98818d77d053f3707ca795ce4fe059b8144a5c97f870322ea6da9d1
+         Esperado:   0000000000000000000000000000000000000000000000000000000000000000
+         ==========================================================
+         FALHA DE INTEGRIDADE: O SHA-256 do arquivo baixado diverge!
+         Operação abortada imediatamente. NENHUM arquivo foi publicado.
+         ==========================================================
+         Process completed with exit code 1.
+         (Comprovado: Zero falhas de infraestrutura; zero steps de upload executados).
+       • Caso Inválido 2 (Job 131615406030 - Log Bruto Auditado):
+         [Trecho Sanitizado]:
+         ==========================================================
+         ERRO CRÍTICO: Arquivo alternativo pré-existente ./downloaded-artifact/KYRO-Finance-1.48-debug.apk possui digest divergente!
+         Arquivo:   ./downloaded-artifact/KYRO-Finance-1.48-debug.apk
+         Digest:    9ee993d41ee17c75f1f8f31d2534285a6c7898413bd5531e8eaf49f7fec4676e
+         Esperado:  98b3089ee98818d77d053f3707ca795ce4fe059b8144a5c97f870322ea6da9d1
+         Operação abortada imediatamente. NENHUM arquivo foi publicado.
+         ==========================================================
+         Process completed with exit code 1.
+         (Comprovado: Zero falhas de infraestrutura; zero steps de upload executados).
      - Registro estruturado e versionado em docs/evidence/etapa_09_governance_evidence.json (com SHA capturado em tempo de execução via git rev-parse).
 - Comprovação do Comportamento Fora do Canal Público:
   • Commit puramente documental: O paths-ignore impede qualquer gatilho de execução de pipeline (zero compilação e zero publicação).
