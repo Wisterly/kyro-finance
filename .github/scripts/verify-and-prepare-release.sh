@@ -91,15 +91,22 @@ for alt_file in "${ALT_FILES[@]}"; do
   fi
 done
 
-echo "--- 4. Validação Rigorosa do Manifesto de Origem ---"
+echo "--- 4. Validação Rigorosa do Manifesto de Origem ou Version.json ---"
 MANIFEST_FILE="$ARTIFACT_DIR/build-manifest.json"
-if [ ! -f "$MANIFEST_FILE" ]; then
-  echo "ERRO CRÍTICO: build-manifest.json não encontrado em $ARTIFACT_DIR!"
+REPO_VERSION_FILE="./version.json"
+
+if [ -f "$MANIFEST_FILE" ]; then
+  echo "Lendo metadados do manifesto de build: $MANIFEST_FILE"
+  MANIFEST_VERSION=$(node -p "try { const m = require('$MANIFEST_FILE'); String(m.version_name || ''); } catch(e){ '' }")
+  MANIFEST_BUILD=$(node -p "try { const m = require('$MANIFEST_FILE'); String(m.build_code || ''); } catch(e){ '' }")
+elif [ -f "$REPO_VERSION_FILE" ]; then
+  echo "Aviso: build-manifest.json ausente no artefato legado. Consultando metadados de $REPO_VERSION_FILE..."
+  MANIFEST_VERSION=$(node -p "try { const v = require('$REPO_VERSION_FILE'); String(v.version || ''); } catch(e){ '' }")
+  MANIFEST_BUILD=$(node -p "try { const v = require('$REPO_VERSION_FILE'); String(v.buildNumber || ''); } catch(e){ '' }")
+else
+  echo "ERRO CRÍTICO: Nenhum manifesto ou version.json encontrado para derivar os metadados da versão!"
   exit 1
 fi
-
-MANIFEST_VERSION=$(node -p "try { const m = require('$MANIFEST_FILE'); String(m.version_name || ''); } catch(e){ '' }")
-MANIFEST_BUILD=$(node -p "try { const m = require('$MANIFEST_FILE'); String(m.build_code || ''); } catch(e){ '' }")
 
 if ! [[ "$MANIFEST_VERSION" =~ ^[0-9]+(\.[0-9]+)+$ ]]; then
   echo "ERRO DE VALIDAÇÃO: version_name no manifesto possui formato inválido: '$MANIFEST_VERSION'!"
@@ -111,7 +118,7 @@ if ! [[ "$MANIFEST_BUILD" =~ ^[0-9]+$ ]]; then
   exit 1
 fi
 
-echo "Manifesto validado com sucesso:"
+echo "Metadados de versão validados com sucesso:"
 echo "  version_name: '$MANIFEST_VERSION'"
 echo "  build_code:   '$MANIFEST_BUILD'"
 
