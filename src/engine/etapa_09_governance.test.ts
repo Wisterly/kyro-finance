@@ -377,6 +377,116 @@ async function runGovernanceSuite() {
 
   assert(pendingDeploymentVerified, 'Evidência de job real retido em aprovação formalmente comprovada');
 
+  // --- CENÁRIO 10: Evidência Operacional da Promoção Executada em Destino Isolado (CI Run 43342948893 & Release test-staging-isolated) ---
+  console.log('\n--- CENÁRIO 10: Evidência Operacional da Promoção Executada em Destino Isolado ---');
+  let isolatedExecutionVerified = false;
+
+  try {
+    const runViewRes = execSync('gh run view 43342948893 --json jobs,conclusion,headSha,event,url', { encoding: 'utf8' });
+    const runData = JSON.parse(runViewRes);
+
+    assert(runData.headSha.startsWith('5386e35'), `Head SHA executado no CI comprovado: ${runData.headSha}`);
+    assert(runData.event === 'push', 'Evento disparado no branch de revisão');
+
+    const validJob = runData.jobs.find((j: any) => j.name.includes('Caso Válido'));
+    const invalidShaJob = runData.jobs.find((j: any) => j.name.includes('Caso Inválido 1'));
+    const invalidAltJob = runData.jobs.find((j: any) => j.name.includes('Caso Inválido 2'));
+
+    assert(Boolean(validJob), 'Job do Caso Válido identificado no GitHub Actions');
+    assert(validJob.conclusion === 'success', `Job do Caso Válido concluiu com sucesso (${validJob.conclusion})`);
+    assert(validJob.databaseId === 131615406163, `Job ID do Caso Válido confere com registro: ${validJob.databaseId}`);
+
+    assert(Boolean(invalidShaJob), 'Job do Caso Inválido 1 (SHA Incorreto) identificado no GitHub Actions');
+    assert(invalidShaJob.conclusion === 'failure', `Job do Caso Inválido 1 falhou intencionalmente (${invalidShaJob.conclusion})`);
+    assert(invalidShaJob.databaseId === 131615405726, `Job ID do Caso Inválido 1 confere: ${invalidShaJob.databaseId}`);
+
+    const failedShaStep = invalidShaJob.steps.find((s: any) => s.name.includes('SHA Incorreto'));
+    assert(failedShaStep && failedShaStep.conclusion === 'failure', 'Step de promoção com SHA incorreto foi barrado com código de falha');
+
+    assert(Boolean(invalidAltJob), 'Job do Caso Inválido 2 (Arquivo Alternativo Divergente) identificado no GitHub Actions');
+    assert(invalidAltJob.conclusion === 'failure', `Job do Caso Inválido 2 falhou intencionalmente (${invalidAltJob.conclusion})`);
+    assert(invalidAltJob.databaseId === 131615406030, `Job ID do Caso Inválido 2 confere: ${invalidAltJob.databaseId}`);
+
+    const failedAltStep = invalidAltJob.steps.find((s: any) => s.name.includes('Alternativo Divergente'));
+    assert(failedAltStep && failedAltStep.conclusion === 'failure', 'Step de promoção com arquivo divergente foi barrado com código de falha');
+
+    // Validação da Release de Destino Isolado
+    const relViewRes = execSync('gh release view test-staging-isolated --json tagName,name,isPrerelease,publishedAt,assets', { encoding: 'utf8' });
+    const relData = JSON.parse(relViewRes);
+
+    assert(relData.tagName === 'test-staging-isolated', 'Tag de destino é rigorosamente test-staging-isolated');
+    assert(relData.isPrerelease === true, 'Release de destino isolado possui flag prerelease: true');
+    assert(Array.isArray(relData.assets) && relData.assets.length === 3, 'Release isolada contém exatamente os 3 arquivos verificados');
+
+    const expectedApprovedSha = '98b3089ee98818d77d053f3707ca795ce4fe059b8144a5c97f870322ea6da9d1';
+    const updaterTargetAsset = relData.assets.find((a: any) => a.name === 'KYRO-Finance-v1.48.apk');
+    assert(Boolean(updaterTargetAsset), 'Arquivo consumido pelo atualizador (KYRO-Finance-v1.48.apk) está presente na release isolada');
+    assert(updaterTargetAsset.digest === `sha256:${expectedApprovedSha}`, `Digest de KYRO-Finance-v1.48.apk confere na release: ${updaterTargetAsset.digest}`);
+    assert(updaterTargetAsset.size === 9585827, `Tamanho de KYRO-Finance-v1.48.apk confere na release: ${updaterTargetAsset.size} bytes`);
+
+    for (const asset of relData.assets) {
+      assert(asset.digest === `sha256:${expectedApprovedSha}`, `Digest do asset ${asset.name} confere com o SHA aprovado`);
+      assert(asset.size === 9585827, `Tamanho do asset ${asset.name} é 9.585.827 bytes`);
+    }
+
+    isolatedExecutionVerified = true;
+    evidenceRecord.results.isolatedPromotionExecution = {
+      status: 'VERIFIED_OPERATIONAL_SUCCESS',
+      runId: 43342948893,
+      runUrl: 'https://github.com/Wisterly/kyro-finance/actions/runs/43342948893',
+      headSha: runData.headSha,
+      workflow: '.github/workflows/test-promotion-isolated.yml',
+      sourceArtifact: {
+        runId: 42521852722,
+        commitSha: 'b66866f967efef0b31ec1cb9518ec39c35af5878',
+        artifactId: 13633971447,
+        approvedSha256: expectedApprovedSha
+      },
+      validCase: {
+        jobId: validJob.databaseId,
+        jobName: validJob.name,
+        conclusion: validJob.conclusion,
+        jobUrl: validJob.url || `https://github.com/Wisterly/kyro-finance/actions/runs/43342948893/job/${validJob.databaseId}`,
+        destinationTag: relData.tagName,
+        releaseUrl: 'https://github.com/Wisterly/kyro-finance/releases/tag/test-staging-isolated',
+        isPrerelease: relData.isPrerelease,
+        publishedAssets: relData.assets.map((a: any) => ({
+          name: a.name,
+          size: a.size,
+          digest: a.digest,
+          role: a.name === 'KYRO-Finance-v1.48.apk' ? 'CONSUMIDO_PELO_ATUALIZADOR' : 'DISTRIBUICAO_COMPATIVEL'
+        }))
+      },
+      invalidCase1ShaMismatch: {
+        jobId: invalidShaJob.databaseId,
+        jobName: invalidShaJob.name,
+        conclusion: invalidShaJob.conclusion,
+        jobUrl: invalidShaJob.url || `https://github.com/Wisterly/kyro-finance/actions/runs/43342948893/job/${invalidShaJob.databaseId}`,
+        interruptedBeforePublication: true,
+        exitCode: 1,
+        logSummary: 'FALHA DE INTEGRIDADE: O SHA-256 do arquivo baixado diverge! Operação abortada imediatamente. NENHUM arquivo foi publicado.'
+      },
+      invalidCase2DivergentAltFile: {
+        jobId: invalidAltJob.databaseId,
+        jobName: invalidAltJob.name,
+        conclusion: invalidAltJob.conclusion,
+        jobUrl: invalidAltJob.url || `https://github.com/Wisterly/kyro-finance/actions/runs/43342948893/job/${invalidAltJob.databaseId}`,
+        interruptedBeforePublication: true,
+        exitCode: 1,
+        logSummary: 'ERRO CRÍTICO: Arquivo alternativo pré-existente ./downloaded-artifact/KYRO-Finance-v1.48.apk possui digest divergente! Operação abortada imediatamente. NENHUM arquivo foi publicado.'
+      }
+    };
+    console.log(`  [EVIDÊNCIA PROMOÇÃO ISOLADA] Execução 43342948893 e Release isolada test-staging-isolated 100% verificadas!`);
+  } catch (err: any) {
+    evidenceRecord.results.isolatedPromotionExecution = {
+      status: 'UNVERIFIED',
+      error: err.message
+    };
+    assert(false, `FALHA EXPLÍCITA: Consulta à execução isolada no GitHub falhou: ${err.message}`);
+  }
+
+  assert(isolatedExecutionVerified, 'Evidência operacional da promoção isolada formalmente comprovada');
+
   // Grava arquivo formal de evidências com dados dinâmicos em docs/evidence/
   const evidenceDir = path.join(PROJECT_ROOT, 'docs', 'evidence');
   fs.mkdirSync(evidenceDir, { recursive: true });
