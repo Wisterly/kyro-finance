@@ -18,6 +18,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Baixar código do repositório
+        uses: actions/checkout@v4
+
       - name: Validar Sanitização e Formato das Entradas
         env:
           INPUT_CONFIRM_PROMOTION: "CONFIRMAR"
@@ -51,10 +54,11 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RUN_ID: "${{ env.VALIDATED_RUN_ID }}"
+          REPO: "${{ github.repository }}"
         run: |
-          echo "=== 2. DOWNLOAD DO ARTEFATO DA RUN $RUN_ID ==="
+          echo "=== 2. DOWNLOAD DO ARTEFATO DA RUN $RUN_ID NO REPO $REPO ==="
           mkdir -p ./downloaded-artifact
-          gh run download "$RUN_ID" --name "KYRO-Finance-APK" --dir "./downloaded-artifact"
+          gh run download "$RUN_ID" --repo "$REPO" --name "KYRO-Finance-APK" --dir "./downloaded-artifact"
           ls -la ./downloaded-artifact
 
       - name: Conferência Criptográfica do APK e Nomes Alternativos
@@ -109,7 +113,7 @@ jobs:
             ### 🧪 Release Isolada de Homologação da Governança (Etapa 09)
             - **Origem CI:** Run ${{ env.VALIDATED_RUN_ID }}
             - **SHA-256 Verificado:** `${{ env.VALIDATED_EXPECTED_SHA256 }}`
-            - **Canal Público:** Preservado (tag isolada).
+            - **Canal Público:** Preservado (tag isolada sem make_latest).
           files: |
             ./verified-release/KYRO-Finance.apk
             ./verified-release/KYRO-Finance-v${{ env.VALIDATED_VERSION_NAME }}.apk
@@ -124,12 +128,16 @@ jobs:
     name: Caso Inválido 1 (Barragem por SHA Incorreto)
     runs-on: ubuntu-latest
     steps:
+      - name: Baixar código do repositório
+        uses: actions/checkout@v4
+
       - name: Baixar Artefato Real
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: "${{ github.repository }}"
         run: |
           mkdir -p ./downloaded-artifact
-          gh run download "42521852722" --name "KYRO-Finance-APK" --dir "./downloaded-artifact"
+          gh run download "42521852722" --repo "$REPO" --name "KYRO-Finance-APK" --dir "./downloaded-artifact"
 
       - name: Tentar Promoção com SHA Incorreto
         env:
@@ -155,12 +163,16 @@ jobs:
     name: Caso Inválido 2 (Barragem por Arquivo Alternativo Divergente)
     runs-on: ubuntu-latest
     steps:
+      - name: Baixar código do repositório
+        uses: actions/checkout@v4
+
       - name: Baixar Artefato Real
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: "${{ github.repository }}"
         run: |
           mkdir -p ./downloaded-artifact
-          gh run download "42521852722" --name "KYRO-Finance-APK" --dir "./downloaded-artifact"
+          gh run download "42521852722" --repo "$REPO" --name "KYRO-Finance-APK" --dir "./downloaded-artifact"
           # Injetar intencionalmente um arquivo alternativo divergente
           echo "CORRUPTED_PAYLOAD_FORGED" > ./downloaded-artifact/KYRO-Finance-v1.48.apk
 
