@@ -1,7 +1,7 @@
 {
   "suite": "Etapa 09 - Governança CI/CD e Promoção Desacoplada",
-  "timestamp": "2026-11-13T01:02:35.262Z",
-  "gitCommitTested": "24e25e652064f4c4f6323a7331e572a636964352",
+  "timestamp": "2026-11-13T01:05:40.569Z",
+  "gitCommitTested": "f906b85788913a0e4d0f175917faf45701b958e9",
   "executionCommand": "npx tsx src/engine/etapa_09_governance.test.ts",
   "branch": "review/etapa-09-desacoplamento-ci",
   "repositoryUrl": "https://github.com/Wisterly/kyro-finance",
@@ -48,6 +48,22 @@
         "login": "Wisterly",
         "id": 341183738
       }
+    },
+    "waitingJobEvidence": {
+      "status": "VERIFIED_WAITING_FOR_REVIEW",
+      "runId": 43341910073,
+      "jobId": 131611988172,
+      "jobStatus": "waiting",
+      "environmentName": "Production",
+      "runUrl": "https://github.com/Wisterly/kyro-finance/actions/runs/43341910073",
+      "jobUrl": "https://github.com/Wisterly/kyro-finance/actions/runs/43341910073/job/131611988172",
+      "pendingReviewers": [
+        {
+          "login": "Wisterly",
+          "id": 341183738
+        }
+      ],
+      "stepsExecutedBeforeApproval": 0
     }
   }
 }

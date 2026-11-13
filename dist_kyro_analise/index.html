@@ -1084,13 +1084,14 @@ C. Referencia Anterior Registrada (CI Run 84):
      - Calcula o SHA-256 do APK baixado e compara estritamente com expected_sha256: se houver divergência de 1 caractere, aborta imediatamente com exit 1 e NENHUM arquivo é publicado.
      - Validação estrita de arquivos alternativos: confere o SHA de cada binário pré-existente e gera cópias exatas do arquivo verificado para os nomes exigidos pelo atualizador (KYRO-Finance-v1.48.apk e KYRO-Finance-1.48.apk), testando cada um individualmente antes de publicar.
      - Substituição do glob: o step de publicação utiliza uma lista explícita de arquivos aprovados (sem nenhum glob *.apk).
-  3) Comprovação Automatizada em Ambiente Isolado (src/engine/etapa_09_governance.test.ts):
-     - 49 asserções automatizadas aprovadas cobrindo: build normal sem releases, validação de regex de inputs, validação de manifesto, barragem de SHA incorreto, barragem de binário alternativo divergente, geração de lista explícita com integridade e evidência sanitizada da API do GitHub.
-     - Evidência estruturada e versionada em docs/evidence/etapa_09_governance_evidence.json.
+  3) Comprovação Automatizada & Evidência de Job Retido no Gate (src/engine/etapa_09_governance.test.ts):
+     - 53 asserções automatizadas aprovadas (100% sucesso) cobrindo: build normal sem releases, validação de regex de inputs manuais, validação prévia de manifesto, barragem de SHA incorreto, barragem de binário alternativo divergente, geração de lista explícita com integridade e evidência sanitizada da API do GitHub.
+     - Evidência Real de Job em Aguardo de Aprovação Humana (Run 43341910073, Job 131611988172): Comprovado via API que o job entrou compulsoriamente no status "waiting" com pending_deployments ativo para o environment Production, aguardando aprovação explícita do revisor Wisterly antes de executar qualquer step de publicação.
+     - Registro estruturado e versionado em docs/evidence/etapa_09_governance_evidence.json (com SHA capturado em tempo de execução via git rev-parse).
 - Comprovação do Comportamento Fora do Canal Público:
   • Commit puramente documental: O paths-ignore impede qualquer gatilho de execução de pipeline (zero compilação e zero publicação).
   • Build normal de candidato: Um push na main ou branch compila o APK, gera o manifesto e arquiva na aba Actions, sem qualquer publicação ou alteração no GitHub Releases / canal público.
-  • Promoção: Ocorre somente mediante despacho manual auditado no promote-release.yml com validação estrita de SHA-256 e aprovação obrigatória do revisor em Production.
+  • Promoção: Ocorre somente mediante despacho manual auditado no promote-release.yml com validação estrita de SHA-256 e aprovação obrigatória do revisor em Production (retido no gate antes da execução).
 
 # 3. Decisão sobre a Build 48 Já Oferecida: Comparativo das 3 Fontes de /api/app-version:
 O endpoint Serverless /api/app-version consulta concorrentemente 3 fontes para determinar a versão mais recente:

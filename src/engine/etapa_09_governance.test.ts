@@ -327,6 +327,56 @@ async function runGovernanceSuite() {
 
   assert(reviewerRuleVerified, 'Regra de proteção de revisores em Production formalmente verificada e ativa');
 
+  // --- CENÁRIO 9: Evidência de Job Real Retido no Gate de Aprovação de Production (Status: waiting) ---
+  console.log('\n--- CENÁRIO 9: Evidência de Job Real Retido no Gate de Aprovação (Waiting for Review) ---');
+  let pendingDeploymentVerified = false;
+
+  try {
+    const runsListRes = execSync('gh run list --workflow="test-environment-gate.yml" --limit 1 --json databaseId,status,conclusion,url', { encoding: 'utf8' });
+    const runs = JSON.parse(runsListRes);
+
+    if (runs && runs.length > 0) {
+      const targetRun = runs[0];
+      const runId = targetRun.databaseId;
+      const pendingDepRes = execSync(`gh api repos/Wisterly/kyro-finance/actions/runs/${runId}/pending_deployments`, { encoding: 'utf8' });
+      const pendingDeps = JSON.parse(pendingDepRes);
+      
+      assert(Array.isArray(pendingDeps) && pendingDeps.length > 0, `Run ${runId} possui pending_deployments ativo`);
+      assert(pendingDeps[0].environment.name === 'Production', `Environment retido é rigorosamente Production`);
+      assert(pendingDeps[0].current_user_can_approve === true, `Aprovação habilitada para o revisor autorizado`);
+      assert(pendingDeps[0].reviewers[0].reviewer.login === 'Wisterly', `Revisor pendente é Wisterly`);
+
+      const jobsRes = execSync(`gh api repos/Wisterly/kyro-finance/actions/runs/${runId}/jobs`, { encoding: 'utf8' });
+      const parsedJobs = JSON.parse(jobsRes);
+      assert(parsedJobs.jobs[0].status === 'waiting', `Job está oficialmente com status 'waiting' (aguardando aprovação)`);
+      assert(parsedJobs.jobs[0].steps.length === 0, `Nenhum step executou antes da aprovação humana`);
+
+      pendingDeploymentVerified = true;
+      evidenceRecord.results.waitingJobEvidence = {
+        status: 'VERIFIED_WAITING_FOR_REVIEW',
+        runId: runId,
+        jobId: parsedJobs.jobs[0].id,
+        jobStatus: parsedJobs.jobs[0].status,
+        environmentName: 'Production',
+        runUrl: targetRun.url || `https://github.com/Wisterly/kyro-finance/actions/runs/${runId}`,
+        jobUrl: parsedJobs.jobs[0].html_url,
+        pendingReviewers: pendingDeps[0].reviewers.map((r: any) => ({ login: r.reviewer.login, id: r.reviewer.id })),
+        stepsExecutedBeforeApproval: 0
+      };
+      console.log(`  [EVIDÊNCIA JOB WAITING] Run ${runId} (Job ${parsedJobs.jobs[0].id}) comprovadamente PARADO em aprovação humana!`);
+    } else {
+      assert(false, 'FALHA EXPLÍCITA: Nenhuma run do workflow test-environment-gate.yml encontrada no GitHub!');
+    }
+  } catch (err: any) {
+    evidenceRecord.results.waitingJobEvidence = {
+      status: 'UNVERIFIED',
+      error: err.message
+    };
+    assert(false, `FALHA EXPLÍCITA: Falha ao verificar job retido no gate: ${err.message}`);
+  }
+
+  assert(pendingDeploymentVerified, 'Evidência de job real retido em aprovação formalmente comprovada');
+
   // Grava arquivo formal de evidências com dados dinâmicos em docs/evidence/
   const evidenceDir = path.join(PROJECT_ROOT, 'docs', 'evidence');
   fs.mkdirSync(evidenceDir, { recursive: true });
