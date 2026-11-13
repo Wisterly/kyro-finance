@@ -1,15 +1,23 @@
 {
   "suite": "Etapa 09 - Governança CI/CD e Promoção Desacoplada",
-  "timestamp": "2026-11-09T03:49:00.856Z",
-  "gitCommitOrigin": "c184ea4ca50248b036f4ca865078b5d4b1f9219f",
+  "timestamp": "2026-11-13T01:02:35.262Z",
+  "gitCommitTested": "24e25e652064f4c4f6323a7331e572a636964352",
+  "executionCommand": "npx tsx src/engine/etapa_09_governance.test.ts",
+  "branch": "review/etapa-09-desacoplamento-ci",
+  "repositoryUrl": "https://github.com/Wisterly/kyro-finance",
+  "branchUrl": "https://github.com/Wisterly/kyro-finance/tree/review/etapa-09-desacoplamento-ci",
+  "compareUrl": "https://github.com/Wisterly/kyro-finance/compare/main...review/etapa-09-desacoplamento-ci",
   "results": {
     "buildNormal": {
       "status": "VERIFIED",
+      "workflowFile": ".github/workflows/android-build.yml",
       "releaseStepPresent": false,
       "artifactUploadPresent": true,
-      "pathsIgnoreActive": true
+      "pathsIgnoreActive": true,
+      "manifestGenerated": true
     },
     "verifiedArtifacts": {
+      "status": "PASSED",
       "expectedSha256": "98b3089ee98818d77d053f3707ca795ce4fe059b8144a5c97f870322ea6da9d1",
       "sizeBytes": 9585827,
       "files": [

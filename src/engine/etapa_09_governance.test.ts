@@ -3,7 +3,8 @@
  * SUÍTE DE HOMOLOGAÇÃO DE GOVERNANÇA CRIPTOGRÁFICA & DESACOPLAMENTO CI/CD
  * COMPROVAÇÃO EM AMBIENTE ISOLADO: BUILD NORMAL, BARRAGEM DE ENTRADAS INVÁLIDAS,
  * BARRAGEM DE SHA INCORRETO, BARRAGEM DE ARQUIVO ALTERNATIVO DIVERGENTE,
- * VALIDAÇÃO DE MANIFESTO, LISTA EXPLÍCITA DE PUBLICAÇÃO E PROTEÇÃO DE ENVIRONMENT
+ * VALIDAÇÃO DE MANIFESTO, LISTA EXPLÍCITA DE PUBLICAÇÃO, PROTEÇÃO DE ENVIRONMENT
+ * E EVIDÊNCIA DE JOB EM AGUARDO DE APROVAÇÃO HUMANA (PRODUCTION GATE)
  */
 
 import fs from 'fs';
@@ -25,7 +26,7 @@ function assert(condition: boolean, message: string) {
     passedTests++;
     console.log(`  [OK] ${message}`);
   } else {
-    console.error(`  [FALHA] ${message}`);
+    console.error(`  [FALHA EXPLÍCITA] ${message}`);
     process.exitCode = 1;
   }
 }
@@ -40,6 +41,15 @@ async function runGovernanceSuite() {
   console.log('  KYRO FINANCE - SUÍTE DE GOVERNANÇA CI/CD & CONFERÊNCIA CRIPTOGRÁFICA (ETAPA 09)');
   console.log('================================================================================\n');
 
+  // Obtenção dinâmica do SHA do commit testado em tempo de execução
+  let currentGitSha = 'UNKNOWN';
+  try {
+    currentGitSha = execSync('git rev-parse HEAD', { encoding: 'utf8' }).trim();
+  } catch (err: any) {
+    console.warn('Aviso: Falha ao obter git SHA via rev-parse:', err.message);
+  }
+
+  const executionCommand = 'npx tsx src/engine/etapa_09_governance.test.ts';
   const stagingDir = path.join(PROJECT_ROOT, '.tmp_governance_staging');
   const cleanupStaging = () => {
     if (fs.existsSync(stagingDir)) {
@@ -50,7 +60,12 @@ async function runGovernanceSuite() {
   const evidenceRecord: any = {
     suite: 'Etapa 09 - Governança CI/CD e Promoção Desacoplada',
     timestamp: new Date().toISOString(),
-    gitCommitOrigin: 'c184ea4ca50248b036f4ca865078b5d4b1f9219f',
+    gitCommitTested: currentGitSha,
+    executionCommand: executionCommand,
+    branch: 'review/etapa-09-desacoplamento-ci',
+    repositoryUrl: 'https://github.com/Wisterly/kyro-finance',
+    branchUrl: 'https://github.com/Wisterly/kyro-finance/tree/review/etapa-09-desacoplamento-ci',
+    compareUrl: 'https://github.com/Wisterly/kyro-finance/compare/main...review/etapa-09-desacoplamento-ci',
     results: {}
   };
 
@@ -69,9 +84,11 @@ async function runGovernanceSuite() {
 
   evidenceRecord.results.buildNormal = {
     status: 'VERIFIED',
+    workflowFile: '.github/workflows/android-build.yml',
     releaseStepPresent: false,
     artifactUploadPresent: true,
-    pathsIgnoreActive: true
+    pathsIgnoreActive: true,
+    manifestGenerated: true
   };
 
   // --- CENÁRIO 2: Validação Estrutural da Promoção (.github/workflows/promote-release.yml) ---
@@ -95,7 +112,7 @@ async function runGovernanceSuite() {
   const filesSection = promoteContent.substring(filesIndex, filesIndex + 260);
   assert(!filesSection.includes('KYRO-Finance*.apk'), 'Substituição do glob confirmada: a publicação NÃO utiliza glob (*.apk)');
 
-  // --- CENÁRIO 3: Validação de Formato das Entradas Manuais ---
+  // --- CENÁRIO 3: Validação de Formato das Entradas Manuais (Regex & Sanitização) ---
   console.log('\n--- CENÁRIO 3: Validação de Formato das Entradas Manuais (Regex & Sanitização) ---');
   const validateInputs = (runId: string, expectedSha: string, targetTag: string, confirm: string) => {
     if (confirm !== 'CONFIRMAR') throw new Error('confirm_promotion inválido');
@@ -106,7 +123,6 @@ async function runGovernanceSuite() {
     return { runId, cleanSha, targetTag };
   };
 
-  // Testes de falha proposital de entradas
   let runIdError = false;
   try { validateInputs('4252185abc', '98b3089ee98818d77d053f3707ca795ce4fe059b8144a5c97f870322ea6da9d1', 'apk-latest', 'CONFIRMAR'); } catch(e: any) { runIdError = e.message.includes('run_id inválido'); }
   assert(runIdError, 'Entrada run_id com caracteres não numéricos é barrada antes da execução');
@@ -189,7 +205,7 @@ async function runGovernanceSuite() {
   fs.writeFileSync(primaryApk, 'PRIMARY_AUTHENTIC_BINARY');
   const targetApprovedSha = calculateSha256(primaryApk);
 
-  // Injeção de arquivo alternativo fraudulento/divergente
+  // Injeção de arquivo alternativo divergente
   const divergentAltApk = path.join(stagingDir, 'KYRO-Finance-v1.48.apk');
   fs.writeFileSync(divergentAltApk, 'DIVERGENT_FORGED_BINARY');
 
@@ -198,11 +214,9 @@ async function runGovernanceSuite() {
   let altErrorMessage = '';
 
   try {
-    // 1. Confere arquivo principal
     const baseDigest = calculateSha256(primaryApk);
     if (baseDigest !== targetApprovedSha) throw new Error('Base SHA inválido');
 
-    // 2. Confere arquivos alternativos existentes
     const altDigest = calculateSha256(divergentAltApk);
     if (altDigest !== targetApprovedSha) {
       throw new Error(`ERRO CRÍTICO: Arquivo alternativo ${path.basename(divergentAltApk)} possui digest divergente (${altDigest} != ${targetApprovedSha})`);
@@ -218,7 +232,7 @@ async function runGovernanceSuite() {
   assert(altErrorMessage.includes('possui digest divergente'), 'Erro crítico emitido com identificação do arquivo divergente');
   cleanupStaging();
 
-  // --- CENÁRIO 7: Caso Válido em Destino Isolado & Confirmação do Nome Exato do Atualizador ---
+  // --- CENÁRIO 7: Caso Válido em Destino Isolado & Nome Exato Consumido pelo Atualizador ---
   console.log('\n--- CENÁRIO 7: Caso Válido em Destino Isolado & Nome Exato Consumido pelo Atualizador ---');
   cleanupStaging();
   const isolatedReleaseDir = path.join(stagingDir, 'verified-release');
@@ -253,6 +267,7 @@ async function runGovernanceSuite() {
   }
 
   evidenceRecord.results.verifiedArtifacts = {
+    status: 'PASSED',
     expectedSha256: realApprovedDigest,
     sizeBytes: 9585827,
     files: [
@@ -264,44 +279,60 @@ async function runGovernanceSuite() {
 
   cleanupStaging();
 
-  // --- CENÁRIO 8: Evidência Sanitizada de Proteção de Environment (GitHub API) ---
+  // --- CENÁRIO 8: Verificação Estrita da Regra de Revisores em Production (Falha Explícita em caso de erro) ---
   console.log('\n--- CENÁRIO 8: Evidência Sanitizada de Proteção de Environment (GitHub API) ---');
+  let reviewerRuleVerified = false;
+
   try {
     const apiRes = execSync('gh api repos/Wisterly/kyro-finance/environments/Production', { encoding: 'utf8' });
     const parsedEnv = JSON.parse(apiRes);
 
-    assert(parsedEnv.name === 'Production', 'Environment "Production" registrado com sucesso no repositório');
-    assert(Array.isArray(parsedEnv.protection_rules) && parsedEnv.protection_rules.length > 0, 'protection_rules está ativo com regras de proteção configuradas');
+    const hasEnv = parsedEnv && parsedEnv.name === 'Production';
+    const hasRules = Array.isArray(parsedEnv.protection_rules) && parsedEnv.protection_rules.length > 0;
+    const reviewerRule = hasRules ? parsedEnv.protection_rules.find((r: any) => r.type === 'required_reviewers') : null;
 
-    const reviewerRule = parsedEnv.protection_rules.find((r: any) => r.type === 'required_reviewers');
-    assert(reviewerRule !== undefined, 'Regra "required_reviewers" está formalmente ATIVA no environment');
-    assert(Array.isArray(reviewerRule.reviewers) && reviewerRule.reviewers.length > 0, 'Revisor humano cadastrado na regra de proteção');
+    if (!hasEnv || !hasRules || !reviewerRule || !Array.isArray(reviewerRule.reviewers) || reviewerRule.reviewers.length === 0) {
+      evidenceRecord.results.environmentProtection = {
+        environmentName: 'Production',
+        status: 'UNVERIFIED',
+        error: 'Regra required_reviewers não encontrada ou sem revisores cadastrados'
+      };
+      assert(false, 'FALHA EXPLÍCITA: A regra required_reviewers em Production não está configurada ou ativa!');
+    } else {
+      const reviewerLogin = reviewerRule.reviewers[0].reviewer.login;
+      const reviewerId = reviewerRule.reviewers[0].reviewer.id;
+      assert(reviewerLogin === 'Wisterly', `Revisor autorizado configurado: ${reviewerLogin}`);
+      console.log(`  [EVIDÊNCIA GITHUB API] Environment "Production" exige aprovação de: ${reviewerLogin} (ID: ${reviewerId})`);
 
-    const reviewerLogin = reviewerRule.reviewers[0].reviewer.login;
-    const reviewerId = reviewerRule.reviewers[0].reviewer.id;
-    assert(reviewerLogin === 'Wisterly', `Revisor autorizado configurado: ${reviewerLogin}`);
-    console.log(`  [EVIDÊNCIA GITHUB API] Environment "Production" exige aprovação de: ${reviewerLogin} (ID: ${reviewerId})`);
-
+      reviewerRuleVerified = true;
+      evidenceRecord.results.environmentProtection = {
+        environmentName: 'Production',
+        ruleId: reviewerRule.id,
+        ruleType: 'required_reviewers',
+        status: 'ACTIVE_AND_ENFORCED',
+        reviewer: {
+          login: reviewerLogin,
+          id: reviewerId
+        }
+      };
+    }
+  } catch (err: any) {
     evidenceRecord.results.environmentProtection = {
       environmentName: 'Production',
-      ruleId: reviewerRule.id,
-      ruleType: 'required_reviewers',
-      status: 'ACTIVE_AND_ENFORCED',
-      reviewer: {
-        login: reviewerLogin,
-        id: reviewerId
-      }
+      status: 'UNVERIFIED',
+      error: err.message
     };
-  } catch (err: any) {
-    console.warn('  [AVISO] Verificação online via GitHub CLI:', err.message);
+    assert(false, `FALHA EXPLÍCITA: Consulta à regra de aprovação em Production falhou: ${err.message}`);
   }
 
-  // Grava arquivo formal de evidências isoladas no repositório
+  assert(reviewerRuleVerified, 'Regra de proteção de revisores em Production formalmente verificada e ativa');
+
+  // Grava arquivo formal de evidências com dados dinâmicos em docs/evidence/
   const evidenceDir = path.join(PROJECT_ROOT, 'docs', 'evidence');
   fs.mkdirSync(evidenceDir, { recursive: true });
   const evidencePath = path.join(evidenceDir, 'etapa_09_governance_evidence.json');
   fs.writeFileSync(evidencePath, JSON.stringify(evidenceRecord, null, 2), 'utf8');
-  assert(fs.existsSync(evidencePath), 'Arquivo de evidências formal docs/evidence/etapa_09_governance_evidence.json gravado no repositório');
+  assert(fs.existsSync(evidencePath), 'Arquivo de evidências formal docs/evidence/etapa_09_governance_evidence.json gravado com sucesso');
 
   // --- RESUMO FINAL ---
   console.log('\n--------------------------------------------------------------------------------');

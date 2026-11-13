@@ -1,0 +1,23 @@
+name: Teste de Gate de Aprovação em Production
+
+on:
+  push:
+    branches:
+      - 'review/etapa-09-desacoplamento-ci'
+    paths:
+      - '.github/workflows/test-environment-gate.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test-production-approval:
+    name: Validar Bloqueio de Aprovação de Revisor (Ambiente Isolado)
+    runs-on: ubuntu-latest
+    environment: Production
+
+    steps:
+      - name: Executar Apenas Após Aprovação Humana
+        run: |
+          echo "Este passo comprova que o job esteve retido no gate de aprovação do environment Production."
+          echo "Nenhum canal público foi alterado. Teste 100% isolado."
