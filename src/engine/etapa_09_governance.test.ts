@@ -411,7 +411,7 @@ async function runGovernanceSuite() {
     assert(Boolean(invalidShaJob) && invalidShaJob.conclusion === 'failure', 'Run 43342948893: Job Caso Inválido 1 falhou como esperado');
     assert(Boolean(invalidAltJob) && invalidAltJob.conclusion === 'failure', 'Run 43342948893: Job Caso Inválido 2 falhou como esperado');
 
-    // 2. Auditoria da Nova Execução com Lógica Modular Compartilhada (Run 43345706220)
+    // 2. Auditoria da Execução Modular de Referência (Run 43345706220)
     const runSharedRes = execSync('gh run view 43345706220 --json jobs,conclusion,headSha,event,url', { encoding: 'utf8' });
     const runSharedData = JSON.parse(runSharedRes);
 
@@ -423,6 +423,21 @@ async function runGovernanceSuite() {
     assert(Boolean(validSharedJob) && validSharedJob.conclusion === 'success', 'Run 43345706220: Caso Válido concluiu com sucesso usando script compartilhado');
     assert(Boolean(invalidSharedShaJob) && invalidSharedShaJob.conclusion === 'failure', 'Run 43345706220: Caso Inválido 1 barrado no script compartilhado');
     assert(Boolean(invalidSharedAltJob) && invalidSharedAltJob.conclusion === 'failure', 'Run 43345706220: Caso Inválido 2 barrado no script compartilhado');
+
+    // 3. Auditoria da Nova Execução com Validação Positiva de Rejeição Específica (Run 43346685843)
+    const runAssertRes = execSync('gh run view 43346685843 --json jobs,conclusion,headSha,event,url', { encoding: 'utf8' });
+    const runAssertData = JSON.parse(runAssertRes);
+
+    assert(runAssertData.headSha.startsWith('5d7f7be'), `Head SHA da execução com asserção positiva comprovado: ${runAssertData.headSha}`);
+    assert(runAssertData.conclusion === 'success', `Run 43346685843 concluiu com sucesso geral (conclusion: ${runAssertData.conclusion})`);
+
+    const validAssertJob = runAssertData.jobs.find((j: any) => j.name.includes('Caso Válido'));
+    const invalidShaAssertJob = runAssertData.jobs.find((j: any) => j.name.includes('Caso Inválido 1'));
+    const invalidAltAssertJob = runAssertData.jobs.find((j: any) => j.name.includes('Caso Inválido 2'));
+
+    assert(Boolean(validAssertJob) && validAssertJob.conclusion === 'success', 'Run 43346685843: Caso Válido concluiu com sucesso');
+    assert(Boolean(invalidShaAssertJob) && invalidShaAssertJob.conclusion === 'success', 'Run 43346685843: Caso Inválido 1 concluiu com sucesso confirmando a rejeição específica de SHA');
+    assert(Boolean(invalidAltAssertJob) && invalidAltAssertJob.conclusion === 'success', 'Run 43346685843: Caso Inválido 2 concluiu com sucesso confirmando a rejeição específica de APK divergente');
 
     // Validação da Release de Destino Isolado
     const relViewRes = execSync('gh release view test-staging-isolated --json tagName,name,isPrerelease,publishedAt,assets', { encoding: 'utf8' });
@@ -464,6 +479,16 @@ async function runGovernanceSuite() {
         invalidShaJobId: invalidSharedShaJob.databaseId,
         invalidAltJobId: invalidSharedAltJob.databaseId
       },
+      assertiveWorkflowRun: {
+        runId: 43346685843,
+        runUrl: 'https://github.com/Wisterly/kyro-finance/actions/runs/43346685843',
+        headSha: runAssertData.headSha,
+        conclusion: runAssertData.conclusion,
+        sharedScript: '.github/scripts/verify-and-prepare-release.sh',
+        validJobId: validAssertJob.databaseId,
+        invalidShaJobId: invalidShaAssertJob.databaseId,
+        invalidAltJobId: invalidAltAssertJob.databaseId
+      },
       destinationTag: relData.tagName,
       releaseUrl: 'https://github.com/Wisterly/kyro-finance/releases/tag/test-staging-isolated',
       isPrerelease: relData.isPrerelease,
@@ -479,7 +504,7 @@ async function runGovernanceSuite() {
         digest: a.digest
       }))
     };
-    console.log(`  [EVIDÊNCIA PROMOÇÃO ISOLADA] Execuções 43342948893 (Preservada) e 43345706220 (Script Compartilhado) 100% verificadas!`);
+    console.log(`  [EVIDÊNCIA PROMOÇÃO ISOLADA] Execuções 43342948893, 43345706220 e 43346685843 100% verificadas!`);
   } catch (err: any) {
     evidenceRecord.results.isolatedPromotionExecution = {
       status: 'UNVERIFIED',
@@ -495,23 +520,23 @@ async function runGovernanceSuite() {
   let rawLogsAudited = false;
 
   try {
-    // Leitura dos logs brutos da nova execução (Run 43345706220 com script compartilhado)
-    const rawLogShaJob = execSync('gh run view --job 131624452552 --log', { encoding: 'utf8' });
-    const rawLogAltJob = execSync('gh run view --job 131624453019 --log', { encoding: 'utf8' });
+    // Leitura dos logs brutos da execução assertiva (Run 43346685843)
+    const rawLogShaJob = execSync('gh run view --job 131627616603 --log', { encoding: 'utf8' });
+    const rawLogAltJob = execSync('gh run view --job 131627616116 --log', { encoding: 'utf8' });
 
-    // 1. Auditoria Estrita do Job 131624452552 (SHA Incorreto)
-    assert(!rawLogShaJob.includes('actions/checkout failed'), 'Job 131624452552: actions/checkout executou sem falha');
-    assert(!rawLogShaJob.includes('Runner lost communication'), 'Job 131624452552: runner operou normalmente sem perda de comunicação');
-    assert(!rawLogShaJob.includes('Uploading KYRO-Finance') && !rawLogShaJob.includes('Release ready at'), 'Job 131624452552: Zero upload de release executado');
-    assert(rawLogShaJob.includes('FALHA DE INTEGRIDADE: O SHA-256 do arquivo baixado diverge!'), 'Job 131624452552: Contém a mensagem exata de rejeição por integridade de SHA');
-    assert(rawLogShaJob.includes('Operação abortada imediatamente. NENHUM arquivo foi publicado.'), 'Job 131624452552: Confirmação expressa de aborto antes da publicação');
+    // 1. Auditoria Estrita do Job 131627616603 (SHA Incorreto)
+    assert(!rawLogShaJob.includes('actions/checkout failed'), 'Job 131627616603: actions/checkout executou sem falha');
+    assert(!rawLogShaJob.includes('Runner lost communication'), 'Job 131627616603: runner operou normalmente sem perda de comunicação');
+    assert(!rawLogShaJob.includes('Uploading KYRO-Finance') && !rawLogShaJob.includes('Release ready at'), 'Job 131627616603: Zero upload de release executado');
+    assert(rawLogShaJob.includes('FALHA DE INTEGRIDADE: O SHA-256 do arquivo baixado diverge!'), 'Job 131627616603: Contém a mensagem exata de rejeição por integridade de SHA');
+    assert(rawLogShaJob.includes('SUCESSO: Rejeição específica por falha de integridade confirmada com sucesso'), 'Job 131627616603: Confirmação expressa de asserção de teste positiva');
 
-    // 2. Auditoria Estrita do Job 131624453019 (Alternativo Divergente)
-    assert(!rawLogAltJob.includes('actions/checkout failed'), 'Job 131624453019: actions/checkout executou sem falha');
-    assert(!rawLogAltJob.includes('Runner lost communication'), 'Job 131624453019: runner operou normalmente sem perda de comunicação');
-    assert(!rawLogAltJob.includes('Uploading KYRO-Finance') && !rawLogAltJob.includes('Release ready at'), 'Job 131624453019: Zero upload de release executado');
-    assert(rawLogAltJob.includes('possui digest divergente'), 'Job 131624453019: Contém a mensagem exata de rejeição por digest divergente');
-    assert(rawLogAltJob.includes('Operação abortada imediatamente. NENHUM arquivo foi publicado.'), 'Job 131624453019: Confirmação expressa de aborto antes da publicação');
+    // 2. Auditoria Estrita do Job 131627616116 (Alternativo Divergente)
+    assert(!rawLogAltJob.includes('actions/checkout failed'), 'Job 131627616116: actions/checkout executou sem falha');
+    assert(!rawLogAltJob.includes('Runner lost communication'), 'Job 131627616116: runner operou normalmente sem perda de comunicação');
+    assert(!rawLogAltJob.includes('Uploading KYRO-Finance') && !rawLogAltJob.includes('Release ready at'), 'Job 131627616116: Zero upload de release executado');
+    assert(rawLogAltJob.includes('possui digest divergente'), 'Job 131627616116: Contém a mensagem exata de rejeição por digest divergente');
+    assert(rawLogAltJob.includes('SUCESSO: Rejeição específica por arquivo alternativo divergente confirmada com sucesso'), 'Job 131627616116: Confirmação expressa de asserção de teste positiva');
 
     // 3. Extração e sanitização dos trechos dos logs brutos
     const extractCleanSnippet = (fullLog: string, startAnchor: string, endAnchor: string, useLast = false) => {
@@ -532,28 +557,30 @@ async function runGovernanceSuite() {
         .join('\n');
     };
 
-    const snippetSha = extractCleanSnippet(rawLogShaJob, 'Calculado: 98b3089ee98818d77d053f3707ca795ce4fe059b8144a5c97f870322ea6da9d1', 'Process completed with exit code 1.', true);
-    const snippetAlt = extractCleanSnippet(rawLogAltJob, 'ERRO CRÍTICO: Arquivo alternativo pré-existente ./downloaded-artifact/', 'Process completed with exit code 1.', true);
+    const snippetSha = extractCleanSnippet(rawLogShaJob, 'Calculado: 98b3089ee98818d77d053f3707ca795ce4fe059b8144a5c97f870322ea6da9d1', 'confirmada com sucesso (código 1)!', true);
+    const snippetAlt = extractCleanSnippet(rawLogAltJob, 'ERRO CRÍTICO: Arquivo alternativo pré-existente ./downloaded-artifact/', 'confirmada com sucesso (código 1)!', true);
 
     evidenceRecord.results.rawLogsAudit = {
       status: 'VERIFIED_INDEPENDENT_AUDIT_PASSED',
       shaMismatchRejection: {
-        jobId: 131624452552,
+        jobId: 131627616603,
         specificRejectionObserved: true,
         infrastructureFailure: false,
         publicationPrevented: true,
+        testAssertionSuccess: true,
         sanitizedLogSnippet: snippetSha
       },
       divergentAltRejection: {
-        jobId: 131624453019,
+        jobId: 131627616116,
         specificRejectionObserved: true,
         infrastructureFailure: false,
         publicationPrevented: true,
+        testAssertionSuccess: true,
         sanitizedLogSnippet: snippetAlt
       }
     };
     rawLogsAudited = true;
-    console.log('  [EVIDÊNCIA LOGS BRUTOS] Rejeição específica confirmada e ausência de falha de infraestrutura validada em ambos os jobs!');
+    console.log('  [EVIDÊNCIA LOGS BRUTOS] Rejeição específica confirmada e asserções de teste positivas validadas em ambos os jobs!');
   } catch (err: any) {
     evidenceRecord.results.rawLogsAudit = {
       status: 'UNVERIFIED',
