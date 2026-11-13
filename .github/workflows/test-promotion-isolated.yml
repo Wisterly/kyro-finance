@@ -1,0 +1,185 @@
+name: Demonstração Operacional de Promoção Android (Destino Isolado)
+
+on:
+  push:
+    branches:
+      - 'review/etapa-09-desacoplamento-ci'
+    paths:
+      - '.github/workflows/test-promotion-isolated.yml'
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  # Job 1: Caso Válido em Destino Isolado
+  promover-caso-valido-isolado:
+    name: Caso Válido (Destino Isolado test-staging-isolated)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Validar Sanitização e Formato das Entradas
+        env:
+          INPUT_CONFIRM_PROMOTION: "CONFIRMAR"
+          INPUT_RUN_ID: "42521852722"
+          INPUT_EXPECTED_SHA256: "98B3089EE98818D77D053F3707CA795CE4FE059B8144A5C97F870322EA6DA9D1"
+          INPUT_TARGET_TAG: "test-staging-isolated"
+        run: |
+          echo "=== 1. VALIDAÇÃO DE ENTRADAS MANUAIS ==="
+          if [ "$INPUT_CONFIRM_PROMOTION" != "CONFIRMAR" ]; then
+            echo "ERRO DE SEGURANÇA: confirm_promotion inválido."
+            exit 1
+          fi
+          if ! [[ "$INPUT_RUN_ID" =~ ^[0-9]+$ ]]; then
+            echo "ERRO DE VALIDAÇÃO: run_id inválido."
+            exit 1
+          fi
+          CLEAN_SHA=$(echo "$INPUT_EXPECTED_SHA256" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')
+          if ! [[ "$CLEAN_SHA" =~ ^[a-f0-9]{64}$ ]]; then
+            echo "ERRO DE VALIDAÇÃO: expected_sha256 inválido."
+            exit 1
+          fi
+          if ! [[ "$INPUT_TARGET_TAG" =~ ^[a-zA-Z0-9._-]+$ ]]; then
+            echo "ERRO DE VALIDAÇÃO: target_tag inválido."
+            exit 1
+          fi
+          echo "VALIDATED_RUN_ID=$INPUT_RUN_ID" >> $GITHUB_ENV
+          echo "VALIDATED_EXPECTED_SHA256=$CLEAN_SHA" >> $GITHUB_ENV
+          echo "VALIDATED_TARGET_TAG=$INPUT_TARGET_TAG" >> $GITHUB_ENV
+
+      - name: Baixar Artefato Auditado da Execução CI
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_ID: "${{ env.VALIDATED_RUN_ID }}"
+        run: |
+          echo "=== 2. DOWNLOAD DO ARTEFATO DA RUN $RUN_ID ==="
+          mkdir -p ./downloaded-artifact
+          gh run download "$RUN_ID" --name "KYRO-Finance-APK" --dir "./downloaded-artifact"
+          ls -la ./downloaded-artifact
+
+      - name: Conferência Criptográfica do APK e Nomes Alternativos
+        env:
+          EXPECTED_SHA_LOWER: "${{ env.VALIDATED_EXPECTED_SHA256 }}"
+        run: |
+          echo "=== 3. CONFERÊNCIA CRIPTOGRÁFICA DO ARQUIVO PRINCIPAL ==="
+          if [ ! -f ./downloaded-artifact/KYRO-Finance.apk ]; then
+            echo "ERRO CRÍTICO: Arquivo KYRO-Finance.apk não encontrado!"
+            exit 1
+          fi
+          BASE_SHA=$(sha256sum ./downloaded-artifact/KYRO-Finance.apk | awk '{print $1}' | tr '[:upper:]' '[:lower:]')
+          echo "Calculado: $BASE_SHA"
+          echo "Esperado:   $EXPECTED_SHA_LOWER"
+          if [ "$BASE_SHA" != "$EXPECTED_SHA_LOWER" ]; then
+            echo "FALHA DE INTEGRIDADE: SHA-256 diverge!"
+            exit 1
+          fi
+
+          # Obter metadados
+          VERSION_NAME="1.48"
+          BUILD_CODE="48"
+          if [ -f ./downloaded-artifact/build-manifest.json ]; then
+            VERSION_NAME=$(node -p "try { const m = require('./downloaded-artifact/build-manifest.json'); String(m.version_name || '1.48'); } catch(e){ '1.48' }")
+            BUILD_CODE=$(node -p "try { const m = require('./downloaded-artifact/build-manifest.json'); String(m.build_code || '48'); } catch(e){ '48' }")
+          fi
+          echo "VALIDATED_VERSION_NAME=$VERSION_NAME" >> $GITHUB_ENV
+          echo "VALIDATED_BUILD_CODE=$BUILD_CODE" >> $GITHUB_ENV
+
+          # Preparar diretório isolado com lista explícita de arquivos aprovados
+          mkdir -p ./verified-release
+          cp ./downloaded-artifact/KYRO-Finance.apk ./verified-release/KYRO-Finance.apk
+          cp ./verified-release/KYRO-Finance.apk "./verified-release/KYRO-Finance-v${VERSION_NAME}.apk"
+          cp ./verified-release/KYRO-Finance.apk "./verified-release/KYRO-Finance-1.${BUILD_CODE}.apk"
+
+          echo "=== 4. CONFERÊNCIA DOS ARQUIVOS DA LISTA EXPLÍCITA ==="
+          for f in ./verified-release/KYRO-Finance.apk "./verified-release/KYRO-Finance-v${VERSION_NAME}.apk" "./verified-release/KYRO-Finance-1.${BUILD_CODE}.apk"; do
+            F_SHA=$(sha256sum "$f" | awk '{print $1}' | tr '[:upper:]' '[:lower:]')
+            if [ "$F_SHA" != "$EXPECTED_SHA_LOWER" ]; then
+              echo "ERRO: Divergência no arquivo $f!"
+              exit 1
+            fi
+            echo "APROVADO: $f -> SHA-256: $F_SHA"
+          done
+
+      - name: Publicar Lista Explícita no Destino Isolado de Teste
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.VALIDATED_TARGET_TAG }}
+          name: "🧪 KYRO Finance v${{ env.VALIDATED_VERSION_NAME }} (Destino Isolado de Homologação)"
+          body: |
+            ### 🧪 Release Isolada de Homologação da Governança (Etapa 09)
+            - **Origem CI:** Run ${{ env.VALIDATED_RUN_ID }}
+            - **SHA-256 Verificado:** `${{ env.VALIDATED_EXPECTED_SHA256 }}`
+            - **Canal Público:** Preservado (tag isolada).
+          files: |
+            ./verified-release/KYRO-Finance.apk
+            ./verified-release/KYRO-Finance-v${{ env.VALIDATED_VERSION_NAME }}.apk
+            ./verified-release/KYRO-Finance-1.${{ env.VALIDATED_BUILD_CODE }}.apk
+          prerelease: true
+          make_latest: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Job 2: Caso Inválido 1 (SHA Incorreto é Barrado)
+  rejeitar-sha-incorreto:
+    name: Caso Inválido 1 (Barragem por SHA Incorreto)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Baixar Artefato Real
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p ./downloaded-artifact
+          gh run download "42521852722" --name "KYRO-Finance-APK" --dir "./downloaded-artifact"
+
+      - name: Tentar Promoção com SHA Incorreto
+        env:
+          FORGED_SHA: "0000000000000000000000000000000000000000000000000000000000000000"
+        run: |
+          echo "Simulando conferência com hash adulterado / incorreto..."
+          CALCULATED_SHA=$(sha256sum ./downloaded-artifact/KYRO-Finance.apk | awk '{print $1}')
+          echo "Calculado: $CALCULATED_SHA"
+          echo "Esperado:   $FORGED_SHA"
+          if [ "$CALCULATED_SHA" != "$FORGED_SHA" ]; then
+            echo "=========================================================="
+            echo "FALHA DE INTEGRIDADE: O SHA-256 do arquivo baixado diverge!"
+            echo "Calculado: $CALCULATED_SHA"
+            echo "Esperado:  $FORGED_SHA"
+            echo "Operação abortada imediatamente. NENHUM arquivo foi publicado."
+            echo "=========================================================="
+            exit 1
+          fi
+          echo "ERRO CRÍTICO: Não deveria ter chegado aqui!" && exit 1
+
+  # Job 3: Caso Inválido 2 (Arquivo Alternativo Divergente é Barrado)
+  rejeitar-arquivo-alternativo-divergente:
+    name: Caso Inválido 2 (Barragem por Arquivo Alternativo Divergente)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Baixar Artefato Real
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p ./downloaded-artifact
+          gh run download "42521852722" --name "KYRO-Finance-APK" --dir "./downloaded-artifact"
+          # Injetar intencionalmente um arquivo alternativo divergente
+          echo "CORRUPTED_PAYLOAD_FORGED" > ./downloaded-artifact/KYRO-Finance-v1.48.apk
+
+      - name: Tentar Promoção com Arquivo Alternativo Divergente
+        env:
+          EXPECTED_SHA: "98b3089ee98818d77d053f3707ca795ce4fe059b8144a5c97f870322ea6da9d1"
+        run: |
+          echo "Validando todos os arquivos .apk existentes no artefato..."
+          for alt_file in ./downloaded-artifact/*.apk; do
+            ALT_SHA=$(sha256sum "$alt_file" | awk '{print $1}' | tr '[:upper:]' '[:lower:]')
+            if [ "$ALT_SHA" != "$EXPECTED_SHA" ]; then
+              echo "=========================================================="
+              echo "ERRO CRÍTICO: Arquivo alternativo pré-existente $alt_file possui digest divergente!"
+              echo "Arquivo:   $alt_file"
+              echo "Digest:    $ALT_SHA"
+              echo "Esperado:  $EXPECTED_SHA"
+              echo "Operação abortada imediatamente. NENHUM arquivo foi publicado."
+              echo "=========================================================="
+              exit 1
+            fi
+          done
+          echo "ERRO CRÍTICO: Não deveria ter chegado aqui!" && exit 1
