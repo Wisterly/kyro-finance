@@ -65,7 +65,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  # Job 2: Caso Inválido 1 (SHA Incorreto é Barrado)
+  # Job 2: Caso Inválido 1 (SHA Incorreto é Barrado com Rejeição Específica)
   rejeitar-sha-incorreto:
     name: Caso Inválido 1 (Barragem por SHA Incorreto)
     runs-on: ubuntu-latest
@@ -81,7 +81,7 @@ jobs:
           mkdir -p ./downloaded-artifact
           gh run download "42521852722" --repo "$REPO" --name "KYRO-Finance-APK" --dir "./downloaded-artifact"
 
-      - name: Tentar Promoção com SHA Incorreto (Script Compartilhado)
+      - name: Validar Rejeição Específica por SHA Incorreto (Script Compartilhado)
         env:
           INPUT_CONFIRM_PROMOTION: "CONFIRMAR"
           INPUT_RUN_ID: "42521852722"
@@ -92,9 +92,34 @@ jobs:
         run: |
           echo "Simulando conferência com hash adulterado / incorreto via script compartilhado..."
           chmod +x ./.github/scripts/verify-and-prepare-release.sh
-          ./.github/scripts/verify-and-prepare-release.sh
+          
+          set +e
+          OUTPUT=$(./.github/scripts/verify-and-prepare-release.sh 2>&1)
+          STATUS=$?
+          set -e
+          
+          echo "$OUTPUT"
+          
+          if [ $STATUS -eq 0 ]; then
+            echo "ERRO DE TESTE: O script aceitou indevidamente um SHA-256 adulterado (retornou código 0)!"
+            exit 1
+          fi
+          
+          if echo "$OUTPUT" | grep -q "FALHA DE INTEGRIDADE: O SHA-256 do arquivo baixado diverge!"; then
+            echo "=========================================================="
+            echo "SUCESSO: Rejeição específica por falha de integridade confirmada com sucesso (código $STATUS)!"
+            echo "=========================================================="
+          else
+            echo "ERRO DE TESTE: O script falhou por outro motivo não esperado. Saída: $OUTPUT"
+            exit 1
+          fi
+          
+          if [ -d "./verified-release" ] && [ "$(ls -A ./verified-release 2>/dev/null)" ]; then
+            echo "ERRO DE TESTE: Arquivos foram preparados para publicação apesar do SHA incorreto!"
+            exit 1
+          fi
 
-  # Job 3: Caso Inválido 2 (Arquivo Alternativo Divergente é Barrado)
+  # Job 3: Caso Inválido 2 (Arquivo Alternativo Divergente é Barrado com Rejeição Específica)
   rejeitar-arquivo-alternativo-divergente:
     name: Caso Inválido 2 (Barragem por Arquivo Alternativo Divergente)
     runs-on: ubuntu-latest
@@ -112,7 +137,7 @@ jobs:
           # Injetar intencionalmente um arquivo alternativo divergente
           echo "CORRUPTED_PAYLOAD_FORGED" > ./downloaded-artifact/KYRO-Finance-v1.48.apk
 
-      - name: Tentar Promoção com Arquivo Alternativo Divergente (Script Compartilhado)
+      - name: Validar Rejeição Específica por Arquivo Alternativo Divergente (Script Compartilhado)
         env:
           INPUT_CONFIRM_PROMOTION: "CONFIRMAR"
           INPUT_RUN_ID: "42521852722"
@@ -123,4 +148,29 @@ jobs:
         run: |
           echo "Simulando detecção de arquivo alternativo divergente via script compartilhado..."
           chmod +x ./.github/scripts/verify-and-prepare-release.sh
-          ./.github/scripts/verify-and-prepare-release.sh
+          
+          set +e
+          OUTPUT=$(./.github/scripts/verify-and-prepare-release.sh 2>&1)
+          STATUS=$?
+          set -e
+          
+          echo "$OUTPUT"
+          
+          if [ $STATUS -eq 0 ]; then
+            echo "ERRO DE TESTE: O script aceitou indevidamente um arquivo alternativo divergente (retornou código 0)!"
+            exit 1
+          fi
+          
+          if echo "$OUTPUT" | grep -q "possui digest divergente!"; then
+            echo "=========================================================="
+            echo "SUCESSO: Rejeição específica por arquivo alternativo divergente confirmada com sucesso (código $STATUS)!"
+            echo "=========================================================="
+          else
+            echo "ERRO DE TESTE: O script falhou por outro motivo não esperado. Saída: $OUTPUT"
+            exit 1
+          fi
+          
+          if [ -d "./verified-release" ] && [ "$(ls -A ./verified-release 2>/dev/null)" ]; then
+            echo "ERRO DE TESTE: Arquivos foram preparados para publicação apesar do arquivo divergente!"
+            exit 1
+          fi
