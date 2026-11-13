@@ -69,6 +69,12 @@ ALT_FILES=("$ARTIFACT_DIR"/*.apk)
 shopt -u nullglob
 
 for alt_file in "${ALT_FILES[@]}"; do
+  # Binários com sufixo -debug.apk são artefatos de diagnóstico interno e não candidatos a release pública
+  if [[ "$alt_file" == *"-debug.apk" ]]; then
+    echo "Ignorando binário de diagnóstico interno (não-candidato a release): $alt_file"
+    continue
+  fi
+
   if [ -f "$alt_file" ]; then
     ALT_SHA=$(sha256sum "$alt_file" | awk '{print $1}' | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')
     if [ "$ALT_SHA" != "$CLEAN_SHA" ]; then
