@@ -2622,23 +2622,56 @@ tokens used: 23.408</div>
 
       <!-- Diagnóstico de Infraestrutura e Requisitos de Acesso -->
       <div style="background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 0.5rem; padding: 1.25rem; margin-top: 1.5rem;">
-        <h3 style="color: var(--warning); font-size: 1.05rem; margin-bottom: 0.5rem;">C. Diagnóstico de Infraestrutura do Host & Acessos Necessários:</h3>
+        <h3 style="color: var(--warning); font-size: 1.05rem; margin-bottom: 0.5rem;">C. Diagnóstico de Infraestrutura do Host & Localização do SDK:</h3>
         <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 0.75rem;">
-          A sondagem de ambiente no host Windows confirmou que as ferramentas de runtime Android não estão provisionadas:
+          A sondagem no host Windows localizou o Android SDK e o utilitário oficial ADB:
         </p>
         <ul style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.8; padding-left: 1.5rem;">
-          <li><strong>Utilitário <code>adb</code>:</strong> Não encontrado no PATH global nem em <code>%LOCALAPPDATA%\Android\Sdk\platform-tools\</code>.</li>
-          <li><strong>Dispositivo Android Físico:</strong> Nenhum smartphone conectado via USB com modo de Depuração USB ativado e autorizado.</li>
-          <li><strong>Emulador AVD:</strong> Nenhum processo de emulador QEMU/Android ativo no host com driver de áudio (DirectSound/PulseAudio) configurado.</li>
+          <li><strong>Utilitário ADB Localizado:</strong> <code>C:\AndroidSDK\platform-tools\adb.exe</code> (Daemon iniciado com sucesso em <code>tcp:5037</code>).</li>
+          <li><strong>Varredura de Dispositivos (<code>adb devices -l</code>):</strong> Lista vazia (nenhum aparelho físico conectado via USB com depuração autorizada).</li>
+          <li><strong>Emulador AVD:</strong> Pacote <code>emulator</code> ausente em <code>C:\AndroidSDK</code> e zero AVDs criados em <code>%USERPROFILE%\.android\avd</code>.</li>
         </ul>
         <div style="margin-top: 0.75rem; font-size: 0.85rem; color: #ffffff;">
-          <strong>Requisitos para Desbloqueio dos Testes em Hardware:</strong> Conectar aparelho Android físico com depuração USB ativa ou provisionar AVD no Android Studio com redirecionamento de microfone.
+          <strong>Ação para Conexão Direta:</strong> Conectar smartphone Android via cabo USB e autorizar a Depuração USB na tela do aparelho. O Antigravity executará os comandos automaticamente via <code>C:\AndroidSDK\platform-tools\adb.exe -s &lt;serial&gt;</code>.
+        </div>
+      </div>
+
+      <!-- Sessão Guiada Operacional de Validação em Aparelho de Teste -->
+      <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 0.5rem; padding: 1.25rem; margin-top: 1.25rem;">
+        <h3 style="color: var(--accent); font-size: 1.05rem; margin-bottom: 0.5rem;">D. Sessão Guiada de Validação em Aparelho de Teste (Roteiro Operacional):</h3>
+        <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 0.75rem;">
+          Para validar a experiência real no candidato v1.48 sem depender de emuladores no host, o operador pode seguir o roteiro abaixo com correlação direta no backend:
+        </p>
+        <ol style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.8; padding-left: 1.5rem;">
+          <li>
+            <strong style="color:#ffffff;">Gesto 1 (Lançamento por Texto & Débito Único):</strong><br/>
+            No candidato v1.48 instalado, abrir a aba Chat, digitar <code>Gastei 13,37 no almoco teste etapa 09</code> e enviar. Conferir na tela a resposta com recibo oficial <code>APPLIED</code> e o débito refletido no saldo.
+          </li>
+          <li>
+            <strong style="color:#ffffff;">Gesto 2 (Persistência Offline & Forçar Parada):</strong><br/>
+            Ativar o <strong>Modo Avião</strong> no aparelho. Digitar no chat <code>Gastei 25,50 no mercado teste offline</code> e enviar (operação fica com ícone de pendente/relógio na fila local). Fechar forçadamente o app (arrastar para cima nas tarefas ou Forçar Parada). Reabrir o app ainda offline e conferir que a transação permanece intacta na fila.
+          </li>
+          <li>
+            <strong style="color:#ffffff;">Gesto 3 (Reconexão e Reenvio sem Duplo Débito):</strong><br/>
+            Desativar o Modo Avião (reconectar Wi-Fi). Aguardar a drenagem automática pelo <code>OfflineSyncEngine</code>. Conferir que o recibo contábil muda para <code>APPLIED</code> e o débito ocorre uma única vez.
+          </li>
+          <li>
+            <strong style="color:#ffffff;">Gesto 4 (Captura de Áudio com Cancelamento):</strong><br/>
+            Segurar o botão de microfone, falar uma despesa de teste e, antes de soltar, arrastar para o botão de cancelar/lixeira. Conferir que o buffer é limpo e zero requisições são enviadas.
+          </li>
+          <li>
+            <strong style="color:#ffffff;">Gesto 5 (Reversão com Mesma Assinatura):</strong><br/>
+            Sem desinstalar o app (preservando banco SQLite local e sessão), instalar o APK de reversão compatível (mesma assinatura <code>9b2b95a9...</code> e <code>versionCode</code> superior). Reabrir o app e confirmar que dados locais e histórico permaneceram 100% íntegros.
+          </li>
+        </ol>
+        <div style="margin-top: 0.75rem; font-size: 0.85rem; color: var(--accent); font-weight: 700;">
+          Status Atual da Sessão: Ponto de parada no Gesto 1 (Aguardando primeiro lançamento digitado no aparelho ou conexão USB do smartphone).
         </div>
       </div>
 
       <!-- Gestão do Canal Público -->
       <div style="background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 0.5rem; padding: 1.25rem; margin-top: 1.25rem;">
-        <strong style="color: var(--blue); font-size: 0.95rem;">D. Governança do Canal Público:</strong>
+        <strong style="color: var(--blue); font-size: 0.95rem;">E. Governança do Canal Público:</strong>
         <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 0.35rem;">
           Qualquer alteração na oferta pública de <code>/api/app-version</code> (manutenção da v1.48 ou contenção/reversão para v1.46) ou nos binários hospedados em <code>apk-latest</code> é mantida como uma decisão estritamente própria e separada do usuário, não sendo modificada automaticamente pela integração do código.
         </p>
