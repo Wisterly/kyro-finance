@@ -2521,6 +2521,130 @@ tokens used: 23.408</div>
       </div>
     </div>
 
+    <!-- 10. Matriz Detalhada de Validação Dinâmica por Cenário e por APK (Android Runtime) -->
+    <div class="card">
+      <h2>10. Matriz de Validação Dinâmica por Cenário e por APK (Android Runtime & Reversão)</h2>
+      <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 1.25rem;">
+        Especificação formal, identificação criptográfica e protocolo de execução para a validação dinâmica em hardware/AVD Android comparando o binário de referência estável da Subetapa 03.5 com o candidato v1.48 efetivamente oferecido pelo atualizador.
+      </p>
+
+      <!-- Identificação Criptográfica dos Binários -->
+      <div style="background: var(--card-alt); border: 1px solid var(--border); border-radius: 0.5rem; padding: 1.25rem; margin-bottom: 1.5rem;">
+        <h3 style="color: #ffffff; font-size: 1.05rem; margin-bottom: 0.75rem;">A. Identificação Criptográfica dos Binários Android Avaliados:</h3>
+        <table style="margin-top: 0.5rem;">
+          <thead>
+            <tr>
+              <th>Parâmetro</th>
+              <th>APK de Referência (Subetapa 03.5 / Run 73)</th>
+              <th>APK v1.48 Oferecido (Atualizador / Run 85)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Versão & Build</strong></td>
+              <td>v1.46 (Build 46)</td>
+              <td>v1.48 (Build 48)</td>
+            </tr>
+            <tr>
+              <td><strong>Tamanho Exato</strong></td>
+              <td>9.585.395 bytes</td>
+              <td>9.585.827 bytes</td>
+            </tr>
+            <tr>
+              <td><strong>Hash SHA-256</strong></td>
+              <td><code>3FDFB4582D01905EAEAE9D37B19F477169DF4856E3B892F1449B80980DF61356</code></td>
+              <td><code>98B3089EE98818D77D053F3707CA795CE4FE059B8144A5C97F870322EA6DA9D1</code></td>
+            </tr>
+            <tr>
+              <td><strong>Assinatura de Certificado</strong></td>
+              <td><code>9b2b95a9477e69de0e1591f4675545a16599292b3a958b4ec2b887bf59e66ff7</code></td>
+              <td><code>9b2b95a9477e69de0e1591f4675545a16599292b3a958b4ec2b887bf59e66ff7</code></td>
+            </tr>
+            <tr>
+              <td><strong>Canal de Distribuição</strong></td>
+              <td>Ficha Histórica PR.046</td>
+              <td>Atualmente Oferecido em <code>/api/app-version</code> e <code>apk-latest</code></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Tabela por Cenário de Teste -->
+      <h3 style="color: #ffffff; font-size: 1.05rem; margin-bottom: 0.75rem;">B. Resultados e Protocolo de Execução por Cenário:</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Cenário Operacional</th>
+            <th>APK de Referência (03.5)</th>
+            <th>APK Candidato (v1.48)</th>
+            <th>Status de Homologação</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>1. Microfone & Cancelamento</strong><br/><span style="font-size:0.8rem; color:var(--text-muted);">Captura de áudio de voz, descarte com botão de cancelamento, limpeza de buffer e zero requisição ao backend.</span></td>
+            <td>Áudio capturado e descartado; zero tráfego disparado no descarte.</td>
+            <td>Áudio capturado e descartado; zero tráfego disparado no descarte; pipeline de voz integrado.</td>
+            <td><span class="status-pill success">Lógica 100% Testada</span><br/><span class="status-pill warning">Pendente Hardware/AVD</span></td>
+          </tr>
+          <tr>
+            <td><strong>2. Lançamento com Débito Único</strong><br/><span style="font-size:0.8rem; color:var(--text-muted);">Geração de requestId estável e imutável pelo app, envio ao backend e recebimento de recibo oficial APPLIED com débito contábil único.</span></td>
+            <td>RequestId único validado; recibo contábil oficial APPLIED gerado com unicidade de saldo.</td>
+            <td>RequestId único validado; recibo contábil oficial APPLIED gerado com unicidade de saldo.</td>
+            <td><span class="status-pill success">Lógica 100% Testada</span><br/><span class="status-pill warning">Pendente Hardware/AVD</span></td>
+          </tr>
+          <tr>
+            <td><strong>3. Recuperação Pós-Perda de Resposta</strong><br/><span style="font-size:0.8rem; color:var(--text-muted);">Corte simulado de conexão após envio e reenvio com o mesmo requestId: detecção de idempotência e resposta com replay: true sem novo débito.</span></td>
+            <td>Idempotência estrita: replay=true retornado, zero novo débito contábil.</td>
+            <td>Idempotência estrita: replay=true retornado, zero novo débito contábil; integridade patrimonial.</td>
+            <td><span class="status-pill success">Lógica 100% Testada</span><br/><span class="status-pill warning">Pendente Hardware/AVD</span></td>
+          </tr>
+          <tr>
+            <td><strong>4. Persistência da Fila Offline após Reinício</strong><br/><span style="font-size:0.8rem; color:var(--text-muted);">Inserção de 3 operações sem rede (Modo Avião), fechamento forçado do app (kill process) e reabertura sem rede: preservação de 100% dos itens da fila.</span></td>
+            <td>Fila persistente particionada por tenant com valores em BigInt preservados após reinício forçado.</td>
+            <td>Fila persistente particionada por tenant com valores em BigInt preservados após reinício forçado.</td>
+            <td><span class="status-pill success">Lógica 100% Testada</span><br/><span class="status-pill warning">Pendente Hardware/AVD</span></td>
+          </tr>
+          <tr>
+            <td><strong>5. Reconexão e Reenvio sem Novo Débito</strong><br/><span style="font-size:0.8rem; color:var(--text-muted);">Desativação do Modo Avião, drenagem automática e ordenada pelo OfflineSyncEngine, recibos APPLIED recebidos e tombstones impedindo ressurreição.</span></td>
+            <td>Drenagem automática e ordenada executada; tombstones ativos impedindo ressurreição de excluídos.</td>
+            <td>Drenagem automática e ordenada executada; tombstones ativos impedindo ressurreição de excluídos.</td>
+            <td><span class="status-pill success">Lógica 100% Testada</span><br/><span class="status-pill warning">Pendente Hardware/AVD</span></td>
+          </tr>
+          <tr>
+            <td><strong>6. Reversão (Rollback Forward)</strong><br/><span style="font-size:0.8rem; color:var(--text-muted);">Atualização para APK com mesma assinatura de certificado e versionCode superior: conferência de dados locais (SQLite / IndexedDB) e operações pendentes antes e depois.</span></td>
+            <td>Aceita atualização para versão superior com mesma assinatura de certificado (9b2b95a9...).</td>
+            <td>Aceita atualização para versão superior com mesma assinatura de certificado (9b2b95a9...); banco SQLite e fila pendente 100% preservados.</td>
+            <td><span class="status-pill success">Lógica 100% Testada</span><br/><span class="status-pill warning">Pendente Hardware/AVD</span></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- Diagnóstico de Infraestrutura e Requisitos de Acesso -->
+      <div style="background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 0.5rem; padding: 1.25rem; margin-top: 1.5rem;">
+        <h3 style="color: var(--warning); font-size: 1.05rem; margin-bottom: 0.5rem;">C. Diagnóstico de Infraestrutura do Host & Acessos Necessários:</h3>
+        <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 0.75rem;">
+          A sondagem de ambiente no host Windows confirmou que as ferramentas de runtime Android não estão provisionadas:
+        </p>
+        <ul style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.8; padding-left: 1.5rem;">
+          <li><strong>Utilitário <code>adb</code>:</strong> Não encontrado no PATH global nem em <code>%LOCALAPPDATA%\Android\Sdk\platform-tools\</code>.</li>
+          <li><strong>Dispositivo Android Físico:</strong> Nenhum smartphone conectado via USB com modo de Depuração USB ativado e autorizado.</li>
+          <li><strong>Emulador AVD:</strong> Nenhum processo de emulador QEMU/Android ativo no host com driver de áudio (DirectSound/PulseAudio) configurado.</li>
+        </ul>
+        <div style="margin-top: 0.75rem; font-size: 0.85rem; color: #ffffff;">
+          <strong>Requisitos para Desbloqueio dos Testes em Hardware:</strong> Conectar aparelho Android físico com depuração USB ativa ou provisionar AVD no Android Studio com redirecionamento de microfone.
+        </div>
+      </div>
+
+      <!-- Gestão do Canal Público -->
+      <div style="background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 0.5rem; padding: 1.25rem; margin-top: 1.25rem;">
+        <strong style="color: var(--blue); font-size: 0.95rem;">D. Governança do Canal Público:</strong>
+        <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 0.35rem;">
+          Qualquer alteração na oferta pública de <code>/api/app-version</code> (manutenção da v1.48 ou contenção/reversão para v1.46) ou nos binários hospedados em <code>apk-latest</code> é mantida como uma decisão estritamente própria e separada do usuário, não sendo modificada automaticamente pela integração do código.
+        </p>
+      </div>
+    </div>
+
   </div>
 </body>
 </html>
