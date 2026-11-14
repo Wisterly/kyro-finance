@@ -230,19 +230,23 @@
       <div class="top-meta">
         <div class="badge-group">
           <span class="badge badge-success">Etapa 09: Consolidação & Publicação</span>
+          <span class="badge badge-success">Integração na main: Concluída (SHA 7d07fbf)</span>
+          <span class="badge badge-cyan">Conferência Pós-Merge: Somente Leitura (Run 43351903494 Apenas Arquivo)</span>
           <span class="badge badge-blue">PR.048 / v1.48 (Build 48)</span>
           <span class="badge badge-cyan">Suíte Consolidada: 644/644 (100% Sucesso)</span>
           <span class="badge badge-purple">Browser E2E Chrome Real: 47/47 (100% Sucesso)</span>
-          <span class="badge badge-success">Total Automatizado: 691/691 (100% Sucesso - Base 8bbb987)</span>
+          <span class="badge badge-success">Total Automatizado: 691/691 (Base 8bbb987) + 98 Governança CI/CD</span>
           <span class="badge badge-warning">Canal Público: apk-latest e /api/app-version oferecem v1.48</span>
           <span class="badge badge-warning">Aceite Dinâmico Android: Formalmente Pendente AVD/Host</span>
           <span class="badge badge-warning">Reversão com Fila Offline: Formalmente Pendente Teste em Hardware</span>
         </div>
         <div style="font-size: 0.85rem; color: var(--text-muted);">
-          Data da Homologação & Conferência Real: <strong>08/11/2026 18:35 BRT (21:35 GMT)</strong> | 
-          Escopo: <strong>Etapa 09 — Estado Real de Publicação, Reconciliação CI de APKs e Parecer de Prontidão</strong><br/>
-          <strong>SHA Base de Estabilização Aceito pelo Codex:</strong> <a href="https://github.com/Wisterly/kyro-finance/commit/8bbb987ecec60d5f2650e8e35da10f731e76757e" target="_blank" style="color:var(--accent); text-decoration: underline;"><code>8bbb987ecec60d5f2650e8e35da10f731e76757e</code></a> (691 Verificações Preservadas) | 
-          <strong>Sucessores no CI:</strong> <code>306def6</code> (Run 84 - Oficial) ⇄ <code>b66866f</code> (Run 85 - Servido Atualizador) ⇄ <code>HEAD</code><br/>
+          Data do Fechamento da Integração & Conferência Pós-Merge: <strong>14/11/2026 00:35 BRT (03:35 GMT)</strong> | 
+          Escopo: <strong>Etapa 09 — Fechamento da Integração, Conferência Pós-Merge e Parecer Final de Governança</strong><br/>
+          <strong>SHA Integrado na main e review:</strong> <a href="https://github.com/Wisterly/kyro-finance/commit/7d07fbfb63b42746133149347eaf074ec8b7de30" target="_blank" style="color:var(--accent); text-decoration: underline;"><code>7d07fbfb63b42746133149347eaf074ec8b7de30</code></a> | 
+          <strong>Base Pré-Merge da main:</strong> <code>d223e6c028b0893e72c7f13eb32771a94a1c4446</code> | 
+          <strong>Run Isolada Aprovada:</strong> <a href="https://github.com/Wisterly/kyro-finance/actions/runs/43346685843" target="_blank" style="color:var(--cyan); text-decoration: underline;">Run 43346685843</a> (Head SHA <code>5d7f7be</code>)<br/>
+          <strong>Conferência de Build Pós-Merge:</strong> <a href="https://github.com/Wisterly/kyro-finance/actions/runs/43351903494" target="_blank" style="color:var(--blue); text-decoration: underline;">Run 43351903494</a> (main) comprovadamente apenas arquivou o APK (ID 14003084906); zero publicação de release.<br/>
           <strong>Distinção Operacional de Binários Android:</strong> APK público servido no atualizador = <strong>9.585.827 bytes</strong> (SHA-256 <code>98B3089...</code>, CI Run 85) vs APK histórico da subetapa 03.7 = <strong>9.585.395 bytes</strong> (SHA-256 <code>3FDFB45...</code>, CI Run 73).<br/>
           <strong>Validação de Paridade:</strong> <code>git diff 8bbb987 HEAD -- src/ api/</code> confirma zero alterações de lógica contábil ou motor financeiro.<br/>
           <strong>Ambiente:</strong> Firestore Emulator (127.0.0.1:8080) & Auth Emulator (127.0.0.1:9099) + Chrome Real (Puppeteer-Core) + Capacitor Android
@@ -2463,6 +2467,56 @@ tokens used: 23.408</div>
         <a href="https://github.com/Wisterly/kyro-finance/releases/download/apk-latest/KYRO-Finance.apk" class="link-item" target="_blank">
           <strong>Download Direto do APK Oficial (GitHub)</strong>
           <span>KYRO-Finance.apk (Release Assinada)</span>
+        </a>
+      </div>
+    </div>
+
+    <!-- 9. Parecer Técnico de Fechamento da Integração da Etapa 09 na Branch main (SHA 7d07fbf) -->
+    <div class="card">
+      <h2>9. Parecer Técnico de Fechamento da Integração da Etapa 09 na Branch main</h2>
+      <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 1.25rem;">
+        Registro oficial de fechamento da integração do workflow Android e governança criptográfica da Etapa 09. A branch <code>main</code> e o branch <code>review/etapa-09-desacoplamento-ci</code> convergem no SHA <code>7d07fbfb63b42746133149347eaf074ec8b7de30</code>.
+      </p>
+
+      <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 0.5rem; padding: 1.25rem; margin-bottom: 1.5rem;">
+        <h3 style="color: var(--accent); font-size: 1.1rem; margin-bottom: 0.5rem;">Status Oficial da Integração: CONCLUÍDA & AUDITADA</h3>
+        <ul style="list-style: none; padding-left: 0; font-size: 0.9rem; line-height: 1.8;">
+          <li><strong>SHA Integrado na main:</strong> <a href="https://github.com/Wisterly/kyro-finance/commit/7d07fbfb63b42746133149347eaf074ec8b7de30" target="_blank" style="color:var(--accent); text-decoration: underline;"><code>7d07fbfb63b42746133149347eaf074ec8b7de30</code></a> (sincronizado em <code>origin/main</code>).</li>
+          <li><strong>Vínculo Criptográfico:</strong> Vinculado diretamente à execução homologada e aprovada pelo Codex no GitHub Actions <a href="https://github.com/Wisterly/kyro-finance/actions/runs/43346685843" target="_blank" style="color:var(--cyan); text-decoration: underline;">Run 43346685843</a> (Head SHA <code>5d7f7be</code>) e à suíte automatizada com <strong>98/98 asserções aprovadas (100% sucesso)</strong>.</li>
+          <li><strong>Conferência Pós-Merge Somente de Leitura:</strong>
+            <ul style="padding-left: 1.5rem; margin-top: 0.35rem;">
+              <li><strong>Execução Disparada na main:</strong> <a href="https://github.com/Wisterly/kyro-finance/actions/runs/43351903494" target="_blank" style="color:var(--blue); text-decoration: underline;">GitHub Actions Run 43351903494</a> no workflow <code>android-build.yml</code>. A execução <strong>apenas arquivou o APK e os manifestos</strong> como artefato de workflow (<code>KYRO-Finance-APK</code>, ID <code>14003084906</code>). Zero uploads ou chamadas de release foram executados.</li>
+              <li><strong>Canal Público de Releases:</strong> A release pública <code>apk-latest</code> <strong>não sofreu nenhuma alteração</strong> (inalterada desde 09/11/2026), mantendo a integridade do canal estável.</li>
+              <li><strong>Endpoint de Atualização (/api/app-version):</strong> Consultado em tempo real em produção (<a href="https://kyro-finance.vercel.app/api/app-version" target="_blank" style="color:var(--accent); text-decoration: underline;">https://kyro-finance.vercel.app/api/app-version</a>), retornando versão <code>1.48</code>, build <code>48</code> e APK <code>KYRO-Finance-v1.48.apk</code>.</li>
+              <li><strong>Preview Vercel:</strong> O deployment de preview (<code>kyro-finance-2x1oaung0-wisterly-s.vercel.app</code>) permanece com proteção de autenticação ativa (<code>Protected by Vercel Authentication</code>).</li>
+            </ul>
+          </li>
+          <li><strong>Pendências Operacionais Formais Mantidas:</strong>
+            <ul style="padding-left: 1.5rem; margin-top: 0.35rem;">
+              <li><span class="status-pill warning">PENDENTE</span> <strong>Aceite Dinâmico do Android em Hardware Real:</strong> Validação em runtime de permissões, estabilidade e experiência do usuário no binário empacotado.</li>
+              <li><span class="status-pill warning">PENDENTE</span> <strong>Teste Dinâmico de Reversão com Fila Offline:</strong> Comprovação de comportamento de fila local e tombstones durante transição de versões do APK.</li>
+              <li><span class="status-pill info">DECISÃO SEPARADA</span> <strong>Oferta Pública da Build 48:</strong> Qualquer alteração no anúncio da versão em <code>/api/app-version</code> ou na release <code>apk-latest</code> depende de decisão específica e própria do usuário.</li>
+            </ul>
+          </li>
+        </ul>
+      </div>
+
+      <div class="links-grid">
+        <a href="https://github.com/Wisterly/kyro-finance/actions/runs/43346685843" class="link-item" target="_blank">
+          <strong>Run Isolada Aprovada (CI)</strong>
+          <span>Run 43346685843 (3 Casos 100% Sucesso)</span>
+        </a>
+        <a href="https://github.com/Wisterly/kyro-finance/actions/runs/43351903494" class="link-item" target="_blank">
+          <strong>Run Pós-Merge no Branch main</strong>
+          <span>Run 43351903494 (Apenas Arquivamento do APK)</span>
+        </a>
+        <a href="https://github.com/Wisterly/kyro-finance/actions/runs/43341910073" class="link-item" target="_blank">
+          <strong>Evidência de Gate em Production</strong>
+          <span>Run 43341910073 (Status: Waiting for Review)</span>
+        </a>
+        <a href="https://github.com/Wisterly/kyro-finance/releases/tag/test-staging-isolated" class="link-item" target="_blank">
+          <strong>Release Isolada de Homologação</strong>
+          <span>Tag test-staging-isolated (v1.48 Verificada)</span>
         </a>
       </div>
     </div>
